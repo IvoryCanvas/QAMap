@@ -1,5 +1,7 @@
 # CodeWard
 
+[![CI](https://github.com/IvoryCanvas/codeward/actions/workflows/ci.yml/badge.svg)](https://github.com/IvoryCanvas/codeward/actions/workflows/ci.yml)
+
 **Guardrails for AI coding agents and the code they change.**
 
 CodeWard scans a repository for the things that make AI-assisted development risky: missing agent instructions, unsafe MCP configuration, leaked local env files, dangerous automation scripts, broad workflow permissions, and weak validation signals.
