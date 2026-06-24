@@ -2,6 +2,8 @@
 
 CodeWard rules are intentionally small and repository-level. The goal is to catch risks that are cheap to fix before an AI coding agent or PR reviewer loses time.
 
+Rule behavior can be tuned in `codeward.config.json`. See [configuration.md](configuration.md) for ignored rules, severity overrides, and CI failure thresholds.
+
 | Rule | Severity | Description |
 | --- | --- | --- |
 | `CW001` | medium | No agent instruction file was found. |

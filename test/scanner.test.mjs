@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { generateAgentContext, formatMarkdownReport, scanProject } from "../dist/index.js";
+import {
+  formatMarkdownReport,
+  formatSarifReport,
+  generateAgentContext,
+  loadConfig,
+  scanProject,
+  writeDefaultConfig,
+} from "../dist/index.js";
 
 const fixtureRoot = fileURLToPath(new URL(".", import.meta.url));
 
@@ -88,6 +95,65 @@ test("formatMarkdownReport includes a useful summary", async () => {
   assert.match(markdown, /# CodeWard Report/);
   assert.match(markdown, /## Summary/);
   assert.match(markdown, /CW001/);
+});
+
+test("scanProject can ignore rules and override severity", async () => {
+  const root = await makeTempRepo();
+  const result = await scanProject(root, {
+    ignoreRules: ["CW001"],
+    severityOverrides: {
+      CW007: "high",
+    },
+  });
+  const ids = result.findings.map((finding) => finding.id);
+  const ciFinding = result.findings.find((finding) => finding.id === "CW007");
+
+  assert.equal(ids.includes("CW001"), false);
+  assert.equal(ciFinding?.severity, "high");
+  assert.equal(ciFinding?.originalSeverity, "low");
+});
+
+test("loadConfig reads repository policy", async () => {
+  const root = await makeTempRepo();
+  await writeFile(
+    path.join(root, "codeward.config.json"),
+    JSON.stringify({
+      failOn: "medium",
+      ignoreRules: ["cw011"],
+      maxFiles: 10,
+      severity: {
+        cw007: "info",
+      },
+    }),
+  );
+
+  const loaded = await loadConfig(root);
+
+  assert.equal(path.basename(loaded.path), "codeward.config.json");
+  assert.equal(loaded.config.failOn, "medium");
+  assert.deepEqual(loaded.config.ignoreRules, ["CW011"]);
+  assert.equal(loaded.config.maxFiles, 10);
+  assert.deepEqual(loaded.config.severity, { CW007: "info" });
+});
+
+test("writeDefaultConfig creates a starter config", async () => {
+  const root = await makeTempRepo();
+  const outputPath = await writeDefaultConfig(root);
+  const loaded = await loadConfig(root);
+
+  assert.equal(outputPath, path.join(root, "codeward.config.json"));
+  assert.equal(loaded.config.failOn, "high");
+  assert.deepEqual(loaded.config.ignoreRules, []);
+});
+
+test("formatSarifReport emits SARIF 2.1.0", async () => {
+  const root = await makeTempRepo();
+  const result = await scanProject(root);
+  const sarif = JSON.parse(formatSarifReport(result));
+
+  assert.equal(sarif.version, "2.1.0");
+  assert.equal(sarif.runs[0].tool.driver.name, "CodeWard");
+  assert.equal(sarif.runs[0].results[0].ruleId, "CW001");
 });
 
 test("generateAgentContext reflects npm scripts and repository boundaries", async () => {

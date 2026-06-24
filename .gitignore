@@ -4,6 +4,8 @@ coverage/
 .DS_Store
 *.log
 CODEWARD_REPORT.md
+codeward.sarif
+*.sarif
 .env
 .env.*
 !.env.example

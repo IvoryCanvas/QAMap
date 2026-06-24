@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward.schema.json",
+  "failOn": "high",
+  "ignoreRules": [],
+  "maxFiles": 2000,
+  "severity": {}
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward.schema.json",
+  "title": "CodeWard configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "failOn": {
+      "$ref": "#/$defs/severity",
+      "description": "Exit with code 1 when findings at this severity or higher are present."
+    },
+    "ignoreRules": {
+      "type": "array",
+      "description": "Rule ids to suppress for this repository.",
+      "items": {
+        "$ref": "#/$defs/ruleId"
+      },
+      "uniqueItems": true
+    },
+    "maxFiles": {
+      "type": "integer",
+      "description": "Maximum number of repository files CodeWard will inspect.",
+      "minimum": 1
+    },
+    "severity": {
+      "type": "object",
+      "description": "Rule-specific severity overrides.",
+      "additionalProperties": {
+        "$ref": "#/$defs/severity"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/ruleId"
+      }
+    }
+  },
+  "$defs": {
+    "ruleId": {
+      "type": "string",
+      "pattern": "^CW[0-9]{3}$"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["info", "low", "medium", "high"]
+    }
+  }
+}

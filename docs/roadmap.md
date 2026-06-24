@@ -4,14 +4,12 @@ CodeWard starts as a local CLI. The project can grow in layers without becoming 
 
 ## Near Term
 
-- Config file support for ignored rules and severity overrides.
 - More MCP server shape checks.
 - GitHub Action wrapper with PR annotations.
 - Rule documentation generated from scanner metadata.
 
 ## Later
 
-- SARIF output for code scanning integrations.
 - VS Code and Cursor extension surfaces.
 - Maintainer dashboard for repeated AI-assisted PR risks.
 - Policy packs for open source, startup teams, and security-sensitive repositories.

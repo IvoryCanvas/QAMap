@@ -69,7 +69,9 @@ export function formatMarkdownReport(result: ScanResult): string {
   for (const finding of sortFindings(result.findings)) {
     lines.push(`### ${finding.id}: ${finding.title}`);
     lines.push("");
-    lines.push(`- Severity: \`${finding.severity}\``);
+    lines.push(
+      `- Severity: \`${finding.severity}\`${finding.originalSeverity ? ` (overridden from \`${finding.originalSeverity}\`)` : ""}`,
+    );
     if (finding.file) {
       lines.push(`- File: \`${finding.file}\``);
     }
@@ -84,8 +86,86 @@ export function formatMarkdownReport(result: ScanResult): string {
   return lines.join("\n");
 }
 
+export function formatSarifReport(result: ScanResult): string {
+  const rules = new Map<string, Finding>();
+  for (const finding of result.findings) {
+    if (!rules.has(finding.id)) {
+      rules.set(finding.id, finding);
+    }
+  }
+
+  const sarif = {
+    version: "2.1.0",
+    $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: result.tool.name,
+            semanticVersion: result.tool.version,
+            informationUri: "https://github.com/IvoryCanvas/codeward",
+            rules: Array.from(rules.values()).map((finding) => ({
+              id: finding.id,
+              name: finding.title,
+              shortDescription: {
+                text: finding.title,
+              },
+              fullDescription: {
+                text: finding.message,
+              },
+              help: {
+                text: finding.recommendation,
+              },
+              defaultConfiguration: {
+                level: sarifLevel(finding.severity),
+              },
+              properties: {
+                severity: finding.severity,
+                originalSeverity: finding.originalSeverity,
+              },
+            })),
+          },
+        },
+        results: result.findings.map((finding) => ({
+          ruleId: finding.id,
+          level: sarifLevel(finding.severity),
+          message: {
+            text: `${finding.message} ${finding.recommendation}`,
+          },
+          locations: [
+            {
+              physicalLocation: {
+                artifactLocation: {
+                  uri: finding.file ?? ".",
+                },
+              },
+            },
+          ],
+          properties: {
+            severity: finding.severity,
+            originalSeverity: finding.originalSeverity,
+            evidence: finding.evidence,
+          },
+        })),
+      },
+    ],
+  };
+
+  return `${JSON.stringify(sarif, null, 2)}\n`;
+}
+
 export function hasFindingsAtOrAbove(result: ScanResult, threshold: Severity): boolean {
   return result.findings.some((finding) => isAtLeastSeverity(finding.severity, threshold));
+}
+
+function sarifLevel(severity: Severity): "error" | "warning" | "note" {
+  if (severity === "high") {
+    return "error";
+  }
+  if (severity === "medium" || severity === "low") {
+    return "warning";
+  }
+  return "note";
 }
 
 function sortFindings(findings: Finding[]): Finding[] {

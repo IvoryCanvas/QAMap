@@ -32,7 +32,7 @@ export async function scanProject(rootInput: string, options: ScanOptions = {}):
   }
 
   const files = await collectProjectFiles(root, options.maxFiles ?? defaultMaxFiles);
-  const findings = [
+  const rawFindings = [
     ...checkAgentInstructions(files),
     ...checkInstructionConflicts(files),
     ...checkSuspiciousInstructionText(files),
@@ -42,6 +42,7 @@ export async function scanProject(rootInput: string, options: ScanOptions = {}):
     ...checkCommittedEnvFiles(files),
     ...checkCommunityHealth(files),
   ];
+  const findings = applyFindingPolicy(rawFindings, options);
 
   return {
     tool: {
@@ -51,6 +52,14 @@ export async function scanProject(rootInput: string, options: ScanOptions = {}):
     root,
     scannedAt: new Date().toISOString(),
     filesInspected: files.length,
+    config:
+      options.configPath || options.ignoreRules?.length || Object.keys(options.severityOverrides ?? {}).length
+        ? {
+            path: options.configPath,
+            ignoredRules: normalizeRuleIds(options.ignoreRules ?? []),
+            severityOverrides: normalizeSeverityOverrides(options.severityOverrides ?? {}),
+          }
+        : undefined,
     findings,
     counts: countFindings(findings),
   };
@@ -71,6 +80,33 @@ function finding(input: Omit<Finding, "recommendation"> & { recommendation?: str
     recommendation: "Review this finding and add an explicit repository policy.",
     ...input,
   };
+}
+
+function applyFindingPolicy(findings: Finding[], options: ScanOptions): Finding[] {
+  const ignoredRules = new Set(normalizeRuleIds(options.ignoreRules ?? []));
+  const severityOverrides = normalizeSeverityOverrides(options.severityOverrides ?? {});
+
+  return findings
+    .filter((item) => !ignoredRules.has(item.id.toUpperCase()))
+    .map((item) => {
+      const override = severityOverrides[item.id.toUpperCase()];
+      if (!override || override === item.severity) {
+        return item;
+      }
+      return {
+        ...item,
+        originalSeverity: item.severity,
+        severity: override,
+      };
+    });
+}
+
+function normalizeRuleIds(ruleIds: string[]): string[] {
+  return [...new Set(ruleIds.map((ruleId) => ruleId.toUpperCase()))];
+}
+
+function normalizeSeverityOverrides(overrides: Record<string, Severity>): Record<string, Severity> {
+  return Object.fromEntries(Object.entries(overrides).map(([ruleId, severity]) => [ruleId.toUpperCase(), severity]));
 }
 
 function getInstructionFiles(files: ProjectFile[]): ProjectFile[] {

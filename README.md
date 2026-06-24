@@ -90,6 +90,18 @@ codeward context . --write AGENTS.md
 codeward scan . --json
 ```
 
+SARIF로 출력합니다.
+
+```sh
+codeward scan . --format sarif --output codeward.sarif
+```
+
+설정 파일을 생성합니다.
+
+```sh
+codeward init .
+```
+
 ## 현재 검사하는 것
 
 첫 릴리즈는 많은 레포지토리에서 바로 쓸 수 있는 고신호 규칙에 집중합니다.
@@ -107,6 +119,24 @@ codeward scan . --json
 | `CW009` | publish, push, merge, unsafe shell pipeline을 실행할 수 있는 package script |
 | `CW010` | 과도한 workflow permission |
 | `CW011` | community health file 누락 |
+
+## 설정
+
+`codeward.config.json` 또는 `.codeward.json`으로 레포지토리별 정책을 조정할 수 있습니다.
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward.schema.json",
+  "failOn": "high",
+  "ignoreRules": ["CW011"],
+  "maxFiles": 2000,
+  "severity": {
+    "CW007": "info"
+  }
+}
+```
+
+자세한 내용은 [docs/configuration.md](docs/configuration.md)를 참고해 주세요.
 
 ## GitHub Actions
 
@@ -210,6 +240,18 @@ Print JSON for custom automation:
 codeward scan . --json
 ```
 
+Print SARIF for code scanning integrations:
+
+```sh
+codeward scan . --format sarif --output codeward.sarif
+```
+
+Create a config file:
+
+```sh
+codeward init .
+```
+
 ## What It Checks Today
 
 CodeWard's first release focuses on high-signal checks that are useful across many repositories:
@@ -227,6 +269,24 @@ CodeWard's first release focuses on high-signal checks that are useful across ma
 | `CW009` | Package scripts that can publish, push, merge, or run unsafe shell pipelines |
 | `CW010` | Broad workflow permissions |
 | `CW011` | Missing community health files |
+
+## Configuration
+
+Use `codeward.config.json` or `.codeward.json` to tune repository policy.
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward.schema.json",
+  "failOn": "high",
+  "ignoreRules": ["CW011"],
+  "maxFiles": 2000,
+  "severity": {
+    "CW007": "info"
+  }
+}
+```
+
+See [docs/configuration.md](docs/configuration.md) for details.
 
 ## GitHub Actions
 
