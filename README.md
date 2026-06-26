@@ -110,6 +110,7 @@ node dist/cli.js scan /path/to/repo
 | `codeward scan . --format sarif --output codeward.sarif` | Generate SARIF for code scanning integrations. |
 | `codeward report . --output CODEWARD_REPORT.md` | Generate a Markdown report for PRs or audits. |
 | `codeward doctor .` | Summarize whether the repo is ready for AI-assisted work. |
+| `codeward review . --base origin/main --head HEAD` | Show new CodeWard findings introduced by a branch. |
 | `codeward context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `codeward init .` | Create a starter `codeward.config.json`. |
 
@@ -202,7 +203,7 @@ Near-term priorities:
 
 - publish the first npm package
 - add a GitHub Action wrapper with PR annotations
-- add branch-aware `review` output for PR risk
+- improve branch-aware `review` output for PR comments and annotations
 - expand agent instruction detection across Codex, Claude Code, Cursor, Copilot, Gemini, and related surfaces
 - generate rule documentation from scanner metadata
 

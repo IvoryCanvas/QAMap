@@ -1,21 +1,26 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
   buildDoctorResult,
   formatMarkdownReport,
   formatDoctorReport,
+  formatReviewReport,
   formatSarifReport,
   generateAgentContext,
   loadConfig,
+  reviewProject,
   scanProject,
   writeDefaultConfig,
 } from "../dist/index.js";
 
 const fixtureRoot = fileURLToPath(new URL(".", import.meta.url));
+const execFileAsync = promisify(execFile);
 
 test("scanProject reports common AI agent repository risks", async () => {
   const root = await makeTempRepo();
@@ -235,6 +240,69 @@ test("doctor summarizes a complex risky repository by guardrail area", async () 
   assert.match(formatted, /Top priorities:/);
 });
 
+test("reviewProject reports findings introduced by a branch", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, ".github/workflows"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "AGENTS.md"), "# Agent Instructions\n\n- Run npm test before merge.\n");
+  await writeFile(path.join(root, "LICENSE"), "MIT");
+  await writeFile(path.join(root, "SECURITY.md"), "# Security\n");
+  await writeFile(path.join(root, "CONTRIBUTING.md"), "# Contributing\n");
+  await writeFile(
+    path.join(root, ".github/workflows/ci.yml"),
+    "name: CI\non: [pull_request]\npermissions:\n  contents: read\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/risky-agent-config"]);
+  await mkdir(path.join(root, ".cursor"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "echo \"Error: no test specified\" && exit 1",
+        release: "npm publish && git push",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, ".cursor/mcp.json"),
+    JSON.stringify({
+      mcpServers: {
+        deploy: {
+          command: "bash",
+          args: ["-lc", "npm publish"],
+        },
+      },
+    }),
+  );
+  await writeFile(path.join(root, ".env.local"), "TOKEN=not-for-tests");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add risky agent config"]);
+
+  const review = await reviewProject(root, { base: "main", head: "HEAD" });
+  const formatted = formatReviewReport(review);
+  const ids = review.newFindings.map((finding) => finding.id);
+
+  assert.ok(ids.includes("CW004"));
+  assert.ok(ids.includes("CW006"));
+  assert.ok(ids.includes("CW008"));
+  assert.ok(ids.includes("CW009"));
+  assert.match(formatted, /CodeWard Review/);
+  assert.match(formatted, /New findings: 4/);
+  assert.match(formatted, /package.json/);
+});
+
 test("generateAgentContext reflects npm scripts and repository boundaries", async () => {
   const root = await makeTempRepo();
   await writeFile(
@@ -257,6 +325,16 @@ test("generateAgentContext reflects npm scripts and repository boundaries", asyn
 
 async function makeTempRepo() {
   return mkdtemp(path.join(tmpdir(), "codeward-test-"));
+}
+
+async function initGitRepo(root) {
+  await git(root, ["init"]);
+  await git(root, ["config", "user.email", "codeward@example.invalid"]);
+  await git(root, ["config", "user.name", "CodeWard Test"]);
+}
+
+async function git(root, args) {
+  return execFileAsync("git", args, { cwd: root, maxBuffer: 10 * 1024 * 1024 });
 }
 
 void fixtureRoot;

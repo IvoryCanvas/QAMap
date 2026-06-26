@@ -5,8 +5,9 @@ import { loadConfig, writeDefaultConfig } from "./config.js";
 import { generateAgentContext } from "./context.js";
 import { buildDoctorResult, formatDoctorReport } from "./doctor.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
+import { formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
-import { isSeverity } from "./severity.js";
+import { isAtLeastSeverity, isSeverity } from "./severity.js";
 import type { CodeWardConfig } from "./types.js";
 import type { Severity } from "./types.js";
 import { VERSION } from "./version.js";
@@ -23,6 +24,8 @@ interface ParsedOptions {
   force: boolean;
   failOn?: Severity;
   maxFiles?: number;
+  base?: string;
+  head?: string;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -66,6 +69,20 @@ async function main(argv: string[]): Promise<number> {
     await printOrWrite(output, options.output);
     const failOn = options.failOn ?? loadedConfig.config.failOn;
     return failOn && hasFindingsAtOrAbove(result, failOn) ? 1 : 0;
+  }
+
+  if (command === "review") {
+    const options = parseOptions(rest);
+    const loadedConfig = await loadConfig(options.path, options.config);
+    const result = await reviewProject(options.path, {
+      base: options.base,
+      head: options.head,
+      scanOptions: buildScanOptions(options, loadedConfig),
+    });
+    const output = formatReviewOutput(result, options.format ?? (options.json ? "json" : "text"));
+    await printOrWrite(output, options.output);
+    const failOn = options.failOn ?? loadedConfig.config.failOn;
+    return failOn && result.newFindings.some((finding) => isAtLeastSeverity(finding.severity, failOn)) ? 1 : 0;
   }
 
   if (command === "context") {
@@ -162,6 +179,16 @@ function parseOptions(args: string[]): ParsedOptions {
       continue;
     }
 
+    if (arg === "--base") {
+      options.base = readValue(args, ++index, arg);
+      continue;
+    }
+
+    if (arg === "--head") {
+      options.head = readValue(args, ++index, arg);
+      continue;
+    }
+
     if (arg === "--max-files") {
       const value = Number.parseInt(readValue(args, ++index, arg), 10);
       if (!Number.isFinite(value) || value < 1) {
@@ -231,6 +258,16 @@ function formatDoctorOutput(result: Awaited<ReturnType<typeof scanProject>>, for
   return formatDoctorReport(result);
 }
 
+function formatReviewOutput(result: Awaited<ReturnType<typeof reviewProject>>, format: OutputFormat): string {
+  if (format === "json") {
+    return `${JSON.stringify(result, null, 2)}\n`;
+  }
+  if (format !== "text") {
+    throw new Error(`Review supports text or json output, not ${format}`);
+  }
+  return formatReviewReport(result);
+}
+
 async function printOrWrite(output: string, outputPath?: string): Promise<void> {
   if (outputPath) {
     const resolvedOutputPath = path.resolve(outputPath);
@@ -262,6 +299,7 @@ Usage:
   codeward scan [path] [--format <format>] [--fail-on <severity>] [--max-files <n>]
   codeward report [path] [--format <format>] [--output <file>] [--fail-on <severity>]
   codeward doctor [path] [--json] [--output <file>] [--fail-on <severity>]
+  codeward review [path] [--base <ref>] [--head <ref>] [--json] [--fail-on <severity>]
   codeward context [path] [--write [file]] [--force]
   codeward init [path] [--write <file>] [--force]
 
@@ -277,6 +315,7 @@ Examples:
   codeward scan . --fail-on medium
   codeward report . --output CODEWARD_REPORT.md
   codeward doctor .
+  codeward review . --base origin/main --head HEAD
   codeward context . --write AGENTS.md
   codeward init .
 `);
