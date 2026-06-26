@@ -1,274 +1,137 @@
 # CodeWard
 
 [![CI](https://github.com/IvoryCanvas/codeward/actions/workflows/ci.yml/badge.svg)](https://github.com/IvoryCanvas/codeward/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**AI 코딩 에이전트와 그들이 변경하는 코드를 위한 가드레일.**
+**Repo-level preflight checks before AI coding agents touch your code.**
 
-CodeWard는 AI와 함께 개발할 때 레포지토리를 위험하게 만드는 요소를 점검합니다. 누락된 에이전트 지침, 위험한 MCP 설정, 커밋된 로컬 환경 파일, 위험한 자동화 스크립트, 과도한 워크플로 권한, 약한 검증 신호를 찾아냅니다.
+CodeWard scans the repository surface that AI coding agents rely on: agent instructions, MCP configuration, local environment files, package scripts, GitHub Actions permissions, community health files, and validation signals.
 
-Codex, Claude Code, Cursor, GitHub Copilot coding agent, MCP 기반 도구를 사용하는 팀이 에이전트에게 작업을 맡기거나 PR을 리뷰하기 전에 가볍게 실행할 수 있는 안전 점검 도구입니다.
+It is built for teams using Codex, Claude Code, Cursor, GitHub Copilot coding agent, MCP-powered tools, or any workflow where an agent can read, edit, test, commit, or open pull requests.
+
+CodeWard is intentionally small:
+
+- static by default: it does not execute scanned project code
+- repo-focused: it checks the guardrails around the code, not general style
+- CI-friendly: text, JSON, Markdown, and SARIF output are supported
+- explainable: every finding includes a concrete fix
 
 <details>
-<summary>English translation</summary>
+<summary>한국어 소개</summary>
 
-**Guardrails for AI coding agents and the code they change.**
+CodeWard는 AI 코딩 에이전트에게 레포지토리를 맡기기 전에 빠르게 실행하는 사전 점검 CLI입니다.
 
-CodeWard scans a repository for the things that make AI-assisted development risky: missing agent instructions, unsafe MCP configuration, leaked local env files, dangerous automation scripts, broad workflow permissions, and weak validation signals.
+누락된 에이전트 지침, 위험한 MCP 설정, 커밋된 로컬 환경 파일, 위험한 자동화 스크립트, 과도한 GitHub Actions 권한, 약한 검증 신호를 찾아냅니다.
 
-It is designed for teams that use Codex, Claude Code, Cursor, GitHub Copilot coding agent, or MCP-powered tools and want a lightweight safety check before an agent edits the repo or a PR gets reviewed.
+목표는 거대한 보안 플랫폼이 아니라, 유지보수자가 PR 리뷰나 에이전트 작업 전에 위험한 레포 상태를 빨리 알아차리게 해주는 작고 선명한 도구입니다.
 
 </details>
 
-## 왜 만들었나요
+## Why It Matters
 
-AI 코딩 에이전트는 빠르지만, 너무 쉽게 믿게 되는 도구이기도 합니다. 가장 난감한 실패는 명백히 망가진 코드가 아니라, 거의 맞아 보이지만 충분한 맥락과 가드레일 없이 병합되는 코드입니다.
+AI agents are becoming normal contributors to software projects. They can research a repository, edit files, run commands, and prepare pull requests. The risky failure mode is not always broken code. It is code that looks plausible, merged through a repository with missing context, broad permissions, unsafe scripts, or weak validation.
 
-CodeWard는 유지보수자에게 첫 번째 방어선을 제공합니다.
+CodeWard gives maintainers a quick first line of defense:
 
-- 위험한 에이전트/MCP 설정 찾기
-- 누락되거나 충돌하는 프로젝트 지침 감지
-- 과도한 CI 권한과 위험한 스크립트 표시
-- 깨끗한 `AGENTS.md` 시작점 생성
-- PR에 붙일 Markdown 리포트 생성
+- Is there clear guidance for agents?
+- Are MCP configs safe enough to inspect?
+- Did a local `.env` file slip into the repo?
+- Can package scripts publish, push, merge, or run risky shell pipelines?
+- Are workflows using broad permissions or risky triggers?
+- Is there a real test command for agent-made changes?
 
-## 설치
-
-```sh
-pnpm add -D @ivorycanvas/codeward
-```
-
-설치 없이 실행할 수도 있습니다.
-
-```sh
-pnpm dlx @ivorycanvas/codeward scan .
-```
-
-<details>
-<summary>npm / Yarn</summary>
-
-```sh
-npm install -D @ivorycanvas/codeward
-npx @ivorycanvas/codeward scan .
-```
-
-```sh
-yarn add -D @ivorycanvas/codeward
-yarn dlx @ivorycanvas/codeward scan .
-```
-
-</details>
-
-## 사용법
-
-현재 레포지토리를 스캔합니다.
+## Quick Demo
 
 ```sh
 codeward scan .
 ```
 
-중간 등급 이상의 finding이 있으면 CI를 실패시킵니다.
+Example output from a risky repository:
+
+```txt
+CodeWard 0.1.0
+Findings: 6 (high: 3, medium: 2, low: 1, info: 0)
+
+HIGH
+- CW003 Suspicious agent instruction text (AGENTS.md)
+  Instruction file contains text that matches a suspicious instruction override pattern.
+  Fix: Remove untrusted instruction text or move examples into clearly fenced documentation that agents should not follow.
+
+- CW009 Risky package script (package.json)
+  The "release" script can publish, push, or merge changes.
+  Fix: Keep publish, push, merge, and destructive scripts outside default agent workflows or gate them with maintainer-only release processes.
+
+- CW008 Committed environment file (.env)
+  A local environment file appears to be present in the repository.
+  Fix: Remove committed environment files, rotate any exposed secrets, and keep only safe examples such as .env.example.
+```
+
+For a readiness view, use `doctor`:
 
 ```sh
-codeward scan . --fail-on medium
+codeward doctor .
 ```
 
-Markdown 리포트를 생성합니다.
+```txt
+CodeWard Doctor
+Agent readiness: High risk
 
-```sh
-codeward report . --output CODEWARD_REPORT.md
+Guardrail areas:
+- [review] Agent instructions: Agent guidance needs attention before broad agent use. (CW003)
+- [review] Validation: Agents do not have a clear default validation command. (CW006)
+- [review] Repository automation: Local environment files or risky scripts need maintainer review. (CW008, CW009)
 ```
-
-에이전트 지침 파일을 생성합니다.
-
-```sh
-codeward context . --write AGENTS.md
-```
-
-자동화를 위해 JSON으로 출력합니다.
-
-```sh
-codeward scan . --json
-```
-
-SARIF로 출력합니다.
-
-```sh
-codeward scan . --format sarif --output codeward.sarif
-```
-
-설정 파일을 생성합니다.
-
-```sh
-codeward init .
-```
-
-## 현재 검사하는 것
-
-첫 릴리즈는 많은 레포지토리에서 바로 쓸 수 있는 고신호 규칙에 집중합니다.
-
-| Rule | 잡아내는 것 |
-| --- | --- |
-| `CW001` | 에이전트 지침 파일 누락 |
-| `CW002` | 서로 충돌하는 에이전트 지침 |
-| `CW003` | 에이전트를 잘못 유도할 수 있는 의심스러운 지침 문구 |
-| `CW004` | 위험한 MCP command 설정 |
-| `CW005` | MCP config에 포함된 secret-like 값 |
-| `CW006` | 누락되었거나 placeholder인 test script |
-| `CW007` | GitHub Actions workflow 누락 |
-| `CW008` | 커밋된 로컬 environment file |
-| `CW009` | publish, push, merge, unsafe shell pipeline을 실행할 수 있는 package script |
-| `CW010` | 과도한 workflow permission |
-| `CW011` | community health file 누락 |
-
-## 설정
-
-`codeward.config.json` 또는 `.codeward.json`으로 레포지토리별 정책을 조정할 수 있습니다.
-
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward.schema.json",
-  "failOn": "high",
-  "ignoreRules": ["CW011"],
-  "maxFiles": 2000,
-  "severity": {
-    "CW007": "info"
-  }
-}
-```
-
-자세한 내용은 [docs/configuration.md](docs/configuration.md)를 참고해 주세요.
-
-## GitHub Actions
-
-```yaml
-name: CodeWard
-
-on:
-  pull_request:
-  push:
-    branches: [main]
-
-permissions:
-  contents: read
-
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.32.1
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm dlx @ivorycanvas/codeward scan . --fail-on high
-```
-
-## 철학
-
-CodeWard는 코드 리뷰, 테스트, threat modeling, branch protection을 대체하지 않습니다. 레포지토리 수준의 AI 위험을 빨리 알아차리게 해주는 작고 선명한 점검 도구입니다.
-
-## 프로젝트 상태
-
-CodeWard는 아직 초기 단계입니다. `1.0` 이전에는 공개 API가 바뀔 수 있지만, 첫 릴리즈부터 실제 레포지토리에서 작고 읽기 쉽고 유용한 도구로 유지하는 것이 목표입니다.
-
-## 기여
-
-이슈와 Pull Request를 환영합니다. 유지보수 권한은 IvoryCanvas 멤버에게만 제공되며, `main`은 보호 브랜치로 운영되어 외부 기여자가 직접 push하거나 merge할 수 없습니다.
-
-[CONTRIBUTING.md](CONTRIBUTING.md), [GOVERNANCE.md](GOVERNANCE.md), [SECURITY.md](SECURITY.md)를 참고해 주세요.
-
-<details>
-<summary>Full English README</summary>
-
-## Why CodeWard Exists
-
-AI coding agents are fast, but they are also easy to over-trust. The awkward failure mode is not obviously broken code; it is code that is almost right, merged through a workflow that had too little context and too few guardrails.
-
-CodeWard gives maintainers a simple first line of defense:
-
-- find risky agent and MCP setup
-- detect missing project instructions
-- flag broad CI permissions and unsafe scripts
-- generate a clean `AGENTS.md` starter
-- produce a Markdown report for pull requests
 
 ## Install
 
-```sh
-pnpm add -D @ivorycanvas/codeward
-```
-
-Run it without installing:
+The package metadata is ready for the first npm release:
 
 ```sh
 pnpm dlx @ivorycanvas/codeward scan .
 ```
 
-## Usage
-
-Scan the current repository:
+Until the npm package is published, run CodeWard from source:
 
 ```sh
-codeward scan .
+git clone https://github.com/IvoryCanvas/codeward.git
+cd codeward
+pnpm install
+pnpm build
+node dist/cli.js scan /path/to/repo
 ```
 
-Fail CI when medium-or-higher findings are present:
+## Commands
 
-```sh
-codeward scan . --fail-on medium
-```
-
-Generate a Markdown report:
-
-```sh
-codeward report . --output CODEWARD_REPORT.md
-```
-
-Generate agent instructions:
-
-```sh
-codeward context . --write AGENTS.md
-```
-
-Print JSON for custom automation:
-
-```sh
-codeward scan . --json
-```
-
-Print SARIF for code scanning integrations:
-
-```sh
-codeward scan . --format sarif --output codeward.sarif
-```
-
-Create a config file:
-
-```sh
-codeward init .
-```
-
-## What It Checks Today
-
-CodeWard's first release focuses on high-signal checks that are useful across many repositories:
-
-| Rule | What it catches |
+| Command | Purpose |
 | --- | --- |
-| `CW001` | Missing agent instruction files |
-| `CW002` | Conflicting agent guidance |
-| `CW003` | Suspicious instruction text that can misdirect agents |
-| `CW004` | Risky MCP command configuration |
-| `CW005` | Secret-like values embedded in MCP config |
-| `CW006` | Missing or placeholder test scripts |
-| `CW007` | Missing GitHub Actions workflows |
-| `CW008` | Committed local environment files |
-| `CW009` | Package scripts that can publish, push, merge, or run unsafe shell pipelines |
-| `CW010` | Broad workflow permissions |
-| `CW011` | Missing community health files |
+| `codeward scan .` | Scan the current repository and print a text report. |
+| `codeward scan . --fail-on medium` | Exit with code `1` when findings at or above the threshold exist. |
+| `codeward scan . --json` | Print machine-readable JSON for custom automation. |
+| `codeward scan . --format sarif --output codeward.sarif` | Generate SARIF for code scanning integrations. |
+| `codeward report . --output CODEWARD_REPORT.md` | Generate a Markdown report for PRs or audits. |
+| `codeward doctor .` | Summarize whether the repo is ready for AI-assisted work. |
+| `codeward context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
+| `codeward init .` | Create a starter `codeward.config.json`. |
+
+## What It Checks
+
+The first release focuses on high-signal checks that are useful across many repositories.
+
+| Rule | Severity | What it catches |
+| --- | --- | --- |
+| `CW001` | medium | Missing agent instruction files. |
+| `CW002` | medium | Conflicting agent guidance. |
+| `CW003` | high | Suspicious instruction text that can misdirect agents. |
+| `CW004` | medium/high | Risky MCP command configuration. |
+| `CW005` | high | Secret-like values embedded in MCP config. |
+| `CW006` | medium | Missing or placeholder test scripts. |
+| `CW007` | low | Missing GitHub Actions workflows. |
+| `CW008` | high | Committed local environment files. |
+| `CW009` | high | Package scripts that can publish, push, merge, or run unsafe shell pipelines. |
+| `CW010` | medium | Broad workflow permissions or risky workflow triggers. |
+| `CW011` | low | Missing community health files. |
+
+See [docs/rules.md](docs/rules.md) for the rule catalog.
 
 ## Configuration
 
@@ -290,6 +153,8 @@ See [docs/configuration.md](docs/configuration.md) for details.
 
 ## GitHub Actions
 
+After the npm package is published, CodeWard can run as a lightweight CI gate:
+
 ```yaml
 name: CodeWard
 
@@ -313,22 +178,48 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
       - run: pnpm dlx @ivorycanvas/codeward scan . --fail-on high
 ```
 
-## Philosophy
+For rollout guidance, see [docs/adoption.md](docs/adoption.md).
 
-CodeWard is not a replacement for code review, tests, threat modeling, or branch protection. It is a small, sharp check that helps teams notice repo-level AI risks early enough to do something about them.
+## Where CodeWard Fits
+
+CodeWard is not trying to replace the larger security ecosystem.
+
+| Tool category | Typical focus | CodeWard focus |
+| --- | --- | --- |
+| OpenSSF Scorecard | Broad open source security posture. | AI-agent readiness at the repository boundary. |
+| Secret scanning | Exposed credentials in code or history. | Secret-like values plus unsafe agent, workflow, and script context. |
+| MCP security scanners | Deep analysis of MCP servers, tools, prompts, and skills. | Static repo checks without executing untrusted MCP servers. |
+| General linters | Code style, correctness, or framework rules. | Guardrails that affect AI-assisted development safety. |
+
+## Roadmap
+
+CodeWard starts as a local CLI and should stay small enough that maintainers can understand every finding.
+
+Near-term priorities:
+
+- publish the first npm package
+- add a GitHub Action wrapper with PR annotations
+- add branch-aware `review` output for PR risk
+- expand agent instruction detection across Codex, Claude Code, Cursor, Copilot, Gemini, and related surfaces
+- generate rule documentation from scanner metadata
+
+See [docs/roadmap.md](docs/roadmap.md) for more detail.
 
 ## Project Status
 
-CodeWard is early. The public API may change before `1.0`, but the project is intended to stay small, readable, and useful in real repositories from the first release.
+CodeWard is early and pre-`1.0`. The public API may change, but the project is intended to stay readable, practical, and useful in real repositories from the first release.
 
 ## Contributing
 
 Issues and pull requests are welcome. Maintainer permissions stay with IvoryCanvas members, and `main` is protected so external contributors cannot push or merge directly.
 
+Good first contributions include new agent instruction file detectors, better SARIF locations, sample risky repository fixtures, and documentation improvements.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md), [GOVERNANCE.md](GOVERNANCE.md), and [SECURITY.md](SECURITY.md).
 
-</details>
+## Philosophy
+
+CodeWard does not replace code review, tests, threat modeling, branch protection, or security review. It is a small preflight check that helps teams notice repo-level AI risks early enough to do something about them.

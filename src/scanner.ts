@@ -249,7 +249,7 @@ function checkSuspiciousInstructionText(files: ProjectFile[]): Finding[] {
           title: "Suspicious agent instruction text",
           severity: "high",
           file: file.path,
-          message: `Instruction file contains text that looks like a ${match.label}.`,
+          message: `Instruction file contains text that matches a suspicious ${match.label} pattern.`,
           recommendation:
             "Remove untrusted instruction text or move examples into clearly fenced documentation that agents should not follow.",
           evidence: `${file.path}:${index + 1} ${redact(line.trim())}`,

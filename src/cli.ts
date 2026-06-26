@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { generateAgentContext } from "./context.js";
+import { buildDoctorResult, formatDoctorReport } from "./doctor.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 import { scanProject } from "./scanner.js";
 import { isSeverity } from "./severity.js";
@@ -52,6 +53,16 @@ async function main(argv: string[]): Promise<number> {
     const loadedConfig = await loadConfig(options.path, options.config);
     const result = await scanProject(options.path, buildScanOptions(options, loadedConfig));
     const output = formatOutput(result, options.format ?? (options.json ? "json" : "markdown"));
+    await printOrWrite(output, options.output);
+    const failOn = options.failOn ?? loadedConfig.config.failOn;
+    return failOn && hasFindingsAtOrAbove(result, failOn) ? 1 : 0;
+  }
+
+  if (command === "doctor") {
+    const options = parseOptions(rest);
+    const loadedConfig = await loadConfig(options.path, options.config);
+    const result = await scanProject(options.path, buildScanOptions(options, loadedConfig));
+    const output = formatDoctorOutput(result, options.format ?? (options.json ? "json" : "text"));
     await printOrWrite(output, options.output);
     const failOn = options.failOn ?? loadedConfig.config.failOn;
     return failOn && hasFindingsAtOrAbove(result, failOn) ? 1 : 0;
@@ -210,6 +221,16 @@ function formatOutput(result: Awaited<ReturnType<typeof scanProject>>, format: O
   return formatTextReport(result);
 }
 
+function formatDoctorOutput(result: Awaited<ReturnType<typeof scanProject>>, format: OutputFormat): string {
+  if (format === "json") {
+    return `${JSON.stringify(buildDoctorResult(result), null, 2)}\n`;
+  }
+  if (format !== "text") {
+    throw new Error(`Doctor supports text or json output, not ${format}`);
+  }
+  return formatDoctorReport(result);
+}
+
 async function printOrWrite(output: string, outputPath?: string): Promise<void> {
   if (outputPath) {
     const resolvedOutputPath = path.resolve(outputPath);
@@ -240,6 +261,7 @@ Guardrails for AI coding agents and the code they change.
 Usage:
   codeward scan [path] [--format <format>] [--fail-on <severity>] [--max-files <n>]
   codeward report [path] [--format <format>] [--output <file>] [--fail-on <severity>]
+  codeward doctor [path] [--json] [--output <file>] [--fail-on <severity>]
   codeward context [path] [--write [file]] [--force]
   codeward init [path] [--write <file>] [--force]
 
@@ -254,6 +276,7 @@ Examples:
   codeward scan . --format sarif --output codeward.sarif
   codeward scan . --fail-on medium
   codeward report . --output CODEWARD_REPORT.md
+  codeward doctor .
   codeward context . --write AGENTS.md
   codeward init .
 `);

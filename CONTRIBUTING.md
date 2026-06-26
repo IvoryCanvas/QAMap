@@ -25,6 +25,14 @@ pnpm report
 - Use one of these branch prefixes: `feat/`, `fix/`, `refactor/`, `style/`, `hotfix/`, `chore/`, or `docs/`.
 - Do not use a `codex/` branch prefix.
 
+## Good First Contributions
+
+- Add detection for another agent instruction surface.
+- Improve SARIF locations for a rule.
+- Add focused scanner fixtures for a risky repo pattern.
+- Improve rule recommendations so maintainers can fix findings faster.
+- Add documentation for real-world rollout patterns.
+
 ## Maintainer Permissions
 
 External contributors can open issues and pull requests. Push and merge permissions are reserved for IvoryCanvas maintainers and organization members with explicit repository access.
