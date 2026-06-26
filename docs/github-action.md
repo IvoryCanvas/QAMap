@@ -7,6 +7,7 @@ The action writes:
 - a Markdown report file
 - a sticky PR comment body
 - an optional suggested domain test plan
+- an optional verification readiness evaluation
 - GitHub workflow annotations
 - a GitHub step summary
 
@@ -71,6 +72,8 @@ While CodeWard is pre-release, use `IvoryCanvas/codeward@main`; pin to a version
 | `comment-file` | `codeward-pr-comment.md` | PR comment body output path. |
 | `test-plan` | `true` | Append suggested domain tests for changed files. |
 | `test-plan-file` | `codeward-test-plan.md` | Markdown test plan output path. |
+| `eval` | `true` | Append a verification readiness evaluation. |
+| `eval-file` | `codeward-eval.md` | Markdown evaluation output path. |
 | `annotations` | `true` | Emit GitHub workflow annotations. |
 | `step-summary` | `true` | Append the report to the GitHub step summary. |
 | `comment` | `true` | Create or update a sticky pull request comment. |
@@ -81,5 +84,6 @@ While CodeWard is pre-release, use `IvoryCanvas/codeward@main`; pin to a version
 - Set `pull-requests: write` only when PR comments are enabled.
 - Set `comment: false` for advisory runs that should only use annotations and step summaries.
 - Set `test-plan: false` when the PR comment should contain only CodeWard findings.
+- Set `eval: false` when the PR comment should not include readiness scoring.
 - Pass `github-token: ${{ secrets.GITHUB_TOKEN }}` when `comment` is enabled.
 - CodeWard still does not execute scanned project code; the action only installs and builds CodeWard itself before scanning the checked-out repository.

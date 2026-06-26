@@ -8,6 +8,8 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
   buildDoctorResult,
+  evaluateChangeReadiness,
+  formatMarkdownEvalReport,
   formatMarkdownReport,
   formatDoctorReport,
   formatMarkdownDoctorReport,
@@ -409,6 +411,73 @@ test("generateTestPlan scopes monorepo changes to the requested package", async 
   assert.match(localMarkdown, /Includes working tree changes: yes/);
 });
 
+test("evaluateChangeReadiness scores intent, risk, and verification evidence", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/features/billing/api"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      packageManager: "pnpm@10.32.1",
+      scripts: {
+        test: "node --test",
+        typecheck: "tsc --noEmit",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "src/features/billing/api/client.ts"), "export const endpoint = '/billing';\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/billing-contract"]);
+  await writeFile(path.join(root, "src/features/billing/api/client.ts"), "export const endpoint = '/billing/v2';\n");
+  await writeFile(path.join(root, "src/features/billing/api/client.test.ts"), "import './client.js';\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update billing contract"]);
+
+  const result = await evaluateChangeReadiness(root, {
+    base: "main",
+    head: "HEAD",
+    prBody: [
+      "문제: billing API contract changed for settlement retries.",
+      "이유: old clients could not distinguish retryable failures.",
+      "Risk: API compatibility is preserved for existing callers.",
+      "Rollback: switch endpoint mapping back to /billing.",
+    ].join("\n"),
+  });
+  const markdown = formatMarkdownEvalReport(result);
+
+  assert.equal(result.rating, "strong");
+  assert.equal(result.score, result.maxScore);
+  assert.equal(result.checks.find((check) => check.id === "intent-capture")?.status, "pass");
+  assert.equal(result.checks.find((check) => check.id === "risk-explanation")?.status, "pass");
+  assert.match(markdown, /# CodeWard Eval/);
+  assert.match(markdown, /Verification Gates/);
+});
+
+test("evaluateChangeReadiness flags missing intent and risk context", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/auth"), { recursive: true });
+  await writeFile(path.join(root, "src/auth/session.ts"), "export const timeout = 5;\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/session-timeout"]);
+  await writeFile(path.join(root, "src/auth/session.ts"), "export const timeout = 10;\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "change session timeout"]);
+
+  const result = await evaluateChangeReadiness(root, { base: "main", head: "HEAD" });
+
+  assert.equal(result.rating, "high-risk");
+  assert.equal(result.checks.find((check) => check.id === "validation-commands")?.status, "fail");
+  assert.equal(result.checks.find((check) => check.id === "intent-capture")?.status, "fail");
+  assert.equal(result.checks.find((check) => check.id === "risk-explanation")?.status, "fail");
+});
+
 test("formatMarkdownReport includes a useful summary", async () => {
   const root = await makeTempRepo();
   const result = await scanProject(root);
@@ -719,6 +788,7 @@ test("github-action command writes PR artifacts before failing", async () => {
   const reportFile = path.join(root, "codeward-report.md");
   const commentFile = path.join(root, "codeward-pr-comment.md");
   const testPlanFile = path.join(root, "codeward-test-plan.md");
+  const evalFile = path.join(root, "codeward-eval.md");
   const summaryFile = path.join(root, "codeward-step-summary.md");
 
   await assert.rejects(
@@ -744,6 +814,9 @@ test("github-action command writes PR artifacts before failing", async () => {
           "--test-plan",
           "--test-plan-file",
           testPlanFile,
+          "--eval",
+          "--eval-file",
+          evalFile,
         ],
         {
           env: {
@@ -758,15 +831,19 @@ test("github-action command writes PR artifacts before failing", async () => {
   const report = await readFile(reportFile, "utf8");
   const comment = await readFile(commentFile, "utf8");
   const testPlan = await readFile(testPlanFile, "utf8");
+  const evaluation = await readFile(evalFile, "utf8");
   const summary = await readFile(summaryFile, "utf8");
 
   assert.match(report, /# CodeWard Review/);
   assert.match(report, /## Changed Risky Files/);
   assert.match(report, /# CodeWard Test Plan/);
+  assert.match(report, /# CodeWard Eval/);
   assert.match(comment, /<!-- codeward-pr-comment -->/);
   assert.match(comment, /Generated by CodeWard/);
   assert.match(comment, /# CodeWard Test Plan/);
+  assert.match(comment, /# CodeWard Eval/);
   assert.match(testPlan, /# CodeWard Test Plan/);
+  assert.match(evaluation, /# CodeWard Eval/);
   assert.match(summary, /# CodeWard Review/);
 });
 

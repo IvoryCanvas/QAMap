@@ -30,10 +30,11 @@ Start advisory, then tighten the gate once the findings are understood.
 | 2. Doctor | `codeward doctor . --format markdown` | Get an agent-readiness summary by guardrail area. |
 | 3. Review | `codeward review . --base origin/main --head HEAD --format markdown` | See new findings introduced by the branch. |
 | 4. Test plan | `codeward test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed and local files. |
-| 5. PR Action | `uses: IvoryCanvas/codeward@main` | Add annotations, a step summary, a test plan, and a sticky PR comment. |
-| 6. Report | `codeward report . --output CODEWARD_REPORT.md` | Share a readable audit artifact in a PR or maintainer discussion. |
-| 7. High-risk gate | `codeward scan . --fail-on high` | Block obvious risks such as committed env files or unsafe scripts. |
-| 8. Medium-risk gate | `codeward scan . --fail-on medium` | Require stronger agent guidance, tests, and workflow permissions. |
+| 5. Eval | `codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md` | Score intent capture, risk explanation, test evidence, and review size. |
+| 6. PR Action | `uses: IvoryCanvas/codeward@main` | Add annotations, a step summary, a test plan, eval, and a sticky PR comment. |
+| 7. Report | `codeward report . --output CODEWARD_REPORT.md` | Share a readable audit artifact in a PR or maintainer discussion. |
+| 8. High-risk gate | `codeward scan . --fail-on high` | Block obvious risks such as committed env files or unsafe scripts. |
+| 9. Medium-risk gate | `codeward scan . --fail-on medium` | Require stronger agent guidance, tests, and workflow permissions. |
 
 ## Monorepos
 
@@ -89,6 +90,16 @@ jobs:
 When the repository is stable, consider `--fail-on medium`.
 
 For all inputs, see [github-action.md](github-action.md).
+
+## Change Readiness Eval
+
+Use `codeward eval` when an AI-assisted branch looks plausible but reviewers need a faster way to decide what still needs human attention:
+
+```sh
+codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md --format markdown
+```
+
+The eval report scores validation commands, changed-test coverage, intent capture, risk explanation, generated domain test scenarios, and review size. A low score does not mean the code is wrong; it means the branch is expensive or risky to verify.
 
 ## Interpreting Findings
 

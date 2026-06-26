@@ -7,18 +7,21 @@ CodeWard starts as a local CLI for repo-level AI agent readiness. The project ca
 - Keep the scanner fast, static, and easy to understand.
 - Make the first public npm release.
 - Improve README, adoption docs, and sample output so new maintainers can try CodeWard quickly.
+- Keep `eval` explainable enough that maintainers trust the score and know what to fix.
 
 ## Next
 
 - Publish a versioned GitHub Action release tag.
 - Improve `doctor` output with clearer scoring and remediation grouping.
 - Improve `review` output for changed-line locations.
+- Expand `eval` with repository-specific verification manifests and configurable taste rubrics.
 - Continue expanding agent surface detection across Codex, Claude Code, Cursor, GitHub Copilot, Gemini, and related tools.
 - Generate rule documentation from scanner metadata.
 
 ## Later
 
 - Policy packs for open source, startup teams, and security-sensitive repositories.
+- A memory or lessons workflow that captures repeated review feedback into durable agent instructions.
 - VS Code and Cursor extension surfaces.
 - Maintainer dashboard for repeated AI-assisted PR risks.
 

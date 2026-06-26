@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { generateAgentContext } from "./context.js";
 import { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
+import { evaluateChangeReadiness, formatEvalReport, formatMarkdownEvalReport } from "./eval.js";
 import { runGitHubAction } from "./github.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
@@ -37,6 +38,9 @@ interface ParsedOptions {
   stepSummary?: boolean;
   testPlan?: boolean;
   testPlanFile?: string;
+  evaluation?: boolean;
+  evalFile?: string;
+  prBodyFile?: string;
   includeWorkingTree?: boolean;
 }
 
@@ -113,9 +117,26 @@ async function main(argv: string[]): Promise<number> {
       stepSummary: options.stepSummary,
       testPlan: options.testPlan,
       testPlanFile: options.testPlanFile,
+      evaluation: options.evaluation,
+      evalFile: options.evalFile,
+      prBodyFile: options.prBodyFile,
       includeWorkingTree: options.includeWorkingTree,
     });
     return result.exitCode;
+  }
+
+  if (command === "eval") {
+    const options = parseOptions(rest);
+    const result = await evaluateChangeReadiness(options.path, {
+      base: options.base,
+      head: options.head,
+      workspaceRoot: options.workspaceRoot,
+      includeWorkingTree: options.includeWorkingTree,
+      prBodyFile: options.prBodyFile,
+    });
+    const output = formatEvalOutput(result, options.format ?? (options.json ? "json" : "markdown"));
+    await printOrWrite(output, options.output);
+    return 0;
   }
 
   if (command === "test-plan") {
@@ -264,6 +285,16 @@ function parseOptions(args: string[]): ParsedOptions {
       continue;
     }
 
+    if (arg === "--eval-file") {
+      options.evalFile = readValue(args, ++index, arg);
+      continue;
+    }
+
+    if (arg === "--pr-body-file") {
+      options.prBodyFile = readValue(args, ++index, arg);
+      continue;
+    }
+
     if (arg === "--no-annotations") {
       options.annotations = false;
       continue;
@@ -281,6 +312,16 @@ function parseOptions(args: string[]): ParsedOptions {
 
     if (arg === "--no-test-plan") {
       options.testPlan = false;
+      continue;
+    }
+
+    if (arg === "--eval") {
+      options.evaluation = true;
+      continue;
+    }
+
+    if (arg === "--no-eval") {
+      options.evaluation = false;
       continue;
     }
 
@@ -390,6 +431,19 @@ function formatTestPlanOutput(result: Awaited<ReturnType<typeof generateTestPlan
   return formatMarkdownTestPlan(result);
 }
 
+function formatEvalOutput(result: Awaited<ReturnType<typeof evaluateChangeReadiness>>, format: OutputFormat): string {
+  if (format === "json") {
+    return `${JSON.stringify(result, null, 2)}\n`;
+  }
+  if (format === "markdown") {
+    return formatMarkdownEvalReport(result);
+  }
+  if (format !== "text") {
+    throw new Error(`Eval supports text, json, or markdown output, not ${format}`);
+  }
+  return formatEvalReport(result);
+}
+
 async function printOrWrite(output: string, outputPath?: string): Promise<void> {
   if (outputPath) {
     const resolvedOutputPath = path.resolve(outputPath);
@@ -426,6 +480,7 @@ Usage:
   codeward report [path] [--format <format>] [--output <file>] [--fail-on <severity>]
   codeward doctor [path] [--format <format>] [--output <file>] [--fail-on <severity>]
   codeward review [path] [--base <ref>] [--head <ref>] [--format <format>] [--fail-on <severity>]
+  codeward eval [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--pr-body-file <file>] [--format <format>]
   codeward github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
   codeward test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
   codeward context [path] [--write [file]] [--force]
@@ -445,6 +500,7 @@ Examples:
   codeward report . --output CODEWARD_REPORT.md
   codeward doctor .
   codeward review . --base origin/main --head HEAD
+  codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md
   codeward github-action . --mode review --base origin/main --head HEAD --fail-on high
   codeward test-plan . --base origin/main --head HEAD
   codeward test-plan services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree

@@ -41,6 +41,7 @@ CodeWard gives maintainers a quick first line of defense:
 - Can package scripts publish, push, merge, or run risky shell pipelines?
 - Are workflows using broad permissions or risky triggers?
 - Is there a real test command for agent-made changes?
+- Does an AI-assisted change explain its intent, risk, and verification evidence?
 
 ## Quick Demo
 
@@ -113,6 +114,7 @@ node dist/cli.js scan /path/to/repo
 | `codeward report . --output CODEWARD_REPORT.md` | Generate a Markdown report for PRs or audits. |
 | `codeward doctor . --format markdown` | Summarize whether the repo is ready for AI-assisted work. |
 | `codeward review . --base origin/main --head HEAD --format markdown` | Show new findings and changed risky files introduced by a branch. |
+| `codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md` | Score change readiness across intent, risk, tests, and review size. |
 | `codeward github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `codeward test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
 | `codeward doctor services/offer --workspace-root .` | Scan a monorepo package while using root guardrails. |
@@ -124,6 +126,8 @@ For monorepos, pass `--workspace-root` when scanning a package. Package-local ch
 `codeward review` compares a branch against a base ref for PR-style workflows. It separates newly introduced findings from risky files that already had findings on the base branch but were modified again, which helps reviewers notice when a PR touches known-dangerous surfaces such as committed `.env` files, MCP configs, or release scripts.
 
 `codeward test-plan` turns changed file paths into a review-ready domain test checklist. Add `--include-working-tree` for local, uncommitted changes while iterating.
+
+`codeward eval` scores whether a branch has enough validation evidence, changed-test coverage, intent capture, risk explanation, domain verification paths, and reviewable size. In GitHub Actions, CodeWard can read the pull request body from the event payload and append the evaluation to the PR comment.
 
 ## What It Checks
 
@@ -148,6 +152,7 @@ The first release focuses on high-signal checks that are useful across many repo
 See [docs/rules.md](docs/rules.md) for the rule catalog.
 See [docs/ecosystem.md](docs/ecosystem.md) for the agent ecosystem surfaces CodeWard tracks.
 See [docs/api-contracts.md](docs/api-contracts.md) for the API contract source-of-truth check.
+See [docs/eval.md](docs/eval.md) for the change readiness evaluation.
 
 ## Configuration
 
@@ -197,7 +202,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-The PR comment can include suggested domain tests for changed files. For rollout guidance, see [docs/adoption.md](docs/adoption.md) and [docs/github-action.md](docs/github-action.md).
+The PR comment can include suggested domain tests and a verification readiness evaluation for changed files. For rollout guidance, see [docs/adoption.md](docs/adoption.md) and [docs/github-action.md](docs/github-action.md).
 
 ## Where CodeWard Fits
 
@@ -220,6 +225,7 @@ Near-term priorities:
 - publish a versioned GitHub Action release tag
 - improve branch-aware `review` changed-line locations
 - improve generated domain test plans with framework-specific test skeletons
+- expand `eval` into repository-specific verification manifests and taste rubrics
 - continue expanding agent surface detection across Codex, Claude Code, Cursor, Copilot, Gemini, and related tools
 - generate rule documentation from scanner metadata
 

@@ -38,6 +38,12 @@ inputs:
   test-plan-file:
     description: Markdown test plan file path.
     default: codeward-test-plan.md
+  eval:
+    description: Append a verification readiness evaluation to reports and PR comments.
+    default: "true"
+  eval-file:
+    description: Markdown verification readiness evaluation file path.
+    default: codeward-eval.md
   annotations:
     description: Emit GitHub workflow annotations.
     default: "true"
@@ -61,6 +67,9 @@ outputs:
   test-plan-file:
     description: Markdown test plan file path.
     value: ${{ steps.codeward.outputs.test-plan-file }}
+  eval-file:
+    description: Markdown verification readiness evaluation file path.
+    value: ${{ steps.codeward.outputs.eval-file }}
   exit-code:
     description: CodeWard exit code before the comment step ran.
     value: ${{ steps.codeward.outputs.exit-code }}
@@ -106,6 +115,11 @@ runs:
         else
           args+=(--no-test-plan)
         fi
+        if [ "${{ inputs.eval }}" = "true" ]; then
+          args+=(--eval --eval-file "${{ inputs.eval-file }}")
+        else
+          args+=(--no-eval)
+        fi
 
         node "$GITHUB_ACTION_PATH/dist/cli.js" "${args[@]}"
         codeward_exit_code=$?
@@ -113,6 +127,7 @@ runs:
         echo "report-file=${{ inputs.report-file }}" >> "$GITHUB_OUTPUT"
         echo "comment-file=${{ inputs.comment-file }}" >> "$GITHUB_OUTPUT"
         echo "test-plan-file=${{ inputs.test-plan-file }}" >> "$GITHUB_OUTPUT"
+        echo "eval-file=${{ inputs.eval-file }}" >> "$GITHUB_OUTPUT"
         exit 0
 
     - name: Comment on pull request
