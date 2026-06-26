@@ -26,6 +26,7 @@ export interface ScanResult {
     version: string;
   };
   root: string;
+  workspaceRoot?: string;
   scannedAt: string;
   filesInspected: number;
   config?: {
@@ -39,6 +40,7 @@ export interface ScanResult {
 
 export interface ScanOptions {
   maxFiles?: number;
+  workspaceRoot?: string;
   configPath?: string;
   ignoreRules?: string[];
   severityOverrides?: Record<string, Severity>;

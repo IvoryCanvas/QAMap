@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import type { Dirent } from "node:fs";
 import path from "node:path";
 import { collectProjectFiles, getFile, getFilesUnder, pathExists } from "./fs.js";
 import { TOOL_NAME, VERSION } from "./version.js";
@@ -31,16 +32,31 @@ export async function scanProject(rootInput: string, options: ScanOptions = {}):
     throw new Error(`CodeWard expected a directory: ${root}`);
   }
 
+  const workspaceRoot = options.workspaceRoot ? path.resolve(options.workspaceRoot) : undefined;
+  if (workspaceRoot) {
+    const workspaceStat = await fs.stat(workspaceRoot);
+    if (!workspaceStat.isDirectory()) {
+      throw new Error(`CodeWard expected a workspace root directory: ${workspaceRoot}`);
+    }
+    const relativeRoot = path.relative(workspaceRoot, root);
+    if (relativeRoot.startsWith("..") || path.isAbsolute(relativeRoot)) {
+      throw new Error(`CodeWard scan path must be inside workspace root: ${root}`);
+    }
+  }
+
   const files = await collectProjectFiles(root, options.maxFiles ?? defaultMaxFiles);
+  const workspaceFiles =
+    workspaceRoot && workspaceRoot !== root ? await collectWorkspaceGuardrailFiles(workspaceRoot) : [];
+  const guardrailFiles = dedupeFiles([...files, ...workspaceFiles]);
   const rawFindings = [
-    ...checkAgentInstructions(files),
-    ...checkInstructionConflicts(files),
-    ...checkSuspiciousInstructionText(files),
-    ...checkMcpConfig(files),
+    ...checkAgentInstructions(guardrailFiles),
+    ...checkInstructionConflicts(guardrailFiles),
+    ...checkSuspiciousInstructionText(guardrailFiles),
+    ...checkMcpConfig(guardrailFiles),
     ...checkPackageScripts(files),
-    ...checkGitHubActions(files),
+    ...checkGitHubActions(guardrailFiles),
     ...checkCommittedEnvFiles(files),
-    ...checkCommunityHealth(files),
+    ...checkCommunityHealth(guardrailFiles),
   ];
   const findings = applyFindingPolicy(rawFindings, options);
 
@@ -50,8 +66,9 @@ export async function scanProject(rootInput: string, options: ScanOptions = {}):
       version: VERSION,
     },
     root,
+    workspaceRoot,
     scannedAt: new Date().toISOString(),
-    filesInspected: files.length,
+    filesInspected: files.length + workspaceFiles.length,
     config:
       options.configPath || options.ignoreRules?.length || Object.keys(options.severityOverrides ?? {}).length
         ? {
@@ -63,6 +80,106 @@ export async function scanProject(rootInput: string, options: ScanOptions = {}):
     findings,
     counts: countFindings(findings),
   };
+}
+
+async function collectWorkspaceGuardrailFiles(workspaceRoot: string): Promise<ProjectFile[]> {
+  const files: ProjectFile[] = [];
+  const candidatePaths = [
+    ...instructionFileNames,
+    ...mcpConfigNames,
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+  ];
+
+  for (const relativePath of candidatePaths) {
+    const file = await readProjectFileIfPresent(workspaceRoot, relativePath);
+    if (file) {
+      files.push(file);
+    }
+  }
+
+  const cursorRuleRoot = path.join(workspaceRoot, ".cursor/rules");
+  if (await pathExists(cursorRuleRoot)) {
+    files.push(...(await collectTextFilesUnder(workspaceRoot, cursorRuleRoot, /\.(md|mdc)$/i)));
+  }
+
+  const workflowRoot = path.join(workspaceRoot, ".github/workflows");
+  if (await pathExists(workflowRoot)) {
+    files.push(...(await collectTextFilesUnder(workspaceRoot, workflowRoot, /\.(ya?ml)$/i)));
+  }
+
+  return dedupeFiles(files);
+}
+
+async function readProjectFileIfPresent(root: string, relativePath: string): Promise<ProjectFile | undefined> {
+  const absolutePath = path.join(root, relativePath);
+  try {
+    const stat = await fs.stat(absolutePath);
+    if (!stat.isFile()) {
+      return undefined;
+    }
+    return {
+      path: relativePath,
+      absolutePath,
+      size: stat.size,
+      text: await fs.readFile(absolutePath, "utf8"),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+async function collectTextFilesUnder(root: string, directory: string, pattern: RegExp): Promise<ProjectFile[]> {
+  const files: ProjectFile[] = [];
+
+  async function walk(currentDirectory: string): Promise<void> {
+    let entries: Dirent[];
+    try {
+      entries = await fs.readdir(currentDirectory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+
+    for (const entry of entries) {
+      const absolutePath = path.join(currentDirectory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(absolutePath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const relativePath = path.relative(root, absolutePath).split(path.sep).join("/");
+      if (!pattern.test(relativePath)) {
+        continue;
+      }
+
+      const stat = await fs.stat(absolutePath);
+      files.push({
+        path: relativePath,
+        absolutePath,
+        size: stat.size,
+        text: await fs.readFile(absolutePath, "utf8"),
+      });
+    }
+  }
+
+  await walk(directory);
+  return files;
+}
+
+function dedupeFiles(files: ProjectFile[]): ProjectFile[] {
+  const seen = new Set<string>();
+  return files.filter((file) => {
+    if (seen.has(file.absolutePath)) {
+      return false;
+    }
+    seen.add(file.absolutePath);
+    return true;
+  });
 }
 
 function countFindings(findings: Finding[]): ScanCounts {
