@@ -4,6 +4,7 @@ import { formatMarkdownReport } from "./report.js";
 import { formatMarkdownReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
 import { isAtLeastSeverity } from "./severity.js";
+import { formatMarkdownTestPlan, generateTestPlan } from "./test-plan.js";
 import type { Finding, ScanOptions, Severity } from "./types.js";
 
 export type GitHubActionMode = "auto" | "scan" | "review";
@@ -19,12 +20,16 @@ export interface GitHubActionOptions {
   annotations?: boolean;
   stepSummary?: boolean;
   stepSummaryPath?: string;
+  testPlan?: boolean;
+  testPlanFile?: string;
+  includeWorkingTree?: boolean;
 }
 
 export interface GitHubActionResult {
   mode: Exclude<GitHubActionMode, "auto">;
   reportFile: string;
   commentFile: string;
+  testPlanFile?: string;
   findingCount: number;
   failedFindingCount: number;
   exitCode: number;
@@ -37,17 +42,32 @@ export async function runGitHubAction(rootInput: string, options: GitHubActionOp
   const mode = resolveMode(options.mode);
   const reportFile = path.resolve(options.reportFile ?? "codeward-report.md");
   const commentFile = path.resolve(options.commentFile ?? "codeward-pr-comment.md");
+  const testPlanFile = options.testPlan ? path.resolve(options.testPlanFile ?? "codeward-test-plan.md") : undefined;
 
   const result =
     mode === "review"
       ? await runReviewAction(rootInput, options)
       : await runScanAction(rootInput, options);
+  const testPlanMarkdown = options.testPlan
+    ? formatMarkdownTestPlan(
+        await generateTestPlan(rootInput, {
+          base: options.base,
+          head: options.head,
+          workspaceRoot: options.scanOptions?.workspaceRoot,
+          includeWorkingTree: options.includeWorkingTree,
+        }),
+      )
+    : undefined;
+  const markdown = testPlanMarkdown ? `${result.markdown.trim()}\n\n---\n\n${testPlanMarkdown.trim()}\n` : result.markdown;
 
-  await fs.writeFile(reportFile, result.markdown, "utf8");
-  await fs.writeFile(commentFile, buildCommentBody(result.markdown), "utf8");
+  await fs.writeFile(reportFile, markdown, "utf8");
+  await fs.writeFile(commentFile, buildCommentBody(markdown), "utf8");
+  if (testPlanFile && testPlanMarkdown) {
+    await fs.writeFile(testPlanFile, testPlanMarkdown, "utf8");
+  }
 
   if (options.stepSummary !== false) {
-    await appendStepSummary(result.markdown, options.stepSummaryPath ?? process.env.GITHUB_STEP_SUMMARY);
+    await appendStepSummary(markdown, options.stepSummaryPath ?? process.env.GITHUB_STEP_SUMMARY);
   }
 
   if (options.annotations !== false) {
@@ -56,11 +76,15 @@ export async function runGitHubAction(rootInput: string, options: GitHubActionOp
 
   console.log(`CodeWard ${mode} report: ${reportFile}`);
   console.log(`CodeWard PR comment body: ${commentFile}`);
+  if (testPlanFile) {
+    console.log(`CodeWard test plan: ${testPlanFile}`);
+  }
 
   return {
     mode,
     reportFile,
     commentFile,
+    testPlanFile,
     findingCount: result.findings.length,
     failedFindingCount: result.failedFindings.length,
     exitCode: result.failedFindings.length > 0 ? 1 : 0,

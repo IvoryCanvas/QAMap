@@ -9,6 +9,7 @@ import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsA
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
 import { isAtLeastSeverity, isSeverity } from "./severity.js";
+import { formatMarkdownTestPlan, generateTestPlan } from "./test-plan.js";
 import type { CodeWardConfig } from "./types.js";
 import type { Severity } from "./types.js";
 import { VERSION } from "./version.js";
@@ -34,6 +35,9 @@ interface ParsedOptions {
   commentFile?: string;
   annotations?: boolean;
   stepSummary?: boolean;
+  testPlan?: boolean;
+  testPlanFile?: string;
+  includeWorkingTree?: boolean;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -107,8 +111,24 @@ async function main(argv: string[]): Promise<number> {
       commentFile: options.commentFile,
       annotations: options.annotations,
       stepSummary: options.stepSummary,
+      testPlan: options.testPlan,
+      testPlanFile: options.testPlanFile,
+      includeWorkingTree: options.includeWorkingTree,
     });
     return result.exitCode;
+  }
+
+  if (command === "test-plan") {
+    const options = parseOptions(rest);
+    const result = await generateTestPlan(options.path, {
+      base: options.base,
+      head: options.head,
+      workspaceRoot: options.workspaceRoot,
+      includeWorkingTree: options.includeWorkingTree,
+    });
+    const output = formatTestPlanOutput(result, options.format ?? (options.json ? "json" : "markdown"));
+    await printOrWrite(output, options.output);
+    return 0;
   }
 
   if (command === "context") {
@@ -239,6 +259,11 @@ function parseOptions(args: string[]): ParsedOptions {
       continue;
     }
 
+    if (arg === "--test-plan-file") {
+      options.testPlanFile = readValue(args, ++index, arg);
+      continue;
+    }
+
     if (arg === "--no-annotations") {
       options.annotations = false;
       continue;
@@ -246,6 +271,21 @@ function parseOptions(args: string[]): ParsedOptions {
 
     if (arg === "--no-step-summary") {
       options.stepSummary = false;
+      continue;
+    }
+
+    if (arg === "--test-plan") {
+      options.testPlan = true;
+      continue;
+    }
+
+    if (arg === "--no-test-plan") {
+      options.testPlan = false;
+      continue;
+    }
+
+    if (arg === "--include-working-tree") {
+      options.includeWorkingTree = true;
       continue;
     }
 
@@ -340,6 +380,16 @@ function formatReviewOutput(result: Awaited<ReturnType<typeof reviewProject>>, f
   return formatReviewReport(result);
 }
 
+function formatTestPlanOutput(result: Awaited<ReturnType<typeof generateTestPlan>>, format: OutputFormat): string {
+  if (format === "json") {
+    return `${JSON.stringify(result, null, 2)}\n`;
+  }
+  if (format !== "markdown" && format !== "text") {
+    throw new Error(`Test plan supports text, json, or markdown output, not ${format}`);
+  }
+  return formatMarkdownTestPlan(result);
+}
+
 async function printOrWrite(output: string, outputPath?: string): Promise<void> {
   if (outputPath) {
     const resolvedOutputPath = path.resolve(outputPath);
@@ -377,6 +427,7 @@ Usage:
   codeward doctor [path] [--format <format>] [--output <file>] [--fail-on <severity>]
   codeward review [path] [--base <ref>] [--head <ref>] [--format <format>] [--fail-on <severity>]
   codeward github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
+  codeward test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
   codeward context [path] [--write [file]] [--force]
   codeward init [path] [--write <file>] [--force]
 
@@ -395,6 +446,8 @@ Examples:
   codeward doctor .
   codeward review . --base origin/main --head HEAD
   codeward github-action . --mode review --base origin/main --head HEAD --fail-on high
+  codeward test-plan . --base origin/main --head HEAD
+  codeward test-plan services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
   codeward context . --write AGENTS.md
   codeward init .
 `);

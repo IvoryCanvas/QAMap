@@ -53,7 +53,8 @@ export async function reviewProject(rootInput: string, options: ReviewOptions = 
 
   const base = options.base ?? (await defaultBaseRef(root));
   const head = options.head ?? "HEAD";
-  const changedFiles = await getChangedFiles(root, base, head);
+  const diffRoot = workspaceRoot ?? root;
+  const changedFiles = scopeChangedFiles(await getChangedFiles(diffRoot, base, head), relativeScanRoot);
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "codeward-review-"));
 
   try {
@@ -306,6 +307,40 @@ function parseChangedFile(line: string): ChangedFile {
     status,
     path: firstPath,
   };
+}
+
+function scopeChangedFiles(changedFiles: ChangedFile[], relativeScanRoot: string): ChangedFile[] {
+  if (!relativeScanRoot) {
+    return changedFiles;
+  }
+  const posixRoot = relativeScanRoot.split(path.sep).join("/");
+  const prefix = `${posixRoot}/`;
+  return changedFiles.flatMap((file): ChangedFile[] => {
+    const scopedPath = stripScopedPath(file.path, posixRoot, prefix);
+    if (!scopedPath) {
+      return [];
+    }
+    const previousPath = file.previousPath
+      ? stripScopedPath(file.previousPath, posixRoot, prefix) ?? file.previousPath
+      : undefined;
+    return [
+      {
+        ...file,
+        path: scopedPath,
+        previousPath,
+      },
+    ];
+  });
+}
+
+function stripScopedPath(filePath: string, relativeRoot: string, prefix: string): string | undefined {
+  if (filePath === relativeRoot) {
+    return ".";
+  }
+  if (filePath.startsWith(prefix)) {
+    return filePath.slice(prefix.length);
+  }
+  return undefined;
 }
 
 async function extractGitArchive(root: string, ref: string, outputDirectory: string): Promise<void> {

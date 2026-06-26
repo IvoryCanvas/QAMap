@@ -29,10 +29,11 @@ Start advisory, then tighten the gate once the findings are understood.
 | 1. Baseline | `codeward scan .` | See current repo-level AI agent risks without blocking work. |
 | 2. Doctor | `codeward doctor . --format markdown` | Get an agent-readiness summary by guardrail area. |
 | 3. Review | `codeward review . --base origin/main --head HEAD --format markdown` | See new findings introduced by the branch. |
-| 4. PR Action | `uses: IvoryCanvas/codeward@main` | Add annotations, a step summary, and a sticky PR comment. |
-| 5. Report | `codeward report . --output CODEWARD_REPORT.md` | Share a readable audit artifact in a PR or maintainer discussion. |
-| 6. High-risk gate | `codeward scan . --fail-on high` | Block obvious risks such as committed env files or unsafe scripts. |
-| 7. Medium-risk gate | `codeward scan . --fail-on medium` | Require stronger agent guidance, tests, and workflow permissions. |
+| 4. Test plan | `codeward test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed and local files. |
+| 5. PR Action | `uses: IvoryCanvas/codeward@main` | Add annotations, a step summary, a test plan, and a sticky PR comment. |
+| 6. Report | `codeward report . --output CODEWARD_REPORT.md` | Share a readable audit artifact in a PR or maintainer discussion. |
+| 7. High-risk gate | `codeward scan . --fail-on high` | Block obvious risks such as committed env files or unsafe scripts. |
+| 8. Medium-risk gate | `codeward scan . --fail-on medium` | Require stronger agent guidance, tests, and workflow permissions. |
 
 ## Monorepos
 

@@ -114,6 +114,7 @@ node dist/cli.js scan /path/to/repo
 | `codeward doctor . --format markdown` | Summarize whether the repo is ready for AI-assisted work. |
 | `codeward review . --base origin/main --head HEAD --format markdown` | Show new findings and changed risky files introduced by a branch. |
 | `codeward github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
+| `codeward test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
 | `codeward doctor services/offer --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `codeward context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `codeward init .` | Create a starter `codeward.config.json`. |
@@ -121,6 +122,8 @@ node dist/cli.js scan /path/to/repo
 For monorepos, pass `--workspace-root` when scanning a package. Package-local checks still use the package directory, while repo-level guardrails such as `AGENTS.md`, `.github/workflows`, `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` are read from the workspace root.
 
 `codeward review` compares a branch against a base ref for PR-style workflows. It separates newly introduced findings from risky files that already had findings on the base branch but were modified again, which helps reviewers notice when a PR touches known-dangerous surfaces such as committed `.env` files, MCP configs, or release scripts.
+
+`codeward test-plan` turns changed file paths into a review-ready domain test checklist. Add `--include-working-tree` for local, uncommitted changes while iterating.
 
 ## What It Checks
 
@@ -194,7 +197,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-For rollout guidance, see [docs/adoption.md](docs/adoption.md) and [docs/github-action.md](docs/github-action.md).
+The PR comment can include suggested domain tests for changed files. For rollout guidance, see [docs/adoption.md](docs/adoption.md) and [docs/github-action.md](docs/github-action.md).
 
 ## Where CodeWard Fits
 
@@ -216,6 +219,7 @@ Near-term priorities:
 - publish the first npm package
 - publish a versioned GitHub Action release tag
 - improve branch-aware `review` changed-line locations
+- improve generated domain test plans with framework-specific test skeletons
 - continue expanding agent surface detection across Codex, Claude Code, Cursor, Copilot, Gemini, and related tools
 - generate rule documentation from scanner metadata
 

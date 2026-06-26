@@ -12,9 +12,11 @@ import {
   formatDoctorReport,
   formatMarkdownDoctorReport,
   formatMarkdownReviewReport,
+  formatMarkdownTestPlan,
   formatReviewReport,
   formatSarifReport,
   generateAgentContext,
+  generateTestPlan,
   loadConfig,
   reviewProject,
   scanProject,
@@ -309,6 +311,102 @@ test("scanProject accepts machine-readable API contract sources", async () => {
   const ids = result.findings.map((item) => item.id);
 
   assert.equal(ids.includes("CW013"), false);
+});
+
+test("generateTestPlan suggests domain-focused checks from changed files", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/features/campaign/api"), { recursive: true });
+  await mkdir(path.join(root, "src/features/campaign/config"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/campaign"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      packageManager: "pnpm@10.32.1",
+      scripts: {
+        test: "node --test",
+        typecheck: "tsc --noEmit",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "src/features/campaign/api/client.ts"), "export const endpoint = '/campaigns';\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/campaign-survey"]);
+  await writeFile(path.join(root, "src/features/campaign/api/client.ts"), "export const endpoint = '/campaigns/survey';\n");
+  await writeFile(path.join(root, "src/features/campaign/config/resortCampaignConfig.ts"), "export const resorts = [];\n");
+  await writeFile(path.join(root, "src/pages/campaign/survey.tsx"), "export function SurveyPage() { return null; }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add campaign survey"]);
+
+  const plan = await generateTestPlan(root, { base: "main", head: "HEAD" });
+  const markdown = formatMarkdownTestPlan(plan);
+  const titles = plan.items.map((item) => item.title);
+
+  assert.ok(titles.some((title) => /Campaign workflow/.test(title)));
+  assert.ok(titles.includes("User-facing UI states"));
+  assert.ok(titles.includes("API contract and failure handling"));
+  assert.ok(titles.includes("Domain configuration and variants"));
+  assert.deepEqual(plan.suggestedCommands, ["pnpm test", "pnpm run typecheck"]);
+  assert.match(markdown, /# CodeWard Test Plan/);
+  assert.match(markdown, /Verify loading, empty, error, and success states/);
+});
+
+test("generateTestPlan scopes monorepo changes to the requested package", async () => {
+  const workspaceRoot = await makeTempRepo();
+  const packageRoot = path.join(workspaceRoot, "services/offer");
+  await initGitRepo(workspaceRoot);
+  await mkdir(path.join(packageRoot, "src/features/offer/api"), { recursive: true });
+  await writeFile(
+    path.join(workspaceRoot, "package.json"),
+    JSON.stringify({
+      packageManager: "pnpm@10.32.1",
+    }),
+  );
+  await writeFile(
+    path.join(packageRoot, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+        lint: "eslint .",
+      },
+    }),
+  );
+  await writeFile(path.join(packageRoot, "src/features/offer/api/client.ts"), "export const endpoint = '/offers';\n");
+  await writeFile(path.join(workspaceRoot, "README.md"), "# Workspace\n");
+  await git(workspaceRoot, ["add", "."]);
+  await git(workspaceRoot, ["commit", "-m", "base"]);
+  await git(workspaceRoot, ["branch", "-M", "main"]);
+
+  await git(workspaceRoot, ["switch", "-c", "feature/offer-flow"]);
+  await writeFile(path.join(packageRoot, "src/features/offer/api/client.ts"), "export const endpoint = '/offers/v2';\n");
+  await writeFile(path.join(workspaceRoot, "README.md"), "# Workspace\n\nUpdated outside package.\n");
+  await git(workspaceRoot, ["add", "."]);
+  await git(workspaceRoot, ["commit", "-m", "update offer flow"]);
+
+  const plan = await generateTestPlan(packageRoot, { base: "main", head: "HEAD", workspaceRoot });
+
+  assert.deepEqual(plan.changedFiles.map((file) => file.path), ["src/features/offer/api/client.ts"]);
+  assert.equal(plan.changedFiles.some((file) => file.path.startsWith("services/offer")), false);
+  assert.deepEqual(plan.suggestedCommands, ["pnpm test", "pnpm run lint"]);
+  assert.ok(plan.items.some((item) => item.title === "Offer workflow regression"));
+
+  await mkdir(path.join(packageRoot, "src/pages/offer"), { recursive: true });
+  await writeFile(path.join(packageRoot, "src/pages/offer/detail.tsx"), "export function OfferDetailPage() { return null; }\n");
+
+  const localPlan = await generateTestPlan(packageRoot, {
+    base: "main",
+    head: "HEAD",
+    workspaceRoot,
+    includeWorkingTree: true,
+  });
+  const localMarkdown = formatMarkdownTestPlan(localPlan);
+
+  assert.ok(localPlan.changedFiles.some((file) => file.path === "src/pages/offer/detail.tsx"));
+  assert.ok(localPlan.items.some((item) => item.title === "User-facing UI states"));
+  assert.match(localMarkdown, /Includes working tree changes: yes/);
 });
 
 test("formatMarkdownReport includes a useful summary", async () => {
@@ -620,6 +718,7 @@ test("github-action command writes PR artifacts before failing", async () => {
 
   const reportFile = path.join(root, "codeward-report.md");
   const commentFile = path.join(root, "codeward-pr-comment.md");
+  const testPlanFile = path.join(root, "codeward-test-plan.md");
   const summaryFile = path.join(root, "codeward-step-summary.md");
 
   await assert.rejects(
@@ -642,6 +741,9 @@ test("github-action command writes PR artifacts before failing", async () => {
           reportFile,
           "--comment-file",
           commentFile,
+          "--test-plan",
+          "--test-plan-file",
+          testPlanFile,
         ],
         {
           env: {
@@ -655,12 +757,16 @@ test("github-action command writes PR artifacts before failing", async () => {
 
   const report = await readFile(reportFile, "utf8");
   const comment = await readFile(commentFile, "utf8");
+  const testPlan = await readFile(testPlanFile, "utf8");
   const summary = await readFile(summaryFile, "utf8");
 
   assert.match(report, /# CodeWard Review/);
   assert.match(report, /## Changed Risky Files/);
+  assert.match(report, /# CodeWard Test Plan/);
   assert.match(comment, /<!-- codeward-pr-comment -->/);
   assert.match(comment, /Generated by CodeWard/);
+  assert.match(comment, /# CodeWard Test Plan/);
+  assert.match(testPlan, /# CodeWard Test Plan/);
   assert.match(summary, /# CodeWard Review/);
 });
 
@@ -692,6 +798,7 @@ test("reviewProject uses workspace root guardrails for package branches", async 
     }),
   );
   await writeFile(path.join(packageRoot, ".env.local"), "TOKEN=not-for-tests");
+  await writeFile(path.join(workspaceRoot, "README.md"), "# Workspace note outside the package\n");
   await git(workspaceRoot, ["add", "."]);
   await git(workspaceRoot, ["commit", "-m", "add package risk"]);
 
@@ -709,6 +816,10 @@ test("reviewProject uses workspace root guardrails for package branches", async 
   assert.equal(ids.includes("CW001"), false);
   assert.equal(ids.includes("CW007"), false);
   assert.equal(ids.includes("CW011"), false);
+  assert.deepEqual(
+    review.changedFiles.map((file) => file.path).sort(),
+    [".env.local", "package.json"],
+  );
 });
 
 test("generateAgentContext reflects npm scripts and repository boundaries", async () => {

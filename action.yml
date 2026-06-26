@@ -32,6 +32,12 @@ inputs:
   comment-file:
     description: Markdown PR comment body file path.
     default: codeward-pr-comment.md
+  test-plan:
+    description: Append a suggested domain test plan to reports and PR comments.
+    default: "true"
+  test-plan-file:
+    description: Markdown test plan file path.
+    default: codeward-test-plan.md
   annotations:
     description: Emit GitHub workflow annotations.
     default: "true"
@@ -52,6 +58,9 @@ outputs:
   comment-file:
     description: Markdown PR comment body file path.
     value: ${{ steps.codeward.outputs.comment-file }}
+  test-plan-file:
+    description: Markdown test plan file path.
+    value: ${{ steps.codeward.outputs.test-plan-file }}
   exit-code:
     description: CodeWard exit code before the comment step ran.
     value: ${{ steps.codeward.outputs.exit-code }}
@@ -92,12 +101,18 @@ runs:
         if [ "${{ inputs.step-summary }}" != "true" ]; then
           args+=(--no-step-summary)
         fi
+        if [ "${{ inputs.test-plan }}" = "true" ]; then
+          args+=(--test-plan --test-plan-file "${{ inputs.test-plan-file }}")
+        else
+          args+=(--no-test-plan)
+        fi
 
         node "$GITHUB_ACTION_PATH/dist/cli.js" "${args[@]}"
         codeward_exit_code=$?
         echo "exit-code=$codeward_exit_code" >> "$GITHUB_OUTPUT"
         echo "report-file=${{ inputs.report-file }}" >> "$GITHUB_OUTPUT"
         echo "comment-file=${{ inputs.comment-file }}" >> "$GITHUB_OUTPUT"
+        echo "test-plan-file=${{ inputs.test-plan-file }}" >> "$GITHUB_OUTPUT"
         exit 0
 
     - name: Comment on pull request
