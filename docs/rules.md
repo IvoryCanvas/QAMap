@@ -18,6 +18,7 @@ Rule behavior can be tuned in `codeward.config.json`. See [configuration.md](con
 | `CW010` | medium | GitHub Actions workflow grants broad permissions or uses risky triggers. |
 | `CW011` | low | Community health files are missing. |
 | `CW012` | medium/high | Committed agent settings define risky hooks or broad shell permissions. |
+| `CW013` | low | API endpoints are documented only in prose without a machine-readable contract source. |
 
 ## Rule Design
 

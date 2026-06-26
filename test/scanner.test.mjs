@@ -227,6 +227,90 @@ test("scanProject reports risky agent settings hooks and MCP servers", async () 
   assert.equal(benignPermissionFinding, undefined);
 });
 
+test("scanProject reports documentation-only API contracts", async () => {
+  const root = await makeTempRepo();
+  await mkdir(path.join(root, "docs"), { recursive: true });
+  await mkdir(path.join(root, ".github/workflows"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "AGENTS.md"), "# Agent Instructions\n\n- Run npm test before merge.\n");
+  await writeFile(path.join(root, "LICENSE"), "MIT");
+  await writeFile(path.join(root, "SECURITY.md"), "# Security\n");
+  await writeFile(path.join(root, "CONTRIBUTING.md"), "# Contributing\n");
+  await writeFile(
+    path.join(root, ".github/workflows/ci.yml"),
+    "name: CI\non: [pull_request]\npermissions:\n  contents: read\n",
+  );
+  await writeFile(
+    path.join(root, "docs/api.md"),
+    [
+      "# API",
+      "",
+      "GET /v1/offers",
+      "POST /v1/offers",
+      "",
+      "Responses are documented here for frontend integration.",
+    ].join("\n"),
+  );
+
+  const result = await scanProject(root);
+  const finding = result.findings.find((item) => item.id === "CW013");
+  const doctor = buildDoctorResult(result);
+
+  assert.equal(finding?.severity, "low");
+  assert.equal(finding?.file, "docs/api.md");
+  assert.equal(doctor.areas.find((area) => area.name === "API contracts")?.status, "review");
+});
+
+test("scanProject accepts machine-readable API contract sources", async () => {
+  const root = await makeTempRepo();
+  await mkdir(path.join(root, "docs"), { recursive: true });
+  await mkdir(path.join(root, ".github/workflows"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "AGENTS.md"), "# Agent Instructions\n\n- Run npm test before merge.\n");
+  await writeFile(path.join(root, "LICENSE"), "MIT");
+  await writeFile(path.join(root, "SECURITY.md"), "# Security\n");
+  await writeFile(path.join(root, "CONTRIBUTING.md"), "# Contributing\n");
+  await writeFile(
+    path.join(root, ".github/workflows/ci.yml"),
+    "name: CI\non: [pull_request]\npermissions:\n  contents: read\n",
+  );
+  await writeFile(path.join(root, "docs/api.md"), "# API\n\nGET /v1/offers\nPOST /v1/offers\n");
+  await writeFile(
+    path.join(root, "openapi.yaml"),
+    [
+      "openapi: 3.1.0",
+      "info:",
+      "  title: Offers",
+      "  version: 1.0.0",
+      "paths:",
+      "  /v1/offers:",
+      "    get:",
+      "      responses:",
+      "        '200':",
+      "          description: ok",
+    ].join("\n"),
+  );
+
+  const result = await scanProject(root);
+  const ids = result.findings.map((item) => item.id);
+
+  assert.equal(ids.includes("CW013"), false);
+});
+
 test("formatMarkdownReport includes a useful summary", async () => {
   const root = await makeTempRepo();
   const result = await scanProject(root);

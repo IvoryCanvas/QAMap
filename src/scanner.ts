@@ -65,6 +65,7 @@ export async function scanProject(rootInput: string, options: ScanOptions = {}):
     ...checkMcpConfig(guardrailFiles),
     ...checkAgentSettings(guardrailFiles),
     ...checkPackageScripts(files),
+    ...checkApiContractSource(files),
     ...checkGitHubActions(guardrailFiles),
     ...checkCommittedEnvFiles(files),
     ...checkCommunityHealth(guardrailFiles),
@@ -786,6 +787,68 @@ function classifyShellPermission(
   }
 
   return undefined;
+}
+
+function checkApiContractSource(files: ProjectFile[]): Finding[] {
+  const proseApiDocs = files.filter(isProseApiDoc);
+  if (proseApiDocs.length === 0 || hasMachineReadableApiContract(files)) {
+    return [];
+  }
+
+  const evidence = proseApiDocs
+    .slice(0, 3)
+    .map((file) => file.path)
+    .join(", ");
+
+  return [
+    finding({
+      id: "CW013",
+      title: "Documentation-only API contract",
+      severity: "low",
+      file: proseApiDocs[0].path,
+      message:
+        "API endpoints appear to be documented in prose, but no machine-readable contract source was found.",
+      recommendation:
+        "Choose a single source of truth for API contracts, such as OpenAPI, protobuf, GraphQL SDL, AsyncAPI, or another IDL that can generate docs and client types.",
+      evidence,
+    }),
+  ];
+}
+
+function isProseApiDoc(file: ProjectFile): boolean {
+  if (!file.text || !/\.(md|mdx|txt)$/i.test(file.path)) {
+    return false;
+  }
+
+  const basename = path.basename(file.path).toLowerCase();
+  const pathSignal = /(?:^|[-_/])(api|apis|endpoint|endpoints|contract|swagger|openapi)(?:[-_.]|$)/i.test(file.path);
+  if (!pathSignal && !/\bapi\b/i.test(basename)) {
+    return false;
+  }
+
+  return /\b(GET|POST|PUT|PATCH|DELETE)\s+\/[A-Za-z0-9_/{:.-]+/.test(file.text);
+}
+
+function hasMachineReadableApiContract(files: ProjectFile[]): boolean {
+  return files.some((file) => {
+    const basename = path.basename(file.path).toLowerCase();
+    const extension = path.extname(file.path).toLowerCase();
+
+    if (["buf.yaml", "buf.gen.yaml", "asyncapi.yaml", "asyncapi.yml", "asyncapi.json"].includes(basename)) {
+      return true;
+    }
+    if (/^openapi\.(json|ya?ml)$/i.test(basename) || /^swagger\.(json|ya?ml)$/i.test(basename)) {
+      return true;
+    }
+    if (extension === ".proto" || extension === ".graphql" || extension === ".graphqls") {
+      return true;
+    }
+    if (/schema\.graphqls?$/i.test(file.path)) {
+      return true;
+    }
+
+    return false;
+  });
 }
 
 function checkGitHubActions(files: ProjectFile[]): Finding[] {

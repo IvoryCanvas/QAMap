@@ -72,6 +72,12 @@ const areaDefinitions: AreaDefinition[] = [
     reviewMessage: "Local environment files or risky scripts need maintainer review.",
   },
   {
+    name: "API contracts",
+    ruleIds: ["CW013"],
+    okMessage: "No documentation-only API contract drift signal was detected.",
+    reviewMessage: "API contract documentation may need a machine-readable source of truth.",
+  },
+  {
     name: "Community health",
     ruleIds: ["CW011"],
     okMessage: "Core contributor and security files are present.",

@@ -5,7 +5,7 @@
 
 **Repo-level preflight checks before AI coding agents touch your code.**
 
-CodeWard scans the repository surface that AI coding agents rely on: agent instructions, MCP configuration, agent settings and hooks, local environment files, package scripts, GitHub Actions permissions, community health files, and validation signals.
+CodeWard scans the repository surface that AI coding agents rely on: agent instructions, MCP configuration, agent settings and hooks, API contract source-of-truth signals, local environment files, package scripts, GitHub Actions permissions, community health files, and validation signals.
 
 It is built for teams using Codex, Claude Code, Cursor, GitHub Copilot coding agent, MCP-powered tools, or any workflow where an agent can read, edit, test, commit, or open pull requests.
 
@@ -36,6 +36,7 @@ CodeWard gives maintainers a quick first line of defense:
 - Is there clear guidance for agents?
 - Are MCP configs safe enough to inspect?
 - Are committed agent settings or hooks able to run risky commands?
+- Are API endpoints documented only in prose, without a machine-readable contract source?
 - Did a local `.env` file slip into the repo?
 - Can package scripts publish, push, merge, or run risky shell pipelines?
 - Are workflows using broad permissions or risky triggers?
@@ -138,9 +139,11 @@ The first release focuses on high-signal checks that are useful across many repo
 | `CW010` | medium | Broad workflow permissions or risky workflow triggers. |
 | `CW011` | low | Missing community health files. |
 | `CW012` | medium/high | Risky committed agent settings, hooks, or broad shell permissions. |
+| `CW013` | low | API endpoints documented only in prose without a contract source. |
 
 See [docs/rules.md](docs/rules.md) for the rule catalog.
 See [docs/ecosystem.md](docs/ecosystem.md) for the agent ecosystem surfaces CodeWard tracks.
+See [docs/api-contracts.md](docs/api-contracts.md) for the API contract source-of-truth check.
 
 ## Configuration
 
