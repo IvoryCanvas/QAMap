@@ -96,6 +96,40 @@ test("scanProject stays quiet for a guarded repository", async () => {
   assert.equal(result.findings.length, 0);
 });
 
+test("scanProject uses workspace root guardrails for package scans", async () => {
+  const workspaceRoot = await makeTempRepo();
+  const packageRoot = path.join(workspaceRoot, "services/offer");
+  await mkdir(path.join(workspaceRoot, ".github/workflows"), { recursive: true });
+  await mkdir(packageRoot, { recursive: true });
+  await writeWorkspaceGuardrails(workspaceRoot);
+  await writeFile(
+    path.join(packageRoot, "package.json"),
+    JSON.stringify({
+      scripts: {
+        lint: "next lint",
+        typecheck: "tsc --noEmit",
+      },
+    }),
+  );
+  await writeFile(path.join(packageRoot, ".env.local"), "TOKEN=not-for-tests");
+
+  const packageOnly = await scanProject(packageRoot);
+  const packageOnlyIds = packageOnly.findings.map((finding) => finding.id);
+  assert.ok(packageOnlyIds.includes("CW001"));
+  assert.ok(packageOnlyIds.includes("CW007"));
+  assert.ok(packageOnlyIds.includes("CW011"));
+
+  const withWorkspaceRoot = await scanProject(packageRoot, { workspaceRoot });
+  const ids = withWorkspaceRoot.findings.map((finding) => finding.id);
+
+  assert.equal(withWorkspaceRoot.workspaceRoot, workspaceRoot);
+  assert.equal(ids.includes("CW001"), false);
+  assert.equal(ids.includes("CW007"), false);
+  assert.equal(ids.includes("CW011"), false);
+  assert.ok(ids.includes("CW006"));
+  assert.ok(ids.includes("CW008"));
+});
+
 test("formatMarkdownReport includes a useful summary", async () => {
   const root = await makeTempRepo();
   const result = await scanProject(root);
@@ -312,6 +346,53 @@ test("reviewProject reports findings introduced by a branch", async () => {
   assert.match(markdown, /`CW009`/);
 });
 
+test("reviewProject uses workspace root guardrails for package branches", async () => {
+  const workspaceRoot = await makeTempRepo();
+  const packageRoot = path.join(workspaceRoot, "services/offer");
+  await initGitRepo(workspaceRoot);
+  await mkdir(packageRoot, { recursive: true });
+  await writeWorkspaceGuardrails(workspaceRoot);
+  await writeFile(
+    path.join(packageRoot, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await git(workspaceRoot, ["add", "."]);
+  await git(workspaceRoot, ["commit", "-m", "base"]);
+  await git(workspaceRoot, ["branch", "-M", "main"]);
+
+  await git(workspaceRoot, ["switch", "-c", "feature/package-risk"]);
+  await writeFile(
+    path.join(packageRoot, "package.json"),
+    JSON.stringify({
+      scripts: {
+        typecheck: "tsc --noEmit",
+      },
+    }),
+  );
+  await writeFile(path.join(packageRoot, ".env.local"), "TOKEN=not-for-tests");
+  await git(workspaceRoot, ["add", "."]);
+  await git(workspaceRoot, ["commit", "-m", "add package risk"]);
+
+  const review = await reviewProject(packageRoot, {
+    base: "main",
+    head: "HEAD",
+    scanOptions: {
+      workspaceRoot,
+    },
+  });
+  const ids = review.newFindings.map((finding) => finding.id);
+
+  assert.ok(ids.includes("CW006"));
+  assert.ok(ids.includes("CW008"));
+  assert.equal(ids.includes("CW001"), false);
+  assert.equal(ids.includes("CW007"), false);
+  assert.equal(ids.includes("CW011"), false);
+});
+
 test("generateAgentContext reflects npm scripts and repository boundaries", async () => {
   const root = await makeTempRepo();
   await writeFile(
@@ -340,6 +421,18 @@ async function initGitRepo(root) {
   await git(root, ["init"]);
   await git(root, ["config", "user.email", "codeward@example.invalid"]);
   await git(root, ["config", "user.name", "CodeWard Test"]);
+}
+
+async function writeWorkspaceGuardrails(root) {
+  await mkdir(path.join(root, ".github/workflows"), { recursive: true });
+  await writeFile(path.join(root, "AGENTS.md"), "# Agent Instructions\n\n- Run package validation before merge.\n");
+  await writeFile(path.join(root, "LICENSE"), "MIT");
+  await writeFile(path.join(root, "SECURITY.md"), "# Security\n");
+  await writeFile(path.join(root, "CONTRIBUTING.md"), "# Contributing\n");
+  await writeFile(
+    path.join(root, ".github/workflows/ci.yml"),
+    "name: CI\non: [pull_request]\npermissions:\n  contents: read\n",
+  );
 }
 
 async function git(root, args) {

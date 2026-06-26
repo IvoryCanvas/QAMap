@@ -7,6 +7,9 @@ export function formatTextReport(result: ScanResult): string {
   const lines: string[] = [];
   lines.push(`${result.tool.name} ${result.tool.version}`);
   lines.push(`Root: ${result.root}`);
+  if (result.workspaceRoot) {
+    lines.push(`Workspace root: ${result.workspaceRoot}`);
+  }
   lines.push(
     `Findings: ${result.findings.length} (${severityOrder
       .map((severity) => `${severity}: ${result.counts[severity]}`)
@@ -46,6 +49,9 @@ export function formatMarkdownReport(result: ScanResult): string {
   lines.push("");
   lines.push(`Generated: ${result.scannedAt}`);
   lines.push(`Root: \`${result.root}\``);
+  if (result.workspaceRoot) {
+    lines.push(`Workspace root: \`${result.workspaceRoot}\``);
+  }
   lines.push(`Files inspected: ${result.filesInspected}`);
   lines.push("");
   lines.push("## Summary");

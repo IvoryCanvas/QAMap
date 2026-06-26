@@ -28,6 +28,7 @@ export interface DoctorPriority {
 export interface DoctorResult {
   tool: ScanResult["tool"];
   root: string;
+  workspaceRoot?: string;
   scannedAt: string;
   filesInspected: number;
   status: DoctorStatus;
@@ -82,6 +83,7 @@ export function buildDoctorResult(result: ScanResult): DoctorResult {
   return {
     tool: result.tool,
     root: result.root,
+    workspaceRoot: result.workspaceRoot,
     scannedAt: result.scannedAt,
     filesInspected: result.filesInspected,
     status: readinessStatus(result.counts),
@@ -104,6 +106,9 @@ export function formatDoctorReport(result: ScanResult): string {
 
   lines.push(`${doctor.tool.name} Doctor`);
   lines.push(`Root: ${doctor.root}`);
+  if (doctor.workspaceRoot) {
+    lines.push(`Workspace root: ${doctor.workspaceRoot}`);
+  }
   lines.push(`Agent readiness: ${doctor.statusLabel}`);
   lines.push(`Files inspected: ${doctor.filesInspected}`);
   lines.push(
@@ -144,6 +149,9 @@ export function formatMarkdownDoctorReport(result: ScanResult): string {
   lines.push("# CodeWard Doctor");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(doctor.root)}\``);
+  if (doctor.workspaceRoot) {
+    lines.push(`- Workspace root: \`${escapeMarkdownInline(doctor.workspaceRoot)}\``);
+  }
   lines.push(`- Agent readiness: **${doctor.statusLabel}**`);
   lines.push(`- Files inspected: ${doctor.filesInspected}`);
   lines.push("");

@@ -111,8 +111,11 @@ node dist/cli.js scan /path/to/repo
 | `codeward report . --output CODEWARD_REPORT.md` | Generate a Markdown report for PRs or audits. |
 | `codeward doctor . --format markdown` | Summarize whether the repo is ready for AI-assisted work. |
 | `codeward review . --base origin/main --head HEAD --format markdown` | Show new CodeWard findings introduced by a branch. |
+| `codeward doctor services/offer --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `codeward context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `codeward init .` | Create a starter `codeward.config.json`. |
+
+For monorepos, pass `--workspace-root` when scanning a package. Package-local checks still use the package directory, while repo-level guardrails such as `AGENTS.md`, `.github/workflows`, `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` are read from the workspace root.
 
 ## What It Checks
 

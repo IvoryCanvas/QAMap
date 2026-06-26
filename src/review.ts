@@ -34,6 +34,15 @@ export interface ReviewResult {
 
 export async function reviewProject(rootInput: string, options: ReviewOptions = {}): Promise<ReviewResult> {
   const root = path.resolve(rootInput);
+  const workspaceRoot = options.scanOptions?.workspaceRoot
+    ? path.resolve(options.scanOptions.workspaceRoot)
+    : undefined;
+  const archiveSourceRoot = workspaceRoot ?? root;
+  const relativeScanRoot = workspaceRoot ? path.relative(workspaceRoot, root) : "";
+  if (workspaceRoot && (relativeScanRoot.startsWith("..") || path.isAbsolute(relativeScanRoot))) {
+    throw new Error(`Review path must be inside workspace root: ${root}`);
+  }
+
   const base = options.base ?? (await defaultBaseRef(root));
   const head = options.head ?? "HEAD";
   const changedFiles = await getChangedFiles(root, base, head);
@@ -44,13 +53,17 @@ export async function reviewProject(rootInput: string, options: ReviewOptions = 
     const headRoot = path.join(tempRoot, "head");
     await fs.mkdir(baseRoot);
     await fs.mkdir(headRoot);
-    await extractGitArchive(root, base, baseRoot);
-    await extractGitArchive(root, head, headRoot);
+    await extractGitArchive(archiveSourceRoot, base, baseRoot);
+    await extractGitArchive(archiveSourceRoot, head, headRoot);
 
-    const baseResult = await scanProject(baseRoot, options.scanOptions);
-    const headResult = await scanProject(headRoot, options.scanOptions);
+    const baseScanRoot = relativeScanRoot ? path.join(baseRoot, relativeScanRoot) : baseRoot;
+    const headScanRoot = relativeScanRoot ? path.join(headRoot, relativeScanRoot) : headRoot;
+    const baseScanOptions = workspaceRoot ? { ...options.scanOptions, workspaceRoot: baseRoot } : options.scanOptions;
+    const headScanOptions = workspaceRoot ? { ...options.scanOptions, workspaceRoot: headRoot } : options.scanOptions;
+    const baseResult = await scanProject(baseScanRoot, baseScanOptions);
+    const headResult = await scanProject(headScanRoot, headScanOptions);
     const baseFingerprints = new Set(baseResult.findings.map(fingerprintFinding));
-    const changedPathSet = new Set(changedFiles.flatMap((file) => [file.path, file.previousPath].filter(Boolean)));
+    const changedPathSet = buildChangedPathSet(changedFiles, relativeScanRoot);
     const newFindings = headResult.findings
       .filter((finding) => !baseFingerprints.has(fingerprintFinding(finding)))
       .filter((finding) => shouldIncludeFinding(finding, changedPathSet))
@@ -245,6 +258,31 @@ function shouldIncludeFinding(finding: Finding, changedPathSet: Set<string | und
     return true;
   }
   return changedPathSet.has(finding.file);
+}
+
+function buildChangedPathSet(changedFiles: ChangedFile[], relativeScanRoot: string): Set<string | undefined> {
+  const paths = new Set<string | undefined>();
+  for (const file of changedFiles) {
+    addChangedPath(paths, file.path, relativeScanRoot);
+    addChangedPath(paths, file.previousPath, relativeScanRoot);
+  }
+  return paths;
+}
+
+function addChangedPath(paths: Set<string | undefined>, filePath: string | undefined, relativeScanRoot: string): void {
+  if (!filePath) {
+    return;
+  }
+  paths.add(filePath);
+
+  if (!relativeScanRoot) {
+    return;
+  }
+
+  const prefix = `${relativeScanRoot.split(path.sep).join("/")}/`;
+  if (filePath.startsWith(prefix)) {
+    paths.add(filePath.slice(prefix.length));
+  }
 }
 
 function fingerprintFinding(finding: Finding): string {

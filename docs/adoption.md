@@ -33,6 +33,17 @@ Start advisory, then tighten the gate once the findings are understood.
 | 5. High-risk gate | `codeward scan . --fail-on high` | Block obvious risks such as committed env files or unsafe scripts. |
 | 6. Medium-risk gate | `codeward scan . --fail-on medium` | Require stronger agent guidance, tests, and workflow permissions. |
 
+## Monorepos
+
+When scanning a package inside a larger workspace, pass the workspace root so CodeWard can separate package-local risks from repository guardrails:
+
+```sh
+codeward doctor services/offer --workspace-root . --format markdown
+codeward scan services/offer --workspace-root . --json
+```
+
+With `--workspace-root`, CodeWard reads package-local files such as `package.json`, `.env.*`, and MCP config from the package path. It reads repo-level guardrails such as `AGENTS.md`, `.github/workflows`, `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` from the workspace root.
+
 ## What To Fix First
 
 Fix high-severity findings before letting an agent work broadly in the repo.

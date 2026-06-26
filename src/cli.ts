@@ -24,6 +24,7 @@ interface ParsedOptions {
   force: boolean;
   failOn?: Severity;
   maxFiles?: number;
+  workspaceRoot?: string;
   base?: string;
   head?: string;
 }
@@ -43,7 +44,7 @@ async function main(argv: string[]): Promise<number> {
 
   if (command === "scan") {
     const options = parseOptions(rest);
-    const loadedConfig = await loadConfig(options.path, options.config);
+    const loadedConfig = await loadOptionsConfig(options);
     const result = await scanProject(options.path, buildScanOptions(options, loadedConfig));
     const output = formatOutput(result, options.format ?? (options.json ? "json" : "text"));
     await printOrWrite(output, options.output);
@@ -53,7 +54,7 @@ async function main(argv: string[]): Promise<number> {
 
   if (command === "report") {
     const options = parseOptions(rest);
-    const loadedConfig = await loadConfig(options.path, options.config);
+    const loadedConfig = await loadOptionsConfig(options);
     const result = await scanProject(options.path, buildScanOptions(options, loadedConfig));
     const output = formatOutput(result, options.format ?? (options.json ? "json" : "markdown"));
     await printOrWrite(output, options.output);
@@ -63,7 +64,7 @@ async function main(argv: string[]): Promise<number> {
 
   if (command === "doctor") {
     const options = parseOptions(rest);
-    const loadedConfig = await loadConfig(options.path, options.config);
+    const loadedConfig = await loadOptionsConfig(options);
     const result = await scanProject(options.path, buildScanOptions(options, loadedConfig));
     const output = formatDoctorOutput(result, options.format ?? (options.json ? "json" : "text"));
     await printOrWrite(output, options.output);
@@ -73,7 +74,7 @@ async function main(argv: string[]): Promise<number> {
 
   if (command === "review") {
     const options = parseOptions(rest);
-    const loadedConfig = await loadConfig(options.path, options.config);
+    const loadedConfig = await loadOptionsConfig(options);
     const result = await reviewProject(options.path, {
       base: options.base,
       head: options.head,
@@ -159,6 +160,11 @@ function parseOptions(args: string[]): ParsedOptions {
       continue;
     }
 
+    if (arg === "--workspace-root") {
+      options.workspaceRoot = readValue(args, ++index, arg);
+      continue;
+    }
+
     if (arg === "--write") {
       const next = args[index + 1];
       if (next && !next.startsWith("-")) {
@@ -225,14 +231,20 @@ function buildScanOptions(
   configPath?: string;
   ignoreRules?: string[];
   maxFiles?: number;
+  workspaceRoot?: string;
   severityOverrides?: Record<string, Severity>;
 } {
   return {
     configPath: loadedConfig.path,
     ignoreRules: loadedConfig.config.ignoreRules,
     maxFiles: options.maxFiles ?? loadedConfig.config.maxFiles,
+    workspaceRoot: options.workspaceRoot,
     severityOverrides: loadedConfig.config.severity,
   };
+}
+
+async function loadOptionsConfig(options: ParsedOptions): Promise<{ path?: string; config: CodeWardConfig }> {
+  return loadConfig(options.workspaceRoot ?? options.path, options.config);
 }
 
 function formatOutput(result: Awaited<ReturnType<typeof scanProject>>, format: OutputFormat): string {
@@ -317,6 +329,7 @@ Formats:
 
 Examples:
   codeward scan .
+  codeward scan services/offer --workspace-root .
   codeward scan . --format sarif --output codeward.sarif
   codeward scan . --fail-on medium
   codeward report . --output CODEWARD_REPORT.md
