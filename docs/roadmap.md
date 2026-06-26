@@ -10,9 +10,9 @@ CodeWard starts as a local CLI for repo-level AI agent readiness. The project ca
 
 ## Next
 
-- Add a GitHub Action wrapper with PR annotations.
+- Publish a versioned GitHub Action release tag.
 - Improve `doctor` output with clearer scoring and remediation grouping.
-- Improve `review` output for PR comments, summaries, and changed-line locations.
+- Improve `review` output for changed-line locations.
 - Continue expanding agent surface detection across Codex, Claude Code, Cursor, GitHub Copilot, Gemini, and related tools.
 - Generate rule documentation from scanner metadata.
 

@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { generateAgentContext } from "./context.js";
 import { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
+import { runGitHubAction } from "./github.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
@@ -11,6 +12,7 @@ import { isAtLeastSeverity, isSeverity } from "./severity.js";
 import type { CodeWardConfig } from "./types.js";
 import type { Severity } from "./types.js";
 import { VERSION } from "./version.js";
+import type { GitHubActionMode } from "./github.js";
 
 type OutputFormat = "text" | "json" | "markdown" | "sarif";
 
@@ -27,6 +29,11 @@ interface ParsedOptions {
   workspaceRoot?: string;
   base?: string;
   head?: string;
+  mode?: GitHubActionMode;
+  reportFile?: string;
+  commentFile?: string;
+  annotations?: boolean;
+  stepSummary?: boolean;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -85,6 +92,23 @@ async function main(argv: string[]): Promise<number> {
     const failOn = options.failOn ?? loadedConfig.config.failOn;
     const reviewFindings = [...result.newFindings, ...result.changedRiskyFindings];
     return failOn && reviewFindings.some((finding) => isAtLeastSeverity(finding.severity, failOn)) ? 1 : 0;
+  }
+
+  if (command === "github-action") {
+    const options = parseOptions(rest);
+    const loadedConfig = await loadOptionsConfig(options);
+    const result = await runGitHubAction(options.path, {
+      mode: options.mode,
+      base: options.base,
+      head: options.head,
+      scanOptions: buildScanOptions(options, loadedConfig),
+      failOn: options.failOn ?? loadedConfig.config.failOn,
+      reportFile: options.reportFile,
+      commentFile: options.commentFile,
+      annotations: options.annotations,
+      stepSummary: options.stepSummary,
+    });
+    return result.exitCode;
   }
 
   if (command === "context") {
@@ -196,6 +220,35 @@ function parseOptions(args: string[]): ParsedOptions {
       continue;
     }
 
+    if (arg === "--mode") {
+      const value = readValue(args, ++index, arg);
+      if (!isGitHubActionMode(value)) {
+        throw new Error(`Invalid mode for --mode: ${value}`);
+      }
+      options.mode = value;
+      continue;
+    }
+
+    if (arg === "--report-file") {
+      options.reportFile = readValue(args, ++index, arg);
+      continue;
+    }
+
+    if (arg === "--comment-file") {
+      options.commentFile = readValue(args, ++index, arg);
+      continue;
+    }
+
+    if (arg === "--no-annotations") {
+      options.annotations = false;
+      continue;
+    }
+
+    if (arg === "--no-step-summary") {
+      options.stepSummary = false;
+      continue;
+    }
+
     if (arg === "--max-files") {
       const value = Number.parseInt(readValue(args, ++index, arg), 10);
       if (!Number.isFinite(value) || value < 1) {
@@ -301,6 +354,10 @@ function isOutputFormat(value: string): value is OutputFormat {
   return value === "text" || value === "json" || value === "markdown" || value === "sarif";
 }
 
+function isGitHubActionMode(value: string): value is GitHubActionMode {
+  return value === "auto" || value === "scan" || value === "review";
+}
+
 function readValue(args: string[], index: number, flag: string): string {
   const value = args[index];
   if (!value || value.startsWith("-")) {
@@ -319,6 +376,7 @@ Usage:
   codeward report [path] [--format <format>] [--output <file>] [--fail-on <severity>]
   codeward doctor [path] [--format <format>] [--output <file>] [--fail-on <severity>]
   codeward review [path] [--base <ref>] [--head <ref>] [--format <format>] [--fail-on <severity>]
+  codeward github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
   codeward context [path] [--write [file]] [--force]
   codeward init [path] [--write <file>] [--force]
 
@@ -336,6 +394,7 @@ Examples:
   codeward report . --output CODEWARD_REPORT.md
   codeward doctor .
   codeward review . --base origin/main --head HEAD
+  codeward github-action . --mode review --base origin/main --head HEAD --fail-on high
   codeward context . --write AGENTS.md
   codeward init .
 `);

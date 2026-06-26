@@ -113,6 +113,7 @@ node dist/cli.js scan /path/to/repo
 | `codeward report . --output CODEWARD_REPORT.md` | Generate a Markdown report for PRs or audits. |
 | `codeward doctor . --format markdown` | Summarize whether the repo is ready for AI-assisted work. |
 | `codeward review . --base origin/main --head HEAD --format markdown` | Show new findings and changed risky files introduced by a branch. |
+| `codeward github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `codeward doctor services/offer --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `codeward context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `codeward init .` | Create a starter `codeward.config.json`. |
@@ -165,35 +166,35 @@ See [docs/configuration.md](docs/configuration.md) for details.
 
 ## GitHub Actions
 
-After the npm package is published, CodeWard can run as a lightweight CI gate:
+CodeWard can run as a lightweight PR check with annotations, a step summary, and a sticky PR comment:
 
 ```yaml
 name: CodeWard
 
 on:
   pull_request:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
-  scan:
+  codeward:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
         with:
-          version: 10.32.1
-      - uses: actions/setup-node@v6
+          fetch-depth: 0
+      - uses: IvoryCanvas/codeward@main
         with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm dlx @ivorycanvas/codeward scan . --fail-on high
+          mode: review
+          base: ${{ github.event.pull_request.base.sha }}
+          head: HEAD
+          fail-on: high
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-For rollout guidance, see [docs/adoption.md](docs/adoption.md).
+For rollout guidance, see [docs/adoption.md](docs/adoption.md) and [docs/github-action.md](docs/github-action.md).
 
 ## Where CodeWard Fits
 
@@ -213,8 +214,8 @@ CodeWard starts as a local CLI and should stay small enough that maintainers can
 Near-term priorities:
 
 - publish the first npm package
-- add a GitHub Action wrapper with PR annotations
-- improve branch-aware `review` annotations for GitHub PR comments
+- publish a versioned GitHub Action release tag
+- improve branch-aware `review` changed-line locations
 - continue expanding agent surface detection across Codex, Claude Code, Cursor, Copilot, Gemini, and related tools
 - generate rule documentation from scanner metadata
 

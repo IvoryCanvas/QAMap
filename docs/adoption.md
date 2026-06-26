@@ -29,9 +29,10 @@ Start advisory, then tighten the gate once the findings are understood.
 | 1. Baseline | `codeward scan .` | See current repo-level AI agent risks without blocking work. |
 | 2. Doctor | `codeward doctor . --format markdown` | Get an agent-readiness summary by guardrail area. |
 | 3. Review | `codeward review . --base origin/main --head HEAD --format markdown` | See new findings introduced by the branch. |
-| 4. Report | `codeward report . --output CODEWARD_REPORT.md` | Share a readable audit artifact in a PR or maintainer discussion. |
-| 5. High-risk gate | `codeward scan . --fail-on high` | Block obvious risks such as committed env files or unsafe scripts. |
-| 6. Medium-risk gate | `codeward scan . --fail-on medium` | Require stronger agent guidance, tests, and workflow permissions. |
+| 4. PR Action | `uses: IvoryCanvas/codeward@main` | Add annotations, a step summary, and a sticky PR comment. |
+| 5. Report | `codeward report . --output CODEWARD_REPORT.md` | Share a readable audit artifact in a PR or maintainer discussion. |
+| 6. High-risk gate | `codeward scan . --fail-on high` | Block obvious risks such as committed env files or unsafe scripts. |
+| 7. Medium-risk gate | `codeward scan . --fail-on medium` | Require stronger agent guidance, tests, and workflow permissions. |
 
 ## Monorepos
 
@@ -66,23 +67,27 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
-  scan:
+  codeward:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
         with:
-          version: 10.32.1
-      - uses: actions/setup-node@v6
+          fetch-depth: 0
+      - uses: IvoryCanvas/codeward@main
         with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm dlx @ivorycanvas/codeward scan . --fail-on high
+          mode: review
+          base: ${{ github.event.pull_request.base.sha }}
+          head: HEAD
+          fail-on: high
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 When the repository is stable, consider `--fail-on medium`.
+
+For all inputs, see [github-action.md](github-action.md).
 
 ## Interpreting Findings
 

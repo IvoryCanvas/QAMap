@@ -1,0 +1,132 @@
+name: CodeWard
+description: Run CodeWard in GitHub Actions with PR summaries, annotations, and optional comments.
+
+inputs:
+  mode:
+    description: Use auto for review on pull_request events and scan elsewhere.
+    default: auto
+  path:
+    description: Repository path to scan.
+    default: "."
+  workspace-root:
+    description: Optional monorepo workspace root.
+    default: ""
+  base:
+    description: Base ref or SHA for review mode.
+    default: ""
+  head:
+    description: Head ref or SHA for review mode.
+    default: "HEAD"
+  config:
+    description: Optional CodeWard config path.
+    default: ""
+  max-files:
+    description: Optional maximum number of files to inspect.
+    default: ""
+  fail-on:
+    description: Severity threshold that fails the action.
+    default: high
+  report-file:
+    description: Markdown report file path.
+    default: codeward-report.md
+  comment-file:
+    description: Markdown PR comment body file path.
+    default: codeward-pr-comment.md
+  annotations:
+    description: Emit GitHub workflow annotations.
+    default: "true"
+  step-summary:
+    description: Append the report to the GitHub step summary.
+    default: "true"
+  comment:
+    description: Create or update a sticky PR comment.
+    default: "true"
+  github-token:
+    description: Token used to create or update PR comments.
+    default: ""
+
+outputs:
+  report-file:
+    description: Markdown report file path.
+    value: ${{ steps.codeward.outputs.report-file }}
+  comment-file:
+    description: Markdown PR comment body file path.
+    value: ${{ steps.codeward.outputs.comment-file }}
+  exit-code:
+    description: CodeWard exit code before the comment step ran.
+    value: ${{ steps.codeward.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare CodeWard
+      shell: bash
+      run: |
+        set -euo pipefail
+        corepack enable
+        pnpm --dir "$GITHUB_ACTION_PATH" install --frozen-lockfile
+        pnpm --dir "$GITHUB_ACTION_PATH" build
+
+    - name: Run CodeWard
+      id: codeward
+      shell: bash
+      run: |
+        set +e
+        args=(github-action "${{ inputs.path }}" --mode "${{ inputs.mode }}" --head "${{ inputs.head }}" --fail-on "${{ inputs.fail-on }}" --report-file "${{ inputs.report-file }}" --comment-file "${{ inputs.comment-file }}")
+
+        if [ -n "${{ inputs.workspace-root }}" ]; then
+          args+=(--workspace-root "${{ inputs.workspace-root }}")
+        fi
+        if [ -n "${{ inputs.base }}" ]; then
+          args+=(--base "${{ inputs.base }}")
+        fi
+        if [ -n "${{ inputs.config }}" ]; then
+          args+=(--config "${{ inputs.config }}")
+        fi
+        if [ -n "${{ inputs.max-files }}" ]; then
+          args+=(--max-files "${{ inputs.max-files }}")
+        fi
+        if [ "${{ inputs.annotations }}" != "true" ]; then
+          args+=(--no-annotations)
+        fi
+        if [ "${{ inputs.step-summary }}" != "true" ]; then
+          args+=(--no-step-summary)
+        fi
+
+        node "$GITHUB_ACTION_PATH/dist/cli.js" "${args[@]}"
+        codeward_exit_code=$?
+        echo "exit-code=$codeward_exit_code" >> "$GITHUB_OUTPUT"
+        echo "report-file=${{ inputs.report-file }}" >> "$GITHUB_OUTPUT"
+        echo "comment-file=${{ inputs.comment-file }}" >> "$GITHUB_OUTPUT"
+        exit 0
+
+    - name: Comment on pull request
+      if: ${{ inputs.comment == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        COMMENT_FILE: ${{ inputs.comment-file }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        set -euo pipefail
+        if [ -z "${GH_TOKEN:-}" ]; then
+          echo "github-token is required when comment is true." >&2
+          exit 1
+        fi
+        body="$(cat "$COMMENT_FILE")"
+        comment_id="$(
+          gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.body | contains("<!-- codeward-pr-comment -->")) | .id' \
+            | head -n 1
+        )"
+
+        if [ -n "$comment_id" ]; then
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -f body="$body" >/dev/null
+        else
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body" >/dev/null
+        fi
+
+    - name: Apply CodeWard failure threshold
+      if: ${{ steps.codeward.outputs.exit-code != '0' }}
+      shell: bash
+      run: exit "${{ steps.codeward.outputs.exit-code }}"
