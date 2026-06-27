@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "repositories": [
+    {
+      "name": "express",
+      "ecosystem": "javascript",
+      "url": "https://github.com/expressjs/express.git",
+      "expectedCommandPatterns": ["^npm test$", "^npm run lint$"],
+      "change": {
+        "fileCandidates": ["lib/application.js", "index.js"],
+        "extensions": [".js"],
+        "pathHints": ["lib/"]
+      }
+    },
+    {
+      "name": "flask",
+      "ecosystem": "python",
+      "url": "https://github.com/pallets/flask.git",
+      "expectedCommandPatterns": ["pytest|tox"],
+      "change": {
+        "fileCandidates": ["src/flask/app.py", "src/flask/__init__.py"],
+        "extensions": [".py"],
+        "pathHints": ["src/flask/"]
+      }
+    },
+    {
+      "name": "gin",
+      "ecosystem": "go",
+      "url": "https://github.com/gin-gonic/gin.git",
+      "expectedCommandPatterns": ["^go test ./\\.\\.\\.$", "^go vet ./\\.\\.\\.$"],
+      "change": {
+        "fileCandidates": ["gin.go", "context.go"],
+        "extensions": [".go"],
+        "pathHints": ["."]
+      }
+    },
+    {
+      "name": "ripgrep",
+      "ecosystem": "rust",
+      "url": "https://github.com/BurntSushi/ripgrep.git",
+      "expectedCommandPatterns": ["^cargo test$", "^cargo clippy --all-targets --all-features$"],
+      "change": {
+        "fileCandidates": ["crates/core/main.rs", "crates/core/lib.rs", "crates/searcher/src/searcher.rs"],
+        "extensions": [".rs"],
+        "pathHints": ["crates/"]
+      }
+    },
+    {
+      "name": "commons-lang",
+      "ecosystem": "maven",
+      "url": "https://github.com/apache/commons-lang.git",
+      "expectedCommandPatterns": ["^mvn test$", "^mvn verify$"],
+      "change": {
+        "fileCandidates": ["src/main/java/org/apache/commons/lang3/StringUtils.java"],
+        "extensions": [".java"],
+        "pathHints": ["src/main/java/"]
+      }
+    }
+  ]
+}

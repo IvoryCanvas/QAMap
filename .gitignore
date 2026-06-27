@@ -1,9 +1,11 @@
 node_modules/
 dist/
 coverage/
+.codeward-corpus/
 .DS_Store
 *.log
 CODEWARD_REPORT.md
+codeward-corpus-report.json
 codeward.sarif
 *.sarif
 .env

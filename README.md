@@ -164,6 +164,7 @@ See [docs/ecosystem.md](docs/ecosystem.md) for the agent ecosystem surfaces Code
 See [docs/api-contracts.md](docs/api-contracts.md) for the API contract source-of-truth check.
 See [docs/verify.md](docs/verify.md) for the combined PR verification report.
 See [docs/eval.md](docs/eval.md) for the change readiness evaluation.
+See [docs/qa-corpus.md](docs/qa-corpus.md) for the opt-in QA corpus against real OSS repositories.
 
 ## Configuration
 

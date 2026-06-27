@@ -6,6 +6,7 @@ const ignoredDirectories = new Set([
   ".git",
   ".hg",
   ".svn",
+  ".codeward-corpus",
   "node_modules",
   "dist",
   "build",

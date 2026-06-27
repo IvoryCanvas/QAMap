@@ -18,6 +18,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "prepack": "pnpm build",
     "test": "pnpm build && node --test test/*.test.mjs",
+    "qa:corpus": "pnpm build && node scripts/qa-oss-corpus.mjs",
     "scan": "pnpm build && node dist/cli.js scan .",
     "report": "pnpm build && node dist/cli.js report . --output CODEWARD_REPORT.md"
   },
