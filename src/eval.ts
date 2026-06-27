@@ -194,10 +194,8 @@ async function readPrBodyFile(prBodyFile: string | undefined): Promise<string | 
 }
 
 function scoreValidationCommands(commands: string[]): EvalCheck {
-  const hasTest = commands.some((command) =>
-    /\b(test|vitest|jest|playwright|node --test|pytest|go test)\b/i.test(command),
-  );
-  const hasSupport = commands.some((command) => /\b(typecheck|lint|build|check|e2e)\b/i.test(command));
+  const hasTest = commands.some(isTestCommand);
+  const hasSupport = commands.some(isSupportingValidationCommand);
   if (hasTest && hasSupport) {
     return check(
       "validation-commands",
@@ -228,6 +226,16 @@ function scoreValidationCommands(commands: string[]): EvalCheck {
     [],
     "Add a real package test script or document the validation command agents should run.",
   );
+}
+
+function isTestCommand(command: string): boolean {
+  return /\b(?:test|vitest|jest|playwright|node --test|pytest|tox|go test|cargo test|gradle test|mvn test)\b/i.test(
+    command,
+  );
+}
+
+function isSupportingValidationCommand(command: string): boolean {
+  return /\b(?:typecheck|lint|build|check|e2e|go vet|ruff|mypy|clippy|mvn verify)\b/i.test(command);
 }
 
 function scoreChangedTestCoverage(files: TestPlanChangedFile[], commands: string[]): EvalCheck {
@@ -554,7 +562,14 @@ function isSourceFile(filePath: string): boolean {
 }
 
 function isTestFile(filePath: string): boolean {
-  return /(?:^|\/)(__tests__|tests?|specs?|e2e)\/|(\.|-)(test|spec)\.[cm]?[jt]sx?$/i.test(filePath);
+  return (
+    /(?:^|\/)(__tests__|tests?|specs?|e2e)\//i.test(filePath) ||
+    /(\.|-)(test|spec)\.[cm]?[jt]sx?$/i.test(filePath) ||
+    /(?:^|\/)test_[^/]+\.py$/i.test(filePath) ||
+    /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(filePath) ||
+    /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift)$/i.test(filePath) ||
+    /(?:^|\/)[^/]+_(?:test|spec)\.rs$/i.test(filePath)
+  );
 }
 
 function isIntentDocumentationFile(filePath: string): boolean {
@@ -567,7 +582,7 @@ function isRiskyChangeFile(filePath: string): boolean {
   const riskyDirectory =
     /(?:^|\/)(\.github\/workflows|migrations?|schema|prisma|db|database|auth|billing|payment|permissions?|security|config|configs)\//i;
   const riskyFile =
-    /(?:action\.ya?ml|package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|\.env|config|workflow|openapi|swagger|graphql|proto)/i;
+    /(?:action\.ya?ml|package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|\.env|config|workflow|openapi|swagger|graphql|proto)/i;
   return riskyDirectory.test(filePath) || riskyFile.test(filePath);
 }
 

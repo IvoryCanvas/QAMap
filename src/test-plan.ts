@@ -278,7 +278,7 @@ function buildStateItem(files: string[]): TestPlanItem | undefined {
 
 function buildConfigItem(files: string[]): TestPlanItem | undefined {
   const matched = files.filter((file) =>
-    /(?:package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|docker|env)/i.test(
+    /(?:package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|docker|env)/i.test(
       file,
     ),
   );
@@ -298,7 +298,7 @@ function buildConfigItem(files: string[]): TestPlanItem | undefined {
 }
 
 function buildTestCoverageItem(files: string[]): TestPlanItem | undefined {
-  const matched = files.filter((file) => /(?:^|\/)(__tests__|tests?|specs?)\/|(\.|-)(test|spec)\.[cm]?[jt]sx?$/i.test(file));
+  const matched = files.filter((file) => isTestLikeFile(file));
   if (matched.length === 0) {
     return undefined;
   }
@@ -315,6 +315,17 @@ function buildTestCoverageItem(files: string[]): TestPlanItem | undefined {
 }
 
 async function discoverSuggestedCommands(root: string, workspaceRoot: string | undefined): Promise<string[]> {
+  const commandGroups = await Promise.all([
+    discoverJavaScriptCommands(root, workspaceRoot),
+    discoverPythonCommands(root),
+    discoverGoCommands(root),
+    discoverRustCommands(root),
+    discoverJvmCommands(root),
+  ]);
+  return uniqueCommands(commandGroups.flat());
+}
+
+async function discoverJavaScriptCommands(root: string, workspaceRoot: string | undefined): Promise<string[]> {
   const packageJsonPath = path.join(root, "package.json");
   let parsed: { packageManager?: string; scripts?: Record<string, string> };
   try {
@@ -331,6 +342,91 @@ async function discoverSuggestedCommands(root: string, workspaceRoot: string | u
   return preferredScripts
     .filter((script) => isUsableScript(parsed.scripts?.[script]))
     .map((script) => (script === "test" ? `${packageManager} test` : `${packageManager} run ${script}`));
+}
+
+async function discoverPythonCommands(root: string): Promise<string[]> {
+  const pyproject = await readTextIfExists(path.join(root, "pyproject.toml"));
+  const hasPythonMarker =
+    Boolean(pyproject) ||
+    (await hasAnyFile(root, [
+      "requirements.txt",
+      "setup.py",
+      "setup.cfg",
+      "tox.ini",
+      "pytest.ini",
+      "uv.lock",
+      "poetry.lock",
+      "Pipfile",
+    ]));
+  if (!hasPythonMarker) {
+    return [];
+  }
+
+  const runner = await detectPythonRunner(root, pyproject);
+  const commands: string[] = [];
+  const hasToxSignal = await exists(path.join(root, "tox.ini"));
+  const hasPytestSignal =
+    /\bpytest\b|\[tool\.pytest/i.test(pyproject ?? "") ||
+    (await exists(path.join(root, "pytest.ini"))) ||
+    (await hasDirectory(path.join(root, "tests")));
+  const hasRuffSignal = /\[tool\.ruff/i.test(pyproject ?? "") || (await hasAnyFile(root, ["ruff.toml", ".ruff.toml"]));
+  const hasMypySignal = /\[tool\.mypy/i.test(pyproject ?? "") || (await hasAnyFile(root, ["mypy.ini", ".mypy.ini"]));
+
+  if (hasToxSignal) {
+    commands.push(withRunner(runner, "tox"));
+  }
+  if (hasPytestSignal) {
+    commands.push(withRunner(runner, "pytest"));
+  }
+  if (hasRuffSignal) {
+    commands.push(withRunner(runner, "ruff check ."));
+  }
+  if (hasMypySignal) {
+    commands.push(withRunner(runner, "mypy ."));
+  }
+
+  return commands;
+}
+
+async function detectPythonRunner(root: string, pyproject: string | undefined): Promise<string | undefined> {
+  if (await exists(path.join(root, "uv.lock"))) {
+    return "uv run";
+  }
+  if (/\[tool\.poetry/i.test(pyproject ?? "") || (await exists(path.join(root, "poetry.lock")))) {
+    return "poetry run";
+  }
+  return undefined;
+}
+
+async function discoverGoCommands(root: string): Promise<string[]> {
+  if (!(await exists(path.join(root, "go.mod")))) {
+    return [];
+  }
+  const commands = ["go test ./...", "go vet ./..."];
+  if (await hasAnyFile(root, [".golangci.yml", ".golangci.yaml", "golangci.yml", "golangci.yaml"])) {
+    commands.push("golangci-lint run");
+  }
+  return commands;
+}
+
+async function discoverRustCommands(root: string): Promise<string[]> {
+  if (!(await exists(path.join(root, "Cargo.toml")))) {
+    return [];
+  }
+  return ["cargo test", "cargo clippy --all-targets --all-features", "cargo build"];
+}
+
+async function discoverJvmCommands(root: string): Promise<string[]> {
+  if (await exists(path.join(root, "gradlew"))) {
+    return ["./gradlew test", "./gradlew build"];
+  }
+  if (await hasAnyFile(root, ["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"])) {
+    return ["gradle test", "gradle build"];
+  }
+  if (await exists(path.join(root, "pom.xml"))) {
+    return ["mvn test", "mvn verify"];
+  }
+  return [];
 }
 
 async function detectPackageManager(
@@ -382,6 +478,51 @@ async function existsInRoots(fileName: string, root: string, workspaceRoot: stri
 
 function isUsableScript(script: string | undefined): boolean {
   return Boolean(script && !/no test specified|exit\s+1/i.test(script));
+}
+
+async function hasAnyFile(root: string, fileNames: string[]): Promise<boolean> {
+  for (const fileName of fileNames) {
+    if (await exists(path.join(root, fileName))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function hasDirectory(directoryPath: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(directoryPath);
+    return stat.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function readTextIfExists(filePath: string): Promise<string | undefined> {
+  try {
+    return await fs.readFile(filePath, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function withRunner(runner: string | undefined, command: string): string {
+  return runner ? `${runner} ${command}` : command;
+}
+
+function uniqueCommands(commands: string[]): string[] {
+  return commands.filter((command, index) => commands.indexOf(command) === index);
+}
+
+function isTestLikeFile(filePath: string): boolean {
+  return (
+    /(?:^|\/)(__tests__|tests?|specs?|e2e)\//i.test(filePath) ||
+    /(\.|-)(test|spec)\.[cm]?[jt]sx?$/i.test(filePath) ||
+    /(?:^|\/)test_[^/]+\.py$/i.test(filePath) ||
+    /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(filePath) ||
+    /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift)$/i.test(filePath) ||
+    /(?:^|\/)[^/]+_(?:test|spec)\.rs$/i.test(filePath)
+  );
 }
 
 async function exists(filePath: string): Promise<boolean> {

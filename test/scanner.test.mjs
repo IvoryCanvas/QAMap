@@ -413,6 +413,148 @@ test("generateTestPlan scopes monorepo changes to the requested package", async 
   assert.match(localMarkdown, /Includes working tree changes: yes/);
 });
 
+test("generateTestPlan suggests validation commands for common non-JavaScript projects", async () => {
+  const fixtures = [
+    {
+      name: "python",
+      expectedCommands: ["uv run tox", "uv run pytest", "uv run ruff check .", "uv run mypy ."],
+      setup: async (root) => {
+        await mkdir(path.join(root, "app"), { recursive: true });
+        await mkdir(path.join(root, "tests"), { recursive: true });
+        await writeFile(
+          path.join(root, "pyproject.toml"),
+          [
+            "[project]",
+            'name = "codeward-python-fixture"',
+            "",
+            "[tool.pytest.ini_options]",
+            'testpaths = ["tests"]',
+            "",
+            "[tool.ruff]",
+            'target-version = "py311"',
+            "",
+            "[tool.mypy]",
+            "strict = true",
+          ].join("\n"),
+        );
+        await writeFile(path.join(root, "uv.lock"), "");
+        await writeFile(path.join(root, "tox.ini"), "[tox]\nenv_list = py311\n");
+        await writeFile(path.join(root, "app/service.py"), "def price() -> int:\n    return 1\n");
+      },
+      edit: async (root) => {
+        await writeFile(path.join(root, "app/service.py"), "def price() -> int:\n    return 2\n");
+      },
+    },
+    {
+      name: "go",
+      expectedCommands: ["go test ./...", "go vet ./...", "golangci-lint run"],
+      setup: async (root) => {
+        await mkdir(path.join(root, "internal/offer"), { recursive: true });
+        await writeFile(path.join(root, "go.mod"), "module example.com/codeward-fixture\n\ngo 1.22\n");
+        await writeFile(path.join(root, ".golangci.yml"), "run:\n  timeout: 2m\n");
+        await writeFile(path.join(root, "internal/offer/service.go"), "package offer\n\nfunc Price() int { return 1 }\n");
+      },
+      edit: async (root) => {
+        await writeFile(path.join(root, "internal/offer/service.go"), "package offer\n\nfunc Price() int { return 2 }\n");
+      },
+    },
+    {
+      name: "rust",
+      expectedCommands: ["cargo test", "cargo clippy --all-targets --all-features", "cargo build"],
+      setup: async (root) => {
+        await mkdir(path.join(root, "src"), { recursive: true });
+        await writeFile(
+          path.join(root, "Cargo.toml"),
+          ['[package]', 'name = "codeward-rust-fixture"', 'version = "0.1.0"', 'edition = "2021"'].join("\n"),
+        );
+        await writeFile(path.join(root, "src/lib.rs"), "pub fn price() -> u32 { 1 }\n");
+      },
+      edit: async (root) => {
+        await writeFile(path.join(root, "src/lib.rs"), "pub fn price() -> u32 { 2 }\n");
+      },
+    },
+    {
+      name: "maven",
+      expectedCommands: ["mvn test", "mvn verify"],
+      setup: async (root) => {
+        await mkdir(path.join(root, "src/main/java/com/example"), { recursive: true });
+        await writeFile(
+          path.join(root, "pom.xml"),
+          [
+            '<project xmlns="http://maven.apache.org/POM/4.0.0">',
+            "  <modelVersion>4.0.0</modelVersion>",
+            "  <groupId>com.example</groupId>",
+            "  <artifactId>codeward-java-fixture</artifactId>",
+            "  <version>1.0.0</version>",
+            "</project>",
+          ].join("\n"),
+        );
+        await writeFile(path.join(root, "src/main/java/com/example/App.java"), "package com.example;\nclass App {}\n");
+      },
+      edit: async (root) => {
+        await writeFile(
+          path.join(root, "src/main/java/com/example/App.java"),
+          "package com.example;\nclass App { int price() { return 2; } }\n",
+        );
+      },
+    },
+  ];
+
+  for (const fixture of fixtures) {
+    const root = await makeTempRepo();
+    await initGitRepo(root);
+    await fixture.setup(root);
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "base"]);
+    await git(root, ["branch", "-M", "main"]);
+
+    await git(root, ["switch", "-c", `feature/${fixture.name}-change`]);
+    await fixture.edit(root);
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", `update ${fixture.name}`]);
+
+    const plan = await generateTestPlan(root, { base: "main", head: "HEAD" });
+
+    assert.deepEqual(plan.suggestedCommands, fixture.expectedCommands, fixture.name);
+  }
+});
+
+test("evaluateChangeReadiness recognizes non-JavaScript test files", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "internal/offer"), { recursive: true });
+  await writeFile(path.join(root, "go.mod"), "module example.com/codeward-fixture\n\ngo 1.22\n");
+  await writeFile(path.join(root, ".golangci.yml"), "run:\n  timeout: 2m\n");
+  await writeFile(path.join(root, "internal/offer/service.go"), "package offer\n\nfunc Price() int { return 1 }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/go-coverage"]);
+  await writeFile(path.join(root, "internal/offer/service.go"), "package offer\n\nfunc Price() int { return 2 }\n");
+  await writeFile(
+    path.join(root, "internal/offer/service_test.go"),
+    "package offer\n\nimport \"testing\"\n\nfunc TestPrice(t *testing.T) { if Price() != 2 { t.Fatal(\"price\") } }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update go coverage"]);
+
+  const result = await evaluateChangeReadiness(root, {
+    base: "main",
+    head: "HEAD",
+    prBody: [
+      "문제: offer price calculation changed for the new flow.",
+      "이유: downstream callers need the updated price.",
+      "Risk: behavior change is covered by a focused Go test.",
+      "Rollback: revert the price calculation branch.",
+    ].join("\n"),
+  });
+
+  assert.equal(result.checks.find((check) => check.id === "validation-commands")?.status, "pass");
+  assert.equal(result.checks.find((check) => check.id === "changed-test-coverage")?.status, "pass");
+  assert.equal(result.rating, "strong");
+});
+
 test("evaluateChangeReadiness scores intent, risk, and verification evidence", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);

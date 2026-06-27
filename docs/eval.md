@@ -23,7 +23,7 @@ Each gate is scored from `0` to `2`.
 
 | Gate | What it checks |
 | --- | --- |
-| Validation commands | The package exposes a real test command and supporting commands such as typecheck, lint, build, or e2e. |
+| Validation commands | The project exposes a real test command and supporting commands such as typecheck, lint, build, e2e, tox, Ruff, mypy, `go vet`, clippy, or Maven verify. |
 | Changed test coverage | Source changes are paired with changed test files, or at least a runnable test command exists. |
 | Intent capture | The PR body, decision docs, or PR template capture the problem, rationale, context, alternatives, or tradeoffs. |
 | Risk explanation | Risky surfaces such as config, workflows, API contracts, auth, billing, migrations, and env files include risk or rollback context. |

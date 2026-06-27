@@ -8,6 +8,14 @@ It combines:
 - `eval`: verification-readiness gates for intent, risk, tests, and review size
 - `test-plan`: domain-oriented scenarios inferred from changed files
 
+Suggested commands are discovered statically from common project files:
+
+- JavaScript/TypeScript: usable `package.json` scripts for test, typecheck, lint, build, and e2e
+- Python: pytest, tox, Ruff, and mypy signals from `pyproject.toml`, pytest config, `tox.ini`, `uv.lock`, or Poetry files
+- Go: `go test`, `go vet`, and `golangci-lint` when `go.mod` or golangci config exists
+- Rust: `cargo test`, `cargo clippy`, and `cargo build` when `Cargo.toml` exists
+- JVM: Gradle wrapper, Gradle build files, or Maven `pom.xml`
+
 ## Usage
 
 ```sh
