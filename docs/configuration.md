@@ -22,6 +22,7 @@ codeward scan . --config ./codeward.config.json
   "failOn": "high",
   "ignoreRules": ["CW011"],
   "maxFiles": 2000,
+  "validationCommands": ["make test", "make lint"],
   "severity": {
     "CW007": "info"
   }
@@ -36,9 +37,11 @@ codeward scan . --config ./codeward.config.json
 | `ignoreRules` | `string[]` | Suppresses rule ids for this repository. |
 | `maxFiles` | `number` | Maximum number of files CodeWard inspects. CLI `--max-files` takes precedence. |
 | `severity` | `Record<string, Severity>` | Overrides severity for specific rule ids. |
+| `validationCommands` | `string[]` | Adds project-specific validation commands to `test-plan`, `eval`, `verify`, and GitHub Action reports. |
 
 ## Notes
 
 - Prefer severity overrides over ignores when a finding is still useful but too noisy for CI.
 - Keep ignores small and documented in pull requests.
+- Use `validationCommands` for custom stacks, Makefile-based projects, or monorepos where the right validation command is not discoverable from standard project files.
 - CodeWard does not execute scanned project code while reading config.

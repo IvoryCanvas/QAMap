@@ -30,6 +30,8 @@ Each gate is scored from `0` to `2`.
 | Domain test plan | Changed files can be mapped to focused domain verification scenarios. |
 | Review size | The branch is small enough to review without unnecessary verification tax. |
 
+`validationCommands` in `codeward.config.json` can supply commands for custom stacks or monorepos when standard project files are not enough.
+
 ## Ratings
 
 | Rating | Meaning |

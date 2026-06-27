@@ -11,6 +11,7 @@ export interface TestPlanOptions {
   head?: string;
   workspaceRoot?: string;
   includeWorkingTree?: boolean;
+  validationCommands?: string[];
 }
 
 export interface TestPlanChangedFile {
@@ -57,7 +58,10 @@ export async function generateTestPlan(rootInput: string, options: TestPlanOptio
   const head = options.head ?? "HEAD";
   const includeWorkingTree = options.includeWorkingTree ?? false;
   const changedFiles = scopeChangedFiles(await getChangedFiles(gitRoot, base, head, includeWorkingTree), relativeRoot);
-  const suggestedCommands = await discoverSuggestedCommands(root, workspaceRoot);
+  const suggestedCommands = uniqueCommands([
+    ...normalizeValidationCommands(options.validationCommands),
+    ...(await discoverSuggestedCommands(root, workspaceRoot)),
+  ]);
   const items = buildPlanItems(changedFiles);
 
   return {
@@ -512,6 +516,10 @@ function withRunner(runner: string | undefined, command: string): string {
 
 function uniqueCommands(commands: string[]): string[] {
   return commands.filter((command, index) => commands.indexOf(command) === index);
+}
+
+function normalizeValidationCommands(commands: string[] | undefined): string[] {
+  return (commands ?? []).map((command) => command.trim()).filter(Boolean);
 }
 
 function isTestLikeFile(filePath: string): boolean {

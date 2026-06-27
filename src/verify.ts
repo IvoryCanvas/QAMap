@@ -40,6 +40,7 @@ export async function verifyChange(rootInput: string, options: VerifyOptions = {
     includeWorkingTree: options.includeWorkingTree,
     prBody: options.prBody,
     prBodyFile: options.prBodyFile,
+    validationCommands: options.validationCommands,
   });
 
   return {

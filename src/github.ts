@@ -28,6 +28,7 @@ export interface GitHubActionOptions {
   prBody?: string;
   prBodyFile?: string;
   includeWorkingTree?: boolean;
+  validationCommands?: string[];
 }
 
 export interface GitHubActionResult {
@@ -62,6 +63,7 @@ export async function runGitHubAction(rootInput: string, options: GitHubActionOp
           head: options.head,
           workspaceRoot: options.scanOptions?.workspaceRoot,
           includeWorkingTree: options.includeWorkingTree,
+          validationCommands: options.validationCommands,
         }),
       )
     : undefined;
@@ -74,6 +76,7 @@ export async function runGitHubAction(rootInput: string, options: GitHubActionOp
           includeWorkingTree: options.includeWorkingTree,
           prBody: options.prBody ?? (await readPullRequestBody()),
           prBodyFile: options.prBodyFile,
+          validationCommands: options.validationCommands,
         }),
       )
     : undefined;

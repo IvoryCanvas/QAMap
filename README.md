@@ -175,6 +175,7 @@ Use `codeward.config.json` or `.codeward.json` to tune repository policy.
   "failOn": "high",
   "ignoreRules": ["CW011"],
   "maxFiles": 2000,
+  "validationCommands": ["make test", "make lint"],
   "severity": {
     "CW007": "info"
   }

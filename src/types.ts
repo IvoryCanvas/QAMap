@@ -59,6 +59,7 @@ export interface CodeWardConfig {
   ignoreRules?: string[];
   maxFiles?: number;
   severity?: Record<string, Severity>;
+  validationCommands?: string[];
 }
 
 export interface ResolvedCodeWardConfig {

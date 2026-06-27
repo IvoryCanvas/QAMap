@@ -34,6 +34,15 @@
       "propertyNames": {
         "$ref": "#/$defs/ruleId"
       }
+    },
+    "validationCommands": {
+      "type": "array",
+      "description": "Project-specific validation commands to show in test-plan, eval, verify, and GitHub Action reports.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
     }
   },
   "$defs": {
