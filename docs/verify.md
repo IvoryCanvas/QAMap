@@ -16,6 +16,8 @@ Suggested commands are discovered statically from common project files:
 - Rust: `cargo test`, `cargo clippy`, and `cargo build` when `Cargo.toml` exists
 - JVM: Gradle wrapper, Gradle build files, or Maven `pom.xml`
 
+For custom stacks or team-specific flows, add `validationCommands` to `codeward.config.json`. Configured commands are shown before automatically discovered commands.
+
 ## Usage
 
 ```sh

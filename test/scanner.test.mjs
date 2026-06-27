@@ -704,6 +704,7 @@ test("loadConfig reads repository policy", async () => {
       failOn: "medium",
       ignoreRules: ["cw011"],
       maxFiles: 10,
+      validationCommands: [" make test ", "make test", "make lint"],
       severity: {
         cw007: "info",
       },
@@ -716,6 +717,7 @@ test("loadConfig reads repository policy", async () => {
   assert.equal(loaded.config.failOn, "medium");
   assert.deepEqual(loaded.config.ignoreRules, ["CW011"]);
   assert.equal(loaded.config.maxFiles, 10);
+  assert.deepEqual(loaded.config.validationCommands, ["make test", "make lint"]);
   assert.deepEqual(loaded.config.severity, { CW007: "info" });
 });
 
@@ -727,6 +729,55 @@ test("writeDefaultConfig creates a starter config", async () => {
   assert.equal(outputPath, path.join(root, "codeward.config.json"));
   assert.equal(loaded.config.failOn, "high");
   assert.deepEqual(loaded.config.ignoreRules, []);
+  assert.deepEqual(loaded.config.validationCommands, []);
+});
+
+test("configured validation commands feed test-plan and eval outputs", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(
+    path.join(root, "codeward.config.json"),
+    JSON.stringify({
+      validationCommands: ["make test", "make lint"],
+    }),
+  );
+  await writeFile(path.join(root, "src/service.py"), "def price() -> int:\n    return 1\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/custom-validation"]);
+  await writeFile(path.join(root, "src/service.py"), "def price() -> int:\n    return 2\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update custom validation"]);
+
+  const testPlanOutput = await execFileAsync(process.execPath, [
+    cliPath,
+    "test-plan",
+    root,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+    "--json",
+  ]);
+  const testPlan = JSON.parse(testPlanOutput.stdout);
+  const evaluation = await evaluateChangeReadiness(root, {
+    base: "main",
+    head: "HEAD",
+    validationCommands: ["make test", "make lint"],
+    prBody: [
+      "문제: custom stack validation is declared in CodeWard config.",
+      "이유: this repository does not expose standard language project files.",
+      "Risk: validation remains explicit and reviewable.",
+      "Rollback: remove the custom validation command config.",
+    ].join("\n"),
+  });
+
+  assert.deepEqual(testPlan.suggestedCommands, ["make test", "make lint"]);
+  assert.equal(evaluation.checks.find((check) => check.id === "validation-commands")?.status, "pass");
+  assert.deepEqual(evaluation.suggestedCommands, ["make test", "make lint"]);
 });
 
 test("formatSarifReport emits SARIF 2.1.0", async () => {

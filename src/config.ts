@@ -14,6 +14,7 @@ export const defaultConfig: CodeWardConfig = {
   ignoreRules: [],
   maxFiles: 2000,
   severity: {},
+  validationCommands: [],
 };
 
 export async function loadConfig(rootInput: string, explicitPath?: string): Promise<ResolvedCodeWardConfig> {
@@ -107,6 +108,16 @@ function normalizeConfig(value: unknown, configPath: string): CodeWardConfig {
       throw new Error("CodeWard config severity must be an object of rule id to severity");
     }
     config.severity = normalizeSeverityOverrides(record.severity as Record<string, unknown>);
+  }
+
+  if (record.validationCommands !== undefined) {
+    if (
+      !Array.isArray(record.validationCommands) ||
+      !record.validationCommands.every((item) => typeof item === "string" && item.trim().length > 0)
+    ) {
+      throw new Error("CodeWard config validationCommands must be an array of non-empty strings");
+    }
+    config.validationCommands = [...new Set(record.validationCommands.map((item) => item.trim()))];
   }
 
   return config;

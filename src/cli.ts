@@ -112,6 +112,7 @@ async function main(argv: string[]): Promise<number> {
       scanOptions: buildScanOptions(options, loadedConfig),
       includeWorkingTree: options.includeWorkingTree,
       prBodyFile: options.prBodyFile,
+      validationCommands: loadedConfig.config.validationCommands,
     });
     const output = formatVerifyOutput(result, options.format ?? (options.json ? "json" : "markdown"));
     await printOrWrite(output, options.output);
@@ -139,18 +140,21 @@ async function main(argv: string[]): Promise<number> {
       evalFile: options.evalFile,
       prBodyFile: options.prBodyFile,
       includeWorkingTree: options.includeWorkingTree,
+      validationCommands: loadedConfig.config.validationCommands,
     });
     return result.exitCode;
   }
 
   if (command === "eval") {
     const options = parseOptions(rest);
+    const loadedConfig = await loadOptionsConfig(options);
     const result = await evaluateChangeReadiness(options.path, {
       base: options.base,
       head: options.head,
       workspaceRoot: options.workspaceRoot,
       includeWorkingTree: options.includeWorkingTree,
       prBodyFile: options.prBodyFile,
+      validationCommands: loadedConfig.config.validationCommands,
     });
     const output = formatEvalOutput(result, options.format ?? (options.json ? "json" : "markdown"));
     await printOrWrite(output, options.output);
@@ -159,11 +163,13 @@ async function main(argv: string[]): Promise<number> {
 
   if (command === "test-plan") {
     const options = parseOptions(rest);
+    const loadedConfig = await loadOptionsConfig(options);
     const result = await generateTestPlan(options.path, {
       base: options.base,
       head: options.head,
       workspaceRoot: options.workspaceRoot,
       includeWorkingTree: options.includeWorkingTree,
+      validationCommands: loadedConfig.config.validationCommands,
     });
     const output = formatTestPlanOutput(result, options.format ?? (options.json ? "json" : "markdown"));
     await printOrWrite(output, options.output);
