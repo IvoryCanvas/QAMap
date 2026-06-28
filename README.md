@@ -3,14 +3,17 @@
 [![CI](https://github.com/IvoryCanvas/codeward/actions/workflows/ci.yml/badge.svg)](https://github.com/IvoryCanvas/codeward/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**A no-token verification layer for AI-assisted pull requests.**
+**Save setup time before AI agents touch your codebase.**
 
-CodeWard checks whether an AI-assisted change is safe and reviewable before merge. It combines repo guardrail scanning, branch review, domain test planning, and verification-readiness scoring into one CLI and GitHub Action.
+CodeWard is a no-token preflight and workspace hygiene layer for AI coding agents. It checks a repository before agent work starts, then helps reviewers verify whether AI-assisted changes are safe and reviewable before merge.
+
+It is built around a simple idea: teams should not spend the first 30 minutes of every AI coding session re-explaining project context, safe commands, missing guardrails, and review expectations. CodeWard turns those repeated setup checks into one CLI and GitHub Action.
 
 It is built for teams using Codex, Claude Code, Cursor, GitHub Copilot coding agent, MCP-powered tools, or any workflow where an agent can read, edit, test, commit, or open pull requests.
 
 CodeWard is intentionally small:
 
+- time-saving: it surfaces missing context, risky settings, and validation gaps before agent work becomes review churn
 - static by default: it does not execute scanned project code
 - no-token by default: it does not call an LLM API
 - verification-focused: it tells reviewers what evidence is missing, not how to style code
@@ -25,13 +28,15 @@ CodeWard는 AI 코딩 에이전트에게 레포지토리를 맡기기 전에 빠
 
 누락된 에이전트 지침, 위험한 MCP 설정, 커밋된 로컬 환경 파일, 위험한 자동화 스크립트, 과도한 GitHub Actions 권한, 약한 검증 신호를 찾아냅니다.
 
-목표는 거대한 보안 플랫폼이 아니라, 유지보수자가 PR 리뷰나 에이전트 작업 전에 위험한 레포 상태를 빨리 알아차리게 해주는 작고 선명한 도구입니다.
+목표는 거대한 보안 플랫폼이 아니라, 유지보수자가 매번 에이전트에게 프로젝트 맥락과 안전한 검증 방법을 설명하느라 쓰는 시간을 줄여주는 작고 선명한 도구입니다.
 
 </details>
 
 ## Why It Matters
 
-AI agents are becoming normal contributors to software projects. They can research a repository, edit files, run commands, and prepare pull requests. The risky failure mode is not always broken code. It is code that looks plausible, merged through a repository with missing context, broad permissions, unsafe scripts, or weak validation.
+AI agents are becoming normal contributors to software projects. They can research a repository, edit files, run commands, and prepare pull requests. The hidden cost is setup time: maintainers repeatedly explain project rules, safe validation commands, risky files, and review expectations before the useful work can begin.
+
+The risky failure mode is not always broken code. It is code that looks plausible, merged through a repository with missing context, broad permissions, unsafe scripts, or weak validation.
 
 CodeWard gives maintainers a quick first line of defense:
 
@@ -125,6 +130,7 @@ node dist/cli.js scan /path/to/repo
 | `codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md` | Score change readiness across intent, risk, tests, and review size. |
 | `codeward github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `codeward test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
+| `codeward e2e plan . --base origin/main --head HEAD` | Suggest E2E runner, user flows, and missing testability hooks for changed files. |
 | `codeward doctor services/offer --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `codeward context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `codeward init .` | Create a starter `codeward.config.json`. |
@@ -136,6 +142,8 @@ For monorepos, pass `--workspace-root` when scanning a package. Package-local ch
 `codeward verify` is the easiest PR-facing command. It combines `review`, `test-plan`, and `eval` into one report with review findings, readiness gates, suggested domain tests, suggested commands, and next actions.
 
 `codeward test-plan` turns changed file paths into a review-ready domain test checklist. It also discovers common validation commands from `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, Gradle files, and Maven `pom.xml`. Add `--include-working-tree` for local, uncommitted changes while iterating.
+
+`codeward e2e plan` turns changed file paths into a first-pass E2E testing plan. It detects whether a project looks like Expo/React Native or web, recommends a runner such as Maestro or Playwright, suggests candidate user flows, and points out missing stable selectors such as `testID` or `data-testid` before anyone starts writing tests from a blank file.
 
 `codeward eval` scores whether a branch has enough validation evidence, changed-test coverage, intent capture, risk explanation, domain verification paths, and reviewable size. In GitHub Actions, CodeWard can read the pull request body from the event payload and append the evaluation to the PR comment.
 
@@ -237,6 +245,7 @@ Near-term priorities:
 - publish a versioned GitHub Action release tag
 - improve branch-aware `review` changed-line locations
 - improve generated domain test plans with framework-specific test skeletons
+- turn E2E plans into runnable Maestro and Playwright draft files
 - expand `eval` into repository-specific verification manifests and taste rubrics
 - continue expanding agent surface detection across Codex, Claude Code, Cursor, Copilot, Gemini, and related tools
 - generate rule documentation from scanner metadata

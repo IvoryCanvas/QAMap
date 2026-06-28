@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { generateAgentContext } from "./context.js";
 import { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
+import { formatMarkdownE2ePlan, generateE2ePlan } from "./e2e.js";
 import { evaluateChangeReadiness, formatEvalReport, formatMarkdownEvalReport } from "./eval.js";
 import { runGitHubAction } from "./github.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
@@ -172,6 +173,29 @@ async function main(argv: string[]): Promise<number> {
       validationCommands: loadedConfig.config.validationCommands,
     });
     const output = formatTestPlanOutput(result, options.format ?? (options.json ? "json" : "markdown"));
+    await printOrWrite(output, options.output);
+    return 0;
+  }
+
+  if (command === "e2e") {
+    const [subcommand, ...subcommandRest] = rest;
+    if (!subcommand || subcommand === "--help" || subcommand === "-h") {
+      printE2eHelp();
+      return 0;
+    }
+    if (subcommand !== "plan") {
+      throw new Error(`Unknown e2e subcommand: ${subcommand}`);
+    }
+    const options = parseOptions(subcommandRest);
+    const loadedConfig = await loadOptionsConfig(options);
+    const result = await generateE2ePlan(options.path, {
+      base: options.base,
+      head: options.head,
+      workspaceRoot: options.workspaceRoot,
+      includeWorkingTree: options.includeWorkingTree,
+      validationCommands: loadedConfig.config.validationCommands,
+    });
+    const output = formatE2ePlanOutput(result, options.format ?? (options.json ? "json" : "markdown"));
     await printOrWrite(output, options.output);
     return 0;
   }
@@ -455,6 +479,16 @@ function formatTestPlanOutput(result: Awaited<ReturnType<typeof generateTestPlan
   return formatMarkdownTestPlan(result);
 }
 
+function formatE2ePlanOutput(result: Awaited<ReturnType<typeof generateE2ePlan>>, format: OutputFormat): string {
+  if (format === "json") {
+    return `${JSON.stringify(result, null, 2)}\n`;
+  }
+  if (format !== "markdown" && format !== "text") {
+    throw new Error(`E2E plan supports text, json, or markdown output, not ${format}`);
+  }
+  return formatMarkdownE2ePlan(result);
+}
+
 function formatEvalOutput(result: Awaited<ReturnType<typeof evaluateChangeReadiness>>, format: OutputFormat): string {
   if (format === "json") {
     return `${JSON.stringify(result, null, 2)}\n`;
@@ -521,6 +555,7 @@ Usage:
   codeward eval [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--pr-body-file <file>] [--format <format>]
   codeward github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
   codeward test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
+  codeward e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>]
   codeward context [path] [--write [file]] [--force]
   codeward init [path] [--write <file>] [--force]
 
@@ -542,9 +577,24 @@ Examples:
   codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md
   codeward github-action . --mode review --base origin/main --head HEAD --fail-on high
   codeward test-plan . --base origin/main --head HEAD
+  codeward e2e plan . --base origin/main --head HEAD
   codeward test-plan services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
   codeward context . --write AGENTS.md
   codeward init .
+`);
+}
+
+function printE2eHelp(): void {
+  console.log(`CodeWard ${VERSION}
+
+E2E planning for AI-assisted changes.
+
+Usage:
+  codeward e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
+
+Examples:
+  codeward e2e plan . --base origin/main --head HEAD
+  codeward e2e plan apps/mobile --workspace-root . --include-working-tree
 `);
 }
 

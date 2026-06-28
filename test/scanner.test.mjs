@@ -13,12 +13,14 @@ import {
   formatMarkdownReport,
   formatDoctorReport,
   formatMarkdownDoctorReport,
+  formatMarkdownE2ePlan,
   formatMarkdownReviewReport,
   formatMarkdownTestPlan,
   formatMarkdownVerifyReport,
   formatReviewReport,
   formatSarifReport,
   generateAgentContext,
+  generateE2ePlan,
   generateTestPlan,
   loadConfig,
   reviewProject,
@@ -411,6 +413,81 @@ test("generateTestPlan scopes monorepo changes to the requested package", async 
   assert.ok(localPlan.changedFiles.some((file) => file.path === "src/pages/offer/detail.tsx"));
   assert.ok(localPlan.items.some((item) => item.title === "User-facing UI states"));
   assert.match(localMarkdown, /Includes working tree changes: yes/);
+});
+
+test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "app"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/home/ui"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/InkDrawingPage"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      packageManager: "pnpm@10.32.1",
+      scripts: {
+        start: "expo start",
+        ios: "expo run:ios",
+        lint: "expo lint",
+      },
+      dependencies: {
+        expo: "^54.0.0",
+        "react-native": "0.81.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "app.json"), JSON.stringify({ expo: { name: "Fixture" } }));
+  await writeFile(path.join(root, "app/index.tsx"), "export default function Home() { return null; }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/ink-flow"]);
+  await writeFile(
+    path.join(root, "src/pages/home/ui/RecordModeSheet.tsx"),
+    [
+      "import { Pressable, Text } from 'react-native';",
+      "export function RecordModeSheet() {",
+      "  return <Pressable onPress={() => undefined}><Text>Ink</Text></Pressable>;",
+      "}",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "src/pages/InkDrawingPage/InkDrawingPage.tsx"),
+    [
+      "import { Pressable, Text } from 'react-native';",
+      "export function InkDrawingPage() {",
+      "  return <Pressable onPress={() => undefined}><Text>Save drawing</Text></Pressable>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add ink flow"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const markdown = formatMarkdownE2ePlan(plan);
+  const cliOutput = await execFileAsync(process.execPath, [
+    cliPath,
+    "e2e",
+    "plan",
+    root,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+    "--json",
+  ]);
+  const cliPlan = JSON.parse(cliOutput.stdout);
+
+  assert.equal(plan.project.type, "expo-react-native");
+  assert.equal(plan.recommendedRunner.name, "maestro");
+  assert.ok(plan.flows.some((flow) => flow.title === "Ink drawing capture flow"));
+  assert.ok(plan.flows.some((flow) => flow.title === "Record mode selection flow"));
+  assert.ok(plan.missingTestability.some((gap) => /testID/.test(gap)));
+  assert.deepEqual(plan.suggestedCommands, ["pnpm run lint"]);
+  assert.match(markdown, /# CodeWard E2E Plan/);
+  assert.match(markdown, /Recommended runner: Maestro/);
+  assert.equal(cliPlan.recommendedRunner.name, "maestro");
 });
 
 test("generateTestPlan suggests validation commands for common non-JavaScript projects", async () => {
