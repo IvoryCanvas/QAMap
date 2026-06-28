@@ -12,6 +12,8 @@ export { formatMarkdownVerifyReport, formatVerifyReport, verifyChange } from "./
 export type { DoctorArea, DoctorPriority, DoctorResult } from "./doctor.js";
 export type {
   E2eFlow,
+  E2eSelector,
+  E2eSelectorKind,
   E2eDraftFile,
   E2eDraftOptions,
   E2eDraftResult,

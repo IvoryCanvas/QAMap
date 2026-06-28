@@ -450,7 +450,7 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
     [
       "import { Pressable, Text } from 'react-native';",
       "export function RecordModeSheet() {",
-      "  return <Pressable onPress={() => undefined}><Text>Ink</Text></Pressable>;",
+      "  return <Pressable testID=\"record-mode-ink\" onPress={() => undefined}><Text>Ink</Text></Pressable>;",
       "}",
     ].join("\n"),
   );
@@ -459,7 +459,7 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
     [
       "import { Pressable, Text } from 'react-native';",
       "export function InkDrawingPage() {",
-      "  return <Pressable onPress={() => undefined}><Text>Save drawing</Text></Pressable>;",
+      "  return <Pressable testID=\"ink-save-button\" accessibilityLabel=\"Save drawing\" onPress={() => undefined}><Text>Save drawing</Text></Pressable>;",
       "}",
     ].join("\n"),
   );
@@ -471,6 +471,7 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".maestro" });
   const draftMarkdown = formatMarkdownE2eDraft(draft);
   const inkDraft = await readFile(path.join(root, ".maestro/ink-drawing-capture-flow.yaml"), "utf8");
+  const recordModeDraft = await readFile(path.join(root, ".maestro/record-mode-selection-flow.yaml"), "utf8");
   const skippedDraft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".maestro" });
   const cliOutput = await execFileAsync(process.execPath, [
     cliPath,
@@ -503,7 +504,9 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.equal(plan.recommendedRunner.name, "maestro");
   assert.ok(plan.flows.some((flow) => flow.title === "Ink drawing capture flow"));
   assert.ok(plan.flows.some((flow) => flow.title === "Record mode selection flow"));
-  assert.ok(plan.missingTestability.some((gap) => /testID/.test(gap)));
+  assert.ok(plan.flows.some((flow) => flow.selectors.some((selector) => selector.value === "ink-save-button")));
+  assert.ok(plan.flows.some((flow) => flow.selectors.some((selector) => selector.value === "record-mode-ink")));
+  assert.ok(plan.missingTestability.some((gap) => /\.maestro/.test(gap)));
   assert.deepEqual(plan.suggestedCommands, ["pnpm run lint"]);
   assert.match(markdown, /# CodeWard E2E Plan/);
   assert.match(markdown, /Recommended runner: Maestro/);
@@ -514,10 +517,60 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.match(draftMarkdown, /# CodeWard E2E Draft/);
   assert.match(inkDraft, /appId: \$\{APP_ID\}/);
   assert.match(inkDraft, /Flow: Ink drawing capture flow/);
+  assert.match(inkDraft, /tapOn: \{ id: "ink-save-button" \}/);
+  assert.match(recordModeDraft, /tapOn: \{ id: "record-mode-ink" \}/);
   assert.match(inkDraft, /TODO:/);
   assert.equal(cliPlan.recommendedRunner.name, "maestro");
   assert.equal(cliDraft.runner, "maestro");
   assert.ok(cliDraft.files.some((file) => file.path === ".maestro-cli/ink-drawing-capture-flow.yaml"));
+});
+
+test("generateE2eDraft uses web selectors in Playwright specs", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      packageManager: "pnpm@10.32.1",
+      scripts: {
+        test: "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        vite: "^7.0.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/pages/checkout/CheckoutPage.tsx"),
+    "export function CheckoutPage() { return <button data-testid=\"checkout-submit\">Complete checkout</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/checkout-copy"]);
+  await writeFile(
+    path.join(root, "src/pages/checkout/CheckoutPage.tsx"),
+    "export function CheckoutPage() { return <button data-testid=\"checkout-submit\" aria-label=\"Complete checkout\">Complete checkout</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update checkout page"]);
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const spec = await readFile(path.join(root, "tests/e2e/changed-ui-smoke-flow.spec.ts"), "utf8");
+
+  assert.equal(draft.runner, "playwright");
+  assert.ok(draft.files.some((file) => file.path === "tests/e2e/changed-ui-smoke-flow.spec.ts"));
+  assert.match(spec, /page\.getByTestId\("checkout-submit"\)/);
+  assert.match(spec, /Inferred selectors/);
 });
 
 test("generateTestPlan suggests validation commands for common non-JavaScript projects", async () => {

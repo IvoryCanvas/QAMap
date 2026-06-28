@@ -146,7 +146,7 @@ For monorepos, pass `--workspace-root` when scanning a package. Package-local ch
 
 `codeward e2e plan` turns changed file paths into a first-pass E2E testing plan. It detects whether a project looks like Expo/React Native or web, recommends a runner such as Maestro or Playwright, suggests candidate user flows, and points out missing stable selectors such as `testID` or `data-testid` before anyone starts writing tests from a blank file.
 
-`codeward e2e draft` writes runnable draft files from that plan. Expo and React Native projects get Maestro YAML flows under `.maestro/` by default, while web projects get Playwright specs under `tests/e2e/`. Drafts keep `TODO` placeholders where stable selectors or project-specific launch details are still needed, and existing files are not overwritten unless `--force` is passed.
+`codeward e2e draft` writes runnable draft files from that plan. Expo and React Native projects get Maestro YAML flows under `.maestro/` by default, while web projects get Playwright specs under `tests/e2e/`. Drafts infer stable selectors such as `testID`, `accessibilityLabel`, `data-testid`, `aria-label`, and visible text where possible. They keep `TODO` placeholders where selectors or project-specific launch details are still needed, and existing files are not overwritten unless `--force` is passed.
 
 `codeward eval` scores whether a branch has enough validation evidence, changed-test coverage, intent capture, risk explanation, domain verification paths, and reviewable size. In GitHub Actions, CodeWard can read the pull request body from the event payload and append the evaluation to the PR comment.
 
