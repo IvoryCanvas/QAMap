@@ -28,6 +28,11 @@ export interface DomainLanguageSummary {
   guidance: string[];
 }
 
+interface PathTermCandidate {
+  term: string;
+  confidence: DomainLanguageConfidence;
+}
+
 const maxFilesPerTerm = 8;
 
 export async function buildDomainLanguageSummary(
@@ -44,8 +49,8 @@ export async function buildDomainLanguageSummary(
   }
 
   for (const file of files) {
-    for (const term of termsFromPath(file)) {
-      addTerm(termMap, term, "changed-file", "medium", [file]);
+    for (const candidate of termsFromPath(file)) {
+      addTerm(termMap, candidate.term, "changed-file", candidate.confidence, [file]);
     }
   }
 
@@ -158,24 +163,51 @@ async function collectUiCopyTerms(
   return terms;
 }
 
-function termsFromPath(file: string): string[] {
+function termsFromPath(file: string): PathTermCandidate[] {
   if (!isDomainLanguageFile(file)) {
     return [];
   }
-  const terms: string[] = [];
+  const terms: PathTermCandidate[] = [];
   const segments = file.split("/");
-  for (const key of ["features", "domains", "modules", "services", "entities", "pages", "screens", "app"]) {
+  const semanticKeys: Array<{ key: string; confidence: DomainLanguageConfidence }> = [
+    { key: "features", confidence: "high" },
+    { key: "domains", confidence: "high" },
+    { key: "modules", confidence: "high" },
+    { key: "services", confidence: "high" },
+    { key: "entities", confidence: "high" },
+    { key: "pages", confidence: "medium" },
+    { key: "screens", confidence: "medium" },
+    { key: "app", confidence: "medium" },
+  ];
+  for (const { key, confidence } of semanticKeys) {
     const index = segments.indexOf(key);
-    const value = normalizeSegment(segments[index + 1]);
+    const value = normalizeSegment(semanticSegmentAfterKey(segments, index));
     if (value) {
-      terms.push(value);
+      terms.push({ term: value, confidence });
     }
   }
   const basename = normalizeSegment(path.basename(file));
   if (basename) {
-    terms.push(basename);
+    terms.push({ term: basename, confidence: "medium" });
   }
-  return uniqueStrings(terms);
+  return uniquePathTermCandidates(terms);
+}
+
+function semanticSegmentAfterKey(segments: string[], keyIndex: number): string | undefined {
+  if (keyIndex < 0) {
+    return undefined;
+  }
+  for (const segment of segments.slice(keyIndex + 1)) {
+    if (!isStructuralSegment(segment)) {
+      return segment;
+    }
+  }
+  return undefined;
+}
+
+function isStructuralSegment(segment: string): boolean {
+  const normalized = segment.toLowerCase().replace(/[^a-z0-9가-힣]+/g, "-").replace(/^-+|-+$/g, "");
+  return structuralSegments.has(normalized);
 }
 
 function extractUiCopyTerms(text: string): string[] {
@@ -257,11 +289,22 @@ function isUsefulTerm(value: string): boolean {
     "config",
     "controller",
     "content",
+    "doc",
+    "docs",
     "index",
     "ios",
     "android",
     "layout",
     "model",
+    "navigation",
+    "navigations",
+    "page",
+    "pages",
+    "provider",
+    "providers",
+    "readme",
+    "route",
+    "routes",
     "screen",
     "screens",
     "service",
@@ -336,3 +379,35 @@ function dedupeScenarios(scenarios: DomainScenarioSuggestion[]): DomainScenarioS
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
+
+function uniquePathTermCandidates(values: PathTermCandidate[]): PathTermCandidate[] {
+  const candidates = new Map<string, PathTermCandidate>();
+  for (const value of values) {
+    const key = value.term.toLowerCase();
+    const existing = candidates.get(key);
+    if (!existing || confidenceRank(value.confidence) > confidenceRank(existing.confidence)) {
+      candidates.set(key, value);
+    }
+  }
+  return [...candidates.values()];
+}
+
+const structuralSegments = new Set([
+  "app",
+  "apps",
+  "components",
+  "content",
+  "docs",
+  "features",
+  "layouts",
+  "modules",
+  "navigation",
+  "navigations",
+  "pages",
+  "providers",
+  "routes",
+  "screens",
+  "services",
+  "shared",
+  "src",
+]);

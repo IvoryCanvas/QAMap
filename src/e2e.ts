@@ -9,7 +9,7 @@ import {
 } from "./test-evidence.js";
 import { generateTestPlan } from "./test-plan.js";
 import type { TestPlanChangedFile, TestPlanOptions } from "./test-plan.js";
-import type { DomainLanguageSummary } from "./domain-language.js";
+import type { DomainLanguageSummary, DomainScenarioSuggestion } from "./domain-language.js";
 import type { MatchedCoreFlow } from "./flows.js";
 import type { LocalHistoryReference } from "./history.js";
 import type { CoverageEvidence, TestSuiteInventory, TestSuiteSummary } from "./test-evidence.js";
@@ -100,6 +100,8 @@ export interface E2eDraftFile {
   flowTitle: string;
   runner: E2eRunnerName;
   status: "created" | "skipped";
+  source?: "domain-language" | "core-flow" | "heuristic";
+  stability?: "ready" | "needs-selector" | "needs-setup" | "needs-selector-and-setup";
   todoCount?: number;
   inferredSelectorCount?: number;
   coverageTargetCount?: number;
@@ -175,7 +177,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
   const plan = await generateE2ePlan(root, options);
   const runner = plan.recommendedRunner.name;
   const outputDirectory = path.resolve(root, options.output ?? defaultDraftOutputDirectory(runner));
-  const flows = plan.flows.length > 0 ? plan.flows : [buildFallbackFlow(plan)];
+  const flows = buildDraftFlows(plan);
 
   await fs.mkdir(outputDirectory, { recursive: true });
 
@@ -189,6 +191,8 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
         flowTitle: flow.title,
         runner,
         status: "skipped",
+        source: draftFlowSource(flow),
+        stability: draftStability(plan, flow),
         coverageTargetCount: flow.coverage.length,
         reason: "File already exists. Pass --force to overwrite it.",
       });
@@ -201,6 +205,8 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
       flowTitle: flow.title,
       runner,
       status: "created",
+      source: draftFlowSource(flow),
+      stability: draftStability(plan, flow),
       todoCount: countTodos(content),
       inferredSelectorCount: flow.selectors.length,
       coverageTargetCount: flow.coverage.length,
@@ -719,6 +725,11 @@ function toCoreFlowChangedFiles(
 type E2eFlowKind = "ui" | "api" | "state" | "content" | "config" | "domain" | "changed-file";
 type FlowCandidate = Omit<E2eFlow, "coverage" | "coverageEvidence" | "selectors" | "missingTestability"> & {
   kind: E2eFlowKind;
+};
+type DraftFlowSource = "domain-language" | "core-flow" | "heuristic";
+type DraftE2eFlow = E2eFlow & {
+  draftSource?: DraftFlowSource;
+  domainScenario?: DomainScenarioSuggestion;
 };
 
 async function buildFlows(
@@ -1271,6 +1282,104 @@ function dedupeFlows(flows: E2eFlow[]): E2eFlow[] {
   return deduped;
 }
 
+function buildDraftFlows(plan: E2ePlanResult): DraftE2eFlow[] {
+  const baseFlows = plan.flows.length > 0 ? plan.flows : [buildFallbackFlow(plan)];
+  const scenarioFlows = plan.domainLanguage.scenarios
+    .filter((scenario) => scenario.files.length > 0 || scenario.source === "core-flow")
+    .slice(0, 4)
+    .map((scenario) => buildDomainScenarioDraftFlow(plan, scenario, baseFlows));
+
+  if (scenarioFlows.length === 0) {
+    return baseFlows.map((flow) => ({
+      ...flow,
+      draftSource: "heuristic",
+    }));
+  }
+
+  const combined = dedupeFlows([...scenarioFlows, ...baseFlows]).slice(0, 4);
+  return combined.map((flow) => ({
+    ...flow,
+    draftSource: draftFlowSource(flow),
+  }));
+}
+
+function buildDomainScenarioDraftFlow(
+  plan: E2ePlanResult,
+  scenario: DomainScenarioSuggestion,
+  baseFlows: E2eFlow[],
+): DraftE2eFlow {
+  const baseFlow = bestBaseFlowForScenario(scenario, baseFlows);
+  const files = uniqueStrings(scenario.files.length > 0 ? scenario.files : (baseFlow?.files ?? [])).slice(0, 20);
+  const coverage = baseFlow?.coverage ?? buildCoverageTargets("domain", files, plan.recommendedRunner.name);
+  return {
+    title: scenario.title,
+    reason: scenario.intent,
+    files,
+    steps: scenario.checks.length > 0 ? scenario.checks : (baseFlow?.steps ?? []),
+    coverage,
+    coverageEvidence: baseFlow?.coverageEvidence ?? [],
+    selectors: baseFlow?.selectors ?? [],
+    missingTestability: baseFlow?.missingTestability ?? [],
+    draftSource: scenario.source === "core-flow" ? "core-flow" : "domain-language",
+    domainScenario: scenario,
+  };
+}
+
+function bestBaseFlowForScenario(
+  scenario: DomainScenarioSuggestion,
+  baseFlows: E2eFlow[],
+): E2eFlow | undefined {
+  let best: { flow: E2eFlow; score: number } | undefined;
+  for (const flow of baseFlows) {
+    const score = fileOverlapScore(scenario.files, flow.files);
+    if (!best || score > best.score) {
+      best = { flow, score };
+    }
+  }
+  return best && best.score > 0 ? best.flow : baseFlows[0];
+}
+
+function fileOverlapScore(leftFiles: string[], rightFiles: string[]): number {
+  let score = 0;
+  for (const left of leftFiles) {
+    for (const right of rightFiles) {
+      if (left === right || left.endsWith(`/${right}`) || right.endsWith(`/${left}`)) {
+        score += 3;
+      } else if (path.dirname(left) === path.dirname(right)) {
+        score += 1;
+      }
+    }
+  }
+  return score;
+}
+
+function draftFlowSource(flow: E2eFlow): DraftFlowSource {
+  const draftFlow = flow as DraftE2eFlow;
+  return draftFlow.draftSource ?? "heuristic";
+}
+
+function domainScenarioForFlow(flow: E2eFlow): DomainScenarioSuggestion | undefined {
+  return (flow as DraftE2eFlow).domainScenario;
+}
+
+function draftStability(
+  plan: E2ePlanResult,
+  flow: E2eFlow,
+): "ready" | "needs-selector" | "needs-setup" | "needs-selector-and-setup" {
+  const needsSelector = flow.missingTestability.length > 0;
+  const needsSetup = plan.missingTestability.some((gap) => /No \.maestro|No Playwright config/i.test(gap));
+  if (needsSelector && needsSetup) {
+    return "needs-selector-and-setup";
+  }
+  if (needsSelector) {
+    return "needs-selector";
+  }
+  if (needsSetup) {
+    return "needs-setup";
+  }
+  return "ready";
+}
+
 function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
   const coverage = buildCoverageTargets("changed-file", [], plan.recommendedRunner.name);
   return {
@@ -1330,8 +1439,13 @@ function draftContentForFlow(plan: E2ePlanResult, flow: E2eFlow, runner: E2eRunn
 function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   const lines: string[] = [];
   const selectorQueue = [...flow.selectors];
+  const scenario = domainScenarioForFlow(flow);
   lines.push(`# Generated by CodeWard ${VERSION}`);
   lines.push(`# Flow: ${flow.title}`);
+  if (scenario) {
+    lines.push(`# Domain scenario: ${scenario.title}`);
+    lines.push(`# Intent: ${scenario.intent}`);
+  }
   lines.push(`# Base: ${plan.base}`);
   lines.push(`# Head: ${plan.head}`);
   lines.push("# Replace ${APP_ID} with the app id or export APP_ID before running Maestro.");
@@ -1343,6 +1457,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
     const command = maestroCommandForStep(step, selectorQueue);
     lines.push(...formatMaestroCommand(command));
   }
+  appendDomainScenarioComments(lines, flow, "#");
   appendMaestroCoverageComments(lines, flow);
   if (flow.missingTestability.length > 0) {
     lines.push("");
@@ -1395,11 +1510,16 @@ function maestroCommandForStep(
 function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   const testName = flow.title.replaceAll('"', "'");
   const selectorQueue = [...flow.selectors];
+  const scenario = domainScenarioForFlow(flow);
   const lines: string[] = [];
   lines.push(`// Generated by CodeWard ${VERSION}`);
   lines.push(`// Base: ${plan.base}`);
   lines.push(`// Head: ${plan.head}`);
   lines.push(`// Flow: ${flow.title}`);
+  if (scenario) {
+    lines.push(`// Domain scenario: ${scenario.title}`);
+    lines.push(`// Intent: ${scenario.intent}`);
+  }
   lines.push("");
   lines.push('import { expect, test } from "@playwright/test";');
   lines.push("");
@@ -1415,6 +1535,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
       lines.push(`  await ${locator}.click();`);
     }
   }
+  appendDomainScenarioComments(lines, flow, "  //");
   appendPlaywrightCoverageComments(lines, flow);
   lines.push("});");
   if (flow.missingTestability.length > 0) {
@@ -1443,10 +1564,17 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
 }
 
 function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
+  const scenario = domainScenarioForFlow(flow);
   const lines: string[] = [];
   lines.push(`# ${flow.title}`);
   lines.push("");
   lines.push(`Generated by CodeWard ${VERSION}.`);
+  if (scenario) {
+    lines.push("");
+    lines.push(`Domain scenario: ${scenario.title}`);
+    lines.push("");
+    lines.push(scenario.intent);
+  }
   lines.push("");
   lines.push(`- Base: \`${plan.base}\``);
   lines.push(`- Head: \`${plan.head}\``);
@@ -1455,6 +1583,18 @@ function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   lines.push("");
   for (const step of flow.steps) {
     lines.push(`- [ ] ${step}`);
+  }
+  if (scenario) {
+    lines.push("");
+    lines.push("## Scenario Checks");
+    lines.push("");
+    if (sameStringList(scenario.checks, flow.steps)) {
+      lines.push("The scenario checks are already used as the draft steps above.");
+    } else {
+      for (const check of scenario.checks) {
+        lines.push(`- [ ] ${check}`);
+      }
+    }
   }
   if (flow.coverage.length > 0) {
     lines.push("");
@@ -1501,6 +1641,18 @@ function appendMaestroCoverageComments(lines: string[], flow: E2eFlow): void {
   }
 }
 
+function appendDomainScenarioComments(lines: string[], flow: E2eFlow, commentPrefix: string): void {
+  const scenario = domainScenarioForFlow(flow);
+  if (!scenario || scenario.checks.length === 0) {
+    return;
+  }
+  lines.push("");
+  lines.push(`${commentPrefix} Domain scenario checks:`);
+  for (const check of scenario.checks) {
+    lines.push(`${commentPrefix} - [ ] ${check}`);
+  }
+}
+
 function appendPlaywrightCoverageComments(lines: string[], flow: E2eFlow): void {
   if (flow.coverage.length === 0) {
     return;
@@ -1513,6 +1665,10 @@ function appendPlaywrightCoverageComments(lines: string[], flow: E2eFlow): void 
       lines.push(`  //   - [ ] ${check}`);
     }
   }
+}
+
+function sameStringList(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function buildDraftNextSteps(plan: E2ePlanResult, runner: E2eRunnerName): string[] {
@@ -1536,6 +1692,12 @@ function buildDraftNextSteps(plan: E2ePlanResult, runner: E2eRunnerName): string
 
 function formatDraftFileQuality(file: E2eDraftFile): string | undefined {
   const details: string[] = [];
+  if (file.source !== undefined) {
+    details.push(file.source);
+  }
+  if (file.stability !== undefined) {
+    details.push(file.stability);
+  }
   if (file.todoCount !== undefined) {
     details.push(`${file.todoCount} TODO${file.todoCount === 1 ? "" : "s"}`);
   }

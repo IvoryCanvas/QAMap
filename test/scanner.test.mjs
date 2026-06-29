@@ -478,7 +478,9 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".maestro" });
   const draftMarkdown = formatMarkdownE2eDraft(draft);
   const uiFlow = plan.flows.find((flow) => flow.title.endsWith("UI smoke flow"));
-  const uiDraftFile = draft.files.find((file) => file.flowTitle === uiFlow?.title);
+  const uiDraftFile = draft.files.find(
+    (file) => file.source === "domain-language" && file.inferredSelectorCount !== undefined && file.inferredSelectorCount > 0,
+  );
   assert.ok(uiFlow);
   assert.ok(uiDraftFile);
   const uiDraft = await readFile(path.join(root, uiDraftFile.path), "utf8");
@@ -530,7 +532,8 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.match(markdown, /Recommended runner: Maestro/);
   assert.match(markdown, /Coverage targets:/);
   assert.equal(draft.runner, "maestro");
-  assert.ok(draft.files.some((file) => file.flowTitle === uiFlow.title));
+  assert.ok(draft.files.some((file) => file.source === "domain-language"));
+  assert.ok(draft.files.some((file) => file.stability === "needs-setup" || file.stability === "needs-selector-and-setup"));
   assert.ok(draft.files.every((file) => file.status === "created"));
   assert.ok(draft.files.some((file) => file.todoCount !== undefined && file.todoCount > 0));
   assert.ok(draft.files.some((file) => file.inferredSelectorCount !== undefined && file.inferredSelectorCount > 0));
@@ -542,7 +545,9 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.match(draftMarkdown, /inferred selector/);
   assert.match(draftMarkdown, /coverage targets/);
   assert.match(uiDraft, /appId: \$\{APP_ID\}/);
-  assert.match(uiDraft, new RegExp(`Flow: ${uiFlow.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  assert.match(uiDraft, new RegExp(`Flow: ${uiDraftFile.flowTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  assert.match(uiDraft, /Domain scenario:/);
+  assert.match(uiDraft, /Domain scenario checks:/);
   assert.match(uiDraft, /tapOn: \{ id: "ink-save-button" \}/);
   assert.match(uiDraft, /record-mode-ink/);
   assert.match(uiDraft, /Coverage matrix/);
@@ -550,7 +555,7 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.match(uiDraft, /TODO:/);
   assert.equal(cliPlan.recommendedRunner.name, "maestro");
   assert.equal(cliDraft.runner, "maestro");
-  assert.ok(cliDraft.files.some((file) => file.flowTitle === uiFlow.title));
+  assert.ok(cliDraft.files.some((file) => file.source === "domain-language"));
 });
 
 test("generateE2ePlan keeps service changes generic and avoids fixture-specific names", async () => {
@@ -754,15 +759,20 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
     output: "tests/e2e",
     runner: "playwright",
   });
-  const spec = await readFile(path.join(root, "tests/e2e/checkout-ui-smoke-flow.spec.ts"), "utf8");
+  const draftFile = draft.files.find((file) => file.flowTitle === "Checkout primary journey");
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
 
   assert.equal(draft.runner, "playwright");
+  assert.equal(draftFile.source, "domain-language");
   assert.equal(draft.plan.testSuite.hasTestSuite, false);
   assert.equal(
     draft.plan.flows[0].coverageEvidence.find((evidence) => evidence.targetTitle === "Primary success path")?.status,
     "missing",
   );
-  assert.ok(draft.files.some((file) => file.path === "tests/e2e/checkout-ui-smoke-flow.spec.ts"));
+  assert.ok(draft.files.some((file) => file.path === "tests/e2e/checkout-primary-journey.spec.ts"));
+  assert.match(spec, /test\("Checkout primary journey"/);
+  assert.match(spec, /Domain scenario:/);
   assert.match(spec, /page\.getByTestId\("checkout-submit"\)/);
   assert.match(spec, /Coverage matrix/);
   assert.match(spec, /Browser viewport regression/);
@@ -873,6 +883,50 @@ test("generateE2ePlan suggests domain language from changed paths without core f
   assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "In App Purchase primary journey"));
   assert.match(markdown, /Suggested terms:/);
   assert.match(markdown, /In App Purchase primary journey/);
+});
+
+test("generateE2ePlan prefers product domains over structural route folders", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/app/navigations"), { recursive: true });
+  await mkdir(path.join(root, "src/features/membership/components"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/app/navigations/MembershipScreen.tsx"),
+    "export function MembershipScreen() { return null; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/features/membership/components/MembershipOverviewScreen.tsx"),
+    "export function MembershipOverviewScreen() { return null; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/membership"]);
+  await writeFile(
+    path.join(root, "src/app/navigations/MembershipScreen.tsx"),
+    "export function MembershipScreen() { return <Text>Membership</Text>; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/features/membership/components/MembershipOverviewScreen.tsx"),
+    "export function MembershipOverviewScreen() { return <Text>Membership overview</Text>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update membership"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+
+  assert.equal(plan.domainLanguage.scenarios[0].title, "Membership primary journey");
+  assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Membership" && term.confidence === "high"));
+  assert.ok(!plan.domainLanguage.terms.some((term) => term.term === "Navigations"));
 });
 
 test("generateE2ePlan matches workspace core flows for package scans", async () => {
