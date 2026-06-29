@@ -54,6 +54,7 @@ export interface E2ePlanHistorySnapshot {
       priority: string;
       matchedFiles: string[];
       matchedSignals: string[];
+      routes: string[];
     }>;
     domainLanguage: {
       terms: Array<{
@@ -180,6 +181,7 @@ function buildE2ePlanHistorySnapshot(historyRoot: string, plan: E2ePlanResult): 
         priority: flow.priority,
         matchedFiles: flow.matchedFiles.slice(0, 10),
         matchedSignals: flow.matchedSignals.slice(0, 10),
+        routes: flow.routes.slice(0, 10),
       })),
       domainLanguage: {
         terms: plan.domainLanguage.terms.slice(0, 12).map((term) => ({

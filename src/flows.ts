@@ -33,6 +33,7 @@ export interface MatchedCoreFlow {
   reason: string;
   matchedFiles: string[];
   matchedSignals: string[];
+  routes: string[];
   checks: string[];
 }
 
@@ -145,6 +146,7 @@ function matchCoreFlow(flow: CoreFlowDefinition, changedFiles: string[]): Matche
     reason: `Changed files match ${signals.slice(0, 4).join(", ")} for this declared core flow.`,
     matchedFiles: [...matchedFiles].slice(0, 20),
     matchedSignals: signals.slice(0, 12),
+    routes: flow.routes.slice(0, 10),
     checks: flow.checks.slice(0, 10),
   };
 }

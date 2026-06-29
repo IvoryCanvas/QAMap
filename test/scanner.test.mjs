@@ -1021,6 +1021,7 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   assert.equal(plan.coreFlows[0].id, "checkout-purchase");
   assert.equal(plan.coreFlows[0].priority, "critical");
   assert.ok(plan.coreFlows[0].matchedFiles.includes("src/pages/checkout/CheckoutPage.tsx"));
+  assert.deepEqual(plan.coreFlows[0].routes, ["/checkout"]);
   assert.ok(plan.coreFlows[0].checks.includes("Complete checkout with a valid payment method."));
   assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Checkout purchase" && term.confidence === "high"));
   assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Checkout purchase"));
@@ -1028,6 +1029,24 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   assert.match(markdown, /## Domain Language/);
   assert.match(markdown, /Checkout purchase/);
   assert.match(markdown, /Human-approved checks:/);
+  assert.match(markdown, /Declared routes:/);
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const draftFile = draft.files.find((file) => file.flowTitle === "Checkout purchase");
+  assert.ok(draftFile);
+  assert.equal(draftFile.source, "core-flow");
+  assert.match(draftFile.primaryEntrypoint ?? "", /route \/checkout \[high\] \(\.codeward\/flows\.yml\)/);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+  assert.match(spec, /Core flow: checkout-purchase \[critical\]/);
+  assert.match(spec, /Keep manifest checks required: Complete checkout with a valid payment method\. and Verify declined payment recovery\./);
+  assert.match(spec, /route \/checkout \[high\] \(\.codeward\/flows\.yml\)/);
+  assert.match(spec, /page\.goto\("\/checkout"\)/);
+  assert.match(spec, /TODO: Complete checkout with a valid payment method\./);
 });
 
 test("generateE2ePlan suggests domain language from changed paths without core flows", async () => {
@@ -1196,6 +1215,22 @@ test("generateE2ePlan matches workspace core flows for package scans", async () 
   assert.equal(plan.coreFlows[0].id, "offer-submit");
   assert.ok(plan.coreFlows[0].matchedFiles.includes("services/offer/src/features/offer/submit.ts"));
   assert.deepEqual(plan.changedFiles.map((file) => file.path), ["src/features/offer/submit.ts"]);
+
+  const draft = await generateE2eDraft(packageRoot, {
+    base: "main",
+    head: "HEAD",
+    workspaceRoot,
+    output: "docs/e2e",
+  });
+  const draftFile = draft.files.find((file) => file.flowTitle === "Offer submit");
+  assert.ok(draftFile);
+  assert.equal(draftFile.source, "core-flow");
+  const manualDraft = await readFile(path.join(packageRoot, draftFile.path), "utf8");
+  assert.match(manualDraft, /## Draft Brief/);
+  assert.match(manualDraft, /Core flow: offer-submit \[critical\]/);
+  assert.match(manualDraft, /Submit an offer with valid terms\./);
+  assert.match(manualDraft, /src\/features\/offer\/submit\.ts/);
+  assert.doesNotMatch(manualDraft, /services\/offer\/src\/features\/offer\/submit\.ts/);
 });
 
 test("generateE2eDraft creates a fallback smoke draft without changed files", async () => {

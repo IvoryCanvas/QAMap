@@ -520,6 +520,13 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
           lines.push(`- ${escapeMarkdownInline(check)}`);
         }
       }
+      if (flow.routes.length > 0) {
+        lines.push("");
+        lines.push("Declared routes:");
+        for (const route of flow.routes) {
+          lines.push(`- \`${escapeMarkdownInline(route)}\``);
+        }
+      }
       lines.push("");
     }
   }
@@ -777,6 +784,7 @@ type DraftFlowSource = "domain-language" | "core-flow" | "heuristic";
 type DraftE2eFlow = E2eFlow & {
   draftSource?: DraftFlowSource;
   domainScenario?: DomainScenarioSuggestion;
+  coreFlow?: MatchedCoreFlow;
 };
 
 async function buildFlows(
@@ -1687,11 +1695,14 @@ async function buildDomainScenarioDraftFlow(
   scenario: DomainScenarioSuggestion,
   baseFlows: E2eFlow[],
 ): Promise<DraftE2eFlow> {
+  const coreFlow = matchedCoreFlowForScenario(plan, scenario);
   const baseFlow = bestBaseFlowForScenario(scenario, baseFlows);
-  const files = uniqueStrings(scenario.files.length > 0 ? scenario.files : (baseFlow?.files ?? [])).slice(0, 20);
+  const scenarioFiles = normalizeScenarioFilesForRoot(plan, scenario.files);
+  const files = uniqueStrings(scenarioFiles.length > 0 ? scenarioFiles : (baseFlow?.files ?? [])).slice(0, 20);
   const coverage = baseFlow?.coverage ?? buildCoverageTargets("domain", files, plan.recommendedRunner.name);
   const runner = plan.recommendedRunner.name;
   const entrypoints = uniqueEntrypoints([
+    ...coreFlowEntrypoints(plan, coreFlow, runner),
     ...filterEntrypointsForFiles(baseFlows.flatMap((flow) => flow.entrypoints), files),
     ...(await inferFlowEntrypoints(plan.root, files, runner)),
   ]);
@@ -1716,7 +1727,53 @@ async function buildDomainScenarioDraftFlow(
     missingTestability: await findFlowTestabilityGaps(plan.root, files, runner),
     draftSource: scenario.source === "core-flow" ? "core-flow" : "domain-language",
     domainScenario: scenario,
+    coreFlow,
   };
+}
+
+function matchedCoreFlowForScenario(
+  plan: E2ePlanResult,
+  scenario: DomainScenarioSuggestion,
+): MatchedCoreFlow | undefined {
+  if (scenario.source !== "core-flow") {
+    return undefined;
+  }
+  return plan.coreFlows.find((flow) => flow.name === scenario.title);
+}
+
+function normalizeScenarioFilesForRoot(plan: E2ePlanResult, files: string[]): string[] {
+  if (!plan.workspaceRoot) {
+    return files;
+  }
+  const packagePathFromWorkspace = toPosixPath(path.relative(plan.workspaceRoot, plan.root));
+  if (!packagePathFromWorkspace || packagePathFromWorkspace.startsWith("..") || path.isAbsolute(packagePathFromWorkspace)) {
+    return files;
+  }
+  return files.map((file) =>
+    file === packagePathFromWorkspace || file.startsWith(`${packagePathFromWorkspace}/`)
+      ? file.slice(packagePathFromWorkspace.length).replace(/^\/+/, "")
+      : file,
+  );
+}
+
+function coreFlowEntrypoints(
+  plan: E2ePlanResult,
+  coreFlow: MatchedCoreFlow | undefined,
+  runner: E2eRunnerName,
+): E2eEntrypoint[] {
+  if (!coreFlow || runner === "maestro") {
+    return [];
+  }
+  const manifestPath = plan.coreFlowManifestPath ?? ".codeward/flows.yml";
+  return coreFlow.routes
+    .map((route) => normalizeEntrypointRoute(route))
+    .filter((route): route is string => Boolean(route))
+    .map((route) => ({
+      kind: "route",
+      value: route,
+      file: manifestPath,
+      confidence: "high",
+    }));
 }
 
 function filterEntrypointsForFiles(entrypoints: E2eEntrypoint[], files: string[]): E2eEntrypoint[] {
@@ -2151,13 +2208,21 @@ function appendManualDraftBrief(lines: string[], flow: E2eFlow, runner: E2eRunne
 
 function buildDraftBrief(flow: E2eFlow, runner: E2eRunnerName): DraftBrief {
   const scenario = domainScenarioForFlow(flow);
+  const coreFlow = coreFlowForDraftFlow(flow);
   const changedBehavior = flow.files.length > 0
     ? `${flow.reason} Changed files include ${formatFileSummary(flow.files)}.`
     : flow.reason;
   const criticalCoverage = flow.coverage.filter((target) => target.priority === "critical").map((target) => target.title);
-  const whyThisFlowMatters = scenario
-    ? `It uses "${scenario.title}" as the team-facing behavior name and protects ${formatHumanList(criticalCoverage)}.`
-    : `It protects ${formatHumanList(criticalCoverage)} for the changed surface.`;
+  let whyThisFlowMatters: string;
+  if (coreFlow) {
+    whyThisFlowMatters =
+      `Core flow: ${coreFlow.id} [${coreFlow.priority}]. It protects the team-approved "${coreFlow.name}" flow and ${formatHumanList(criticalCoverage)}.`;
+  } else if (scenario) {
+    whyThisFlowMatters =
+      `It uses "${scenario.title}" as the team-facing behavior name and protects ${formatHumanList(criticalCoverage)}.`;
+  } else {
+    whyThisFlowMatters = `It protects ${formatHumanList(criticalCoverage)} for the changed surface.`;
+  }
 
   return {
     changedBehavior,
@@ -2168,6 +2233,10 @@ function buildDraftBrief(flow: E2eFlow, runner: E2eRunnerName): DraftBrief {
 
 function buildHumanFixtureInputs(flow: E2eFlow, runner: E2eRunnerName): string[] {
   const inputs: string[] = [];
+  const coreFlow = coreFlowForDraftFlow(flow);
+  if (coreFlow?.checks.length) {
+    inputs.push(`Keep manifest checks required: ${formatHumanList(coreFlow.checks.slice(0, 3))}.`);
+  }
   if (runner === "maestro") {
     inputs.push("Set APP_ID to the target app id or export it before running the flow.");
   }
@@ -2188,6 +2257,10 @@ function buildHumanFixtureInputs(flow: E2eFlow, runner: E2eRunnerName): string[]
     inputs.push("Use realistic data for the primary success path and one blocked, empty, or failed path.");
   }
   return uniqueStrings(inputs).slice(0, 6);
+}
+
+function coreFlowForDraftFlow(flow: E2eFlow): MatchedCoreFlow | undefined {
+  return (flow as DraftE2eFlow).coreFlow;
 }
 
 function humanFixtureInputForSetupHint(hint: E2eSetupHint): string {
