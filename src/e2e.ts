@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { buildDomainLanguageSummary } from "./domain-language.js";
 import { loadCoreFlowManifest, matchCoreFlows } from "./flows.js";
 import {
   collectTestSuiteInventory,
@@ -8,6 +9,7 @@ import {
 } from "./test-evidence.js";
 import { generateTestPlan } from "./test-plan.js";
 import type { TestPlanChangedFile, TestPlanOptions } from "./test-plan.js";
+import type { DomainLanguageSummary } from "./domain-language.js";
 import type { MatchedCoreFlow } from "./flows.js";
 import type { LocalHistoryReference } from "./history.js";
 import type { CoverageEvidence, TestSuiteInventory, TestSuiteSummary } from "./test-evidence.js";
@@ -84,6 +86,7 @@ export interface E2ePlanResult {
   testSuite: TestSuiteSummary;
   coreFlowManifestPath?: string;
   coreFlows: MatchedCoreFlow[];
+  domainLanguage: DomainLanguageSummary;
   changedFiles: TestPlanChangedFile[];
   suggestedCommands: string[];
   localHistory?: LocalHistoryReference;
@@ -135,6 +138,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const coreFlowManifest = await loadCoreFlowManifest(coreFlowRoot);
   const coreFlowChangedFiles = toCoreFlowChangedFiles(testPlan.changedFiles, root, coreFlowRoot);
   const coreFlows = matchCoreFlows(coreFlowManifest, coreFlowChangedFiles);
+  const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows);
   const flows = await buildFlows(root, testPlan.changedFiles, recommendedRunner.name, project.type, testSuiteInventory);
   const missingTestability = uniqueStrings([
     ...flows.flatMap((flow) => flow.missingTestability),
@@ -157,6 +161,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     testSuite: summarizeTestSuiteInventory(testSuiteInventory),
     coreFlowManifestPath: coreFlowManifest.path,
     coreFlows,
+    domainLanguage,
     changedFiles: testPlan.changedFiles,
     suggestedCommands: testPlan.suggestedCommands,
     flows,
@@ -427,6 +432,33 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
     }
   }
   lines.push("");
+
+  if (result.domainLanguage.terms.length > 0 || result.domainLanguage.scenarios.length > 0) {
+    lines.push("## Domain Language");
+    lines.push("");
+    if (result.domainLanguage.terms.length > 0) {
+      lines.push("Suggested terms:");
+      for (const term of result.domainLanguage.terms.slice(0, 10)) {
+        const files = term.files.length > 0 ? ` (${term.files.slice(0, 3).join(", ")})` : "";
+        lines.push(`- ${escapeMarkdownInline(term.term)} [${term.confidence}, ${term.source}]${files}`);
+      }
+      lines.push("");
+    }
+    if (result.domainLanguage.scenarios.length > 0) {
+      lines.push("Suggested user scenarios:");
+      for (const scenario of result.domainLanguage.scenarios.slice(0, 6)) {
+        lines.push(`- ${escapeMarkdownInline(scenario.title)}: ${escapeMarkdownInline(scenario.intent)}`);
+      }
+      lines.push("");
+    }
+    if (result.domainLanguage.guidance.length > 0) {
+      lines.push("Naming guidance:");
+      for (const guidance of result.domainLanguage.guidance) {
+        lines.push(`- ${escapeMarkdownInline(guidance)}`);
+      }
+      lines.push("");
+    }
+  }
 
   if (result.coreFlows.length > 0) {
     lines.push("## Matched Core Flows");

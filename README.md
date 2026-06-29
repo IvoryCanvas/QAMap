@@ -147,7 +147,9 @@ For monorepos, pass `--workspace-root` when scanning a package. Package-local ch
 
 `codeward test-plan` turns changed file paths into a review-ready domain test checklist. It also discovers common validation commands from `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, Gradle files, and Maven `pom.xml`. Add `--include-working-tree` for local, uncommitted changes while iterating.
 
-`codeward e2e plan` turns changed file paths into a first-pass E2E testing plan. It detects whether a project looks like Expo/React Native or web, recommends a runner such as Maestro or Playwright, suggests candidate user flows, adds coverage targets, compares those targets with existing test-suite evidence when tests are present, and points out missing stable selectors such as `testID` or `data-testid` before anyone starts writing tests from a blank file.
+`codeward e2e plan` turns changed file paths into a first-pass E2E testing plan. It detects whether a project looks like Expo/React Native or web, recommends a runner such as Maestro or Playwright, suggests domain language for the changed behavior, suggests candidate user flows, adds coverage targets, compares those targets with existing test-suite evidence when tests are present, and points out missing stable selectors such as `testID` or `data-testid` before anyone starts writing tests from a blank file.
+
+The domain language section is intentionally less implementation-oriented than the raw file list. For example, changes under `src/features/in-app-purchase/` become terms such as `In App Purchase` and scenarios such as `In App Purchase primary journey`. When `.codeward/flows.yml` exists, team-approved flow names receive higher confidence and appear as preferred scenario names.
 
 If `.codeward/flows.yml` exists, `codeward e2e plan` also matches changed files against team-approved core flows. This lets maintainers encode the product or domain flows humans already care about:
 

@@ -829,9 +829,50 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   assert.equal(plan.coreFlows[0].priority, "critical");
   assert.ok(plan.coreFlows[0].matchedFiles.includes("src/pages/checkout/CheckoutPage.tsx"));
   assert.ok(plan.coreFlows[0].checks.includes("Complete checkout with a valid payment method."));
+  assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Checkout purchase" && term.confidence === "high"));
+  assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Checkout purchase"));
   assert.match(markdown, /## Matched Core Flows/);
+  assert.match(markdown, /## Domain Language/);
   assert.match(markdown, /Checkout purchase/);
   assert.match(markdown, /Human-approved checks:/);
+});
+
+test("generateE2ePlan suggests domain language from changed paths without core flows", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/features/in-app-purchase/services"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/features/in-app-purchase/services/nativeInAppPurchaseService.ts"),
+    "export const purchase = () => true;\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/in-app-purchase"]);
+  await writeFile(
+    path.join(root, "src/features/in-app-purchase/services/nativeInAppPurchaseService.ts"),
+    "export const purchase = () => 'changed';\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update in app purchase"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const markdown = formatMarkdownE2ePlan(plan);
+
+  assert.equal(plan.coreFlows.length, 0);
+  assert.ok(plan.domainLanguage.terms.some((term) => term.term === "In App Purchase"));
+  assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "In App Purchase primary journey"));
+  assert.match(markdown, /Suggested terms:/);
+  assert.match(markdown, /In App Purchase primary journey/);
 });
 
 test("generateE2ePlan matches workspace core flows for package scans", async () => {

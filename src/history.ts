@@ -55,6 +55,14 @@ export interface E2ePlanHistorySnapshot {
       matchedFiles: string[];
       matchedSignals: string[];
     }>;
+    domainLanguage: {
+      terms: Array<{
+        term: string;
+        confidence: string;
+        source: string;
+      }>;
+      scenarios: string[];
+    };
     changedFilesCount: number;
     changedFiles: string[];
     suggestedCommands: string[];
@@ -80,6 +88,7 @@ export interface E2ePlanHistorySnapshot {
     changedFiles: number;
     flows: number;
     coreFlows: number;
+    domainTerms: number;
     coverageEvidence: {
       covered: number;
       partial: number;
@@ -172,6 +181,14 @@ function buildE2ePlanHistorySnapshot(historyRoot: string, plan: E2ePlanResult): 
         matchedFiles: flow.matchedFiles.slice(0, 10),
         matchedSignals: flow.matchedSignals.slice(0, 10),
       })),
+      domainLanguage: {
+        terms: plan.domainLanguage.terms.slice(0, 12).map((term) => ({
+          term: term.term,
+          confidence: term.confidence,
+          source: term.source,
+        })),
+        scenarios: plan.domainLanguage.scenarios.map((scenario) => scenario.title).slice(0, 8),
+      },
       changedFilesCount: plan.changedFiles.length,
       changedFiles: plan.changedFiles.map((file) => file.path).slice(0, 50),
       suggestedCommands: plan.suggestedCommands.slice(0, 20),
@@ -197,6 +214,7 @@ function buildE2ePlanHistorySnapshot(historyRoot: string, plan: E2ePlanResult): 
       changedFiles: plan.changedFiles.length,
       flows: plan.flows.length,
       coreFlows: plan.coreFlows.length,
+      domainTerms: plan.domainLanguage.terms.length,
       coverageEvidence: {
         covered: coverageEvidence.filter((evidence) => evidence.status === "covered").length,
         partial: coverageEvidence.filter((evidence) => evidence.status === "partial").length,

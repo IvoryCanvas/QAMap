@@ -115,3 +115,15 @@ Supported match fields:
 | `checks` | Human-approved verification points shown in the E2E plan. |
 
 `priority` can be `critical`, `recommended`, or `optional`.
+
+## Domain Language Suggestions
+
+`codeward e2e plan` includes a domain language section before the lower-level E2E candidates. CodeWard derives these suggestions from:
+
+- team-approved `.codeward/flows.yml` names
+- changed file path terms such as `features/in-app-purchase`
+- selected UI copy such as accessibility labels, placeholders, and text labels
+
+The goal is to help reviewers and test authors use the product words the team already understands. For example, a service or component path can become `In App Purchase primary journey` instead of a generic implementation phrase such as "API smoke flow".
+
+High-confidence terms usually come from committed core flows. Medium-confidence terms usually come from changed paths. Low-confidence terms can come from UI copy and should be treated as naming hints, not final policy.
