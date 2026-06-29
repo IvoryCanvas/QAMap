@@ -1,6 +1,12 @@
 export { defaultConfig, loadConfig, writeDefaultConfig } from "./config.js";
 export { generateAgentContext } from "./context.js";
 export { buildDomainLanguageSummary } from "./domain-language.js";
+export {
+  defaultDomainManifestPath,
+  loadDomainManifest,
+  matchDomains,
+  writeDefaultDomainManifest,
+} from "./domains.js";
 export { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
 export { formatMarkdownE2eDraft, formatMarkdownE2ePlan, generateE2eDraft, generateE2ePlan } from "./e2e.js";
 export { evaluateChangeReadiness, formatEvalReport, formatMarkdownEvalReport } from "./eval.js";
@@ -44,6 +50,12 @@ export type {
   DomainLanguageTerm,
   DomainScenarioSuggestion,
 } from "./domain-language.js";
+export type {
+  DomainDefinition,
+  DomainManifest,
+  DomainScenarioDefinition,
+  MatchedDomain,
+} from "./domains.js";
 export type {
   E2eCoveragePriority,
   E2eCoverageTarget,

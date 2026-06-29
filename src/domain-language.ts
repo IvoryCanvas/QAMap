@@ -1,10 +1,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { pathExists } from "./fs.js";
+import type { MatchedDomain } from "./domains.js";
 import type { MatchedCoreFlow } from "./flows.js";
 import type { TestPlanChangedFile } from "./test-plan.js";
 
-export type DomainLanguageSource = "core-flow" | "changed-file" | "ui-copy";
+export type DomainLanguageSource = "core-flow" | "domain-manifest" | "changed-file" | "ui-copy";
 export type DomainLanguageConfidence = "high" | "medium" | "low";
 
 export interface DomainLanguageTerm {
@@ -19,6 +20,7 @@ export interface DomainScenarioSuggestion {
   intent: string;
   checks: string[];
   files: string[];
+  routes?: string[];
   source: DomainLanguageSource;
 }
 
@@ -39,6 +41,7 @@ export async function buildDomainLanguageSummary(
   rootInput: string,
   changedFiles: TestPlanChangedFile[],
   coreFlows: MatchedCoreFlow[],
+  domains: MatchedDomain[] = [],
 ): Promise<DomainLanguageSummary> {
   const root = path.resolve(rootInput);
   const files = changedFiles.map((file) => file.path).filter((file) => !isTestLikeFile(file));
@@ -46,6 +49,13 @@ export async function buildDomainLanguageSummary(
 
   for (const flow of coreFlows) {
     addTerm(termMap, flow.name, "core-flow", "high", flow.matchedFiles);
+  }
+
+  for (const domain of domains) {
+    addTerm(termMap, domain.name, "domain-manifest", "high", domain.matchedFiles);
+    for (const alias of domain.aliases) {
+      addTerm(termMap, alias, "domain-manifest", "medium", domain.matchedFiles);
+    }
   }
 
   for (const file of files) {
@@ -62,14 +72,14 @@ export async function buildDomainLanguageSummary(
     .filter((term) => isUsefulTerm(term.term))
     .sort(compareTerms)
     .slice(0, 12);
-  const scenarios = buildScenarioSuggestions(terms, coreFlows);
+  const scenarios = buildScenarioSuggestions(terms, coreFlows, domains);
 
   return {
     terms,
     scenarios,
     guidance: [
       "Prefer these product words in generated test names, PR notes, and reviewer checklists.",
-      "Promote high-confidence repeated terms into `.codeward/flows.yml` when the team agrees they describe a durable user flow.",
+      "Promote durable product terms into `.codeward/domains.yml`, then promote end-to-end journeys into `.codeward/flows.yml`.",
       "Use the suggested scenarios as starting points, then replace generic actor or outcome wording with the team's domain language.",
     ],
   };
@@ -82,7 +92,7 @@ function addTerm(
   confidence: DomainLanguageConfidence,
   files: string[],
 ): void {
-  const term = source === "core-flow" ? rawTerm.trim() : titleCase(rawTerm);
+  const term = source === "core-flow" || source === "domain-manifest" ? rawTerm.trim() : titleCase(rawTerm);
   if (!isUsefulTerm(term)) {
     return;
   }
@@ -99,6 +109,7 @@ function addTerm(
   }
   existing.files = uniqueStrings([...existing.files, ...files]).slice(0, maxFilesPerTerm);
   if (confidenceRank(confidence) > confidenceRank(existing.confidence)) {
+    existing.term = term;
     existing.confidence = confidence;
     existing.source = source;
   }
@@ -107,6 +118,7 @@ function addTerm(
 function buildScenarioSuggestions(
   terms: DomainLanguageTerm[],
   coreFlows: MatchedCoreFlow[],
+  domains: MatchedDomain[],
 ): DomainScenarioSuggestion[] {
   const scenarios: DomainScenarioSuggestion[] = [];
 
@@ -124,6 +136,42 @@ function buildScenarioSuggestions(
             ],
       files: flow.matchedFiles,
       source: "core-flow",
+    });
+  }
+
+  for (const domain of domains.slice(0, 4)) {
+    if (domain.scenarios.length > 0) {
+      for (const scenario of domain.scenarios.slice(0, 2)) {
+        scenarios.push({
+          title: scenario.title,
+          intent: `Verify the team-approved "${domain.name}" domain with shared product language.`,
+          checks:
+            scenario.checks.length > 0
+              ? scenario.checks
+              : [
+                  `Start from the normal entry point for ${domain.name}.`,
+                  `Complete the main ${domain.name} action.`,
+                  `Confirm the user-visible result for ${domain.name}.`,
+                ],
+          files: domain.matchedFiles,
+          routes: domain.routes,
+          source: "domain-manifest",
+        });
+      }
+      continue;
+    }
+    scenarios.push({
+      title: `${domain.name} primary journey`,
+      intent: `Use "${domain.name}" as the shared name for this changed behavior until the team chooses a more specific scenario.`,
+      checks: [
+        `Start from the normal entry point for ${domain.name}.`,
+        `Complete the main ${domain.name} action with realistic data.`,
+        `Confirm the visible result, saved state, navigation, or event that proves ${domain.name} worked.`,
+        `Try one empty, blocked, rejected, or failed ${domain.name} path that a real user could hit.`,
+      ],
+      files: domain.matchedFiles,
+      routes: domain.routes,
+      source: "domain-manifest",
     });
   }
 

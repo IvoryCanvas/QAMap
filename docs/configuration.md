@@ -75,6 +75,51 @@ Use `--record-history` when an analysis should leave a compact local snapshot fo
 codeward e2e plan . --base origin/main --head HEAD --record-history
 ```
 
+## Domain Manifest
+
+Create a starter domain manifest:
+
+```sh
+codeward domains init .
+```
+
+`.codeward/domains.yml` is meant to be committed when the team wants CodeWard to use shared product language during E2E planning.
+
+```yaml
+domains:
+  - id: billing
+    name: Billing
+    aliases:
+      - checkout
+      - subscription
+    files:
+      - src/features/billing/**
+    routes:
+      - /billing
+    tags:
+      - payment
+    scenarios:
+      - title: Billing primary journey
+        checks:
+          - Start from the normal billing entry point.
+          - Complete the primary billing action with realistic data.
+          - Confirm the visible result or saved state.
+```
+
+Supported domain fields:
+
+| Field | Description |
+| --- | --- |
+| `id` | Stable machine-readable id for the domain. |
+| `name` | Human-facing product term used in E2E plan language. |
+| `aliases` | Extra words that can match changed file path segments. |
+| `files` | Glob-like path patterns relative to the repository or workspace root. |
+| `routes` | Route hints used for matching and Playwright draft entrypoints. |
+| `tags` | Additional tokens that can match file path segments. |
+| `scenarios` | Optional suggested scenario names and checks for generated drafts. |
+
+Use `.codeward/domains.yml` for naming and route hints. Use `.codeward/flows.yml` when the team wants to define a higher-confidence verification journey with priority and required checks.
+
 ## Core Flows
 
 Create a starter core flow manifest:
@@ -121,9 +166,10 @@ Supported match fields:
 `codeward e2e plan` includes a domain language section before the lower-level E2E candidates. CodeWard derives these suggestions from:
 
 - team-approved `.codeward/flows.yml` names
+- shared `.codeward/domains.yml` names, aliases, routes, and scenarios
 - changed file path terms such as `features/in-app-purchase`
 - selected UI copy such as accessibility labels, placeholders, and text labels
 
 The goal is to help reviewers and test authors use the product words the team already understands. For example, a service or component path can become `In App Purchase primary journey` instead of a generic implementation phrase such as "API smoke flow".
 
-High-confidence terms usually come from committed core flows. Medium-confidence terms usually come from changed paths. Low-confidence terms can come from UI copy and should be treated as naming hints, not final policy.
+High-confidence terms usually come from committed core flows or domain manifests. Medium-confidence terms usually come from changed paths. Low-confidence terms can come from UI copy and should be treated as naming hints, not final policy.

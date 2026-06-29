@@ -134,6 +134,7 @@ node dist/cli.js scan /path/to/repo
 | `codeward e2e plan . --base origin/main --head HEAD --record-history` | Save a compact local run snapshot under `.codeward/runs/` while keeping JSON/Markdown output usable. |
 | `codeward e2e draft . --base origin/main --head HEAD` | Generate first-pass Maestro or Playwright E2E draft files from changed flows. |
 | `codeward flows init .` | Create a starter `.codeward/flows.yml` for team-approved core flow definitions. |
+| `codeward domains init .` | Create a starter `.codeward/domains.yml` for shared product/domain language. |
 | `codeward history init .` | Create local CodeWard history directories and protect generated run history with `.gitignore`. |
 | `codeward doctor services/offer --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `codeward context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
@@ -149,7 +150,29 @@ For monorepos, pass `--workspace-root` when scanning a package. Package-local ch
 
 `codeward e2e plan` turns changed file paths into a first-pass E2E testing plan. It detects whether a project looks like Expo/React Native or web, recommends a runner such as Maestro or Playwright, suggests domain language for the changed behavior, suggests candidate user flows, adds coverage targets, compares those targets with existing test-suite evidence when tests are present, and points out missing stable selectors such as `testID` or `data-testid` before anyone starts writing tests from a blank file.
 
-The domain language section is intentionally less implementation-oriented than the raw file list. For example, changes under `src/features/in-app-purchase/` become terms such as `In App Purchase` and scenarios such as `In App Purchase primary journey`. When `.codeward/flows.yml` exists, team-approved flow names receive higher confidence and appear as preferred scenario names.
+The domain language section is intentionally less implementation-oriented than the raw file list. For example, changes under `src/features/in-app-purchase/` become terms such as `In App Purchase` and scenarios such as `In App Purchase primary journey`. When `.codeward/domains.yml` exists, declared product terms and routes receive higher confidence. When `.codeward/flows.yml` exists, team-approved flow names appear as preferred scenario names.
+
+If `.codeward/domains.yml` exists, `codeward e2e plan` also matches changed files against shared product or domain language:
+
+```yaml
+domains:
+  - id: billing
+    name: Billing
+    aliases:
+      - checkout
+      - subscription
+    files:
+      - src/features/billing/**
+    routes:
+      - /billing
+    scenarios:
+      - title: Billing primary journey
+        checks:
+          - Start from the normal billing entry point.
+          - Complete the primary billing action with realistic data.
+```
+
+Run `codeward domains init .` to create a starter domain manifest. Use domains for naming and route hints; use core flows when the team wants to define a durable verification journey.
 
 If `.codeward/flows.yml` exists, `codeward e2e plan` also matches changed files against team-approved core flows. This lets maintainers encode the product or domain flows humans already care about:
 
@@ -172,7 +195,7 @@ flows:
 
 Run `codeward flows init .` to create a starter manifest. Unlike generated run history, `.codeward/flows.yml` is meant to be reviewed and committed when those flow definitions should become team policy.
 
-Pass `--record-history` when you want CodeWard to keep a compact local snapshot of an E2E plan under `.codeward/runs/`. CodeWard automatically protects `.codeward/runs/`, `.codeward/cache/`, `.codeward/tmp/`, and `.codeward/*.local.json` with `.gitignore` so generated history stays local by default. Shared project policy, such as `codeward.config.json` and `.codeward/flows.yml`, remains commit-friendly.
+Pass `--record-history` when you want CodeWard to keep a compact local snapshot of an E2E plan under `.codeward/runs/`. CodeWard automatically protects `.codeward/runs/`, `.codeward/cache/`, `.codeward/tmp/`, and `.codeward/*.local.json` with `.gitignore` so generated history stays local by default. Shared project policy, such as `codeward.config.json`, `.codeward/domains.yml`, and `.codeward/flows.yml`, remains commit-friendly.
 
 `codeward e2e draft` writes runnable draft files from that plan. Expo and React Native projects get Maestro YAML flows under `.maestro/` by default, while web projects get Playwright specs under `tests/e2e/`. Drafts infer stable selectors such as `testID`, `accessibilityLabel`, `data-testid`, `aria-label`, and visible text where possible. They keep `TODO` placeholders where selectors or project-specific launch details are still needed, and existing files are not overwritten unless `--force` is passed.
 

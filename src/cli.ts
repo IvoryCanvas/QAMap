@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { generateAgentContext } from "./context.js";
+import { defaultDomainManifestPath, writeDefaultDomainManifest } from "./domains.js";
 import { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
 import { formatMarkdownE2eDraft, formatMarkdownE2ePlan, generateE2eDraft, generateE2ePlan } from "./e2e.js";
 import { evaluateChangeReadiness, formatEvalReport, formatMarkdownEvalReport } from "./eval.js";
@@ -259,6 +260,32 @@ async function main(argv: string[]): Promise<number> {
     } else {
       await printOrWrite(
         `Wrote ${outputPath}\nCommit this file when the flow definitions should become team policy.\n`,
+        options.output,
+      );
+    }
+    return 0;
+  }
+
+  if (command === "domains") {
+    const [subcommand, ...subcommandRest] = rest;
+    if (!subcommand || subcommand === "--help" || subcommand === "-h") {
+      printDomainsHelp();
+      return 0;
+    }
+    if (subcommand !== "init") {
+      throw new Error(`Unknown domains subcommand: ${subcommand}`);
+    }
+    const options = parseOptions(subcommandRest);
+    const outputPath = await writeDefaultDomainManifest(
+      options.path,
+      options.write ?? defaultDomainManifestPath,
+      options.force,
+    );
+    if (options.json || options.format === "json") {
+      await printOrWrite(`${JSON.stringify({ path: outputPath }, null, 2)}\n`, options.output);
+    } else {
+      await printOrWrite(
+        `Wrote ${outputPath}\nCommit this file when the domain definitions should become team policy.\n`,
         options.output,
       );
     }
@@ -651,6 +678,7 @@ Usage:
   codeward e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   codeward e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--force]
   codeward flows init [path] [--write <file>] [--force]
+  codeward domains init [path] [--write <file>] [--force]
   codeward history init [path]
   codeward context [path] [--write [file]] [--force]
   codeward init [path] [--write <file>] [--force]
@@ -677,6 +705,7 @@ Examples:
   codeward e2e plan . --base origin/main --head HEAD --record-history
   codeward e2e draft . --base origin/main --head HEAD
   codeward flows init .
+  codeward domains init .
   codeward history init .
   codeward test-plan services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
   codeward context . --write AGENTS.md
@@ -724,6 +753,19 @@ Usage:
 
 Examples:
   codeward flows init .
+`);
+}
+
+function printDomainsHelp(): void {
+  console.log(`CodeWard ${VERSION}
+
+Domain definitions for project-specific E2E naming and route hints.
+
+Usage:
+  codeward domains init [path] [--write <file>] [--force]
+
+Examples:
+  codeward domains init .
 `);
 }
 

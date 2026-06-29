@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { buildDomainLanguageSummary } from "./domain-language.js";
+import { defaultDomainManifestPath, loadDomainManifest, matchDomains } from "./domains.js";
 import { loadCoreFlowManifest, matchCoreFlows } from "./flows.js";
 import {
   collectTestSuiteInventory,
@@ -10,6 +11,7 @@ import {
 import { generateTestPlan } from "./test-plan.js";
 import type { TestPlanChangedFile, TestPlanOptions } from "./test-plan.js";
 import type { DomainLanguageSummary, DomainScenarioSuggestion } from "./domain-language.js";
+import type { MatchedDomain } from "./domains.js";
 import type { MatchedCoreFlow } from "./flows.js";
 import type { LocalHistoryReference } from "./history.js";
 import type { CoverageEvidence, TestSuiteInventory, TestSuiteSummary } from "./test-evidence.js";
@@ -107,6 +109,8 @@ export interface E2ePlanResult {
   testSuite: TestSuiteSummary;
   coreFlowManifestPath?: string;
   coreFlows: MatchedCoreFlow[];
+  domainManifestPath?: string;
+  domains: MatchedDomain[];
   domainLanguage: DomainLanguageSummary;
   changedFiles: TestPlanChangedFile[];
   suggestedCommands: string[];
@@ -164,7 +168,9 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const coreFlowManifest = await loadCoreFlowManifest(coreFlowRoot);
   const coreFlowChangedFiles = toCoreFlowChangedFiles(testPlan.changedFiles, root, coreFlowRoot);
   const coreFlows = matchCoreFlows(coreFlowManifest, coreFlowChangedFiles);
-  const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows);
+  const domainManifest = await loadDomainManifest(coreFlowRoot);
+  const domains = matchDomains(domainManifest, coreFlowChangedFiles);
+  const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows, domains);
   const flows = await buildFlows(root, testPlan.changedFiles, recommendedRunner.name, project.type, testSuiteInventory);
   const missingTestability = uniqueStrings([
     ...flows.flatMap((flow) => flow.missingTestability),
@@ -187,6 +193,8 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     testSuite: summarizeTestSuiteInventory(testSuiteInventory),
     coreFlowManifestPath: coreFlowManifest.path,
     coreFlows,
+    domainManifestPath: domainManifest.path,
+    domains,
     domainLanguage,
     changedFiles: testPlan.changedFiles,
     suggestedCommands: testPlan.suggestedCommands,
@@ -450,7 +458,11 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
   if (result.coreFlowManifestPath) {
     lines.push(`- Core flow manifest: \`${escapeMarkdownInline(result.coreFlowManifestPath)}\``);
   }
+  if (result.domainManifestPath) {
+    lines.push(`- Domain manifest: \`${escapeMarkdownInline(result.domainManifestPath)}\``);
+  }
   lines.push(`- Matched core flows: ${result.coreFlows.length}`);
+  lines.push(`- Matched domains: ${result.domains.length}`);
   lines.push(`- Changed files considered: ${result.changedFiles.length}`);
   if (result.localHistory) {
     lines.push(`- Local history: \`${escapeMarkdownInline(result.localHistory.path)}\``);
@@ -525,6 +537,36 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
         lines.push("Declared routes:");
         for (const route of flow.routes) {
           lines.push(`- \`${escapeMarkdownInline(route)}\``);
+        }
+      }
+      lines.push("");
+    }
+  }
+
+  if (result.domains.length > 0) {
+    lines.push("## Matched Domains");
+    lines.push("");
+    for (const domain of result.domains) {
+      lines.push(`### ${escapeMarkdownInline(domain.name)} \`${escapeMarkdownInline(domain.id)}\``);
+      lines.push("");
+      lines.push(domain.reason);
+      lines.push("");
+      lines.push("Matched files:");
+      for (const file of domain.matchedFiles.slice(0, maxFilesPerFlow)) {
+        lines.push(`- \`${escapeMarkdownInline(file)}\``);
+      }
+      if (domain.routes.length > 0) {
+        lines.push("");
+        lines.push("Declared routes:");
+        for (const route of domain.routes) {
+          lines.push(`- \`${escapeMarkdownInline(route)}\``);
+        }
+      }
+      if (domain.scenarios.length > 0) {
+        lines.push("");
+        lines.push("Suggested scenarios:");
+        for (const scenario of domain.scenarios) {
+          lines.push(`- ${escapeMarkdownInline(scenario.title)}`);
         }
       }
       lines.push("");
@@ -1702,6 +1744,7 @@ async function buildDomainScenarioDraftFlow(
   const coverage = baseFlow?.coverage ?? buildCoverageTargets("domain", files, plan.recommendedRunner.name);
   const runner = plan.recommendedRunner.name;
   const entrypoints = uniqueEntrypoints([
+    ...domainScenarioEntrypoints(plan, scenario, runner),
     ...coreFlowEntrypoints(plan, coreFlow, runner),
     ...filterEntrypointsForFiles(baseFlows.flatMap((flow) => flow.entrypoints), files),
     ...(await inferFlowEntrypoints(plan.root, files, runner)),
@@ -1754,6 +1797,26 @@ function normalizeScenarioFilesForRoot(plan: E2ePlanResult, files: string[]): st
       ? file.slice(packagePathFromWorkspace.length).replace(/^\/+/, "")
       : file,
   );
+}
+
+function domainScenarioEntrypoints(
+  plan: E2ePlanResult,
+  scenario: DomainScenarioSuggestion,
+  runner: E2eRunnerName,
+): E2eEntrypoint[] {
+  if (runner === "maestro" || scenario.source !== "domain-manifest" || !scenario.routes || scenario.routes.length === 0) {
+    return [];
+  }
+  const manifestPath = plan.domainManifestPath ?? defaultDomainManifestPath;
+  return scenario.routes
+    .map((route) => normalizeEntrypointRoute(route))
+    .filter((route): route is string => Boolean(route))
+    .map((route) => ({
+      kind: "route",
+      value: route,
+      file: manifestPath,
+      confidence: "high",
+    }));
 }
 
 function coreFlowEntrypoints(
