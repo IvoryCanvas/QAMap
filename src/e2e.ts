@@ -17,6 +17,8 @@ import { TOOL_NAME, VERSION } from "./version.js";
 
 export type E2eProjectType = "expo-react-native" | "react-native" | "web" | "unknown";
 export type E2eRunnerName = "maestro" | "playwright" | "manual";
+export type E2eEntrypointKind = "route" | "screen" | "command";
+export type E2eEntrypointConfidence = "high" | "medium" | "low";
 export type E2eSelectorKind =
   | "test-id"
   | "accessibility-label"
@@ -60,8 +62,16 @@ export interface E2eFlow {
   steps: string[];
   coverage: E2eCoverageTarget[];
   coverageEvidence: CoverageEvidence[];
+  entrypoints: E2eEntrypoint[];
   selectors: E2eSelector[];
   missingTestability: string[];
+}
+
+export interface E2eEntrypoint {
+  kind: E2eEntrypointKind;
+  value: string;
+  file: string;
+  confidence: E2eEntrypointConfidence;
 }
 
 export interface E2eSelector {
@@ -103,6 +113,8 @@ export interface E2eDraftFile {
   source?: "domain-language" | "core-flow" | "heuristic";
   stability?: "ready" | "needs-selector" | "needs-setup" | "needs-selector-and-setup";
   todoCount?: number;
+  entrypointCount?: number;
+  primaryEntrypoint?: string;
   inferredSelectorCount?: number;
   coverageTargetCount?: number;
   reason?: string;
@@ -177,7 +189,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
   const plan = await generateE2ePlan(root, options);
   const runner = plan.recommendedRunner.name;
   const outputDirectory = path.resolve(root, options.output ?? defaultDraftOutputDirectory(runner));
-  const flows = buildDraftFlows(plan);
+  const flows = await buildDraftFlows(plan);
 
   await fs.mkdir(outputDirectory, { recursive: true });
 
@@ -193,6 +205,8 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
         status: "skipped",
         source: draftFlowSource(flow),
         stability: draftStability(plan, flow),
+        entrypointCount: flow.entrypoints.length,
+        primaryEntrypoint: primaryEntrypointLabel(flow),
         coverageTargetCount: flow.coverage.length,
         reason: "File already exists. Pass --force to overwrite it.",
       });
@@ -208,6 +222,8 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
       source: draftFlowSource(flow),
       stability: draftStability(plan, flow),
       todoCount: countTodos(content),
+      entrypointCount: flow.entrypoints.length,
+      primaryEntrypoint: primaryEntrypointLabel(flow),
       inferredSelectorCount: flow.selectors.length,
       coverageTargetCount: flow.coverage.length,
     });
@@ -517,6 +533,13 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
       for (const step of flow.steps) {
         lines.push(`- ${escapeMarkdownInline(step)}`);
       }
+      if (flow.entrypoints.length > 0) {
+        lines.push("");
+        lines.push("Entrypoint hints:");
+        for (const entrypoint of flow.entrypoints.slice(0, maxFilesPerFlow)) {
+          lines.push(`- ${formatEntrypoint(entrypoint)}`);
+        }
+      }
       if (flow.coverage.length > 0) {
         lines.push("");
         lines.push("Coverage targets:");
@@ -723,7 +746,7 @@ function toCoreFlowChangedFiles(
 }
 
 type E2eFlowKind = "ui" | "api" | "state" | "content" | "config" | "domain" | "changed-file";
-type FlowCandidate = Omit<E2eFlow, "coverage" | "coverageEvidence" | "selectors" | "missingTestability"> & {
+type FlowCandidate = Omit<E2eFlow, "coverage" | "coverageEvidence" | "entrypoints" | "selectors" | "missingTestability"> & {
   kind: E2eFlowKind;
 };
 type DraftFlowSource = "domain-language" | "core-flow" | "heuristic";
@@ -902,9 +925,22 @@ async function buildFlow(
     steps: candidate.steps,
     coverage,
     coverageEvidence: evaluateFlowCoverageEvidence({ title: candidate.title, files, coverage }, testSuiteInventory),
+    entrypoints: await inferFlowEntrypoints(root, files, runner),
     selectors: await inferFlowSelectors(root, files, runner),
     missingTestability: await findFlowTestabilityGaps(root, files, runner),
   };
+}
+
+async function inferFlowEntrypoints(root: string, files: string[], runner: E2eRunnerName): Promise<E2eEntrypoint[]> {
+  const entrypoints: E2eEntrypoint[] = [];
+  for (const file of files.slice(0, 10)) {
+    entrypoints.push(...entrypointsFromPath(file, runner));
+    const text = await readTextIfExists(path.join(root, file));
+    if (text) {
+      entrypoints.push(...entrypointsFromText(file, text, runner));
+    }
+  }
+  return uniqueEntrypoints(entrypoints).slice(0, 6);
 }
 
 async function inferFlowSelectors(root: string, files: string[], runner: E2eRunnerName): Promise<E2eSelector[]> {
@@ -920,6 +956,186 @@ async function inferFlowSelectors(root: string, files: string[], runner: E2eRunn
     selectors.push(...extractSelectorsFromText(file, text, runner));
   }
   return uniqueSelectors(selectors).slice(0, 12);
+}
+
+function entrypointsFromPath(file: string, runner: E2eRunnerName): E2eEntrypoint[] {
+  const entrypoints: E2eEntrypoint[] = [];
+  const route = routeEntrypointFromPath(file);
+  if (route && runner !== "maestro") {
+    entrypoints.push({
+      kind: "route",
+      value: route.value,
+      file,
+      confidence: route.confidence,
+    });
+  }
+
+  const screen = screenEntrypointFromPath(file);
+  if (screen && runner !== "playwright") {
+    entrypoints.push({
+      kind: "screen",
+      value: screen.value,
+      file,
+      confidence: screen.confidence,
+    });
+  }
+  return entrypoints;
+}
+
+function entrypointsFromText(file: string, text: string, runner: E2eRunnerName): E2eEntrypoint[] {
+  const entrypoints: E2eEntrypoint[] = [];
+  if (runner !== "maestro") {
+    const routeMatcher =
+      /(?:href|to)\s*=\s*(?:"([^"]+)"|'([^']+)'|\{\s*["']([^"']+)["']\s*\})|(?:router\.(?:push|replace)|navigate)\(\s*["']([^"']+)["']/g;
+    for (const match of text.matchAll(routeMatcher)) {
+      const route = normalizeEntrypointRoute(match[1] ?? match[2] ?? match[3] ?? match[4]);
+      if (route) {
+        entrypoints.push({ kind: "route", value: route, file, confidence: "medium" });
+      }
+    }
+  }
+
+  if (runner !== "playwright") {
+    const screenMatcher = /(?:navigation\.)?navigate\(\s*["']([^"'/]{2,80})["']|name\s*=\s*["']([^"'/]{2,80})["']/g;
+    for (const match of text.matchAll(screenMatcher)) {
+      const screen = normalizeScreenName(match[1] ?? match[2]);
+      if (screen) {
+        entrypoints.push({ kind: "screen", value: screen, file, confidence: "medium" });
+      }
+    }
+  }
+  return entrypoints;
+}
+
+function routeEntrypointFromPath(
+  file: string,
+): { value: string; confidence: E2eEntrypointConfidence } | undefined {
+  if (!isPotentialRouteEntrypointFile(file)) {
+    return undefined;
+  }
+  const segments = file.split("/");
+  const appIndex = lastIndexOfAny(segments, ["app"]);
+  const pageIndex = lastIndexOfAny(segments, ["pages", "routes"]);
+  const routeRootIndex = appIndex >= 0 ? appIndex : pageIndex;
+  if (routeRootIndex < 0) {
+    return undefined;
+  }
+
+  const rawRouteSegments = segments.slice(routeRootIndex + 1);
+  const routeSegments = normalizeRouteSegments(rawRouteSegments);
+  const value = formatRoutePath(routeSegments);
+  if (!value) {
+    return undefined;
+  }
+
+  const leaf = stripKnownExtension(rawRouteSegments.at(-1) ?? "");
+  const confidence =
+    appIndex >= 0 || /^(?:index|page|route)$/i.test(leaf) || /Page$/i.test(leaf) ? "high" : "medium";
+  return { value, confidence };
+}
+
+function screenEntrypointFromPath(
+  file: string,
+): { value: string; confidence: E2eEntrypointConfidence } | undefined {
+  if (!isPotentialScreenEntrypointFile(file)) {
+    return undefined;
+  }
+  const basename = stripKnownExtension(path.basename(file));
+  if (!basename || /^use[A-Z]/.test(basename) || /^(?:index|_layout|layout|page|route)$/i.test(basename)) {
+    return undefined;
+  }
+  const stripped = basename.replace(/(?:Route)?Screen$/i, "").replace(/Page$/i, "");
+  const screen = normalizeScreenName(stripped);
+  if (!screen) {
+    return undefined;
+  }
+  const confidence = /(?:Route)?Screen$|Page$/i.test(basename) || /(?:^|\/)(?:screens?|navigations?)\//i.test(file)
+    ? "high"
+    : "medium";
+  return { value: screen, confidence };
+}
+
+function isPotentialRouteEntrypointFile(file: string): boolean {
+  return isUiImplementationFile(file) || /(?:^|\/)(?:app|pages|routes)\/.*(?:page|route)\.[cm]?[jt]sx?$/i.test(file);
+}
+
+function isPotentialScreenEntrypointFile(file: string): boolean {
+  return isUiImplementationFile(file) || /(?:^|\/)(?:screens?|navigations?)\//i.test(file);
+}
+
+function normalizeRouteSegments(rawSegments: string[]): string[] {
+  const routeSegments: string[] = [];
+  for (const [index, segment] of rawSegments.entries()) {
+    const normalized = normalizeRouteSegment(segment);
+    if (!normalized) {
+      continue;
+    }
+    const isLeaf = index === rawSegments.length - 1;
+    const parent = routeSegments.at(-1);
+    if (isLeaf && shouldDropRouteLeaf(normalized, parent)) {
+      continue;
+    }
+    routeSegments.push(normalized);
+  }
+  return routeSegments;
+}
+
+function normalizeRouteSegment(segment: string): string | undefined {
+  const stem = stripKnownExtension(segment);
+  if (!stem || /^\([^)]*\)$/.test(stem) || stem.startsWith("_")) {
+    return undefined;
+  }
+  if (/^(?:index|page|route|layout|template|loading|error|not-found|404|500)$/i.test(stem)) {
+    return undefined;
+  }
+  const dynamic = stem.match(/^\[{1,2}\.?\.\.?([^[\]]+)\]{1,2}$/);
+  if (dynamic?.[1]) {
+    return `:${slugify(dynamic[1])}`;
+  }
+  return slugify(stem.replace(/Page$/i, ""));
+}
+
+function shouldDropRouteLeaf(leaf: string, parent: string | undefined): boolean {
+  return Boolean(parent && leaf === parent);
+}
+
+function normalizeEntrypointRoute(value: string | undefined): string | undefined {
+  if (!value || !value.startsWith("/") || /^\/\//.test(value) || /[{}]/.test(value)) {
+    return undefined;
+  }
+  const withoutQuery = value.split(/[?#]/)[0];
+  return withoutQuery.length > 0 && withoutQuery.length <= 120 ? withoutQuery : undefined;
+}
+
+function normalizeScreenName(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const normalized = value.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[-_]+/g, " ").trim();
+  if (!normalized || normalized.length > 80 || /[{}()[\]=>/]/.test(normalized)) {
+    return undefined;
+  }
+  return titleCase(normalized);
+}
+
+function formatRoutePath(routeSegments: string[]): string | undefined {
+  if (routeSegments.length === 0) {
+    return "/";
+  }
+  return `/${routeSegments.join("/")}`;
+}
+
+function lastIndexOfAny(values: string[], candidates: string[]): number {
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    if (candidates.includes(values[index])) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function stripKnownExtension(file: string): string {
+  return file.replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|mdx?)$/i, "");
 }
 
 async function findFlowTestabilityGaps(root: string, files: string[], runner: E2eRunnerName): Promise<string[]> {
@@ -1282,12 +1498,14 @@ function dedupeFlows(flows: E2eFlow[]): E2eFlow[] {
   return deduped;
 }
 
-function buildDraftFlows(plan: E2ePlanResult): DraftE2eFlow[] {
+async function buildDraftFlows(plan: E2ePlanResult): Promise<DraftE2eFlow[]> {
   const baseFlows = plan.flows.length > 0 ? plan.flows : [buildFallbackFlow(plan)];
-  const scenarioFlows = plan.domainLanguage.scenarios
-    .filter((scenario) => scenario.files.length > 0 || scenario.source === "core-flow")
-    .slice(0, 4)
-    .map((scenario) => buildDomainScenarioDraftFlow(plan, scenario, baseFlows));
+  const scenarioFlows = await Promise.all(
+    plan.domainLanguage.scenarios
+      .filter((scenario) => scenario.files.length > 0 || scenario.source === "core-flow")
+      .slice(0, 4)
+      .map((scenario) => buildDomainScenarioDraftFlow(plan, scenario, baseFlows)),
+  );
 
   if (scenarioFlows.length === 0) {
     return baseFlows.map((flow) => ({
@@ -1303,14 +1521,23 @@ function buildDraftFlows(plan: E2ePlanResult): DraftE2eFlow[] {
   }));
 }
 
-function buildDomainScenarioDraftFlow(
+async function buildDomainScenarioDraftFlow(
   plan: E2ePlanResult,
   scenario: DomainScenarioSuggestion,
   baseFlows: E2eFlow[],
-): DraftE2eFlow {
+): Promise<DraftE2eFlow> {
   const baseFlow = bestBaseFlowForScenario(scenario, baseFlows);
   const files = uniqueStrings(scenario.files.length > 0 ? scenario.files : (baseFlow?.files ?? [])).slice(0, 20);
   const coverage = baseFlow?.coverage ?? buildCoverageTargets("domain", files, plan.recommendedRunner.name);
+  const runner = plan.recommendedRunner.name;
+  const entrypoints = uniqueEntrypoints([
+    ...filterEntrypointsForFiles(baseFlows.flatMap((flow) => flow.entrypoints), files),
+    ...(await inferFlowEntrypoints(plan.root, files, runner)),
+  ]);
+  const selectors = uniqueSelectors([
+    ...filterSelectorsForFiles(baseFlows.flatMap((flow) => flow.selectors), files),
+    ...(await inferFlowSelectors(plan.root, files, runner)),
+  ]);
   return {
     title: scenario.title,
     reason: scenario.intent,
@@ -1318,11 +1545,24 @@ function buildDomainScenarioDraftFlow(
     steps: scenario.checks.length > 0 ? scenario.checks : (baseFlow?.steps ?? []),
     coverage,
     coverageEvidence: baseFlow?.coverageEvidence ?? [],
-    selectors: baseFlow?.selectors ?? [],
-    missingTestability: baseFlow?.missingTestability ?? [],
+    entrypoints,
+    selectors,
+    missingTestability: await findFlowTestabilityGaps(plan.root, files, runner),
     draftSource: scenario.source === "core-flow" ? "core-flow" : "domain-language",
     domainScenario: scenario,
   };
+}
+
+function filterEntrypointsForFiles(entrypoints: E2eEntrypoint[], files: string[]): E2eEntrypoint[] {
+  return entrypoints.filter((entrypoint) => files.some((file) => sameOrNestedPath(entrypoint.file, file)));
+}
+
+function filterSelectorsForFiles(selectors: E2eSelector[], files: string[]): E2eSelector[] {
+  return selectors.filter((selector) => files.some((file) => sameOrNestedPath(selector.file, file)));
+}
+
+function sameOrNestedPath(left: string, right: string): boolean {
+  return left === right || left.endsWith(`/${right}`) || right.endsWith(`/${left}`);
 }
 
 function bestBaseFlowForScenario(
@@ -1401,6 +1641,7 @@ function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
         files: [],
       },
     ),
+    entrypoints: [],
     selectors: [],
     missingTestability: plan.missingTestability,
   };
@@ -1453,6 +1694,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   lines.push("appId: ${APP_ID}");
   lines.push("---");
   lines.push("- launchApp");
+  appendEntrypointHints(lines, flow, "#");
   for (const step of flow.steps) {
     const command = maestroCommandForStep(step, selectorQueue);
     lines.push(...formatMaestroCommand(command));
@@ -1524,7 +1766,9 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   lines.push('import { expect, test } from "@playwright/test";');
   lines.push("");
   lines.push(`test("${testName}", async ({ page }) => {`);
-  lines.push('  await page.goto("/");');
+  appendEntrypointHints(lines, flow, "  //");
+  const routeEntrypoint = primaryRouteEntrypoint(flow);
+  lines.push(`  await page.goto("${quoteJs(routeEntrypoint?.value ?? "/")}");`);
   for (const step of flow.steps) {
     const selector = takeSelectorForStep(selectorQueue, step);
     const locator = selector ? playwrightLocator(selector) : 'page.getByText("TODO")';
@@ -1584,6 +1828,14 @@ function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   for (const step of flow.steps) {
     lines.push(`- [ ] ${step}`);
   }
+  if (flow.entrypoints.length > 0) {
+    lines.push("");
+    lines.push("## Entrypoint Hints");
+    lines.push("");
+    for (const entrypoint of flow.entrypoints.slice(0, maxFilesPerFlow)) {
+      lines.push(`- ${formatEntrypoint(entrypoint)}`);
+    }
+  }
   if (scenario) {
     lines.push("");
     lines.push("## Scenario Checks");
@@ -1641,6 +1893,17 @@ function appendMaestroCoverageComments(lines: string[], flow: E2eFlow): void {
   }
 }
 
+function appendEntrypointHints(lines: string[], flow: E2eFlow, commentPrefix: string): void {
+  if (flow.entrypoints.length === 0) {
+    return;
+  }
+  lines.push("");
+  lines.push(`${commentPrefix} Entrypoint hints:`);
+  for (const entrypoint of flow.entrypoints.slice(0, maxFilesPerFlow)) {
+    lines.push(`${commentPrefix} - ${formatEntrypoint(entrypoint)}`);
+  }
+}
+
 function appendDomainScenarioComments(lines: string[], flow: E2eFlow, commentPrefix: string): void {
   const scenario = domainScenarioForFlow(flow);
   if (!scenario || scenario.checks.length === 0) {
@@ -1669,6 +1932,19 @@ function appendPlaywrightCoverageComments(lines: string[], flow: E2eFlow): void 
 
 function sameStringList(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function primaryRouteEntrypoint(flow: E2eFlow): E2eEntrypoint | undefined {
+  return flow.entrypoints.find((entrypoint) => entrypoint.kind === "route");
+}
+
+function primaryEntrypointLabel(flow: E2eFlow): string | undefined {
+  const entrypoint = flow.entrypoints[0];
+  return entrypoint ? formatEntrypoint(entrypoint) : undefined;
+}
+
+function formatEntrypoint(entrypoint: E2eEntrypoint): string {
+  return `${entrypoint.kind} ${entrypoint.value} [${entrypoint.confidence}] (${entrypoint.file})`;
 }
 
 function buildDraftNextSteps(plan: E2ePlanResult, runner: E2eRunnerName): string[] {
@@ -1701,6 +1977,10 @@ function formatDraftFileQuality(file: E2eDraftFile): string | undefined {
   if (file.todoCount !== undefined) {
     details.push(`${file.todoCount} TODO${file.todoCount === 1 ? "" : "s"}`);
   }
+  if (file.entrypointCount !== undefined && file.entrypointCount > 0) {
+    const suffix = file.primaryEntrypoint ? `: ${file.primaryEntrypoint}` : "";
+    details.push(`${file.entrypointCount} entrypoint hint${file.entrypointCount === 1 ? "" : "s"}${suffix}`);
+  }
   if (file.inferredSelectorCount !== undefined) {
     details.push(
       `${file.inferredSelectorCount} inferred selector${file.inferredSelectorCount === 1 ? "" : "s"}`,
@@ -1732,7 +2012,11 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
     return selector;
   }
   if (canUsePrimarySelector(step)) {
-    return selectors.shift();
+    const fallbackIndex = selectors.findIndex((selector) => selectorCanDriveInteraction(selector));
+    if (fallbackIndex >= 0) {
+      const [selector] = selectors.splice(fallbackIndex, 1);
+      return selector;
+    }
   }
   return undefined;
 }
@@ -1744,6 +2028,17 @@ function selectorMatchesStep(selector: E2eSelector, step: string): boolean {
 
 function canUsePrimarySelector(step: string): boolean {
   return /\b(?:primary|action|submit|continue)\b/i.test(step) && !/^launch\b/i.test(step);
+}
+
+function selectorCanDriveInteraction(selector: E2eSelector): boolean {
+  if (selector.kind === "visible-text" || selector.kind === "placeholder") {
+    return false;
+  }
+  return !isPassiveControlLabel(selector.value);
+}
+
+function isPassiveControlLabel(value: string): boolean {
+  return /^(?:close|cancel|dismiss|back|previous|닫기|취소|뒤로)$/i.test(value.trim());
 }
 
 function keywordsForStep(step: string): string[] {
@@ -1909,6 +2204,35 @@ async function exists(filePath: string): Promise<boolean> {
 
 function uniqueStrings(values: string[]): string[] {
   return values.filter((value, index) => values.indexOf(value) === index);
+}
+
+function uniqueEntrypoints(entrypoints: E2eEntrypoint[]): E2eEntrypoint[] {
+  const seen = new Set<string>();
+  const ordered = [...entrypoints].sort((left, right) => entrypointRank(left) - entrypointRank(right));
+  return ordered.filter((entrypoint) => {
+    const key = `${entrypoint.kind}\0${entrypoint.value}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function entrypointRank(entrypoint: E2eEntrypoint): number {
+  const confidenceRankValue = entrypointConfidenceRank(entrypoint.confidence);
+  const kindRank = entrypoint.kind === "route" ? 0 : entrypoint.kind === "screen" ? 1 : 2;
+  return confidenceRankValue * 10 + kindRank;
+}
+
+function entrypointConfidenceRank(confidence: E2eEntrypointConfidence): number {
+  if (confidence === "high") {
+    return 0;
+  }
+  if (confidence === "medium") {
+    return 1;
+  }
+  return 2;
 }
 
 function uniqueCoverageTargets(targets: E2eCoverageTarget[]): E2eCoverageTarget[] {
