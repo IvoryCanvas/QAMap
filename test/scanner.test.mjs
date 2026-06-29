@@ -524,6 +524,7 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   );
   assert.equal(plan.flows.some((flow) => flow.title === "Ink drawing capture flow"), false);
   assert.equal(plan.flows.some((flow) => flow.title === "Record mode selection flow"), false);
+  assert.ok(plan.flows.some((flow) => flow.entrypoints.some((entrypoint) => entrypoint.value === "Ink Drawing")));
   assert.ok(plan.flows.some((flow) => flow.selectors.some((selector) => selector.value === "ink-save-button")));
   assert.ok(plan.flows.some((flow) => flow.selectors.some((selector) => selector.value === "record-mode-ink")));
   assert.ok(plan.missingTestability.some((gap) => /\.maestro/.test(gap)));
@@ -548,7 +549,9 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.match(uiDraft, new RegExp(`Flow: ${uiDraftFile.flowTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   assert.match(uiDraft, /Domain scenario:/);
   assert.match(uiDraft, /Domain scenario checks:/);
-  assert.match(uiDraft, /tapOn: \{ id: "ink-save-button" \}/);
+  assert.match(uiDraft, /Entrypoint hints:/);
+  assert.match(uiDraft, /screen (?:Record Mode Sheet|Ink Drawing)/);
+  assert.match(uiDraft, /tapOn: \{ id: "(?:ink-save-button|record-mode-ink)" \}/);
   assert.match(uiDraft, /record-mode-ink/);
   assert.match(uiDraft, /Coverage matrix/);
   assert.match(uiDraft, /Loading, empty, error, and success states/);
@@ -604,6 +607,60 @@ test("generateE2ePlan keeps service changes generic and avoids fixture-specific 
     ),
   );
   assert.equal(titles.some((title) => /Ink drawing|Record mode|Saved entry|Localized visual/i.test(title)), false);
+});
+
+test("generateE2eDraft scopes entrypoint hints to each domain scenario", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/app/navigations"), { recursive: true });
+  await mkdir(path.join(root, "src/features/offer/components"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        ios: "expo run:ios",
+        test: "node --test",
+      },
+      dependencies: {
+        expo: "^54.0.0",
+        "react-native": "^0.81.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "app.json"), JSON.stringify({ expo: { name: "Fixture" } }));
+  await writeFile(
+    path.join(root, "src/app/navigations/ArchiveScreen.tsx"),
+    "export function ArchiveScreen() { return null; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/features/offer/components/OfferScreen.tsx"),
+    "export function OfferScreen() { return null; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/offer"]);
+  await writeFile(
+    path.join(root, "src/app/navigations/ArchiveScreen.tsx"),
+    "export function ArchiveScreen() { return <Text>Archive</Text>; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/features/offer/components/OfferScreen.tsx"),
+    "export function OfferScreen() { return <Text>Offer</Text>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update offer"]);
+
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".maestro" });
+  const offerDraftFile = draft.files.find((file) => file.flowTitle === "Offer primary journey");
+  assert.ok(offerDraftFile);
+  const offerDraft = await readFile(path.join(root, offerDraftFile.path), "utf8");
+
+  assert.match(offerDraftFile.primaryEntrypoint ?? "", /screen Offer/);
+  assert.doesNotMatch(offerDraftFile.primaryEntrypoint ?? "", /Archive/);
+  assert.match(offerDraft, /screen Offer/);
+  assert.doesNotMatch(offerDraft, /screen Archive/);
 });
 
 test("generateE2ePlan evaluates existing test suite coverage evidence", async () => {
@@ -771,8 +828,12 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
     "missing",
   );
   assert.ok(draft.files.some((file) => file.path === "tests/e2e/checkout-primary-journey.spec.ts"));
+  assert.ok(draftFile.entrypointCount > 0);
+  assert.match(draftFile.primaryEntrypoint ?? "", /route \/checkout/);
   assert.match(spec, /test\("Checkout primary journey"/);
   assert.match(spec, /Domain scenario:/);
+  assert.match(spec, /Entrypoint hints:/);
+  assert.match(spec, /page\.goto\("\/checkout"\)/);
   assert.match(spec, /page\.getByTestId\("checkout-submit"\)/);
   assert.match(spec, /Coverage matrix/);
   assert.match(spec, /Browser viewport regression/);
