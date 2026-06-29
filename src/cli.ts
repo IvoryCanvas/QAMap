@@ -6,6 +6,7 @@ import { generateAgentContext } from "./context.js";
 import { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
 import { formatMarkdownE2eDraft, formatMarkdownE2ePlan, generateE2eDraft, generateE2ePlan } from "./e2e.js";
 import { evaluateChangeReadiness, formatEvalReport, formatMarkdownEvalReport } from "./eval.js";
+import { defaultFlowManifestPath, writeDefaultCoreFlowManifest } from "./flows.js";
 import { runGitHubAction } from "./github.js";
 import { formatLocalHistoryInitResult, initializeLocalHistory, recordE2ePlanHistory } from "./history.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
@@ -234,6 +235,32 @@ async function main(argv: string[]): Promise<number> {
       await printOrWrite(`${JSON.stringify(result, null, 2)}\n`, options.output);
     } else {
       await printOrWrite(formatLocalHistoryInitResult(result), options.output);
+    }
+    return 0;
+  }
+
+  if (command === "flows") {
+    const [subcommand, ...subcommandRest] = rest;
+    if (!subcommand || subcommand === "--help" || subcommand === "-h") {
+      printFlowsHelp();
+      return 0;
+    }
+    if (subcommand !== "init") {
+      throw new Error(`Unknown flows subcommand: ${subcommand}`);
+    }
+    const options = parseOptions(subcommandRest);
+    const outputPath = await writeDefaultCoreFlowManifest(
+      options.path,
+      options.write ?? defaultFlowManifestPath,
+      options.force,
+    );
+    if (options.json || options.format === "json") {
+      await printOrWrite(`${JSON.stringify({ path: outputPath }, null, 2)}\n`, options.output);
+    } else {
+      await printOrWrite(
+        `Wrote ${outputPath}\nCommit this file when the flow definitions should become team policy.\n`,
+        options.output,
+      );
     }
     return 0;
   }
@@ -623,6 +650,7 @@ Usage:
   codeward test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
   codeward e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   codeward e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--force]
+  codeward flows init [path] [--write <file>] [--force]
   codeward history init [path]
   codeward context [path] [--write [file]] [--force]
   codeward init [path] [--write <file>] [--force]
@@ -648,6 +676,7 @@ Examples:
   codeward e2e plan . --base origin/main --head HEAD
   codeward e2e plan . --base origin/main --head HEAD --record-history
   codeward e2e draft . --base origin/main --head HEAD
+  codeward flows init .
   codeward history init .
   codeward test-plan services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
   codeward context . --write AGENTS.md
@@ -682,6 +711,19 @@ Usage:
 
 Examples:
   codeward history init .
+`);
+}
+
+function printFlowsHelp(): void {
+  console.log(`CodeWard ${VERSION}
+
+Core flow definitions for project-specific E2E planning.
+
+Usage:
+  codeward flows init [path] [--write <file>] [--force]
+
+Examples:
+  codeward flows init .
 `);
 }
 

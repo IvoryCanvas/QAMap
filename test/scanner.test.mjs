@@ -769,6 +769,117 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
   assert.match(spec, /Inferred selectors/);
 });
 
+test("generateE2ePlan matches committed core flow definitions", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        vite: "^7.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, ".codeward/flows.yml"),
+    [
+      "flows:",
+      "  - id: checkout-purchase",
+      "    name: Checkout purchase",
+      "    priority: critical",
+      "    domains:",
+      "      - checkout",
+      "    files:",
+      "      - src/pages/checkout/**",
+      "    routes:",
+      "      - /checkout",
+      "    checks:",
+      "      - Complete checkout with a valid payment method.",
+      "      - Verify declined payment recovery.",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "src/pages/checkout/CheckoutPage.tsx"),
+    "export function CheckoutPage() { return <button data-testid=\"checkout-submit\">Checkout</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/checkout-flow"]);
+  await writeFile(
+    path.join(root, "src/pages/checkout/CheckoutPage.tsx"),
+    "export function CheckoutPage() { return <button data-testid=\"checkout-submit\">Complete checkout</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update checkout flow"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const markdown = formatMarkdownE2ePlan(plan);
+
+  assert.equal(plan.coreFlowManifestPath, ".codeward/flows.yml");
+  assert.equal(plan.coreFlows.length, 1);
+  assert.equal(plan.coreFlows[0].id, "checkout-purchase");
+  assert.equal(plan.coreFlows[0].priority, "critical");
+  assert.ok(plan.coreFlows[0].matchedFiles.includes("src/pages/checkout/CheckoutPage.tsx"));
+  assert.ok(plan.coreFlows[0].checks.includes("Complete checkout with a valid payment method."));
+  assert.match(markdown, /## Matched Core Flows/);
+  assert.match(markdown, /Checkout purchase/);
+  assert.match(markdown, /Human-approved checks:/);
+});
+
+test("generateE2ePlan matches workspace core flows for package scans", async () => {
+  const workspaceRoot = await makeTempRepo();
+  const packageRoot = path.join(workspaceRoot, "services/offer");
+  await initGitRepo(workspaceRoot);
+  await mkdir(path.join(workspaceRoot, ".codeward"), { recursive: true });
+  await mkdir(path.join(packageRoot, "src/features/offer"), { recursive: true });
+  await writeFile(
+    path.join(workspaceRoot, ".codeward/flows.yml"),
+    [
+      "flows:",
+      "  - id: offer-submit",
+      "    name: Offer submit",
+      "    priority: critical",
+      "    files:",
+      "      - services/offer/src/features/offer/**",
+      "    checks:",
+      "      - Submit an offer with valid terms.",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(packageRoot, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(path.join(packageRoot, "src/features/offer/submit.ts"), "export const submit = () => true;\n");
+  await git(workspaceRoot, ["add", "."]);
+  await git(workspaceRoot, ["commit", "-m", "base"]);
+  await git(workspaceRoot, ["branch", "-M", "main"]);
+
+  await git(workspaceRoot, ["switch", "-c", "feature/offer-submit"]);
+  await writeFile(path.join(packageRoot, "src/features/offer/submit.ts"), "export const submit = () => 'changed';\n");
+  await git(workspaceRoot, ["add", "."]);
+  await git(workspaceRoot, ["commit", "-m", "update offer submit"]);
+
+  const plan = await generateE2ePlan(packageRoot, { base: "main", head: "HEAD", workspaceRoot });
+
+  assert.equal(plan.coreFlowManifestPath, ".codeward/flows.yml");
+  assert.equal(plan.coreFlows.length, 1);
+  assert.equal(plan.coreFlows[0].id, "offer-submit");
+  assert.ok(plan.coreFlows[0].matchedFiles.includes("services/offer/src/features/offer/submit.ts"));
+  assert.deepEqual(plan.changedFiles.map((file) => file.path), ["src/features/offer/submit.ts"]);
+});
+
 test("generateE2eDraft creates a fallback smoke draft without changed files", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
@@ -1198,6 +1309,17 @@ test("e2e plan can record compact local history without breaking JSON output", a
   for (const pattern of localHistoryGitignorePatterns) {
     assert.match(gitignore, new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+});
+
+test("flows init creates a commit-friendly core flow manifest", async () => {
+  const root = await makeTempRepo();
+  const cliOutput = await execFileAsync(process.execPath, [cliPath, "flows", "init", root]);
+  const manifest = await readFile(path.join(root, ".codeward/flows.yml"), "utf8");
+
+  assert.match(cliOutput.stdout, /Wrote /);
+  assert.match(cliOutput.stdout, /team policy/);
+  assert.match(manifest, /flows:/);
+  assert.match(manifest, /primary-success-path/);
 });
 
 test("configured validation commands feed test-plan and eval outputs", async () => {
