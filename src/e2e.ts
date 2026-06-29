@@ -25,6 +25,8 @@ export type E2eEntrypointConfidence = "high" | "medium" | "low";
 export type E2eSetupHintKind = "auth" | "network" | "fixture" | "environment" | "payment" | "state";
 export type E2eSetupHintConfidence = "high" | "medium" | "low";
 export type E2eFixtureReadinessStatus = "ready" | "partial" | "missing" | "not-needed";
+export type E2eValidationMatrixStatus = "ready" | "partial" | "missing";
+export type E2eValidationMatrixCategory = "core-flow" | "coverage" | "fixture" | "testability" | "setup";
 export type E2eSelectorKind =
   | "test-id"
   | "accessibility-label"
@@ -105,6 +107,26 @@ export interface E2eFixtureReadiness {
   nextActions: string[];
 }
 
+export interface E2eValidationMatrixRow {
+  area: string;
+  category: E2eValidationMatrixCategory;
+  requiredEvidence: string;
+  currentEvidence: string;
+  status: E2eValidationMatrixStatus;
+  nextAction: string;
+  flowTitle?: string;
+  files: string[];
+}
+
+export interface E2eValidationMatrix {
+  rows: E2eValidationMatrixRow[];
+  summary: {
+    ready: number;
+    partial: number;
+    missing: number;
+  };
+}
+
 export interface E2ePlanResult {
   tool: {
     name: string;
@@ -128,6 +150,7 @@ export interface E2ePlanResult {
   suggestedCommands: string[];
   localHistory?: LocalHistoryReference;
   flows: E2eFlow[];
+  validationMatrix: E2eValidationMatrix;
   missingTestability: string[];
   setupNotes: string[];
 }
@@ -189,6 +212,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     ...flows.flatMap((flow) => flow.missingTestability),
     ...(await buildGlobalTestabilityGaps(root, recommendedRunner.name)),
   ]);
+  const validationMatrix = buildE2eValidationMatrix(flows, coreFlows);
 
   return {
     tool: {
@@ -212,6 +236,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     changedFiles: testPlan.changedFiles,
     suggestedCommands: testPlan.suggestedCommands,
     flows,
+    validationMatrix,
     missingTestability,
     setupNotes: await buildSetupNotes(root, recommendedRunner.name, project),
   };
@@ -449,6 +474,216 @@ function coverageTarget(
   return { title, priority, reason, checks };
 }
 
+function buildE2eValidationMatrix(
+  flows: E2eFlow[],
+  coreFlows: MatchedCoreFlow[],
+): E2eValidationMatrix {
+  const rows: E2eValidationMatrixRow[] = [];
+
+  for (const coreFlow of coreFlows) {
+    rows.push({
+      area: coreFlow.name,
+      category: "core-flow",
+      requiredEvidence: coreFlow.checks.length > 0
+        ? `Core flow checks: ${formatHumanList(coreFlow.checks.slice(0, 3))}.`
+        : "Core flow should cover the primary success path and one realistic blocked or failure path.",
+      currentEvidence: `Matched ${coreFlow.matchedFiles.length} changed file${coreFlow.matchedFiles.length === 1 ? "" : "s"}${coreFlow.routes.length > 0 ? ` and ${coreFlow.routes.length} declared route${coreFlow.routes.length === 1 ? "" : "s"}` : ""}.`,
+      status: "partial",
+      nextAction: "Make the matched core flow checks required validation evidence for this PR.",
+      files: coreFlow.matchedFiles,
+    });
+  }
+
+  for (const flow of flows) {
+    for (const evidence of flow.coverageEvidence) {
+      rows.push({
+        area: `${flow.title}: ${evidence.targetTitle}`,
+        category: "coverage",
+        requiredEvidence: coverageTargetRequirement(flow, evidence.targetTitle),
+        currentEvidence: coverageEvidenceSummary(evidence),
+        status: validationStatusFromCoverageEvidence(evidence.status),
+        nextAction: nextActionForCoverageEvidence(evidence),
+        flowTitle: flow.title,
+        files: evidence.files.length > 0 ? evidence.files : flow.files,
+      });
+    }
+
+    if (flow.fixtureReadiness.status !== "not-needed") {
+      rows.push({
+        area: `${flow.title}: fixture/mock readiness`,
+        category: "fixture",
+        requiredEvidence: "Deterministic success, empty, unauthorized, timeout, or server-error responses for API-dependent UI flow.",
+        currentEvidence: fixtureReadinessEvidenceSummary(flow.fixtureReadiness),
+        status: validationStatusFromFixtureReadiness(flow.fixtureReadiness.status),
+        nextAction: flow.fixtureReadiness.nextActions[0] ?? "Keep fixture evidence aligned with the changed flow.",
+        flowTitle: flow.title,
+        files: uniqueStrings([
+          ...flow.fixtureReadiness.apiSignals,
+          ...flow.fixtureReadiness.backendSignals,
+          ...flow.fixtureReadiness.mockSignals,
+          ...flow.files,
+        ]).slice(0, maxFilesPerFlow),
+      });
+    }
+
+    if (flow.setupHints.length > 0) {
+      rows.push({
+        area: `${flow.title}: setup readiness`,
+        category: "setup",
+        requiredEvidence: `Document and prepare ${formatHumanList(flow.setupHints.map((hint) => hint.title).slice(0, 3))}.`,
+        currentEvidence: `${flow.setupHints.length} setup hint${flow.setupHints.length === 1 ? "" : "s"} detected.`,
+        status: "partial",
+        nextAction: "Turn setup hints into reusable fixtures, seed steps, env flags, or test identities before making the draft required.",
+        flowTitle: flow.title,
+        files: uniqueStrings(flow.setupHints.flatMap((hint) => hint.files)).slice(0, maxFilesPerFlow),
+      });
+    }
+
+    rows.push({
+      area: `${flow.title}: testability`,
+      category: "testability",
+      requiredEvidence: "Stable selectors, entrypoint hints, and no unresolved testability gaps.",
+      currentEvidence: testabilityEvidenceSummary(flow),
+      status: validationStatusFromTestability(flow),
+      nextAction: nextActionForTestability(flow),
+      flowTitle: flow.title,
+      files: flow.missingTestability.length > 0 ? flow.files : flow.selectors.map((selector) => selector.file).slice(0, maxFilesPerFlow),
+    });
+  }
+
+  const sortedRows = rows.sort(compareValidationMatrixRows);
+  return {
+    rows: sortedRows,
+    summary: {
+      ready: sortedRows.filter((row) => row.status === "ready").length,
+      partial: sortedRows.filter((row) => row.status === "partial").length,
+      missing: sortedRows.filter((row) => row.status === "missing").length,
+    },
+  };
+}
+
+function coverageTargetRequirement(flow: E2eFlow, targetTitle: string): string {
+  const target = flow.coverage.find((item) => item.title === targetTitle);
+  if (!target) {
+    return `Evidence for ${targetTitle}.`;
+  }
+  const checks = target.checks.slice(0, 2);
+  return checks.length > 0 ? `${target.reason} Checks: ${formatHumanList(checks)}.` : target.reason;
+}
+
+function coverageEvidenceSummary(evidence: CoverageEvidence): string {
+  const files = evidence.files.length > 0 ? ` Files: ${evidence.files.slice(0, 3).join(", ")}.` : "";
+  const signals = evidence.signals.length > 0 ? ` Signals: ${evidence.signals.slice(0, 3).join(", ")}.` : "";
+  return `${evidence.reason}${files}${signals}`;
+}
+
+function validationStatusFromCoverageEvidence(status: CoverageEvidence["status"]): E2eValidationMatrixStatus {
+  if (status === "covered") {
+    return "ready";
+  }
+  if (status === "partial") {
+    return "partial";
+  }
+  return "missing";
+}
+
+function nextActionForCoverageEvidence(evidence: CoverageEvidence): string {
+  if (evidence.status === "covered") {
+    return "Keep the related test evidence linked in the PR validation notes.";
+  }
+  if (evidence.status === "partial") {
+    return "Expand existing tests or generated drafts to cover the missing checks for this target.";
+  }
+  return "Add E2E, integration, or manual validation evidence for this target.";
+}
+
+function fixtureReadinessEvidenceSummary(readiness: E2eFixtureReadiness): string {
+  const parts = [
+    readiness.apiSignals.length > 0 ? `${readiness.apiSignals.length} API signal${readiness.apiSignals.length === 1 ? "" : "s"}` : "",
+    readiness.backendSignals.length > 0 ? `${readiness.backendSignals.length} backend signal${readiness.backendSignals.length === 1 ? "" : "s"}` : "",
+    readiness.mockSignals.length > 0 ? `${readiness.mockSignals.length} mock/fixture signal${readiness.mockSignals.length === 1 ? "" : "s"}` : "",
+  ].filter(Boolean);
+  return `${readiness.reason}${parts.length > 0 ? ` Evidence: ${parts.join(", ")}.` : ""}`;
+}
+
+function validationStatusFromFixtureReadiness(status: E2eFixtureReadinessStatus): E2eValidationMatrixStatus {
+  if (status === "ready") {
+    return "ready";
+  }
+  if (status === "partial") {
+    return "partial";
+  }
+  return "missing";
+}
+
+function testabilityEvidenceSummary(flow: E2eFlow): string {
+  if (flow.missingTestability.length > 0) {
+    return `${flow.missingTestability.length} testability gap${flow.missingTestability.length === 1 ? "" : "s"} detected.`;
+  }
+  const signals = [
+    flow.selectors.length > 0 ? `${flow.selectors.length} selector${flow.selectors.length === 1 ? "" : "s"}` : "",
+    flow.entrypoints.length > 0 ? `${flow.entrypoints.length} entrypoint hint${flow.entrypoints.length === 1 ? "" : "s"}` : "",
+  ].filter(Boolean);
+  return signals.length > 0 ? `${signals.join(", ")} detected.` : "No stable selector or entrypoint evidence detected.";
+}
+
+function validationStatusFromTestability(flow: E2eFlow): E2eValidationMatrixStatus {
+  if (flow.missingTestability.length > 0) {
+    return "missing";
+  }
+  if (flow.selectors.length > 0 || flow.entrypoints.length > 0) {
+    return "ready";
+  }
+  return "partial";
+}
+
+function nextActionForTestability(flow: E2eFlow): string {
+  if (flow.missingTestability.length > 0) {
+    return "Add stable test ids, accessibility labels, roles, route hints, or visible copy before making this draft required.";
+  }
+  if (flow.selectors.length > 0 || flow.entrypoints.length > 0) {
+    return "Use the detected selectors and entrypoints in the generated draft.";
+  }
+  return "Identify a stable entrypoint and selector strategy for this flow.";
+}
+
+function compareValidationMatrixRows(left: E2eValidationMatrixRow, right: E2eValidationMatrixRow): number {
+  const statusDiff = validationStatusRank(left.status) - validationStatusRank(right.status);
+  if (statusDiff !== 0) {
+    return statusDiff;
+  }
+  const categoryDiff = validationCategoryRank(left.category) - validationCategoryRank(right.category);
+  if (categoryDiff !== 0) {
+    return categoryDiff;
+  }
+  return left.area.localeCompare(right.area);
+}
+
+function validationStatusRank(status: E2eValidationMatrixStatus): number {
+  if (status === "missing") {
+    return 0;
+  }
+  if (status === "partial") {
+    return 1;
+  }
+  return 2;
+}
+
+function validationCategoryRank(category: E2eValidationMatrixCategory): number {
+  switch (category) {
+    case "core-flow":
+      return 0;
+    case "fixture":
+      return 1;
+    case "coverage":
+      return 2;
+    case "testability":
+      return 3;
+    case "setup":
+      return 4;
+  }
+}
+
 export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
   const lines: string[] = [];
   lines.push("# CodeWard E2E Plan");
@@ -586,6 +821,28 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
       }
       lines.push("");
     }
+  }
+
+  if (result.validationMatrix.rows.length > 0) {
+    lines.push("## E2E Validation Matrix");
+    lines.push("");
+    lines.push(
+      `Summary: ${result.validationMatrix.summary.ready} ready, ${result.validationMatrix.summary.partial} partial, ${result.validationMatrix.summary.missing} missing.`,
+    );
+    lines.push("");
+    lines.push("| Area | Required Evidence | Current Evidence | Status | Next Action |");
+    lines.push("| --- | --- | --- | --- | --- |");
+    for (const row of result.validationMatrix.rows.slice(0, 12)) {
+      lines.push(
+        `| ${escapeMarkdownTableCell(row.area)} | ${escapeMarkdownTableCell(row.requiredEvidence)} | ${escapeMarkdownTableCell(row.currentEvidence)} | ${row.status} | ${escapeMarkdownTableCell(row.nextAction)} |`,
+      );
+    }
+    if (result.validationMatrix.rows.length > 12) {
+      lines.push(
+        `| ... ${result.validationMatrix.rows.length - 12} more | See JSON output for the full validation matrix. |  | partial | Review the remaining matrix rows before merging. |`,
+      );
+    }
+    lines.push("");
   }
 
   lines.push("## Candidate E2E Flows");
@@ -3217,4 +3474,8 @@ function formatCoveragePriority(priority: E2eCoveragePriority): string {
 
 function escapeMarkdownInline(value: string): string {
   return value.replaceAll("`", "'");
+}
+
+function escapeMarkdownTableCell(value: string): string {
+  return escapeMarkdownInline(value).replaceAll("|", "\\|").replace(/\s+/g, " ").trim();
 }

@@ -73,6 +73,21 @@ export interface E2ePlanHistorySnapshot {
       }>;
       scenarios: string[];
     };
+    validationMatrix: {
+      summary: {
+        ready: number;
+        partial: number;
+        missing: number;
+      };
+      rows: Array<{
+        area: string;
+        category: string;
+        status: string;
+        requiredEvidence: string;
+        currentEvidence: string;
+        nextAction: string;
+      }>;
+    };
     changedFilesCount: number;
     changedFiles: string[];
     suggestedCommands: string[];
@@ -113,6 +128,11 @@ export interface E2ePlanHistorySnapshot {
       missing: number;
     };
     fixtureReadiness: {
+      ready: number;
+      partial: number;
+      missing: number;
+    };
+    validationMatrix: {
       ready: number;
       partial: number;
       missing: number;
@@ -222,6 +242,17 @@ function buildE2ePlanHistorySnapshot(historyRoot: string, plan: E2ePlanResult): 
         })),
         scenarios: plan.domainLanguage.scenarios.map((scenario) => scenario.title).slice(0, 8),
       },
+      validationMatrix: {
+        summary: plan.validationMatrix.summary,
+        rows: plan.validationMatrix.rows.slice(0, 20).map((row) => ({
+          area: row.area,
+          category: row.category,
+          status: row.status,
+          requiredEvidence: row.requiredEvidence,
+          currentEvidence: row.currentEvidence,
+          nextAction: row.nextAction,
+        })),
+      },
       changedFilesCount: plan.changedFiles.length,
       changedFiles: plan.changedFiles.map((file) => file.path).slice(0, 50),
       suggestedCommands: plan.suggestedCommands.slice(0, 20),
@@ -266,6 +297,7 @@ function buildE2ePlanHistorySnapshot(historyRoot: string, plan: E2ePlanResult): 
         partial: plan.flows.filter((flow) => flow.fixtureReadiness.status === "partial").length,
         missing: plan.flows.filter((flow) => flow.fixtureReadiness.status === "missing").length,
       },
+      validationMatrix: plan.validationMatrix.summary,
       missingTestability: plan.missingTestability.length,
     },
   };

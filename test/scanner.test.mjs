@@ -873,6 +873,17 @@ test("generateE2ePlan flags missing mock fixtures for API-dependent UI flows", a
   assert.ok(flow);
   assert.equal(flow.fixtureReadiness.status, "missing");
   assert.ok(flow.fixtureReadiness.apiSignals.includes("src/pages/orders/OrderSummaryPage.tsx"));
+  assert.equal(plan.validationMatrix.summary.missing > 0, true);
+  assert.ok(
+    plan.validationMatrix.rows.some(
+      (row) =>
+        row.category === "fixture" &&
+        row.status === "missing" &&
+        row.area.includes("fixture/mock readiness") &&
+        row.nextAction.includes("mock or fixture"),
+    ),
+  );
+  assert.match(markdown, /## E2E Validation Matrix/);
   assert.match(markdown, /Fixture\/mock readiness/);
   assert.match(markdown, /no changed backend, mock, or fixture evidence was detected/);
 
@@ -1805,6 +1816,10 @@ test("e2e plan can record compact local history without breaking JSON output", a
   assert.equal(snapshot.kind, "e2e-plan");
   assert.equal(snapshot.plan.scope, ".");
   assert.equal(snapshot.plan.recommendedRunner, "playwright");
+  assert.equal(typeof plan.validationMatrix.summary.partial, "number");
+  assert.equal(typeof snapshot.plan.validationMatrix.summary.partial, "number");
+  assert.equal(snapshot.plan.validationMatrix.rows.length > 0, true);
+  assert.equal(snapshot.summary.validationMatrix.partial > 0, true);
   assert.equal(snapshot.summary.changedFiles, 1);
   assert.equal(JSON.stringify(snapshot).includes(root), false);
   for (const pattern of localHistoryGitignorePatterns) {
