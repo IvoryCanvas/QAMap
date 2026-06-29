@@ -74,3 +74,44 @@ Use `--record-history` when an analysis should leave a compact local snapshot fo
 ```sh
 codeward e2e plan . --base origin/main --head HEAD --record-history
 ```
+
+## Core Flows
+
+Create a starter core flow manifest:
+
+```sh
+codeward flows init .
+```
+
+`.codeward/flows.yml` is meant to be committed when the team wants CodeWard to understand project-specific flows during E2E planning.
+
+```yaml
+flows:
+  - id: checkout-purchase
+    name: Checkout purchase
+    priority: critical
+    domains:
+      - checkout
+    files:
+      - src/pages/checkout/**
+      - src/features/checkout/**
+    routes:
+      - /checkout
+    tags:
+      - payment
+    checks:
+      - Complete checkout with a valid payment method.
+      - Verify declined payment recovery.
+```
+
+Supported match fields:
+
+| Field | Description |
+| --- | --- |
+| `files` | Glob-like path patterns relative to the repository or workspace root. |
+| `domains` | Domain tokens matched against changed file path segments. |
+| `routes` | Route-like strings matched against changed file paths. |
+| `tags` | Additional tokens that can match file path segments. |
+| `checks` | Human-approved verification points shown in the E2E plan. |
+
+`priority` can be `critical`, `recommended`, or `optional`.

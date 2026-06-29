@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { loadCoreFlowManifest, matchCoreFlows } from "./flows.js";
 import {
   collectTestSuiteInventory,
   evaluateFlowCoverageEvidence,
@@ -7,6 +8,7 @@ import {
 } from "./test-evidence.js";
 import { generateTestPlan } from "./test-plan.js";
 import type { TestPlanChangedFile, TestPlanOptions } from "./test-plan.js";
+import type { MatchedCoreFlow } from "./flows.js";
 import type { LocalHistoryReference } from "./history.js";
 import type { CoverageEvidence, TestSuiteInventory, TestSuiteSummary } from "./test-evidence.js";
 import { TOOL_NAME, VERSION } from "./version.js";
@@ -80,6 +82,8 @@ export interface E2ePlanResult {
   project: E2eProjectProfile;
   recommendedRunner: E2eRunnerRecommendation;
   testSuite: TestSuiteSummary;
+  coreFlowManifestPath?: string;
+  coreFlows: MatchedCoreFlow[];
   changedFiles: TestPlanChangedFile[];
   suggestedCommands: string[];
   localHistory?: LocalHistoryReference;
@@ -127,6 +131,10 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const project = await detectProjectProfile(root);
   const recommendedRunner = options.runner ? overrideRunner(project, options.runner) : recommendRunner(project);
   const testSuiteInventory = await collectTestSuiteInventory(root);
+  const coreFlowRoot = testPlan.workspaceRoot ?? root;
+  const coreFlowManifest = await loadCoreFlowManifest(coreFlowRoot);
+  const coreFlowChangedFiles = toCoreFlowChangedFiles(testPlan.changedFiles, root, coreFlowRoot);
+  const coreFlows = matchCoreFlows(coreFlowManifest, coreFlowChangedFiles);
   const flows = await buildFlows(root, testPlan.changedFiles, recommendedRunner.name, project.type, testSuiteInventory);
   const missingTestability = uniqueStrings([
     ...flows.flatMap((flow) => flow.missingTestability),
@@ -147,6 +155,8 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     project,
     recommendedRunner,
     testSuite: summarizeTestSuiteInventory(testSuiteInventory),
+    coreFlowManifestPath: coreFlowManifest.path,
+    coreFlows,
     changedFiles: testPlan.changedFiles,
     suggestedCommands: testPlan.suggestedCommands,
     flows,
@@ -396,6 +406,10 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
   if (result.testSuite.frameworkSignals.length > 0) {
     lines.push(`- Test frameworks: ${result.testSuite.frameworkSignals.join(", ")}`);
   }
+  if (result.coreFlowManifestPath) {
+    lines.push(`- Core flow manifest: \`${escapeMarkdownInline(result.coreFlowManifestPath)}\``);
+  }
+  lines.push(`- Matched core flows: ${result.coreFlows.length}`);
   lines.push(`- Changed files considered: ${result.changedFiles.length}`);
   if (result.localHistory) {
     lines.push(`- Local history: \`${escapeMarkdownInline(result.localHistory.path)}\``);
@@ -413,6 +427,34 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
     }
   }
   lines.push("");
+
+  if (result.coreFlows.length > 0) {
+    lines.push("## Matched Core Flows");
+    lines.push("");
+    for (const flow of result.coreFlows) {
+      lines.push(`### ${escapeMarkdownInline(flow.name)} \`${escapeMarkdownInline(flow.id)}\``);
+      lines.push("");
+      lines.push(`Priority: ${flow.priority}`);
+      lines.push("");
+      lines.push(flow.reason);
+      lines.push("");
+      lines.push("Matched files:");
+      for (const file of flow.matchedFiles.slice(0, maxFilesPerFlow)) {
+        lines.push(`- \`${escapeMarkdownInline(file)}\``);
+      }
+      if (flow.matchedFiles.length > maxFilesPerFlow) {
+        lines.push(`- ... ${flow.matchedFiles.length - maxFilesPerFlow} more`);
+      }
+      if (flow.checks.length > 0) {
+        lines.push("");
+        lines.push("Human-approved checks:");
+        for (const check of flow.checks) {
+          lines.push(`- ${escapeMarkdownInline(check)}`);
+        }
+      }
+      lines.push("");
+    }
+  }
 
   lines.push("## Candidate E2E Flows");
   lines.push("");
@@ -624,6 +666,22 @@ function overrideRunner(project: E2eProjectProfile, runner: E2eRunnerName): E2eR
     name: runner,
     reason: `Use a manual checklist because no runnable E2E runner was selected for this ${formatProjectType(project.type)} project.`,
   };
+}
+
+function toCoreFlowChangedFiles(
+  changedFiles: TestPlanChangedFile[],
+  scopedRoot: string,
+  coreFlowRoot: string,
+): TestPlanChangedFile[] {
+  const relativeRoot = toPosixPath(path.relative(coreFlowRoot, scopedRoot));
+  if (!relativeRoot || relativeRoot.startsWith("..") || path.isAbsolute(relativeRoot)) {
+    return changedFiles;
+  }
+  return changedFiles.map((file) => ({
+    ...file,
+    path: toPosixPath(path.join(relativeRoot, file.path)),
+    previousPath: file.previousPath ? toPosixPath(path.join(relativeRoot, file.previousPath)) : undefined,
+  }));
 }
 
 type E2eFlowKind = "ui" | "api" | "state" | "content" | "config" | "domain" | "changed-file";

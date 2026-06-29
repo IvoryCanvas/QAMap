@@ -3,6 +3,12 @@ export { generateAgentContext } from "./context.js";
 export { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
 export { formatMarkdownE2eDraft, formatMarkdownE2ePlan, generateE2eDraft, generateE2ePlan } from "./e2e.js";
 export { evaluateChangeReadiness, formatEvalReport, formatMarkdownEvalReport } from "./eval.js";
+export {
+  defaultFlowManifestPath,
+  loadCoreFlowManifest,
+  matchCoreFlows,
+  writeDefaultCoreFlowManifest,
+} from "./flows.js";
 export { githubCommentMarker, runGitHubAction } from "./github.js";
 export {
   codewardDirectoryName,
@@ -47,6 +53,12 @@ export type {
   E2eRunnerRecommendation,
 } from "./e2e.js";
 export type { EvalCheck, EvalCheckStatus, EvalOptions, EvalRating, EvalResult } from "./eval.js";
+export type {
+  CoreFlowDefinition,
+  CoreFlowManifest,
+  CoreFlowPriority,
+  MatchedCoreFlow,
+} from "./flows.js";
 export type { GitHubActionMode, GitHubActionOptions, GitHubActionResult } from "./github.js";
 export type { E2ePlanHistorySnapshot, LocalHistoryInitResult, LocalHistoryReference } from "./history.js";
 export type { ChangedFile, ChangedRiskyFinding, ReviewOptions, ReviewResult } from "./review.js";
