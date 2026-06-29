@@ -1168,10 +1168,7 @@ function routeEntrypointFromPath(
     return undefined;
   }
 
-  const leaf = stripKnownExtension(rawRouteSegments.at(-1) ?? "");
-  const confidence =
-    appIndex >= 0 || /^(?:index|page|route)$/i.test(leaf) || /Page$/i.test(leaf) ? "high" : "medium";
-  return { value, confidence };
+  return { value, confidence: "high" };
 }
 
 function screenEntrypointFromPath(
@@ -1230,7 +1227,7 @@ function normalizeRouteSegment(segment: string): string | undefined {
   }
   const dynamic = dynamicRouteSegmentName(stem);
   if (dynamic) {
-    return `:${slugify(dynamic)}`;
+    return `:${normalizeRouteParamName(dynamic)}`;
   }
   return slugify(stem.replace(/Page$/i, ""));
 }
@@ -1242,6 +1239,21 @@ function dynamicRouteSegmentName(segment: string): string | undefined {
   }
   const simple = segment.match(/^\[([^[\].]+)\]$/);
   return simple?.[1];
+}
+
+function normalizeRouteParamName(value: string): string {
+  const parts = value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9_$]+/)
+    .filter(Boolean);
+  const normalized = parts
+    .map((part, index) => {
+      const lower = part.charAt(0).toLowerCase() + part.slice(1);
+      return index === 0 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join("")
+    .replace(/^[^A-Za-z_$]+/, "");
+  return normalized || "param";
 }
 
 function shouldDropRouteLeaf(leaf: string, parent: string | undefined): boolean {
@@ -1934,7 +1946,17 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   appendEntrypointHints(lines, flow, "  //");
   appendSetupHints(lines, flow, "  //");
   const routeEntrypoint = primaryRouteEntrypoint(flow);
-  lines.push(`  await page.goto("${quoteJs(routeEntrypoint?.value ?? "/")}");`);
+  const routeDraft = buildPlaywrightRouteDraft(routeEntrypoint?.value ?? "/");
+  if (routeDraft.params.length > 0) {
+    lines.push("");
+    lines.push("  const routeParams = {");
+    for (const param of routeDraft.params) {
+      lines.push(`    ${playwrightRouteParamKey(param.name)}: "${quoteJs(routeParamPlaceholder(param.name))}",`);
+    }
+    lines.push("  };");
+    lines.push("  // TODO: Replace routeParams with fixture ids, tabs, or slugs from the target environment.");
+  }
+  lines.push(`  await page.goto(${routeDraft.expression});`);
   for (const step of flow.steps) {
     const selector = takeSelectorForStep(selectorQueue, step);
     const locator = selector ? playwrightLocator(selector) : 'page.getByText("TODO")';
@@ -2126,6 +2148,66 @@ function primaryRouteEntrypoint(flow: E2eFlow): E2eEntrypoint | undefined {
 function primaryEntrypointLabel(flow: E2eFlow): string | undefined {
   const entrypoint = flow.entrypoints[0];
   return entrypoint ? formatEntrypoint(entrypoint) : undefined;
+}
+
+interface PlaywrightRouteDraft {
+  expression: string;
+  params: Array<{ name: string }>;
+}
+
+function buildPlaywrightRouteDraft(route: string): PlaywrightRouteDraft {
+  const normalizedRoute = route || "/";
+  const params: Array<{ name: string }> = [];
+  const seenParams = new Set<string>();
+  const dynamicSegmentMatcher = /:([A-Za-z_$][A-Za-z0-9_$-]*)/g;
+  let cursor = 0;
+  let template = "";
+
+  for (const match of normalizedRoute.matchAll(dynamicSegmentMatcher)) {
+    const [token, name] = match;
+    if (!name) {
+      continue;
+    }
+    if (!seenParams.has(name)) {
+      seenParams.add(name);
+      params.push({ name });
+    }
+    template += quoteTemplateLiteralPart(normalizedRoute.slice(cursor, match.index));
+    template += `\${${playwrightRouteParamAccess(name)}}`;
+    cursor = (match.index ?? 0) + token.length;
+  }
+
+  if (params.length === 0) {
+    return { expression: `"${quoteJs(normalizedRoute)}"`, params: [] };
+  }
+
+  template += quoteTemplateLiteralPart(normalizedRoute.slice(cursor));
+  return { expression: `\`${template}\``, params };
+}
+
+function playwrightRouteParamKey(name: string): string {
+  return isJsIdentifier(name) ? name : `"${quoteJs(name)}"`;
+}
+
+function playwrightRouteParamAccess(name: string): string {
+  return isJsIdentifier(name) ? `routeParams.${name}` : `routeParams["${quoteJs(name)}"]`;
+}
+
+function routeParamPlaceholder(name: string): string {
+  const readableName = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return `TODO-${readableName || "param"}`;
+}
+
+function quoteTemplateLiteralPart(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
+}
+
+function isJsIdentifier(value: string): boolean {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
 }
 
 function formatEntrypoint(entrypoint: E2eEntrypoint): string {

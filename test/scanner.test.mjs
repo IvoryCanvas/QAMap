@@ -908,7 +908,7 @@ test("generateE2eDraft normalizes dynamic routes without creating id domain scen
   );
   await writeFile(
     path.join(root, "src/pages/campaign/official/[id].tsx"),
-    "export default function CampaignPage() { return <button data-testid=\"apply-campaign\">Apply</button>; }\n",
+    "export default function CampaignPage() { return <><a href=\"/public\">Public</a><button data-testid=\"apply-campaign\">Apply</button></>; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
@@ -917,7 +917,7 @@ test("generateE2eDraft normalizes dynamic routes without creating id domain scen
   await git(root, ["switch", "-c", "feature/campaign-route"]);
   await writeFile(
     path.join(root, "src/pages/campaign/official/[id].tsx"),
-    "export default function CampaignPage() { return <button data-testid=\"apply-campaign\">Apply now</button>; }\n",
+    "export default function CampaignPage() { return <><a href=\"/public\">Public</a><button data-testid=\"apply-campaign\">Apply now</button></>; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "update campaign route"]);
@@ -934,7 +934,11 @@ test("generateE2eDraft normalizes dynamic routes without creating id domain scen
 
   assert.equal(draft.plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Id primary journey"), false);
   assert.match(campaignDraftFile.primaryEntrypoint ?? "", /route \/campaign\/official\/:id/);
-  assert.match(spec, /page\.goto\("\/campaign\/official\/:id"\)/);
+  assert.match(spec, /route \/public \[medium\]/);
+  assert.match(spec, /const routeParams = \{/);
+  assert.match(spec, /id: "TODO-id"/);
+  assert.match(spec, /page\.goto\(`\/campaign\/official\/\$\{routeParams\.id\}`\)/);
+  assert.doesNotMatch(spec, /page\.goto\("\/campaign\/official\/:id"\)/);
 });
 
 test("generateE2ePlan matches committed core flow definitions", async () => {
@@ -1085,6 +1089,46 @@ test("generateE2ePlan prefers product domains over structural route folders", as
   assert.equal(plan.domainLanguage.scenarios[0].title, "Membership primary journey");
   assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Membership" && term.confidence === "high"));
   assert.ok(!plan.domainLanguage.terms.some((term) => term.term === "Navigations"));
+});
+
+test("generateE2ePlan skips access route folders when naming scenarios", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/public/campaign/official"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/pages/public/campaign/official/[id].tsx"),
+    "export default function PublicCampaignPage() { return <button>Apply</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/public-campaign"]);
+  await writeFile(
+    path.join(root, "src/pages/public/campaign/official/[id].tsx"),
+    "export default function PublicCampaignPage() { return <button>Apply now</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update public campaign"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+
+  assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Campaign"));
+  assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Campaign primary journey"));
+  assert.ok(!plan.domainLanguage.terms.some((term) => term.term === "Public"));
+  assert.ok(!plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Public primary journey"));
 });
 
 test("generateE2ePlan matches workspace core flows for package scans", async () => {
