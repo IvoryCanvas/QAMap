@@ -548,6 +548,11 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.match(uiDraft, /appId: \$\{APP_ID\}/);
   assert.match(uiDraft, new RegExp(`Flow: ${uiDraftFile.flowTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   assert.match(uiDraft, /Domain scenario:/);
+  assert.match(uiDraft, /Draft brief:/);
+  assert.match(uiDraft, /Changed behavior:/);
+  assert.match(uiDraft, /Why this flow matters:/);
+  assert.match(uiDraft, /Human fixture inputs:/);
+  assert.match(uiDraft, /Set APP_ID to the target app id/);
   assert.match(uiDraft, /Domain scenario checks:/);
   assert.match(uiDraft, /Entrypoint hints:/);
   assert.match(uiDraft, /screen (?:Record Mode Sheet|Ink Drawing)/);
@@ -607,6 +612,16 @@ test("generateE2ePlan keeps service changes generic and avoids fixture-specific 
     ),
   );
   assert.equal(titles.some((title) => /Ink drawing|Record mode|Saved entry|Localized visual/i.test(title)), false);
+
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e" });
+  const manualDraftFile = draft.files.find((file) => file.path.endsWith(".md"));
+  assert.ok(manualDraftFile);
+  const manualDraft = await readFile(path.join(root, manualDraftFile.path), "utf8");
+  assert.match(manualDraft, /## Draft Brief/);
+  assert.match(manualDraft, /Changed behavior:/);
+  assert.match(manualDraft, /Why this flow matters:/);
+  assert.match(manualDraft, /Human fixture inputs:/);
+  assert.match(manualDraft, /Seed or mock success, empty, unauthorized, timeout, and server-error responses/);
 });
 
 test("generateE2eDraft scopes entrypoint hints to each domain scenario", async () => {
@@ -879,6 +894,11 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
   assert.match(draftFile.primaryEntrypoint ?? "", /route \/checkout/);
   assert.match(spec, /test\("Checkout primary journey"/);
   assert.match(spec, /Domain scenario:/);
+  assert.match(spec, /Draft brief:/);
+  assert.match(spec, /Changed behavior:/);
+  assert.match(spec, /Why this flow matters:/);
+  assert.match(spec, /Human fixture inputs:/);
+  assert.match(spec, /Seed or mock success, empty, unauthorized, timeout, and server-error responses/);
   assert.match(spec, /Entrypoint hints:/);
   assert.match(spec, /Setup hints:/);
   assert.match(spec, /Network response setup/);
@@ -937,6 +957,7 @@ test("generateE2eDraft normalizes dynamic routes without creating id domain scen
   assert.match(spec, /route \/public \[medium\]/);
   assert.match(spec, /const routeParams = \{/);
   assert.match(spec, /id: "TODO-id"/);
+  assert.match(spec, /Replace route param id with a real fixture value for \/campaign\/official\/:id/);
   assert.match(spec, /page\.goto\(`\/campaign\/official\/\$\{routeParams\.id\}`\)/);
   assert.doesNotMatch(spec, /page\.goto\("\/campaign\/official\/:id"\)/);
 });

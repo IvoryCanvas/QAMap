@@ -1865,6 +1865,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   }
   lines.push(`# Base: ${plan.base}`);
   lines.push(`# Head: ${plan.head}`);
+  appendDraftBriefComments(lines, flow, "maestro", "#");
   lines.push("# Replace ${APP_ID} with the app id or export APP_ID before running Maestro.");
   lines.push("");
   lines.push("appId: ${APP_ID}");
@@ -1939,6 +1940,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
     lines.push(`// Domain scenario: ${scenario.title}`);
     lines.push(`// Intent: ${scenario.intent}`);
   }
+  appendDraftBriefComments(lines, flow, "playwright", "//");
   lines.push("");
   lines.push('import { expect, test } from "@playwright/test";');
   lines.push("");
@@ -2010,6 +2012,8 @@ function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   lines.push("");
   lines.push(`- Base: \`${plan.base}\``);
   lines.push(`- Head: \`${plan.head}\``);
+  lines.push("");
+  appendManualDraftBrief(lines, flow, "manual");
   lines.push("");
   lines.push("## Steps");
   lines.push("");
@@ -2109,6 +2113,118 @@ function appendSetupHints(lines: string[], flow: E2eFlow, commentPrefix: string)
   for (const hint of flow.setupHints.slice(0, maxFilesPerFlow)) {
     lines.push(`${commentPrefix} - ${formatSetupHint(hint)}`);
   }
+}
+
+interface DraftBrief {
+  changedBehavior: string;
+  whyThisFlowMatters: string;
+  humanFixtureInputs: string[];
+}
+
+function appendDraftBriefComments(
+  lines: string[],
+  flow: E2eFlow,
+  runner: E2eRunnerName,
+  commentPrefix: string,
+): void {
+  const brief = buildDraftBrief(flow, runner);
+  lines.push(`${commentPrefix} Draft brief:`);
+  lines.push(`${commentPrefix} - Changed behavior: ${brief.changedBehavior}`);
+  lines.push(`${commentPrefix} - Why this flow matters: ${brief.whyThisFlowMatters}`);
+  lines.push(`${commentPrefix} - Human fixture inputs:`);
+  for (const input of brief.humanFixtureInputs) {
+    lines.push(`${commentPrefix}   - ${input}`);
+  }
+}
+
+function appendManualDraftBrief(lines: string[], flow: E2eFlow, runner: E2eRunnerName): void {
+  const brief = buildDraftBrief(flow, runner);
+  lines.push("## Draft Brief");
+  lines.push("");
+  lines.push(`- Changed behavior: ${brief.changedBehavior}`);
+  lines.push(`- Why this flow matters: ${brief.whyThisFlowMatters}`);
+  lines.push("- Human fixture inputs:");
+  for (const input of brief.humanFixtureInputs) {
+    lines.push(`  - ${input}`);
+  }
+}
+
+function buildDraftBrief(flow: E2eFlow, runner: E2eRunnerName): DraftBrief {
+  const scenario = domainScenarioForFlow(flow);
+  const changedBehavior = flow.files.length > 0
+    ? `${flow.reason} Changed files include ${formatFileSummary(flow.files)}.`
+    : flow.reason;
+  const criticalCoverage = flow.coverage.filter((target) => target.priority === "critical").map((target) => target.title);
+  const whyThisFlowMatters = scenario
+    ? `It uses "${scenario.title}" as the team-facing behavior name and protects ${formatHumanList(criticalCoverage)}.`
+    : `It protects ${formatHumanList(criticalCoverage)} for the changed surface.`;
+
+  return {
+    changedBehavior,
+    whyThisFlowMatters,
+    humanFixtureInputs: buildHumanFixtureInputs(flow, runner),
+  };
+}
+
+function buildHumanFixtureInputs(flow: E2eFlow, runner: E2eRunnerName): string[] {
+  const inputs: string[] = [];
+  if (runner === "maestro") {
+    inputs.push("Set APP_ID to the target app id or export it before running the flow.");
+  }
+  if (runner === "playwright") {
+    const route = primaryRouteEntrypoint(flow)?.value;
+    const routeDraft = route ? buildPlaywrightRouteDraft(route) : undefined;
+    for (const param of routeDraft?.params ?? []) {
+      inputs.push(`Replace route param ${param.name} with a real fixture value for ${route}.`);
+    }
+  }
+  for (const hint of flow.setupHints) {
+    inputs.push(humanFixtureInputForSetupHint(hint));
+  }
+  if (flow.missingTestability.length > 0) {
+    inputs.push("Replace placeholder selectors with stable test ids, accessibility labels, roles, or visible copy from the app.");
+  }
+  if (inputs.length === 0) {
+    inputs.push("Use realistic data for the primary success path and one blocked, empty, or failed path.");
+  }
+  return uniqueStrings(inputs).slice(0, 6);
+}
+
+function humanFixtureInputForSetupHint(hint: E2eSetupHint): string {
+  switch (hint.kind) {
+    case "auth":
+      return "Prepare logged-in, anonymous, expired-session, and permission-denied identities.";
+    case "network":
+      return "Seed or mock success, empty, unauthorized, timeout, and server-error responses.";
+    case "fixture":
+      return "Prepare deterministic success data plus one blocked or empty fixture.";
+    case "environment":
+      return "Set required env vars, feature flags, build variant, or dependency mode.";
+    case "payment":
+      return "Use sandbox or simulated payment responses for success, cancellation, declined, and already-owned cases.";
+    case "state":
+      return "Reset persisted storage, cache, and provider state before each run.";
+  }
+}
+
+function formatFileSummary(files: string[]): string {
+  const visibleFiles = files.slice(0, 3);
+  const suffix = files.length > visibleFiles.length ? ` and ${files.length - visibleFiles.length} more` : "";
+  return `${visibleFiles.join(", ")}${suffix}`;
+}
+
+function formatHumanList(values: string[]): string {
+  const visibleValues = values.length > 0 ? values.slice(0, 3) : ["the primary success path"];
+  if (values.length > visibleValues.length) {
+    visibleValues.push(`${values.length - visibleValues.length} more coverage target${values.length - visibleValues.length === 1 ? "" : "s"}`);
+  }
+  if (visibleValues.length === 1) {
+    return visibleValues[0];
+  }
+  if (visibleValues.length === 2) {
+    return `${visibleValues[0]} and ${visibleValues[1]}`;
+  }
+  return `${visibleValues.slice(0, -1).join(", ")}, and ${visibleValues.at(-1)}`;
 }
 
 function appendDomainScenarioComments(lines: string[], flow: E2eFlow, commentPrefix: string): void {
