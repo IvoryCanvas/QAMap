@@ -1,7 +1,13 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import {
+  collectTestSuiteInventory,
+  evaluateFlowCoverageEvidence,
+  summarizeTestSuiteInventory,
+} from "./test-evidence.js";
 import { generateTestPlan } from "./test-plan.js";
 import type { TestPlanChangedFile, TestPlanOptions } from "./test-plan.js";
+import type { CoverageEvidence, TestSuiteInventory, TestSuiteSummary } from "./test-evidence.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
 export type E2eProjectType = "expo-react-native" | "react-native" | "web" | "unknown";
@@ -48,6 +54,7 @@ export interface E2eFlow {
   files: string[];
   steps: string[];
   coverage: E2eCoverageTarget[];
+  coverageEvidence: CoverageEvidence[];
   selectors: E2eSelector[];
   missingTestability: string[];
 }
@@ -71,6 +78,7 @@ export interface E2ePlanResult {
   includeWorkingTree: boolean;
   project: E2eProjectProfile;
   recommendedRunner: E2eRunnerRecommendation;
+  testSuite: TestSuiteSummary;
   changedFiles: TestPlanChangedFile[];
   suggestedCommands: string[];
   flows: E2eFlow[];
@@ -116,7 +124,8 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const testPlan = await generateTestPlan(root, options);
   const project = await detectProjectProfile(root);
   const recommendedRunner = options.runner ? overrideRunner(project, options.runner) : recommendRunner(project);
-  const flows = await buildFlows(root, testPlan.changedFiles, recommendedRunner.name, project.type);
+  const testSuiteInventory = await collectTestSuiteInventory(root);
+  const flows = await buildFlows(root, testPlan.changedFiles, recommendedRunner.name, project.type, testSuiteInventory);
   const missingTestability = uniqueStrings([
     ...flows.flatMap((flow) => flow.missingTestability),
     ...(await buildGlobalTestabilityGaps(root, recommendedRunner.name)),
@@ -135,6 +144,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     includeWorkingTree: testPlan.includeWorkingTree,
     project,
     recommendedRunner,
+    testSuite: summarizeTestSuiteInventory(testSuiteInventory),
     changedFiles: testPlan.changedFiles,
     suggestedCommands: testPlan.suggestedCommands,
     flows,
@@ -378,6 +388,12 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
   }
   lines.push(`- Project: ${formatProjectType(result.project.type)}`);
   lines.push(`- Recommended runner: ${formatRunnerName(result.recommendedRunner.name)}`);
+  lines.push(
+    `- Test suite: ${result.testSuite.hasTestSuite ? `${result.testSuite.testFileCount} test file${result.testSuite.testFileCount === 1 ? "" : "s"}` : "not detected"}`,
+  );
+  if (result.testSuite.frameworkSignals.length > 0) {
+    lines.push(`- Test frameworks: ${result.testSuite.frameworkSignals.join(", ")}`);
+  }
   lines.push(`- Changed files considered: ${result.changedFiles.length}`);
   lines.push("");
 
@@ -421,6 +437,17 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
         lines.push("Coverage targets:");
         for (const target of flow.coverage) {
           lines.push(`- ${formatCoveragePriority(target.priority)} ${escapeMarkdownInline(target.title)}: ${escapeMarkdownInline(target.reason)}`);
+        }
+      }
+      if (flow.coverageEvidence.length > 0) {
+        lines.push("");
+        lines.push("Existing test evidence:");
+        for (const evidence of flow.coverageEvidence) {
+          const files = evidence.files.length > 0 ? ` (${evidence.files.slice(0, 3).join(", ")})` : "";
+          const signals = evidence.signals.length > 0 ? ` signals: ${evidence.signals.join(", ")}` : "";
+          lines.push(
+            `- ${evidence.status} ${escapeMarkdownInline(evidence.targetTitle)} [${evidence.confidence} confidence]${files}${signals}`,
+          );
         }
       }
       if (flow.missingTestability.length > 0) {
@@ -595,17 +622,22 @@ function overrideRunner(project: E2eProjectProfile, runner: E2eRunnerName): E2eR
 }
 
 type E2eFlowKind = "ui" | "api" | "state" | "content" | "config" | "domain" | "changed-file";
-type FlowCandidate = Omit<E2eFlow, "coverage" | "selectors" | "missingTestability"> & { kind: E2eFlowKind };
+type FlowCandidate = Omit<E2eFlow, "coverage" | "coverageEvidence" | "selectors" | "missingTestability"> & {
+  kind: E2eFlowKind;
+};
 
 async function buildFlows(
   root: string,
   changedFiles: TestPlanChangedFile[],
   runner: E2eRunnerName,
   projectType: E2eProjectType,
+  testSuiteInventory: TestSuiteInventory,
 ): Promise<E2eFlow[]> {
   const files = changedFiles.map((file) => file.path);
   const flowResults = await Promise.all(
-    buildFlowCandidates(files, runner, projectType).map((candidate) => buildFlow(root, runner, candidate)),
+    buildFlowCandidates(files, runner, projectType).map((candidate) =>
+      buildFlow(root, runner, candidate, testSuiteInventory),
+    ),
   );
   const flows = flowResults.filter((flow): flow is E2eFlow => Boolean(flow));
 
@@ -750,17 +782,20 @@ async function buildFlow(
   root: string,
   runner: E2eRunnerName,
   candidate: FlowCandidate,
+  testSuiteInventory: TestSuiteInventory,
 ): Promise<E2eFlow | undefined> {
   const files = uniqueStrings(candidate.files).slice(0, 20);
   if (files.length === 0) {
     return undefined;
   }
+  const coverage = buildCoverageTargets(candidate.kind, files, runner);
   return {
     title: candidate.title,
     reason: candidate.reason,
     files,
     steps: candidate.steps,
-    coverage: buildCoverageTargets(candidate.kind, files, runner),
+    coverage,
+    coverageEvidence: evaluateFlowCoverageEvidence({ title: candidate.title, files, coverage }, testSuiteInventory),
     selectors: await inferFlowSelectors(root, files, runner),
     missingTestability: await findFlowTestabilityGaps(root, files, runner),
   };
@@ -1142,6 +1177,7 @@ function dedupeFlows(flows: E2eFlow[]): E2eFlow[] {
 }
 
 function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
+  const coverage = buildCoverageTargets("changed-file", [], plan.recommendedRunner.name);
   return {
     title: "App launch smoke flow",
     reason:
@@ -1153,7 +1189,14 @@ function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
       "Exercise the primary visible action if one is present.",
       "Verify the app remains usable after the action.",
     ],
-    coverage: buildCoverageTargets("changed-file", [], plan.recommendedRunner.name),
+    coverage,
+    coverageEvidence: evaluateFlowCoverageEvidence(
+      { title: "App launch smoke flow", files: [], coverage },
+      {
+        ...plan.testSuite,
+        files: [],
+      },
+    ),
     selectors: [],
     missingTestability: plan.missingTestability,
   };

@@ -599,6 +599,119 @@ test("generateE2ePlan keeps service changes generic and avoids fixture-specific 
   assert.equal(titles.some((title) => /Ink drawing|Record mode|Saved entry|Localized visual/i.test(title)), false);
 });
 
+test("generateE2ePlan evaluates existing test suite coverage evidence", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/features/campaign/fragments"), { recursive: true });
+  await mkdir(path.join(root, "src/features/campaign/__tests__"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "vitest run",
+      },
+      dependencies: {
+        vite: "^7.0.0",
+        "react-dom": "^19.0.0",
+      },
+      devDependencies: {
+        vitest: "^3.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/features/campaign/fragments/CampaignView.tsx"),
+    "export function CampaignView() { return <main>Campaign</main>; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/features/campaign/__tests__/CampaignView.test.tsx"),
+    [
+      "import { describe, expect, it } from 'vitest';",
+      "import { CampaignView } from '../fragments/CampaignView';",
+      "describe('CampaignView', () => {",
+      "  it('renders campaign success state', () => expect(CampaignView).toBeDefined());",
+      "  it('shows empty state when there are no results', () => expect('empty').toBe('empty'));",
+      "  it('shows error state after request failure', () => expect('error').toBe('error'));",
+      "});",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/campaign-view"]);
+  await writeFile(
+    path.join(root, "src/features/campaign/fragments/CampaignView.tsx"),
+    "export function CampaignView() { return <main data-testid=\"campaign-view\">Campaign detail</main>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update campaign view"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const markdown = formatMarkdownE2ePlan(plan);
+  const flow = plan.flows.find((item) => item.title === "Campaign UI smoke flow");
+
+  assert.ok(flow);
+  assert.equal(plan.testSuite.hasTestSuite, true);
+  assert.equal(plan.testSuite.testFileCount, 1);
+  assert.ok(plan.testSuite.frameworkSignals.includes("vitest"));
+  assert.equal(
+    flow.coverageEvidence.find((evidence) => evidence.targetTitle === "Primary success path")?.status,
+    "covered",
+  );
+  assert.equal(
+    flow.coverageEvidence.find((evidence) => evidence.targetTitle === "Loading, empty, error, and success states")
+      ?.status,
+    "covered",
+  );
+  assert.ok(
+    flow.coverageEvidence
+      .find((evidence) => evidence.targetTitle === "Loading, empty, error, and success states")
+      ?.files.includes("src/features/campaign/__tests__/CampaignView.test.tsx"),
+  );
+  assert.match(markdown, /Existing test evidence:/);
+  assert.match(markdown, /covered Loading, empty, error, and success states/);
+});
+
+test("generateE2ePlan keeps generic test filenames from overmatching unrelated services", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "in_app_purchases/services"), { recursive: true });
+  await mkdir(path.join(root, "in_app_purchases/tests"), { recursive: true });
+  await mkdir(path.join(root, "offers/tests"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "pytest",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "in_app_purchases/services/clients.py"), "def get_client():\n    return None\n");
+  await writeFile(
+    path.join(root, "in_app_purchases/tests/test_views.py"),
+    "def test_purchase_response_contract():\n    assert {'status': 200}\n",
+  );
+  await writeFile(path.join(root, "offers/tests/test_services.py"), "def test_offer_success():\n    assert True\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/iap-client"]);
+  await writeFile(path.join(root, "in_app_purchases/services/clients.py"), "def get_client():\n    return 'changed'\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update iap client"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((item) => /API contract/.test(item.title));
+  const evidenceFiles = flow?.coverageEvidence.flatMap((evidence) => evidence.files) ?? [];
+
+  assert.ok(flow);
+  assert.ok(plan.testSuite.frameworkSignals.includes("pytest"));
+  assert.ok(evidenceFiles.includes("in_app_purchases/tests/test_views.py"));
+  assert.equal(evidenceFiles.includes("offers/tests/test_services.py"), false);
+});
+
 test("generateE2eDraft uses web selectors in Playwright specs", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
@@ -642,6 +755,11 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
   const spec = await readFile(path.join(root, "tests/e2e/checkout-ui-smoke-flow.spec.ts"), "utf8");
 
   assert.equal(draft.runner, "playwright");
+  assert.equal(draft.plan.testSuite.hasTestSuite, false);
+  assert.equal(
+    draft.plan.flows[0].coverageEvidence.find((evidence) => evidence.targetTitle === "Primary success path")?.status,
+    "missing",
+  );
   assert.ok(draft.files.some((file) => file.path === "tests/e2e/checkout-ui-smoke-flow.spec.ts"));
   assert.match(spec, /page\.getByTestId\("checkout-submit"\)/);
   assert.match(spec, /Coverage matrix/);
