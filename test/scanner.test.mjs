@@ -776,10 +776,48 @@ test("generateE2ePlan keeps generic test filenames from overmatching unrelated s
   assert.equal(evidenceFiles.includes("offers/tests/test_services.py"), false);
 });
 
+test("generateE2ePlan suggests setup hints for auth and session changes", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/auth"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/auth/session.ts"),
+    "export const session = { token: 'demo', expiresInSeconds: 300 };\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/session-expiry"]);
+  await writeFile(
+    path.join(root, "src/auth/session.ts"),
+    "export const session = { token: 'demo', expiresInSeconds: 60, permission: 'member' };\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update session expiry"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((item) => item.title.includes("state transition"));
+
+  assert.ok(flow);
+  assert.ok(flow.setupHints.some((hint) => hint.kind === "auth" && hint.confidence === "high"));
+  assert.ok(flow.setupHints.some((hint) => hint.kind === "state" && hint.confidence === "high"));
+  assert.match(formatMarkdownE2ePlan(plan), /Authenticated session setup/);
+});
+
 test("generateE2eDraft uses web selectors in Playwright specs", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
+  await mkdir(path.join(root, "src/features/checkout/api"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -798,6 +836,10 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
     path.join(root, "src/pages/checkout/CheckoutPage.tsx"),
     "export function CheckoutPage() { return <button data-testid=\"checkout-submit\">Complete checkout</button>; }\n",
   );
+  await writeFile(
+    path.join(root, "src/features/checkout/api/checkoutApi.ts"),
+    "export async function submitCheckout() { return fetch('/api/checkout'); }\n",
+  );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
@@ -806,6 +848,10 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
   await writeFile(
     path.join(root, "src/pages/checkout/CheckoutPage.tsx"),
     "export function CheckoutPage() { return <button data-testid=\"checkout-submit\" aria-label=\"Complete checkout\">Complete checkout</button>; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/features/checkout/api/checkoutApi.ts"),
+    "export async function submitCheckout() { return fetch('/api/checkout', { method: 'POST' }); }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "update checkout page"]);
@@ -829,15 +875,66 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
   );
   assert.ok(draft.files.some((file) => file.path === "tests/e2e/checkout-primary-journey.spec.ts"));
   assert.ok(draftFile.entrypointCount > 0);
+  assert.ok(draftFile.setupHintCount >= 2);
   assert.match(draftFile.primaryEntrypoint ?? "", /route \/checkout/);
   assert.match(spec, /test\("Checkout primary journey"/);
   assert.match(spec, /Domain scenario:/);
   assert.match(spec, /Entrypoint hints:/);
+  assert.match(spec, /Setup hints:/);
+  assert.match(spec, /Network response setup/);
+  assert.match(spec, /Payment sandbox setup/);
   assert.match(spec, /page\.goto\("\/checkout"\)/);
   assert.match(spec, /page\.getByTestId\("checkout-submit"\)/);
   assert.match(spec, /Coverage matrix/);
   assert.match(spec, /Browser viewport regression/);
   assert.match(spec, /Inferred selectors/);
+});
+
+test("generateE2eDraft normalizes dynamic routes without creating id domain scenarios", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/campaign/official"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/pages/campaign/official/[id].tsx"),
+    "export default function CampaignPage() { return <button data-testid=\"apply-campaign\">Apply</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/campaign-route"]);
+  await writeFile(
+    path.join(root, "src/pages/campaign/official/[id].tsx"),
+    "export default function CampaignPage() { return <button data-testid=\"apply-campaign\">Apply now</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update campaign route"]);
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const campaignDraftFile = draft.files.find((file) => file.flowTitle === "Campaign primary journey");
+  assert.ok(campaignDraftFile);
+  const spec = await readFile(path.join(root, campaignDraftFile.path), "utf8");
+
+  assert.equal(draft.plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Id primary journey"), false);
+  assert.match(campaignDraftFile.primaryEntrypoint ?? "", /route \/campaign\/official\/:id/);
+  assert.match(spec, /page\.goto\("\/campaign\/official\/:id"\)/);
 });
 
 test("generateE2ePlan matches committed core flow definitions", async () => {

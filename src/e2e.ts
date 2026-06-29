@@ -19,6 +19,8 @@ export type E2eProjectType = "expo-react-native" | "react-native" | "web" | "unk
 export type E2eRunnerName = "maestro" | "playwright" | "manual";
 export type E2eEntrypointKind = "route" | "screen" | "command";
 export type E2eEntrypointConfidence = "high" | "medium" | "low";
+export type E2eSetupHintKind = "auth" | "network" | "fixture" | "environment" | "payment" | "state";
+export type E2eSetupHintConfidence = "high" | "medium" | "low";
 export type E2eSelectorKind =
   | "test-id"
   | "accessibility-label"
@@ -63,6 +65,7 @@ export interface E2eFlow {
   coverage: E2eCoverageTarget[];
   coverageEvidence: CoverageEvidence[];
   entrypoints: E2eEntrypoint[];
+  setupHints: E2eSetupHint[];
   selectors: E2eSelector[];
   missingTestability: string[];
 }
@@ -72,6 +75,14 @@ export interface E2eEntrypoint {
   value: string;
   file: string;
   confidence: E2eEntrypointConfidence;
+}
+
+export interface E2eSetupHint {
+  kind: E2eSetupHintKind;
+  title: string;
+  detail: string;
+  files: string[];
+  confidence: E2eSetupHintConfidence;
 }
 
 export interface E2eSelector {
@@ -115,6 +126,7 @@ export interface E2eDraftFile {
   todoCount?: number;
   entrypointCount?: number;
   primaryEntrypoint?: string;
+  setupHintCount?: number;
   inferredSelectorCount?: number;
   coverageTargetCount?: number;
   reason?: string;
@@ -207,6 +219,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
         stability: draftStability(plan, flow),
         entrypointCount: flow.entrypoints.length,
         primaryEntrypoint: primaryEntrypointLabel(flow),
+        setupHintCount: flow.setupHints.length,
         coverageTargetCount: flow.coverage.length,
         reason: "File already exists. Pass --force to overwrite it.",
       });
@@ -224,6 +237,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
       todoCount: countTodos(content),
       entrypointCount: flow.entrypoints.length,
       primaryEntrypoint: primaryEntrypointLabel(flow),
+      setupHintCount: flow.setupHints.length,
       inferredSelectorCount: flow.selectors.length,
       coverageTargetCount: flow.coverage.length,
     });
@@ -540,6 +554,13 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
           lines.push(`- ${formatEntrypoint(entrypoint)}`);
         }
       }
+      if (flow.setupHints.length > 0) {
+        lines.push("");
+        lines.push("Setup hints:");
+        for (const hint of flow.setupHints.slice(0, maxFilesPerFlow)) {
+          lines.push(`- ${formatSetupHint(hint)}`);
+        }
+      }
       if (flow.coverage.length > 0) {
         lines.push("");
         lines.push("Coverage targets:");
@@ -746,7 +767,10 @@ function toCoreFlowChangedFiles(
 }
 
 type E2eFlowKind = "ui" | "api" | "state" | "content" | "config" | "domain" | "changed-file";
-type FlowCandidate = Omit<E2eFlow, "coverage" | "coverageEvidence" | "entrypoints" | "selectors" | "missingTestability"> & {
+type FlowCandidate = Omit<
+  E2eFlow,
+  "coverage" | "coverageEvidence" | "entrypoints" | "setupHints" | "selectors" | "missingTestability"
+> & {
   kind: E2eFlowKind;
 };
 type DraftFlowSource = "domain-language" | "core-flow" | "heuristic";
@@ -926,6 +950,7 @@ async function buildFlow(
     coverage,
     coverageEvidence: evaluateFlowCoverageEvidence({ title: candidate.title, files, coverage }, testSuiteInventory),
     entrypoints: await inferFlowEntrypoints(root, files, runner),
+    setupHints: await inferFlowSetupHints(root, files, candidate.kind),
     selectors: await inferFlowSelectors(root, files, runner),
     missingTestability: await findFlowTestabilityGaps(root, files, runner),
   };
@@ -941,6 +966,121 @@ async function inferFlowEntrypoints(root: string, files: string[], runner: E2eRu
     }
   }
   return uniqueEntrypoints(entrypoints).slice(0, 6);
+}
+
+async function inferFlowSetupHints(root: string, files: string[], kind: E2eFlowKind): Promise<E2eSetupHint[]> {
+  const hints: E2eSetupHint[] = [];
+  const fileTexts: Array<{ file: string; text: string }> = [];
+  for (const file of files.slice(0, 12)) {
+    const text = await readTextIfExists(path.join(root, file));
+    if (text) {
+      fileTexts.push({ file, text });
+    }
+  }
+
+  const filesText = files.join("\n");
+  const combinedText = `${filesText}\n${fileTexts.map((item) => item.text).join("\n")}`;
+  const matchingFiles = (pattern: RegExp) =>
+    uniqueStrings([
+      ...files.filter((file) => pattern.test(file)),
+      ...fileTexts.filter((item) => pattern.test(item.text)).map((item) => item.file),
+    ]).slice(0, maxFilesPerFlow);
+
+  if (/(?:^|\/|[-_])(auth|session|login|logout|permission|permissions|guard|guards|token|jwt)(?:\/|[-_.]|$)/i.test(combinedText)) {
+    const authFiles = matchingFiles(/auth|session|login|logout|permission|guard|token|jwt/i);
+    hints.push(
+      setupHint(
+        "auth",
+        "Authenticated session setup",
+        "Prepare logged-in, anonymous, expired-session, and permission-denied states before making this draft required.",
+        authFiles,
+        "high",
+      ),
+    );
+  }
+
+  if (kind === "api" || /(?:fetch|axios|graphql|trpc|rpc|client|endpoint|request|response|msw|nock|mock|\/api\/)/i.test(combinedText)) {
+    const networkFiles = matchingFiles(/api|client|endpoint|request|response|graphql|trpc|rpc|fetch|axios|msw|nock|mock/i);
+    hints.push(
+      setupHint(
+        "network",
+        "Network response setup",
+        "Seed or mock success, empty, unauthorized, timeout, and server-error responses that the changed path can surface.",
+        networkFiles,
+        kind === "api" ? "high" : "medium",
+      ),
+    );
+  }
+
+  if (/(?:fixture|fixtures|factory|factories|seed|seeds|mock|mocks|faker|test-data|testData)/i.test(combinedText)) {
+    const fixtureFiles = matchingFiles(/fixture|factory|seed|mock|faker|test-data|testData/i);
+    hints.push(
+      setupHint(
+        "fixture",
+        "Fixture data setup",
+        "Reuse or create deterministic fixture data for the primary success case and one blocked or empty case.",
+        fixtureFiles,
+        "medium",
+      ),
+    );
+  }
+
+  if (/(?:\.env|environment|process\.env|feature-?flag|experiments?|remoteConfig|config|eas\.json|app\.config)/i.test(combinedText)) {
+    const environmentFiles = matchingFiles(/\.env|environment|process\.env|feature-?flag|experiment|remoteConfig|config|eas\.json|app\.config/i);
+    hints.push(
+      setupHint(
+        "environment",
+        "Environment and flag setup",
+        "Document the env vars, feature flags, build variant, or dependency mode needed before running this flow.",
+        environmentFiles,
+        kind === "config" ? "high" : "medium",
+      ),
+    );
+  }
+
+  if (/(?:payment|billing|checkout|purchase|subscription|invoice|settlement|stripe|iap|in-app-purchase|storekit|revenuecat)/i.test(combinedText)) {
+    const paymentFiles = matchingFiles(/payment|billing|checkout|purchase|subscription|invoice|settlement|stripe|iap|in-app-purchase|storekit|revenuecat/i);
+    hints.push(
+      setupHint(
+        "payment",
+        "Payment sandbox setup",
+        "Use sandbox credentials or simulated purchase responses, and verify cancellation, declined, and already-owned cases without live transactions.",
+        paymentFiles,
+        "high",
+      ),
+    );
+  }
+
+  if (kind === "state" || /(?:store|state|cache|provider|context|atom|selector|reducer|storage|localStorage|AsyncStorage)/i.test(combinedText)) {
+    const stateFiles = matchingFiles(/store|state|cache|provider|context|atom|selector|reducer|storage|localStorage|AsyncStorage/i);
+    hints.push(
+      setupHint(
+        "state",
+        "State reset setup",
+        "Reset persisted storage, cache, and provider state before running the flow, then verify refresh or re-entry behavior.",
+        stateFiles,
+        kind === "state" ? "high" : "medium",
+      ),
+    );
+  }
+
+  return uniqueSetupHints(hints).slice(0, 6);
+}
+
+function setupHint(
+  kind: E2eSetupHintKind,
+  title: string,
+  detail: string,
+  files: string[],
+  confidence: E2eSetupHintConfidence,
+): E2eSetupHint {
+  return {
+    kind,
+    title,
+    detail,
+    files: uniqueStrings(files).slice(0, maxFilesPerFlow),
+    confidence,
+  };
 }
 
 async function inferFlowSelectors(root: string, files: string[], runner: E2eRunnerName): Promise<E2eSelector[]> {
@@ -1088,11 +1228,20 @@ function normalizeRouteSegment(segment: string): string | undefined {
   if (/^(?:index|page|route|layout|template|loading|error|not-found|404|500)$/i.test(stem)) {
     return undefined;
   }
-  const dynamic = stem.match(/^\[{1,2}\.?\.\.?([^[\]]+)\]{1,2}$/);
-  if (dynamic?.[1]) {
-    return `:${slugify(dynamic[1])}`;
+  const dynamic = dynamicRouteSegmentName(stem);
+  if (dynamic) {
+    return `:${slugify(dynamic)}`;
   }
   return slugify(stem.replace(/Page$/i, ""));
+}
+
+function dynamicRouteSegmentName(segment: string): string | undefined {
+  const catchAll = segment.match(/^\[{1,2}\.\.\.([^[\]]+)\]{1,2}$/);
+  if (catchAll?.[1]) {
+    return catchAll[1];
+  }
+  const simple = segment.match(/^\[([^[\].]+)\]$/);
+  return simple?.[1];
 }
 
 function shouldDropRouteLeaf(leaf: string, parent: string | undefined): boolean {
@@ -1538,6 +1687,10 @@ async function buildDomainScenarioDraftFlow(
     ...filterSelectorsForFiles(baseFlows.flatMap((flow) => flow.selectors), files),
     ...(await inferFlowSelectors(plan.root, files, runner)),
   ]);
+  const setupHints = uniqueSetupHints([
+    ...filterSetupHintsForFiles(baseFlows.flatMap((flow) => flow.setupHints), files),
+    ...(await inferFlowSetupHints(plan.root, files, "domain")),
+  ]);
   return {
     title: scenario.title,
     reason: scenario.intent,
@@ -1546,6 +1699,7 @@ async function buildDomainScenarioDraftFlow(
     coverage,
     coverageEvidence: baseFlow?.coverageEvidence ?? [],
     entrypoints,
+    setupHints,
     selectors,
     missingTestability: await findFlowTestabilityGaps(plan.root, files, runner),
     draftSource: scenario.source === "core-flow" ? "core-flow" : "domain-language",
@@ -1559,6 +1713,15 @@ function filterEntrypointsForFiles(entrypoints: E2eEntrypoint[], files: string[]
 
 function filterSelectorsForFiles(selectors: E2eSelector[], files: string[]): E2eSelector[] {
   return selectors.filter((selector) => files.some((file) => sameOrNestedPath(selector.file, file)));
+}
+
+function filterSetupHintsForFiles(setupHints: E2eSetupHint[], files: string[]): E2eSetupHint[] {
+  return setupHints
+    .map((hint) => ({
+      ...hint,
+      files: hint.files.filter((file) => files.some((targetFile) => sameOrNestedPath(file, targetFile))),
+    }))
+    .filter((hint) => hint.files.length > 0);
 }
 
 function sameOrNestedPath(left: string, right: string): boolean {
@@ -1642,6 +1805,7 @@ function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
       },
     ),
     entrypoints: [],
+    setupHints: [],
     selectors: [],
     missingTestability: plan.missingTestability,
   };
@@ -1695,6 +1859,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   lines.push("---");
   lines.push("- launchApp");
   appendEntrypointHints(lines, flow, "#");
+  appendSetupHints(lines, flow, "#");
   for (const step of flow.steps) {
     const command = maestroCommandForStep(step, selectorQueue);
     lines.push(...formatMaestroCommand(command));
@@ -1767,6 +1932,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   lines.push("");
   lines.push(`test("${testName}", async ({ page }) => {`);
   appendEntrypointHints(lines, flow, "  //");
+  appendSetupHints(lines, flow, "  //");
   const routeEntrypoint = primaryRouteEntrypoint(flow);
   lines.push(`  await page.goto("${quoteJs(routeEntrypoint?.value ?? "/")}");`);
   for (const step of flow.steps) {
@@ -1834,6 +2000,14 @@ function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
     lines.push("");
     for (const entrypoint of flow.entrypoints.slice(0, maxFilesPerFlow)) {
       lines.push(`- ${formatEntrypoint(entrypoint)}`);
+    }
+  }
+  if (flow.setupHints.length > 0) {
+    lines.push("");
+    lines.push("## Setup Hints");
+    lines.push("");
+    for (const hint of flow.setupHints.slice(0, maxFilesPerFlow)) {
+      lines.push(`- ${formatSetupHint(hint)}`);
     }
   }
   if (scenario) {
@@ -1904,6 +2078,17 @@ function appendEntrypointHints(lines: string[], flow: E2eFlow, commentPrefix: st
   }
 }
 
+function appendSetupHints(lines: string[], flow: E2eFlow, commentPrefix: string): void {
+  if (flow.setupHints.length === 0) {
+    return;
+  }
+  lines.push("");
+  lines.push(`${commentPrefix} Setup hints:`);
+  for (const hint of flow.setupHints.slice(0, maxFilesPerFlow)) {
+    lines.push(`${commentPrefix} - ${formatSetupHint(hint)}`);
+  }
+}
+
 function appendDomainScenarioComments(lines: string[], flow: E2eFlow, commentPrefix: string): void {
   const scenario = domainScenarioForFlow(flow);
   if (!scenario || scenario.checks.length === 0) {
@@ -1947,6 +2132,11 @@ function formatEntrypoint(entrypoint: E2eEntrypoint): string {
   return `${entrypoint.kind} ${entrypoint.value} [${entrypoint.confidence}] (${entrypoint.file})`;
 }
 
+function formatSetupHint(hint: E2eSetupHint): string {
+  const files = hint.files.length > 0 ? ` (${hint.files.slice(0, 3).join(", ")})` : "";
+  return `[${hint.kind}, ${hint.confidence}] ${hint.title}: ${hint.detail}${files}`;
+}
+
 function buildDraftNextSteps(plan: E2ePlanResult, runner: E2eRunnerName): string[] {
   const steps: string[] = [];
   if (runner === "maestro") {
@@ -1980,6 +2170,9 @@ function formatDraftFileQuality(file: E2eDraftFile): string | undefined {
   if (file.entrypointCount !== undefined && file.entrypointCount > 0) {
     const suffix = file.primaryEntrypoint ? `: ${file.primaryEntrypoint}` : "";
     details.push(`${file.entrypointCount} entrypoint hint${file.entrypointCount === 1 ? "" : "s"}${suffix}`);
+  }
+  if (file.setupHintCount !== undefined && file.setupHintCount > 0) {
+    details.push(`${file.setupHintCount} setup hint${file.setupHintCount === 1 ? "" : "s"}`);
   }
   if (file.inferredSelectorCount !== undefined) {
     details.push(
@@ -2233,6 +2426,52 @@ function entrypointConfidenceRank(confidence: E2eEntrypointConfidence): number {
     return 1;
   }
   return 2;
+}
+
+function uniqueSetupHints(setupHints: E2eSetupHint[]): E2eSetupHint[] {
+  const hintsByKind = new Map<E2eSetupHintKind, E2eSetupHint>();
+  for (const hint of setupHints) {
+    const existing = hintsByKind.get(hint.kind);
+    if (!existing) {
+      hintsByKind.set(hint.kind, { ...hint, files: uniqueStrings(hint.files).slice(0, maxFilesPerFlow) });
+      continue;
+    }
+    existing.files = uniqueStrings([...existing.files, ...hint.files]).slice(0, maxFilesPerFlow);
+    if (setupHintConfidenceRank(hint.confidence) < setupHintConfidenceRank(existing.confidence)) {
+      existing.confidence = hint.confidence;
+      existing.title = hint.title;
+      existing.detail = hint.detail;
+    }
+  }
+  return [...hintsByKind.values()].sort((left, right) => {
+    const confidenceDiff = setupHintConfidenceRank(left.confidence) - setupHintConfidenceRank(right.confidence);
+    if (confidenceDiff !== 0) {
+      return confidenceDiff;
+    }
+    return setupHintKindRank(left.kind) - setupHintKindRank(right.kind);
+  });
+}
+
+function setupHintConfidenceRank(confidence: E2eSetupHintConfidence): number {
+  if (confidence === "high") {
+    return 0;
+  }
+  if (confidence === "medium") {
+    return 1;
+  }
+  return 2;
+}
+
+function setupHintKindRank(kind: E2eSetupHintKind): number {
+  const ranks: Record<E2eSetupHintKind, number> = {
+    auth: 0,
+    payment: 1,
+    network: 2,
+    fixture: 3,
+    state: 4,
+    environment: 5,
+  };
+  return ranks[kind];
 }
 
 function uniqueCoverageTargets(targets: E2eCoverageTarget[]): E2eCoverageTarget[] {

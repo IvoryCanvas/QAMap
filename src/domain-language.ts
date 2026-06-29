@@ -243,15 +243,25 @@ function normalizeSegment(value: string | undefined): string | undefined {
   if (!value) {
     return undefined;
   }
+  if (isRouteSyntaxSegment(value)) {
+    return undefined;
+  }
   const normalized = value
     .replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|json|ya?ml|md|py|go|rs|kt|java|swift|cs|png|jpe?g|webp|gif|svg)$/i, "")
     .replace(/(?:Api|Service|Controller|Component|Screen)$/g, "")
     .replace(/^_+|_+$/g, "")
     .trim();
+  if (isRouteSyntaxSegment(normalized)) {
+    return undefined;
+  }
   if (/^use[A-Z]/.test(normalized)) {
     return undefined;
   }
   return isUsefulTerm(normalized) ? normalized : undefined;
+}
+
+function isRouteSyntaxSegment(value: string): boolean {
+  return /^\([^)]*\)$/.test(value) || /^\[{1,2}(?:\.\.\.)?[^/\]]+\]{1,2}$/.test(value);
 }
 
 function isDomainLanguageFile(file: string): boolean {
