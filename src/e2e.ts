@@ -24,6 +24,7 @@ export type E2eEntrypointKind = "route" | "screen" | "command";
 export type E2eEntrypointConfidence = "high" | "medium" | "low";
 export type E2eSetupHintKind = "auth" | "network" | "fixture" | "environment" | "payment" | "state";
 export type E2eSetupHintConfidence = "high" | "medium" | "low";
+export type E2eExecutionProfileConfidence = "high" | "medium" | "low";
 export type E2eFixtureReadinessStatus = "ready" | "partial" | "missing" | "not-needed";
 export type E2eValidationMatrixStatus = "ready" | "partial" | "missing";
 export type E2eValidationMatrixCategory = "core-flow" | "coverage" | "fixture" | "testability" | "setup";
@@ -63,6 +64,19 @@ export interface E2eProjectProfile {
 export interface E2eRunnerRecommendation {
   name: E2eRunnerName;
   reason: string;
+}
+
+export interface E2eExecutionProfile {
+  runner: E2eRunnerName;
+  confidence: E2eExecutionProfileConfidence;
+  startCommand?: string;
+  testCommand?: string;
+  baseUrl?: string;
+  appId?: string;
+  configFiles: string[];
+  envFiles: string[];
+  evidence: string[];
+  blockers: string[];
 }
 
 export interface E2eWorkspaceTarget {
@@ -191,6 +205,7 @@ export interface E2ePlanResult {
   includeWorkingTree: boolean;
   project: E2eProjectProfile;
   recommendedRunner: E2eRunnerRecommendation;
+  executionProfile: E2eExecutionProfile;
   testSuite: TestSuiteSummary;
   coreFlowManifestPath?: string;
   coreFlows: MatchedCoreFlow[];
@@ -220,6 +235,8 @@ export interface E2eDraftFile {
   promotionReason?: string;
   promotionAction?: string;
   stability?: "ready" | "needs-selector" | "needs-setup" | "needs-selector-and-setup";
+  runnableStatus?: "runnable-candidate" | "near-runnable" | "review-only";
+  executionBlockers?: string[];
   todoCount?: number;
   entrypointCount?: number;
   primaryEntrypoint?: string;
@@ -278,6 +295,7 @@ export interface E2eDraftResult {
 
 interface PackageJson {
   name?: string;
+  packageManager?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
@@ -305,6 +323,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const testPlan = await generateTestPlan(root, options);
   const project = await detectProjectProfile(root);
   const recommendedRunner = options.runner ? overrideRunner(project, options.runner) : recommendRunner(project);
+  const executionProfile = await buildExecutionProfile(root, testPlan.workspaceRoot, project, recommendedRunner.name);
   const testSuiteInventory = await collectTestSuiteInventory(root);
   const coreFlowRoot = testPlan.workspaceRoot ?? root;
   const coreFlowManifest = await loadCoreFlowManifest(coreFlowRoot);
@@ -334,6 +353,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     head: testPlan.head,
     projectType: project.type,
     recommendedRunner,
+    executionProfile,
     testSuite,
     coreFlowManifestPath: coreFlowManifest.path,
     domainManifestPath: domainManifest.path,
@@ -360,6 +380,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     includeWorkingTree: testPlan.includeWorkingTree,
     project,
     recommendedRunner,
+    executionProfile,
     testSuite,
     coreFlowManifestPath: coreFlowManifest.path,
     coreFlows,
@@ -393,6 +414,8 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
     const validationSummary = summarizeDraftValidation(flow);
     const promotionGuidance = buildDraftPromotionGuidance(flow);
     const actionItems = buildDraftActionItems(plan, flow, runner, validationSummary, promotionGuidance);
+    const executionBlockers = draftExecutionBlockers(plan, flow, runner, validationSummary);
+    const runnableStatus = draftRunnableStatus(plan, flow, runner, validationSummary, executionBlockers);
     if ((await exists(filePath)) && !options.force) {
       files.push({
         path: displayPath,
@@ -406,6 +429,8 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
         promotionReason: promotionGuidance.reason,
         promotionAction: promotionGuidance.action,
         stability: draftStability(plan, flow),
+        runnableStatus,
+        executionBlockers,
         entrypointCount: flow.entrypoints.length,
         primaryEntrypoint: primaryEntrypointLabel(flow),
         setupHintCount: flow.setupHints.length,
@@ -432,6 +457,8 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
       promotionReason: promotionGuidance.reason,
       promotionAction: promotionGuidance.action,
       stability: draftStability(plan, flow),
+      runnableStatus,
+      executionBlockers,
       todoCount: countTodos(content),
       entrypointCount: flow.entrypoints.length,
       primaryEntrypoint: primaryEntrypointLabel(flow),
@@ -722,6 +749,7 @@ interface E2eBootstrapPlanInput {
   head: string;
   projectType: E2eProjectType;
   recommendedRunner: E2eRunnerRecommendation;
+  executionProfile: E2eExecutionProfile;
   testSuite: TestSuiteSummary;
   coreFlowManifestPath?: string;
   domainManifestPath?: string;
@@ -742,6 +770,7 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
   const planHistoryCommand = `codeward e2e plan . --base ${input.base} --head ${input.head} --record-history`;
   const domainsSuggestCommand = `codeward domains suggest . --base ${input.base} --head ${input.head}`;
   const flowsSuggestCommand = `codeward flows suggest . --base ${input.base} --head ${input.head}`;
+  const executionProfileBlockers = remainingExecutionProfileBlockers(input.executionProfile.blockers, runnerGap);
 
   if (input.workspaceTargets.length > 0) {
     const concreteTargets = input.workspaceTargets.filter((target) => target.project.type !== "unknown");
@@ -802,6 +831,20 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "Keep runner setup documented and linked from PR validation notes.",
         [],
         [],
+      ),
+    );
+  }
+
+  if (input.recommendedRunner.name !== "manual" && executionProfileBlockers.length > 0) {
+    steps.push(
+      bootstrapStep(
+        "runner",
+        "required",
+        "Complete the E2E execution profile",
+        executionProfileBlockers.slice(0, 3).join(" "),
+        "Document or configure the missing command, URL, app id, or runner file before treating generated drafts as runnable regression coverage.",
+        uniqueStrings([input.executionProfile.startCommand, input.executionProfile.testCommand].filter(Boolean) as string[]),
+        input.executionProfile.configFiles,
       ),
     );
   }
@@ -1328,6 +1371,15 @@ function buildDraftActionItems(
       runnerGap,
     ));
   }
+  const executionBlockers = remainingExecutionProfileBlockers(plan.executionProfile.blockers, runnerGap);
+  if (runner !== "manual" && executionBlockers.length > 0) {
+    items.push(draftActionItem(
+      "runner",
+      "required",
+      "Complete execution profile",
+      executionBlockers.slice(0, 3).join(" "),
+    ));
+  }
 
   const route = primaryRouteEntrypoint(flow);
   if (runner === "playwright" && route) {
@@ -1419,6 +1471,27 @@ function runnerSetupGap(plan: E2ePlanResult, runner: E2eRunnerName): string | un
     return plan.missingTestability.find((gap) => /No \.maestro/i.test(gap));
   }
   return undefined;
+}
+
+function remainingExecutionProfileBlockers(blockers: string[], runnerGap?: string): string[] {
+  return blockers.filter((blocker) => {
+    if (/No runnable E2E runner/i.test(blocker)) {
+      return false;
+    }
+    if (!runnerGap) {
+      return true;
+    }
+    if (blocker === runnerGap) {
+      return false;
+    }
+    if (/No Playwright config/i.test(runnerGap) && /Playwright config/i.test(blocker)) {
+      return false;
+    }
+    if (/No \.maestro/i.test(runnerGap) && /(\.maestro|Maestro.*(config|flow))/i.test(blocker)) {
+      return false;
+    }
+    return true;
+  });
 }
 
 function draftActionItem(
@@ -1708,6 +1781,8 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
     }
   }
   lines.push("");
+
+  appendExecutionProfileMarkdown(lines, result.executionProfile);
 
   if (result.workspaceTargets.length > 0) {
     lines.push("## Changed App/Package Targets");
@@ -2210,6 +2285,301 @@ function overrideRunner(project: E2eProjectProfile, runner: E2eRunnerName): E2eR
     name: runner,
     reason: `Use a manual checklist because no runnable E2E runner was selected for this ${formatProjectType(project.type)} project.`,
   };
+}
+
+async function buildExecutionProfile(
+  root: string,
+  workspaceRoot: string | undefined,
+  project: E2eProjectProfile,
+  runner: E2eRunnerName,
+): Promise<E2eExecutionProfile> {
+  const packageJson = await readPackageJson(root);
+  const scripts = packageJson?.scripts ?? {};
+  const packageManager = await detectPackageManager(root, packageJson?.packageManager, workspaceRoot);
+  const configFiles = await existingFiles(root, executionConfigCandidates(runner));
+  const envFiles = await existingFiles(root, [
+    ".env.example",
+    ".env.local.example",
+    ".env.test",
+    ".env.e2e",
+    ".env.development",
+  ]);
+  const startScript = chooseScript(scripts, startScriptCandidates(runner, project.type));
+  const testScript = chooseScript(scripts, testScriptCandidates(runner));
+  const startCommand = startScript ? commandForScript(packageManager, startScript) : undefined;
+  const testCommand = testScript ? commandForScript(packageManager, testScript) : defaultRunnerCommand(runner);
+  const baseUrl = runner === "playwright" ? await detectPlaywrightBaseUrl(root, configFiles, envFiles) : undefined;
+  const appId = runner === "maestro" ? await detectMobileAppId(root) : undefined;
+  const evidence = executionProfileEvidence({
+    runner,
+    startCommand,
+    testCommand,
+    baseUrl,
+    appId,
+    configFiles,
+    envFiles,
+  });
+  const blockers = executionProfileBlockers({
+    runner,
+    startCommand,
+    testCommand,
+    baseUrl,
+    appId,
+    configFiles,
+    projectType: project.type,
+  });
+
+  return {
+    runner,
+    confidence: executionProfileConfidence(runner, evidence, blockers),
+    startCommand,
+    testCommand,
+    baseUrl,
+    appId,
+    configFiles,
+    envFiles,
+    evidence,
+    blockers,
+  };
+}
+
+function executionConfigCandidates(runner: E2eRunnerName): string[] {
+  if (runner === "playwright") {
+    return [
+      "playwright.config.ts",
+      "playwright.config.js",
+      "playwright.config.mjs",
+      "playwright.config.cjs",
+    ];
+  }
+  if (runner === "maestro") {
+    return [".maestro", "maestro.yaml", "maestro.yml"];
+  }
+  return ["openapi.yml", "openapi.yaml", "swagger.yml", "swagger.yaml", "serverless.yml", "serverless.yaml"];
+}
+
+function startScriptCandidates(runner: E2eRunnerName, projectType: E2eProjectType): string[] {
+  if (runner === "maestro") {
+    return ["ios", "android", "start", "dev"];
+  }
+  if (runner === "playwright") {
+    return ["dev", "start", "preview", "serve"];
+  }
+  if (projectType === "api-service") {
+    return ["dev", "start", "serve", "local"];
+  }
+  return ["dev", "start"];
+}
+
+function testScriptCandidates(runner: E2eRunnerName): string[] {
+  if (runner === "playwright") {
+    return ["test:e2e", "e2e", "playwright", "test"];
+  }
+  if (runner === "maestro") {
+    return ["test:e2e", "e2e", "maestro"];
+  }
+  return ["test:e2e", "e2e", "test"];
+}
+
+function chooseScript(scripts: Record<string, string>, candidates: string[]): string | undefined {
+  return candidates.find((script) => isUsablePackageScript(scripts[script]));
+}
+
+function isUsablePackageScript(script: string | undefined): boolean {
+  return Boolean(script && !/no test specified|exit\s+1/i.test(script));
+}
+
+function commandForScript(packageManager: string, script: string): string {
+  if (script === "start" || script === "test") {
+    return `${packageManager} ${script}`;
+  }
+  return `${packageManager} run ${script}`;
+}
+
+function defaultRunnerCommand(runner: E2eRunnerName): string | undefined {
+  if (runner === "playwright") {
+    return "npx playwright test";
+  }
+  if (runner === "maestro") {
+    return "maestro test .maestro";
+  }
+  return undefined;
+}
+
+async function detectPackageManager(
+  root: string,
+  packageManager: string | undefined,
+  workspaceRoot: string | undefined,
+): Promise<string> {
+  const workspacePackageManager =
+    workspaceRoot && workspaceRoot !== root ? (await readPackageJson(workspaceRoot))?.packageManager : undefined;
+  const declaredPackageManager = packageManager ?? workspacePackageManager;
+  if (declaredPackageManager?.startsWith("pnpm@")) {
+    return "pnpm";
+  }
+  if (declaredPackageManager?.startsWith("yarn@")) {
+    return "yarn";
+  }
+  if (declaredPackageManager?.startsWith("bun@")) {
+    return "bun";
+  }
+  if (await existsInRoots("pnpm-lock.yaml", root, workspaceRoot)) {
+    return "pnpm";
+  }
+  if (await existsInRoots("yarn.lock", root, workspaceRoot)) {
+    return "yarn";
+  }
+  if (await existsInRoots("bun.lockb", root, workspaceRoot)) {
+    return "bun";
+  }
+  return "npm";
+}
+
+async function existsInRoots(fileName: string, root: string, workspaceRoot: string | undefined): Promise<boolean> {
+  if (await exists(path.join(root, fileName))) {
+    return true;
+  }
+  return Boolean(workspaceRoot && workspaceRoot !== root && (await exists(path.join(workspaceRoot, fileName))));
+}
+
+async function existingFiles(root: string, candidates: string[]): Promise<string[]> {
+  const files: string[] = [];
+  for (const candidate of candidates) {
+    if (await exists(path.join(root, candidate))) {
+      files.push(candidate);
+    }
+  }
+  return files;
+}
+
+async function detectPlaywrightBaseUrl(root: string, configFiles: string[], envFiles: string[]): Promise<string | undefined> {
+  for (const configFile of configFiles) {
+    const text = await readTextIfExists(path.join(root, configFile));
+    const baseUrl = text?.match(/\bbaseURL\s*:\s*["'`]([^"'`]+)["'`]/)?.[1];
+    if (baseUrl) {
+      return baseUrl;
+    }
+  }
+
+  for (const envFile of envFiles) {
+    const text = await readTextIfExists(path.join(root, envFile));
+    const baseUrl = text?.match(/^(?:PLAYWRIGHT_BASE_URL|BASE_URL|E2E_BASE_URL|NEXT_PUBLIC_SITE_URL)=(.+)$/m)?.[1]?.trim();
+    if (baseUrl && !/\$\{|<|TODO/i.test(baseUrl)) {
+      return baseUrl.replace(/^["']|["']$/g, "");
+    }
+  }
+
+  return undefined;
+}
+
+async function detectMobileAppId(root: string): Promise<string | undefined> {
+  const appJson = await readTextIfExists(path.join(root, "app.json"));
+  if (!appJson) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(appJson) as {
+      expo?: {
+        android?: { package?: string };
+        ios?: { bundleIdentifier?: string };
+        slug?: string;
+        name?: string;
+      };
+    };
+    return parsed.expo?.android?.package ?? parsed.expo?.ios?.bundleIdentifier ?? parsed.expo?.slug ?? parsed.expo?.name;
+  } catch {
+    return undefined;
+  }
+}
+
+function executionProfileEvidence(input: {
+  runner: E2eRunnerName;
+  startCommand?: string;
+  testCommand?: string;
+  baseUrl?: string;
+  appId?: string;
+  configFiles: string[];
+  envFiles: string[];
+}): string[] {
+  const evidence: string[] = [];
+  if (input.startCommand) {
+    evidence.push(`start command: ${input.startCommand}`);
+  }
+  if (input.testCommand) {
+    evidence.push(`test command: ${input.testCommand}`);
+  }
+  if (input.baseUrl) {
+    evidence.push(`base URL: ${input.baseUrl}`);
+  }
+  if (input.appId) {
+    evidence.push(`app id: ${input.appId}`);
+  }
+  for (const file of input.configFiles) {
+    evidence.push(`config file: ${file}`);
+  }
+  for (const file of input.envFiles) {
+    evidence.push(`env fixture file: ${file}`);
+  }
+  if (input.runner === "manual" && evidence.length === 0) {
+    evidence.push("manual checklist profile");
+  }
+  return uniqueStrings(evidence);
+}
+
+function executionProfileBlockers(input: {
+  runner: E2eRunnerName;
+  startCommand?: string;
+  testCommand?: string;
+  baseUrl?: string;
+  appId?: string;
+  configFiles: string[];
+  projectType: E2eProjectType;
+}): string[] {
+  const blockers: string[] = [];
+  if (input.runner === "manual") {
+    if (input.projectType !== "api-service") {
+      blockers.push("No runnable E2E runner was selected for this project surface.");
+    }
+    if (input.projectType === "api-service" && !input.startCommand) {
+      blockers.push("No local API/service start command was detected.");
+    }
+    return blockers;
+  }
+
+  if (input.configFiles.length === 0) {
+    blockers.push(
+      input.runner === "playwright"
+        ? "No Playwright config file was detected."
+        : "No Maestro flow directory or config file was detected.",
+    );
+  }
+  if (!input.startCommand) {
+    blockers.push("No local app start or launch command was detected.");
+  }
+  if (input.runner === "playwright" && !input.baseUrl) {
+    blockers.push("No Playwright baseURL or E2E base URL was detected.");
+  }
+  if (input.runner === "maestro" && !input.appId) {
+    blockers.push("No mobile app id was detected from app.json.");
+  }
+  if (!input.testCommand) {
+    blockers.push(`No ${formatRunnerName(input.runner)} test command was detected.`);
+  }
+  return blockers;
+}
+
+function executionProfileConfidence(
+  runner: E2eRunnerName,
+  evidence: string[],
+  blockers: string[],
+): E2eExecutionProfileConfidence {
+  if (runner === "manual") {
+    return blockers.length === 0 && evidence.length > 0 ? "medium" : "low";
+  }
+  if (blockers.length === 0) {
+    return "high";
+  }
+  return evidence.length >= 3 ? "medium" : "low";
 }
 
 async function buildWorkspaceTargets(root: string, testPlan: TestPlanResult): Promise<E2eWorkspaceTarget[]> {
@@ -3894,6 +4264,52 @@ function draftStability(
   return "ready";
 }
 
+function draftExecutionBlockers(
+  plan: E2ePlanResult,
+  flow: E2eFlow,
+  runner: E2eRunnerName,
+  validationSummary: ReturnType<typeof summarizeDraftValidation>,
+): string[] {
+  const blockers = [...plan.executionProfile.blockers];
+  if (runner !== "manual" && flow.entrypoints.length === 0) {
+    blockers.push("No runnable route, screen, or command entrypoint was inferred for this flow.");
+  }
+  if (flow.missingTestability.length > 0) {
+    blockers.push(flow.missingTestability[0]);
+  }
+  if (flow.fixtureReadiness.status === "missing") {
+    blockers.push(flow.fixtureReadiness.nextActions[0] ?? flow.fixtureReadiness.reason);
+  }
+  if (validationSummary.blockingGapCount > 0) {
+    blockers.push(`${validationSummary.blockingGapCount} blocking validation gap${validationSummary.blockingGapCount === 1 ? "" : "s"} remain.`);
+  }
+  return uniqueStrings(blockers).slice(0, 8);
+}
+
+function draftRunnableStatus(
+  plan: E2ePlanResult,
+  flow: E2eFlow,
+  runner: E2eRunnerName,
+  validationSummary: ReturnType<typeof summarizeDraftValidation>,
+  executionBlockers: string[],
+): "runnable-candidate" | "near-runnable" | "review-only" {
+  if (runner === "manual") {
+    return "review-only";
+  }
+  if (
+    executionBlockers.length === 0 &&
+    validationSummary.blockingGapCount === 0 &&
+    flow.missingTestability.length === 0 &&
+    (flow.fixtureReadiness.status === "ready" || flow.fixtureReadiness.status === "not-needed")
+  ) {
+    return "runnable-candidate";
+  }
+  if (plan.executionProfile.confidence !== "low" && flow.entrypoints.length > 0) {
+    return "near-runnable";
+  }
+  return "review-only";
+}
+
 function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
   const coverage = buildCoverageTargets("changed-file", [], plan.recommendedRunner.name);
   const flow: Omit<E2eFlow, "languageBrief"> = {
@@ -3977,6 +4393,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   lines.push(`# Base: ${plan.base}`);
   lines.push(`# Head: ${plan.head}`);
   appendDraftBriefComments(lines, flow, "maestro", "#");
+  appendExecutionProfileComments(lines, plan.executionProfile, "#");
   lines.push("# Replace ${APP_ID} with the app id or export APP_ID before running Maestro.");
   lines.push("");
   lines.push("appId: ${APP_ID}");
@@ -4056,6 +4473,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
     lines.push(`// Intent: ${scenario.intent}`);
   }
   appendDraftBriefComments(lines, flow, "playwright", "//");
+  appendExecutionProfileComments(lines, plan.executionProfile, "//");
   lines.push("");
   lines.push('import { expect, test } from "@playwright/test";');
   lines.push("");
@@ -4136,6 +4554,7 @@ function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   lines.push(`- Head: \`${plan.head}\``);
   lines.push("");
   appendManualDraftBrief(lines, flow, "manual");
+  appendManualExecutionProfile(lines, plan.executionProfile);
   lines.push("");
   lines.push("## Steps");
   lines.push("");
@@ -4237,6 +4656,39 @@ function appendFlowLanguageBriefMarkdown(lines: string[], brief: E2eFlowLanguage
   if (brief.edgeCases.length > 0) {
     lines.push(`- Edge cases: ${escapeMarkdownInline(brief.edgeCases.join("; "))}`);
   }
+}
+
+function appendExecutionProfileMarkdown(lines: string[], profile: E2eExecutionProfile): void {
+  lines.push("## Execution Profile");
+  lines.push("");
+  lines.push(`- Runner: ${formatRunnerName(profile.runner)}`);
+  lines.push(`- Confidence: ${profile.confidence}`);
+  if (profile.startCommand) {
+    lines.push(`- Start command: \`${escapeMarkdownInline(profile.startCommand)}\``);
+  }
+  if (profile.testCommand) {
+    lines.push(`- Test command: \`${escapeMarkdownInline(profile.testCommand)}\``);
+  }
+  if (profile.baseUrl) {
+    lines.push(`- Base URL: \`${escapeMarkdownInline(profile.baseUrl)}\``);
+  }
+  if (profile.appId) {
+    lines.push(`- App id: \`${escapeMarkdownInline(profile.appId)}\``);
+  }
+  if (profile.configFiles.length > 0) {
+    lines.push(`- Config files: ${profile.configFiles.map((file) => `\`${escapeMarkdownInline(file)}\``).join(", ")}`);
+  }
+  if (profile.envFiles.length > 0) {
+    lines.push(`- Env fixture files: ${profile.envFiles.map((file) => `\`${escapeMarkdownInline(file)}\``).join(", ")}`);
+  }
+  if (profile.blockers.length > 0) {
+    lines.push("");
+    lines.push("Execution blockers:");
+    for (const blocker of profile.blockers) {
+      lines.push(`- ${escapeMarkdownInline(blocker)}`);
+    }
+  }
+  lines.push("");
 }
 
 function appendFlowLanguageBriefComments(
@@ -4370,6 +4822,31 @@ function appendDraftBriefComments(
   }
 }
 
+function appendExecutionProfileComments(
+  lines: string[],
+  profile: E2eExecutionProfile,
+  commentPrefix: string,
+): void {
+  lines.push("");
+  lines.push(`${commentPrefix} Execution profile:`);
+  lines.push(`${commentPrefix} - Confidence: ${profile.confidence}`);
+  if (profile.startCommand) {
+    lines.push(`${commentPrefix} - Start command: ${profile.startCommand}`);
+  }
+  if (profile.testCommand) {
+    lines.push(`${commentPrefix} - Test command: ${profile.testCommand}`);
+  }
+  if (profile.baseUrl) {
+    lines.push(`${commentPrefix} - Base URL: ${profile.baseUrl}`);
+  }
+  if (profile.appId) {
+    lines.push(`${commentPrefix} - App id: ${profile.appId}`);
+  }
+  for (const blocker of profile.blockers.slice(0, 4)) {
+    lines.push(`${commentPrefix} - Blocker: ${blocker}`);
+  }
+}
+
 function appendManualDraftBrief(lines: string[], flow: E2eFlow, runner: E2eRunnerName): void {
   const brief = buildDraftBrief(flow, runner);
   lines.push("## Draft Brief");
@@ -4379,6 +4856,32 @@ function appendManualDraftBrief(lines: string[], flow: E2eFlow, runner: E2eRunne
   lines.push("- Human fixture inputs:");
   for (const input of brief.humanFixtureInputs) {
     lines.push(`  - ${input}`);
+  }
+}
+
+function appendManualExecutionProfile(lines: string[], profile: E2eExecutionProfile): void {
+  lines.push("");
+  lines.push("## Execution Profile");
+  lines.push("");
+  lines.push(`- Runner: ${formatRunnerName(profile.runner)}`);
+  lines.push(`- Confidence: ${profile.confidence}`);
+  if (profile.startCommand) {
+    lines.push(`- Start command: \`${profile.startCommand}\``);
+  }
+  if (profile.testCommand) {
+    lines.push(`- Test command: \`${profile.testCommand}\``);
+  }
+  if (profile.baseUrl) {
+    lines.push(`- Base URL: \`${profile.baseUrl}\``);
+  }
+  if (profile.appId) {
+    lines.push(`- App id: \`${profile.appId}\``);
+  }
+  if (profile.blockers.length > 0) {
+    lines.push("- Blockers:");
+    for (const blocker of profile.blockers.slice(0, 4)) {
+      lines.push(`  - ${blocker}`);
+    }
   }
 }
 
@@ -4635,13 +5138,23 @@ function formatDraftActionKindSummary(summary: E2eDraftActionKindSummary[]): str
 function buildDraftNextSteps(plan: E2ePlanResult, runner: E2eRunnerName): string[] {
   const steps: string[] = [];
   if (runner === "maestro") {
-    steps.push("Replace ${APP_ID} or export APP_ID before running Maestro.");
+    steps.push(plan.executionProfile.appId
+      ? `Use app id ${plan.executionProfile.appId} or export APP_ID before running Maestro.`
+      : "Replace ${APP_ID} or export APP_ID before running Maestro.");
     steps.push("Replace TODO text selectors with visible copy, testID, or accessibilityLabel selectors.");
-    steps.push("Run the app with the launch command that matches your simulator or device, then run `maestro test .maestro`.");
+    steps.push(plan.executionProfile.startCommand
+      ? `Launch the app with \`${plan.executionProfile.startCommand}\`, then run \`${plan.executionProfile.testCommand ?? "maestro test .maestro"}\`.`
+      : `Run the app with the launch command that matches your simulator or device, then run \`${plan.executionProfile.testCommand ?? "maestro test .maestro"}\`.`);
   } else if (runner === "playwright") {
     steps.push("Replace TODO locators with role, text, or data-testid locators from the app.");
-    steps.push("Configure baseURL in Playwright before making the specs required in CI.");
-    steps.push("Run `npx playwright test` after the app can be served locally.");
+    if (plan.executionProfile.baseUrl) {
+      steps.push(`Confirm Playwright baseURL \`${plan.executionProfile.baseUrl}\` points at the target environment.`);
+    } else {
+      steps.push("Configure baseURL in Playwright before making the specs required in CI.");
+    }
+    steps.push(plan.executionProfile.startCommand
+      ? `Serve the app with \`${plan.executionProfile.startCommand}\`, then run \`${plan.executionProfile.testCommand ?? "npx playwright test"}\`.`
+      : `Run \`${plan.executionProfile.testCommand ?? "npx playwright test"}\` after the app can be served locally.`);
   } else {
     steps.push("Choose a runnable E2E framework once the primary app surface is documented.");
   }
@@ -4671,6 +5184,12 @@ function formatDraftFileQuality(file: E2eDraftFile): string | undefined {
   }
   if (file.actionItems !== undefined && file.actionItems.length > 0) {
     details.push(`${file.actionItems.length} action item${file.actionItems.length === 1 ? "" : "s"}`);
+  }
+  if (file.runnableStatus !== undefined) {
+    details.push(file.runnableStatus);
+  }
+  if (file.executionBlockers !== undefined && file.executionBlockers.length > 0) {
+    details.push(`${file.executionBlockers.length} execution blocker${file.executionBlockers.length === 1 ? "" : "s"}`);
   }
   if (file.stability !== undefined) {
     details.push(file.stability);

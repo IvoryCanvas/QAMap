@@ -47,6 +47,18 @@ export interface E2ePlanHistorySnapshot {
     includeWorkingTree: boolean;
     projectType: string;
     recommendedRunner: string;
+    executionProfile: {
+      runner: string;
+      confidence: string;
+      startCommand?: string;
+      testCommand?: string;
+      baseUrl?: string;
+      appId?: string;
+      configFiles: string[];
+      envFiles: string[];
+      evidence: string[];
+      blockers: string[];
+    };
     coreFlowManifestPath?: string;
     coreFlows: Array<{
       id: string;
@@ -246,6 +258,18 @@ function buildE2ePlanHistorySnapshot(historyRoot: string, plan: E2ePlanResult): 
       includeWorkingTree: plan.includeWorkingTree,
       projectType: plan.project.type,
       recommendedRunner: plan.recommendedRunner.name,
+      executionProfile: {
+        runner: plan.executionProfile.runner,
+        confidence: plan.executionProfile.confidence,
+        startCommand: plan.executionProfile.startCommand,
+        testCommand: plan.executionProfile.testCommand,
+        baseUrl: plan.executionProfile.baseUrl,
+        appId: plan.executionProfile.appId,
+        configFiles: plan.executionProfile.configFiles.slice(0, 10),
+        envFiles: plan.executionProfile.envFiles.slice(0, 10),
+        evidence: plan.executionProfile.evidence.slice(0, 12),
+        blockers: plan.executionProfile.blockers.slice(0, 12),
+      },
       coreFlowManifestPath: plan.coreFlowManifestPath,
       coreFlows: plan.coreFlows.map((flow) => ({
         id: flow.id,

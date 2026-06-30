@@ -57,6 +57,7 @@ node dist/cli.js e2e draft <package> --workspace-root <repo-root> --base <base> 
 The E2E plan should show:
 
 - runner recommendation with clear evidence
+- execution profile with start command, test command, base URL or app id when discoverable, confidence, and blockers
 - bootstrap steps when the project lacks E2E setup
 - domain language and candidate user scenarios
 - matched `.codeward/domains.yml` or `.codeward/flows.yml` entries when present
@@ -67,6 +68,7 @@ The E2E draft should show:
 - generated Maestro, Playwright, or manual draft files
 - `languageBrief` for each draft file
 - `promotionStatus` for each draft file
+- `runnableStatus` and execution blockers for each draft file
 - `actionItems` grouped by assertion, fixture, selector, runner, validation, or manifest
 - `actionSummary` with required and recommended action counts
 - Playwright `test.step()` names that read like the product journey
@@ -77,8 +79,8 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 
 | Target | Fixture-backed coverage | Expected output |
 | --- | --- | --- |
-| Web app with Playwright routes | `generateE2ePlan matches committed core flow definitions`; `generateE2eDraft uses web selectors in Playwright specs` | `Web` project profile, `playwright` runner, core-flow names such as `Checkout purchase`, route-aware Playwright drafts, stable selector hints, action items, and validation gaps. |
-| Expo / React Native mobile app | `generateE2ePlan recommends mobile flows for Expo changes`; `generateE2eDraft scopes entrypoint hints to each domain scenario` | `Expo / React Native` project profile, `maestro` runner, Maestro YAML drafts, `testID`/`accessibilityLabel` selector hints, and mobile setup actions. |
+| Web app with Playwright routes | `generateE2ePlan matches committed core flow definitions`; `generateE2eDraft uses web selectors in Playwright specs`; `generateE2ePlan captures Playwright execution profile for runnable drafts` | `Web` project profile, `playwright` runner, core-flow names such as `Checkout purchase`, route-aware Playwright drafts, stable selector hints, execution profile, action items, and validation gaps. |
+| Expo / React Native mobile app | `generateE2ePlan recommends mobile flows for Expo changes`; `generateE2eDraft scopes entrypoint hints to each domain scenario` | `Expo / React Native` project profile, `maestro` runner, app id and launch command hints, Maestro YAML drafts, `testID`/`accessibilityLabel` selector hints, and mobile setup actions. |
 | API or backend service | `generateE2ePlan detects API service projects and suggests contract checklists`; `generateE2ePlan names versioned API service paths with domain language`; `generateE2ePlan uses matched core flow names for API service contracts` | `API / service` project profile, manual contract checklist, domain-aware titles such as `Offer API contract`, API consumer actor, endpoint/handler/service-path trigger, and contract failure coverage. |
 | Monorepo root and package targeting | `generateE2ePlan surfaces package-scoped targets for monorepo root changes`; `generateE2ePlan matches workspace core flows for package scans`; `generateTestPlan scopes monorepo changes to the requested package` | Root plans list changed app/package targets with package names, project type, runner, and scoped commands; package scans keep package-local changed files, workspace-level `.codeward/flows.yml` matches, package-local generated drafts, and no leaked workspace path prefixes in package drafts. |
 | Test-light project | `generateE2ePlan builds a bootstrap plan for projects without tests`; `generateE2eDraft creates a fallback smoke draft without changed files` | Required bootstrap steps for runner setup, first draft generation, fixture/mock data, testability, and validation evidence before generated drafts are treated as regression coverage. |
@@ -102,6 +104,7 @@ Before publishing the package, run the fixture-backed suite plus at least one re
 Do not publish `0.1.0` if any representative target shows one of these problems:
 
 - generated flow names are dominated by generic folder names instead of product language
+- execution profiles hide missing start commands, base URLs, app ids, or runner config needed to run generated drafts
 - monorepo package scans report workspace-root paths in generated package-local drafts
 - Playwright drafts cannot express dynamic route parameters with fixture placeholders
 - API-dependent flows fail to produce fixture or mock readiness actions

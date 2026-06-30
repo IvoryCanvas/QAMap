@@ -25,6 +25,10 @@ flows:
 ```txt
 Project: Web
 Recommended runner: Playwright
+Execution profile: high
+Start command: pnpm run dev
+Test command: pnpm run test:e2e
+Base URL: http://127.0.0.1:4173
 Matched core flows: 1
 
 Flow: Checkout purchase UI smoke flow
@@ -117,6 +121,7 @@ Draft action items should make the next developer action explicit:
 
 ```txt
 Action summary:
+- runnable status: near-runnable
 - required assertion: Turn generated TODOs into runnable assertions
 - required fixture: Add deterministic fixture or mock data
 - required validation: Resolve missing validation evidence

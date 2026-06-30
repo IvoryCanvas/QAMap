@@ -598,6 +598,11 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
 
   assert.equal(plan.project.type, "expo-react-native");
   assert.equal(plan.recommendedRunner.name, "maestro");
+  assert.equal(plan.executionProfile.runner, "maestro");
+  assert.equal(plan.executionProfile.startCommand, "pnpm run ios");
+  assert.equal(plan.executionProfile.testCommand, "maestro test .maestro");
+  assert.equal(plan.executionProfile.appId, "Fixture");
+  assert.ok(plan.executionProfile.blockers.some((blocker) => /Maestro/.test(blocker)));
   assert.ok(uiFlow.title.endsWith("UI smoke flow"));
   assert.ok(plan.flows.every((flow) => flow.coverage.length > 0));
   assert.ok(plan.flows.some((flow) => flow.coverage.some((target) => target.title === "Loading, empty, error, and success states")));
@@ -614,6 +619,8 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.deepEqual(plan.suggestedCommands, ["pnpm run lint"]);
   assert.match(markdown, /# CodeWard E2E Plan/);
   assert.match(markdown, /Recommended runner: Maestro/);
+  assert.match(markdown, /## Execution Profile/);
+  assert.match(markdown, /App id: `Fixture`/);
   assert.match(markdown, /Coverage targets:/);
   assert.equal(draft.runner, "maestro");
   assert.ok(draft.files.some((file) => file.source === "domain-language"));
@@ -635,6 +642,8 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.match(uiDraft, new RegExp(`Flow: ${uiDraftFile.flowTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   assert.match(uiDraft, /Domain scenario:/);
   assert.match(uiDraft, /Draft brief:/);
+  assert.match(uiDraft, /Execution profile:/);
+  assert.match(uiDraft, /App id: Fixture/);
   assert.match(uiDraft, /Changed behavior:/);
   assert.match(uiDraft, /Why this flow matters:/);
   assert.match(uiDraft, /Human fixture inputs:/);
@@ -1559,6 +1568,70 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
   assert.match(spec, /Coverage matrix/);
   assert.match(spec, /Browser viewport regression/);
   assert.match(spec, /Inferred selectors/);
+});
+
+test("generateE2ePlan captures Playwright execution profile for runnable drafts", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/profile"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      packageManager: "pnpm@10.32.1",
+      scripts: {
+        dev: "vite --host 127.0.0.1",
+        "test:e2e": "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        vite: "^7.0.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "playwright.config.ts"),
+    "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n",
+  );
+  await writeFile(
+    path.join(root, "src/pages/profile/ProfilePage.tsx"),
+    "export function ProfilePage() { return <button data-testid=\"profile-save\">Save profile</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/profile-save"]);
+  await writeFile(
+    path.join(root, "src/pages/profile/ProfilePage.tsx"),
+    "export function ProfilePage() { return <button data-testid=\"profile-save\" aria-label=\"Save profile\">Save profile</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update profile save"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const markdown = formatMarkdownE2ePlan(plan);
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".generated-e2e" });
+  const draftFile = draft.files.find((file) => file.flowTitle === "Profile primary journey");
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+
+  assert.equal(plan.executionProfile.runner, "playwright");
+  assert.equal(plan.executionProfile.confidence, "high");
+  assert.equal(plan.executionProfile.startCommand, "pnpm run dev");
+  assert.equal(plan.executionProfile.testCommand, "pnpm run test:e2e");
+  assert.equal(plan.executionProfile.baseUrl, "http://127.0.0.1:4173");
+  assert.deepEqual(plan.executionProfile.blockers, []);
+  assert.match(markdown, /## Execution Profile/);
+  assert.match(markdown, /Start command: `pnpm run dev`/);
+  assert.match(markdown, /Base URL: `http:\/\/127\.0\.0\.1:4173`/);
+  assert.equal(draftFile.runnableStatus, "near-runnable");
+  assert.deepEqual(draftFile.executionBlockers?.filter((blocker) => /Playwright|baseURL|start command/i.test(blocker)), []);
+  assert.match(formatMarkdownE2eDraft(draft), /near-runnable/);
+  assert.match(spec, /Execution profile:/);
+  assert.match(spec, /Start command: pnpm run dev/);
+  assert.match(spec, /Test command: pnpm run test:e2e/);
+  assert.match(spec, /Base URL: http:\/\/127\.0\.0\.1:4173/);
 });
 
 test("generateE2eDraft normalizes dynamic routes without creating id domain scenarios", async () => {
