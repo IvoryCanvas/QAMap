@@ -1931,6 +1931,108 @@ test("domains init creates a commit-friendly domain manifest", async () => {
   assert.match(manifest, /Billing primary journey/);
 });
 
+test("domains and flows suggest changed-file manifests for package scopes", async () => {
+  const workspaceRoot = await makeTempRepo();
+  const packageRoot = path.join(workspaceRoot, "services/offer");
+  await initGitRepo(workspaceRoot);
+  await mkdir(path.join(packageRoot, "src/pages/offer"), { recursive: true });
+  await writeFile(
+    path.join(packageRoot, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+      },
+      dependencies: {
+        vite: "^7.0.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(packageRoot, "src/pages/offer/[offerId].tsx"),
+    [
+      "export default function OfferPage() {",
+      "  return <button data-testid=\"apply-offer\">Apply</button>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(workspaceRoot, ["add", "."]);
+  await git(workspaceRoot, ["commit", "-m", "base"]);
+  await git(workspaceRoot, ["branch", "-M", "main"]);
+
+  await git(workspaceRoot, ["switch", "-c", "feature/offer-apply"]);
+  await writeFile(
+    path.join(packageRoot, "src/pages/offer/[offerId].tsx"),
+    [
+      "export async function loadOffer(offerId) {",
+      "  const response = await fetch(`/api/offers/${offerId}`);",
+      "  return response.json();",
+      "}",
+      "export default function OfferPage() {",
+      "  return <button data-testid=\"apply-offer\">Apply offer</button>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(workspaceRoot, ["add", "."]);
+  await git(workspaceRoot, ["commit", "-m", "update offer apply"]);
+
+  const domainOutput = await execFileAsync(process.execPath, [
+    cliPath,
+    "domains",
+    "suggest",
+    packageRoot,
+    "--workspace-root",
+    workspaceRoot,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+  ]);
+  const flowOutput = await execFileAsync(process.execPath, [
+    cliPath,
+    "flows",
+    "suggest",
+    packageRoot,
+    "--workspace-root",
+    workspaceRoot,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+  ]);
+  const writeOutput = await execFileAsync(process.execPath, [
+    cliPath,
+    "domains",
+    "suggest",
+    packageRoot,
+    "--workspace-root",
+    workspaceRoot,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+    "--write",
+    ".codeward/domains.suggested.yml",
+  ]);
+  const writtenManifest = await readFile(path.join(workspaceRoot, ".codeward/domains.suggested.yml"), "utf8");
+
+  assert.match(domainOutput.stdout, /domains:/);
+  assert.match(domainOutput.stdout, /id: offer/);
+  assert.match(domainOutput.stdout, /name: Offer/);
+  assert.match(domainOutput.stdout, /services\/offer\/src\/pages\/offer\/\*\*/);
+  assert.match(domainOutput.stdout, /\/offer\/:offerId/);
+  assert.match(domainOutput.stdout, /Offer primary journey/);
+  assert.match(flowOutput.stdout, /flows:/);
+  assert.match(flowOutput.stdout, /id: offer-primary-journey/);
+  assert.match(flowOutput.stdout, /domains:/);
+  assert.match(flowOutput.stdout, /- offer/);
+  assert.match(flowOutput.stdout, /routes:/);
+  assert.match(flowOutput.stdout, /\/offer\/:offerId/);
+  assert.match(writeOutput.stdout, /Wrote /);
+  assert.match(writtenManifest, /domains:/);
+  assert.match(writtenManifest, /services\/offer\/src\/pages\/offer\/\*\*/);
+});
+
 test("configured validation commands feed test-plan and eval outputs", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);

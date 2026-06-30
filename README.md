@@ -134,7 +134,9 @@ node dist/cli.js scan /path/to/repo
 | `codeward e2e plan . --base origin/main --head HEAD --record-history` | Save a compact local run snapshot under `.codeward/runs/` while keeping JSON/Markdown output usable. |
 | `codeward e2e draft . --base origin/main --head HEAD` | Generate first-pass Maestro or Playwright E2E draft files from changed flows. |
 | `codeward flows init .` | Create a starter `.codeward/flows.yml` for team-approved core flow definitions. |
+| `codeward flows suggest . --base origin/main --head HEAD` | Generate suggested `.codeward/flows.yml` entries from changed files and E2E plan context. |
 | `codeward domains init .` | Create a starter `.codeward/domains.yml` for shared product/domain language. |
+| `codeward domains suggest . --base origin/main --head HEAD` | Generate suggested `.codeward/domains.yml` entries from changed files and inferred product language. |
 | `codeward history init .` | Create local CodeWard history directories and protect generated run history with `.gitignore`. |
 | `codeward doctor services/offer --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `codeward context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
@@ -174,7 +176,7 @@ domains:
           - Complete the primary billing action with realistic data.
 ```
 
-Run `codeward domains init .` to create a starter domain manifest. Use domains for naming and route hints; use core flows when the team wants to define a durable verification journey.
+Run `codeward domains init .` to create a starter domain manifest. Run `codeward domains suggest . --base origin/main --head HEAD` when you want CodeWard to draft manifest entries from the current branch. Use domains for naming and route hints; use core flows when the team wants to define a durable verification journey.
 
 If `.codeward/flows.yml` exists, `codeward e2e plan` also matches changed files against team-approved core flows. This lets maintainers encode the product or domain flows humans already care about:
 
@@ -195,7 +197,7 @@ flows:
       - Verify declined payment recovery.
 ```
 
-Run `codeward flows init .` to create a starter manifest. Unlike generated run history, `.codeward/flows.yml` is meant to be reviewed and committed when those flow definitions should become team policy.
+Run `codeward flows init .` to create a starter manifest. Run `codeward flows suggest . --base origin/main --head HEAD` when you want CodeWard to draft flow entries from changed files, inferred domain language, routes, and E2E checks. Unlike generated run history, `.codeward/flows.yml` is meant to be reviewed and committed when those flow definitions should become team policy.
 
 Pass `--record-history` when you want CodeWard to keep a compact local snapshot of an E2E plan under `.codeward/runs/`. CodeWard automatically protects `.codeward/runs/`, `.codeward/cache/`, `.codeward/tmp/`, and `.codeward/*.local.json` with `.gitignore` so generated history stays local by default. Shared project policy, such as `codeward.config.json`, `.codeward/domains.yml`, and `.codeward/flows.yml`, remains commit-friendly.
 

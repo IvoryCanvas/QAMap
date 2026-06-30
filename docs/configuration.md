@@ -81,6 +81,7 @@ Create a starter domain manifest:
 
 ```sh
 codeward domains init .
+codeward domains suggest . --base origin/main --head HEAD
 ```
 
 `.codeward/domains.yml` is meant to be committed when the team wants CodeWard to use shared product language during E2E planning.
@@ -126,6 +127,7 @@ Create a starter core flow manifest:
 
 ```sh
 codeward flows init .
+codeward flows suggest . --base origin/main --head HEAD
 ```
 
 `.codeward/flows.yml` is meant to be committed when the team wants CodeWard to understand project-specific flows during E2E planning.

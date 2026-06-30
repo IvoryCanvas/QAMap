@@ -14,5 +14,6 @@ Working scope for the first public `0.1.0` release.
 - E2E planning and draft generation for Playwright, Maestro, and manual checklists.
 - Bootstrap planning for projects with little or no E2E history, including required runner setup, first-draft, fixture, selector, and validation steps.
 - Domain language, domain manifest, and core-flow manifest support through `.codeward/domains.yml` and `.codeward/flows.yml`.
+- Change-aware `domains suggest` and `flows suggest` commands that draft manifest entries from branch context before teams commit durable policy.
 - Fixture/mock readiness and validation matrix output for generated E2E plans and drafts.
 - Local E2E run history snapshots protected by generated `.gitignore` entries.

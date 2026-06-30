@@ -10,6 +10,15 @@ import { evaluateChangeReadiness, formatEvalReport, formatMarkdownEvalReport } f
 import { defaultFlowManifestPath, writeDefaultCoreFlowManifest } from "./flows.js";
 import { runGitHubAction } from "./github.js";
 import { formatLocalHistoryInitResult, initializeLocalHistory, recordE2ePlanHistory } from "./history.js";
+import {
+  defaultSuggestedDomainManifestPath,
+  defaultSuggestedFlowManifestPath,
+  formatDomainManifestSuggestion,
+  formatFlowManifestSuggestion,
+  generateDomainManifestSuggestion,
+  generateFlowManifestSuggestion,
+  writeSuggestedManifest,
+} from "./manifest-suggestions.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
@@ -246,10 +255,35 @@ async function main(argv: string[]): Promise<number> {
       printFlowsHelp();
       return 0;
     }
-    if (subcommand !== "init") {
+    if (subcommand !== "init" && subcommand !== "suggest") {
       throw new Error(`Unknown flows subcommand: ${subcommand}`);
     }
     const options = parseOptions(subcommandRest);
+    if (subcommand === "suggest") {
+      const loadedConfig = await loadOptionsConfig(options);
+      const result = await generateFlowManifestSuggestion(options.path, {
+        base: options.base,
+        head: options.head,
+        workspaceRoot: options.workspaceRoot,
+        includeWorkingTree: options.includeWorkingTree,
+        validationCommands: loadedConfig.config.validationCommands,
+      });
+      const format = options.format ?? (options.json ? "json" : "text");
+      const output = formatFlowManifestSuggestion(result, manifestSuggestionFormat(format, "flows"));
+      if (options.write) {
+        const manifestRoot = options.workspaceRoot ?? options.path;
+        const writePath = await writeSuggestedManifest(
+          manifestRoot,
+          manifestWritePath(options.write, defaultSuggestedFlowManifestPath),
+          result.yaml,
+          options.force,
+        );
+        await printOrWrite(`Wrote ${writePath}\nReview this generated core flow manifest before committing it.\n`, options.output);
+      } else {
+        await printOrWrite(output, options.output);
+      }
+      return 0;
+    }
     const outputPath = await writeDefaultCoreFlowManifest(
       options.path,
       options.write ?? defaultFlowManifestPath,
@@ -272,10 +306,35 @@ async function main(argv: string[]): Promise<number> {
       printDomainsHelp();
       return 0;
     }
-    if (subcommand !== "init") {
+    if (subcommand !== "init" && subcommand !== "suggest") {
       throw new Error(`Unknown domains subcommand: ${subcommand}`);
     }
     const options = parseOptions(subcommandRest);
+    if (subcommand === "suggest") {
+      const loadedConfig = await loadOptionsConfig(options);
+      const result = await generateDomainManifestSuggestion(options.path, {
+        base: options.base,
+        head: options.head,
+        workspaceRoot: options.workspaceRoot,
+        includeWorkingTree: options.includeWorkingTree,
+        validationCommands: loadedConfig.config.validationCommands,
+      });
+      const format = options.format ?? (options.json ? "json" : "text");
+      const output = formatDomainManifestSuggestion(result, manifestSuggestionFormat(format, "domains"));
+      if (options.write) {
+        const manifestRoot = options.workspaceRoot ?? options.path;
+        const writePath = await writeSuggestedManifest(
+          manifestRoot,
+          manifestWritePath(options.write, defaultSuggestedDomainManifestPath),
+          result.yaml,
+          options.force,
+        );
+        await printOrWrite(`Wrote ${writePath}\nReview this generated domain manifest before committing it.\n`, options.output);
+      } else {
+        await printOrWrite(output, options.output);
+      }
+      return 0;
+    }
     const outputPath = await writeDefaultDomainManifest(
       options.path,
       options.write ?? defaultDomainManifestPath,
@@ -605,6 +664,17 @@ function formatE2eDraftOutput(result: Awaited<ReturnType<typeof generateE2eDraft
   return formatMarkdownE2eDraft(result);
 }
 
+function manifestSuggestionFormat(format: OutputFormat, command: "domains" | "flows"): "text" | "json" | "markdown" {
+  if (format === "sarif") {
+    throw new Error(`${command} suggest supports text, json, or markdown output, not sarif`);
+  }
+  return format;
+}
+
+function manifestWritePath(writeOption: string, defaultPath: string): string {
+  return writeOption === "AGENTS.md" ? defaultPath : writeOption;
+}
+
 function formatEvalOutput(result: Awaited<ReturnType<typeof evaluateChangeReadiness>>, format: OutputFormat): string {
   if (format === "json") {
     return `${JSON.stringify(result, null, 2)}\n`;
@@ -678,7 +748,9 @@ Usage:
   codeward e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   codeward e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--force]
   codeward flows init [path] [--write <file>] [--force]
+  codeward flows suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>] [--write <file>] [--force]
   codeward domains init [path] [--write <file>] [--force]
+  codeward domains suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>] [--write <file>] [--force]
   codeward history init [path]
   codeward context [path] [--write [file]] [--force]
   codeward init [path] [--write <file>] [--force]
@@ -705,7 +777,9 @@ Examples:
   codeward e2e plan . --base origin/main --head HEAD --record-history
   codeward e2e draft . --base origin/main --head HEAD
   codeward flows init .
+  codeward flows suggest . --base origin/main --head HEAD
   codeward domains init .
+  codeward domains suggest . --base origin/main --head HEAD
   codeward history init .
   codeward test-plan services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
   codeward context . --write AGENTS.md
@@ -750,9 +824,12 @@ Core flow definitions for project-specific E2E planning.
 
 Usage:
   codeward flows init [path] [--write <file>] [--force]
+  codeward flows suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format text|json|markdown] [--output <file>] [--write <file>] [--force]
 
 Examples:
   codeward flows init .
+  codeward flows suggest . --base origin/main --head HEAD
+  codeward flows suggest services/offer --workspace-root . --include-working-tree
 `);
 }
 
@@ -763,9 +840,12 @@ Domain definitions for project-specific E2E naming and route hints.
 
 Usage:
   codeward domains init [path] [--write <file>] [--force]
+  codeward domains suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format text|json|markdown] [--output <file>] [--write <file>] [--force]
 
 Examples:
   codeward domains init .
+  codeward domains suggest . --base origin/main --head HEAD
+  codeward domains suggest services/offer --workspace-root . --include-working-tree
 `);
 }
 

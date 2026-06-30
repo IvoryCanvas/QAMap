@@ -27,6 +27,15 @@ export {
   localTmpDirectory,
   recordE2ePlanHistory,
 } from "./history.js";
+export {
+  defaultSuggestedDomainManifestPath,
+  defaultSuggestedFlowManifestPath,
+  formatDomainManifestSuggestion,
+  formatFlowManifestSuggestion,
+  generateDomainManifestSuggestion,
+  generateFlowManifestSuggestion,
+  writeSuggestedManifest,
+} from "./manifest-suggestions.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 export { scanProject } from "./scanner.js";
@@ -97,6 +106,7 @@ export type {
 } from "./flows.js";
 export type { GitHubActionMode, GitHubActionOptions, GitHubActionResult } from "./github.js";
 export type { E2ePlanHistorySnapshot, LocalHistoryInitResult, LocalHistoryReference } from "./history.js";
+export type { DomainManifestSuggestionResult, FlowManifestSuggestionResult, ManifestSuggestionOptions } from "./manifest-suggestions.js";
 export type { ChangedFile, ChangedRiskyFinding, ReviewOptions, ReviewResult } from "./review.js";
 export type { TestPlanChangedFile, TestPlanItem, TestPlanOptions, TestPlanResult } from "./test-plan.js";
 export type { CodeWardConfig, Finding, ScanCounts, ScanOptions, ScanResult, Severity } from "./types.js";
