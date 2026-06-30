@@ -8,6 +8,7 @@ CodeWard is ready for `0.1.0` when the commands below produce useful, reviewable
 
 - web app with Playwright-compatible routes and components
 - mobile or Expo/React Native app with Maestro-compatible screens
+- API or backend service repo with contract-oriented checklist output
 - monorepo package scanned with `--workspace-root`
 - test-light project with little or no existing E2E coverage
 - API-dependent UI flow that needs deterministic mock or fixture data

@@ -18,7 +18,7 @@ import type { LocalHistoryReference } from "./history.js";
 import type { CoverageEvidence, TestSuiteInventory, TestSuiteSummary } from "./test-evidence.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
-export type E2eProjectType = "expo-react-native" | "react-native" | "web" | "unknown";
+export type E2eProjectType = "expo-react-native" | "react-native" | "web" | "api-service" | "unknown";
 export type E2eRunnerName = "maestro" | "playwright" | "manual";
 export type E2eEntrypointKind = "route" | "screen" | "command";
 export type E2eEntrypointConfidence = "high" | "medium" | "low";
@@ -296,6 +296,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const bootstrap = buildE2eBootstrapPlan({
     base: testPlan.base,
     head: testPlan.head,
+    projectType: project.type,
     recommendedRunner,
     testSuite,
     coreFlowManifestPath: coreFlowManifest.path,
@@ -681,6 +682,7 @@ function buildE2eValidationMatrix(
 interface E2eBootstrapPlanInput {
   base: string;
   head: string;
+  projectType: E2eProjectType;
   recommendedRunner: E2eRunnerRecommendation;
   testSuite: TestSuiteSummary;
   coreFlowManifestPath?: string;
@@ -707,9 +709,15 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
       bootstrapStep(
         "runner",
         "required",
-        "Choose the first runnable E2E runner",
-        "CodeWard could not detect a web, Expo, or React Native app surface, so generated output should start as a manual checklist.",
-        "Document the app entrypoint and pick Playwright, Maestro, or a project-specific runner before requiring generated drafts in CI.",
+        input.projectType === "api-service"
+          ? "Start with API contract validation"
+          : "Choose the first runnable E2E runner",
+        input.projectType === "api-service"
+          ? "CodeWard detected an API or backend service, so generated output should start as a contract checklist before assuming a browser or device runner."
+          : "CodeWard could not detect a web, Expo, React Native, or API service surface, so generated output should start as a manual checklist.",
+        input.projectType === "api-service"
+          ? "Document the local service start command, base URL, auth fixture, and request examples before making API contract checks required in CI."
+          : "Document the app entrypoint and pick Playwright, Maestro, or a project-specific runner before requiring generated drafts in CI.",
         [],
         [],
       ),
@@ -1456,6 +1464,9 @@ function inferFlowActor(flow: Omit<E2eFlow, "languageBrief">): string {
   if (/\bapi contract\b/i.test(flow.title)) {
     return "API consumer or upstream service";
   }
+  if (/\b(configuration|dependency|build|runtime|environment|feature[- ]?flag|package\.json|tsconfig|docker|serverless|deploy)\b/.test(haystack)) {
+    return "Maintainer or release operator";
+  }
   if (/\b(admin|dashboard|console|operator|settings|settlement|manage|moderation)\b/.test(haystack)) {
     return "Operator";
   }
@@ -1936,8 +1947,31 @@ async function detectProjectProfile(root: string): Promise<E2eProjectProfile> {
   const hasPlaywrightDependency = "@playwright/test" in dependencies || "playwright" in dependencies;
   const hasWebDependency =
     "next" in dependencies || "vite" in dependencies || "react-dom" in dependencies || hasPlaywrightDependency;
+  const apiServiceDependencies = [
+    "@apollo/server",
+    "@nestjs/core",
+    "@trpc/server",
+    "apollo-server",
+    "express",
+    "fastify",
+    "graphql-yoga",
+    "hapi",
+    "hono",
+    "koa",
+    "serverless",
+    "serverless-http",
+  ];
+  const apiServiceDependency = apiServiceDependencies.find((dependency) => dependency in dependencies);
   const hasExpoConfig = await hasAnyFile(root, ["app.json", "app.config.js", "app.config.ts"]);
   const hasNativeDirs = (await exists(path.join(root, "ios"))) || (await exists(path.join(root, "android")));
+  const hasApiServiceConfig = await hasAnyFile(root, [
+    "serverless.yml",
+    "serverless.yaml",
+    "openapi.yml",
+    "openapi.yaml",
+    "swagger.yml",
+    "swagger.yaml",
+  ]);
 
   if (hasExpoDependency) {
     evidence.push("package.json dependency: expo");
@@ -1954,6 +1988,12 @@ async function detectProjectProfile(root: string): Promise<E2eProjectProfile> {
   if (hasNativeDirs) {
     evidence.push("ios/ or android/ directory found");
   }
+  if (apiServiceDependency) {
+    evidence.push(`package.json dependency: ${apiServiceDependency}`);
+  }
+  if (hasApiServiceConfig) {
+    evidence.push("API or serverless service configuration found");
+  }
 
   if (hasExpoDependency || (hasExpoConfig && hasReactNativeDependency)) {
     return { type: "expo-react-native", evidence };
@@ -1963,6 +2003,9 @@ async function detectProjectProfile(root: string): Promise<E2eProjectProfile> {
   }
   if (hasWebDependency) {
     return { type: "web", evidence };
+  }
+  if (apiServiceDependency || hasApiServiceConfig) {
+    return { type: "api-service", evidence };
   }
   return {
     type: "unknown",
@@ -1983,6 +2026,13 @@ function recommendRunner(project: E2eProjectProfile): E2eRunnerRecommendation {
       name: "playwright",
       reason:
         "Use Playwright for the first E2E draft because this looks like a web app and Playwright can generate stable browser automation tests.",
+    };
+  }
+  if (project.type === "api-service") {
+    return {
+      name: "manual",
+      reason:
+        "Use a manual API contract checklist first because this looks like a backend service without a browser or device surface.",
     };
   }
   return {
@@ -2074,6 +2124,13 @@ function buildFlowCandidates(files: string[], runner: E2eRunnerName, projectType
   const candidateFiles = behaviorFiles.length > 0 ? behaviorFiles : files;
   const uiFiles = candidateFiles.filter(isUserFacingFile);
   const apiFiles = candidateFiles.filter(isApiLikeFile);
+  const apiServiceSourceFiles =
+    projectType === "api-service"
+      ? candidateFiles.filter(
+          (file) => !apiFiles.includes(file) && !isConfigLikeFile(file) && isServiceSourceFile(file),
+        )
+      : [];
+  const contractFiles = uniqueStrings([...apiFiles, ...apiServiceSourceFiles]);
   const stateFiles = candidateFiles.filter(isStateLikeFile);
   const contentFiles = candidateFiles.filter(isContentOrStyleFile);
   const configFiles = candidateFiles.filter(isConfigLikeFile);
@@ -2096,13 +2153,16 @@ function buildFlowCandidates(files: string[], runner: E2eRunnerName, projectType
     });
   }
 
-  if (apiFiles.length > 0) {
-    const subject = summarizeFlowSubject(apiFiles, "Changed");
+  if (contractFiles.length > 0) {
+    const subject = summarizeFlowSubject(contractFiles, "Changed");
     candidates.push({
       kind: "api",
       title: `${subject} API contract smoke ${runner === "manual" ? "checklist" : "flow"}`,
-      reason: "API client, schema, endpoint, request, or response files changed, so the generated draft should verify contract shape and failure handling before relying on UI-only coverage.",
-      files: apiFiles,
+      reason:
+        projectType === "api-service"
+          ? "Backend service source, endpoint, request, or response files changed, so the generated draft should verify externally observable contract shape and failure handling."
+          : "API client, schema, endpoint, request, or response files changed, so the generated draft should verify contract shape and failure handling before relying on UI-only coverage.",
+      files: contractFiles,
       steps:
         runner === "manual"
           ? [
@@ -2914,6 +2974,10 @@ function isTestLikeFile(file: string): boolean {
 
 function isUiImplementationFile(file: string): boolean {
   return /\.(?:tsx|jsx|vue|svelte)$/i.test(file);
+}
+
+function isServiceSourceFile(file: string): boolean {
+  return /(?:^|\/)src\/.+\.(?:[cm]?[jt]s|py|go|rs|java|kt|cs)$/i.test(file);
 }
 
 function summarizeFlowSubject(files: string[], fallback: string): string {
@@ -4557,6 +4621,9 @@ function formatProjectType(type: E2eProjectType): string {
   }
   if (type === "web") {
     return "Web";
+  }
+  if (type === "api-service") {
+    return "API / service";
   }
   return "Unknown";
 }

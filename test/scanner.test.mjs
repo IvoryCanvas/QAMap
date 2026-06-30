@@ -573,6 +573,127 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.ok(cliDraft.files.some((file) => file.validationGapCount > 0));
 });
 
+test("generateE2ePlan detects API service projects and suggests contract checklists", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/v1/offers/controllers"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        build: "tsc",
+        dev: "serverless offline",
+      },
+      dependencies: {
+        express: "^4.18.0",
+        "serverless-http": "^3.2.0",
+      },
+      devDependencies: {
+        serverless: "^3.38.0",
+        typescript: "^5.8.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "serverless.yml"), "service: offers-api\n");
+  await writeFile(
+    path.join(root, "src/v1/offers/controllers/getOffer.ts"),
+    "export function getOffer() { return { statusCode: 200, body: '{}' }; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/offer-contract"]);
+  await writeFile(
+    path.join(root, "src/v1/offers/controllers/getOffer.ts"),
+    "export function getOffer() { return { statusCode: 200, body: JSON.stringify({ ok: true }) }; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update offer contract"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const markdown = formatMarkdownE2ePlan(plan);
+  const flow = plan.flows.find((item) => /API contract/.test(item.title));
+
+  assert.equal(plan.project.type, "api-service");
+  assert.ok(plan.project.evidence.some((item) => item.includes("express")));
+  assert.equal(plan.recommendedRunner.name, "manual");
+  assert.match(plan.recommendedRunner.reason, /backend service/);
+  assert.ok(plan.bootstrap.steps.some((step) => step.title === "Start with API contract validation"));
+  assert.ok(flow);
+  assert.equal(flow.languageBrief.actor, "API consumer or upstream service");
+  assert.match(markdown, /Project: API \/ service/);
+  assert.match(markdown, /Start with API contract validation/);
+});
+
+test("generateE2ePlan assigns configuration changes to release operators", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      version: "1.0.0",
+      dependencies: {
+        express: "^4.18.0",
+      },
+    }),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/package-version"]);
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      version: "1.0.1",
+      dependencies: {
+        express: "^4.18.0",
+      },
+    }),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update package version"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((item) => /configuration verification/.test(item.title));
+
+  assert.equal(plan.project.type, "api-service");
+  assert.ok(flow);
+  assert.equal(flow.languageBrief.actor, "Maintainer or release operator");
+});
+
+test("generateE2ePlan treats API service source utilities as contract-impacting changes", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/core"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      dependencies: {
+        express: "^4.18.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "src/core/token.ts"), "export function getToken() { return undefined; }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/token-helper"]);
+  await writeFile(path.join(root, "src/core/token.ts"), "export function getToken() { return 'cookie-token'; }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update token helper"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((item) => /API contract/.test(item.title));
+
+  assert.equal(plan.project.type, "api-service");
+  assert.ok(flow);
+  assert.equal(flow.languageBrief.actor, "API consumer or upstream service");
+  assert.equal(plan.flows.some((item) => item.title === "Changed-file smoke checklist"), false);
+});
+
 test("generateE2ePlan keeps service changes generic and avoids fixture-specific names", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
