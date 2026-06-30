@@ -231,6 +231,22 @@ export interface E2eDraftActionItem {
   detail: string;
 }
 
+export interface E2eDraftActionKindSummary {
+  kind: E2eDraftActionKind;
+  required: number;
+  recommended: number;
+  total: number;
+}
+
+export interface E2eDraftActionSummary {
+  required: number;
+  recommended: number;
+  readyFiles: number;
+  filesWithRequiredActions: number;
+  filesWithRecommendedActions: number;
+  byKind: E2eDraftActionKindSummary[];
+}
+
 export type E2eDraftPromotionStatus = "commit-candidate" | "needs-review" | "low-signal";
 
 export interface E2eDraftResult {
@@ -244,6 +260,7 @@ export interface E2eDraftResult {
   outputDirectory: string;
   plan: E2ePlanResult;
   files: E2eDraftFile[];
+  actionSummary: E2eDraftActionSummary;
   nextSteps: string[];
 }
 
@@ -400,6 +417,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
     outputDirectory: toDisplayPath(root, outputDirectory),
     plan,
     files,
+    actionSummary: summarizeDraftActionItems(files),
     nextSteps: buildDraftNextSteps(plan, runner),
   };
 }
@@ -1361,6 +1379,63 @@ function uniqueDraftActionItems(items: E2eDraftActionItem[]): E2eDraftActionItem
   return uniqueItems;
 }
 
+function summarizeDraftActionItems(files: E2eDraftFile[]): E2eDraftActionSummary {
+  const byKind = new Map<E2eDraftActionKind, E2eDraftActionKindSummary>();
+  let required = 0;
+  let recommended = 0;
+  let readyFiles = 0;
+  let filesWithRequiredActions = 0;
+  let filesWithRecommendedActions = 0;
+
+  for (const file of files) {
+    const actionItems = file.actionItems ?? [];
+    const fileHasRequired = actionItems.some((item) => item.priority === "required");
+    const fileHasRecommended = actionItems.some((item) => item.priority === "recommended");
+    if (actionItems.length === 0) {
+      readyFiles += 1;
+    }
+    if (fileHasRequired) {
+      filesWithRequiredActions += 1;
+    }
+    if (fileHasRecommended) {
+      filesWithRecommendedActions += 1;
+    }
+    for (const item of actionItems) {
+      if (item.priority === "required") {
+        required += 1;
+      } else {
+        recommended += 1;
+      }
+      const existing = byKind.get(item.kind) ?? {
+        kind: item.kind,
+        required: 0,
+        recommended: 0,
+        total: 0,
+      };
+      existing.total += 1;
+      if (item.priority === "required") {
+        existing.required += 1;
+      } else {
+        existing.recommended += 1;
+      }
+      byKind.set(item.kind, existing);
+    }
+  }
+
+  return {
+    required,
+    recommended,
+    readyFiles,
+    filesWithRequiredActions,
+    filesWithRecommendedActions,
+    byKind: [...byKind.values()].sort(compareDraftActionKindSummary),
+  };
+}
+
+function compareDraftActionKindSummary(left: E2eDraftActionKindSummary, right: E2eDraftActionKindSummary): number {
+  return right.total - left.total || right.required - left.required || left.kind.localeCompare(right.kind);
+}
+
 function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLanguageBrief {
   const actor = inferFlowActor(flow);
   const trigger = inferFlowTrigger(flow);
@@ -1758,6 +1833,19 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
   lines.push(`- Runner: ${formatRunnerName(result.runner)}`);
   lines.push(`- Output directory: \`${escapeMarkdownInline(result.outputDirectory)}\``);
   lines.push(`- Files: ${result.files.filter((file) => file.status === "created").length} created, ${result.files.filter((file) => file.status === "skipped").length} skipped`);
+  lines.push("");
+
+  lines.push("## Draft Readiness Summary");
+  lines.push("");
+  lines.push(
+    `Summary: ${result.actionSummary.required} required action${result.actionSummary.required === 1 ? "" : "s"}, ${result.actionSummary.recommended} recommended action${result.actionSummary.recommended === 1 ? "" : "s"}.`,
+  );
+  lines.push(`- Ready files: ${result.actionSummary.readyFiles}`);
+  lines.push(`- Files with required actions: ${result.actionSummary.filesWithRequiredActions}`);
+  lines.push(`- Files with recommended actions: ${result.actionSummary.filesWithRecommendedActions}`);
+  if (result.actionSummary.byKind.length > 0) {
+    lines.push(`- Action categories: ${formatDraftActionKindSummary(result.actionSummary.byKind)}`);
+  }
   lines.push("");
 
   lines.push("## Files");
@@ -4002,6 +4090,13 @@ function formatFixtureReadiness(readiness: E2eFixtureReadiness): string {
   }
   const suffix = evidence.length > 0 ? ` Evidence: ${evidence.join(", ")}.` : "";
   return `[${readiness.status}] ${readiness.reason}${suffix}`;
+}
+
+function formatDraftActionKindSummary(summary: E2eDraftActionKindSummary[]): string {
+  return summary
+    .slice(0, 5)
+    .map((item) => `${item.kind} ${item.total} (${item.required} required, ${item.recommended} recommended)`)
+    .join(", ");
 }
 
 function buildDraftNextSteps(plan: E2ePlanResult, runner: E2eRunnerName): string[] {

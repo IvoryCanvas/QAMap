@@ -912,6 +912,11 @@ test("generateE2ePlan flags missing mock fixtures for API-dependent UI flows", a
     ),
   );
   assert.ok(draftFile.actionItems.some((item) => item.kind === "validation" && item.priority === "required"));
+  assert.equal(draft.actionSummary.filesWithRequiredActions > 0, true);
+  assert.equal(draft.actionSummary.required > 0, true);
+  assert.ok(draft.actionSummary.byKind.some((item) => item.kind === "fixture" && item.required > 0));
+  assert.match(formatMarkdownE2eDraft(draft), /## Draft Readiness Summary/);
+  assert.match(formatMarkdownE2eDraft(draft), /Files with required actions:/);
   assert.match(formatMarkdownE2eDraft(draft), /## Draft Action Items/);
   assert.match(formatMarkdownE2eDraft(draft), /\[required\] fixture: Add deterministic fixture or mock data/);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
@@ -1207,6 +1212,8 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   assert.match(draftFile.promotionReason, /Team-approved core flow already exists/);
   assert.ok(draftFile.actionItems.some((item) => item.kind === "assertion" && item.priority === "required"));
   assert.ok(draftFile.actionItems.some((item) => item.kind === "validation"));
+  assert.equal(draft.actionSummary.required > 0, true);
+  assert.ok(draft.actionSummary.byKind.some((item) => item.kind === "assertion" && item.required > 0));
   assert.ok((draftFile.validationGapCount ?? 0) > 0);
   assert.match(draftFile.primaryEntrypoint ?? "", /route \/checkout \[high\] \(\.codeward\/flows\.yml\)/);
   assert.match(formatMarkdownE2eDraft(draft), /## Draft Action Items/);
