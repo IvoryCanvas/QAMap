@@ -192,6 +192,9 @@ export interface E2eDraftFile {
   runner: E2eRunnerName;
   status: "created" | "skipped";
   source?: "domain-language" | "core-flow" | "heuristic";
+  promotionStatus?: E2eDraftPromotionStatus;
+  promotionReason?: string;
+  promotionAction?: string;
   stability?: "ready" | "needs-selector" | "needs-setup" | "needs-selector-and-setup";
   todoCount?: number;
   entrypointCount?: number;
@@ -205,6 +208,8 @@ export interface E2eDraftFile {
   blockingValidationGapCount?: number;
   reason?: string;
 }
+
+export type E2eDraftPromotionStatus = "commit-candidate" | "needs-review" | "low-signal";
 
 export interface E2eDraftResult {
   tool: {
@@ -308,6 +313,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
     const filePath = path.join(outputDirectory, `${slugify(flow.title)}${draftExtension(runner)}`);
     const displayPath = toDisplayPath(root, filePath);
     const validationSummary = summarizeDraftValidation(flow);
+    const promotionGuidance = buildDraftPromotionGuidance(flow);
     if ((await exists(filePath)) && !options.force) {
       files.push({
         path: displayPath,
@@ -315,6 +321,9 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
         runner,
         status: "skipped",
         source: draftFlowSource(flow),
+        promotionStatus: promotionGuidance.status,
+        promotionReason: promotionGuidance.reason,
+        promotionAction: promotionGuidance.action,
         stability: draftStability(plan, flow),
         entrypointCount: flow.entrypoints.length,
         primaryEntrypoint: primaryEntrypointLabel(flow),
@@ -336,6 +345,9 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
       runner,
       status: "created",
       source: draftFlowSource(flow),
+      promotionStatus: promotionGuidance.status,
+      promotionReason: promotionGuidance.reason,
+      promotionAction: promotionGuidance.action,
       stability: draftStability(plan, flow),
       todoCount: countTodos(content),
       entrypointCount: flow.entrypoints.length,
@@ -1117,6 +1129,78 @@ function summarizeDraftValidation(flow: E2eFlow): {
   return { status, gapCount, blockingGapCount };
 }
 
+interface E2eDraftPromotionGuidance {
+  status: E2eDraftPromotionStatus;
+  reason: string;
+  action: string;
+}
+
+function buildDraftPromotionGuidance(flow: E2eFlow): E2eDraftPromotionGuidance {
+  const coreFlow = coreFlowForDraftFlow(flow);
+  const scenario = domainScenarioForFlow(flow);
+  const hasEntrypoint = flow.entrypoints.length > 0;
+  const hasChecks = flow.steps.length > 0 || (scenario?.checks.length ?? 0) > 0 || (coreFlow?.checks.length ?? 0) > 0;
+
+  if (coreFlow) {
+    if (hasEntrypoint && hasChecks) {
+      return {
+        status: "commit-candidate",
+        reason: "Team-approved core flow already exists and matched the changed files.",
+        action: "Wire the manifest checks to runnable assertions, then use the draft as PR evidence.",
+      };
+    }
+    return {
+      status: "needs-review",
+      reason: "Team-approved core flow matched the change, but the runnable entrypoint or required evidence is incomplete.",
+      action: "Confirm the route, fixture, and selectors before making this draft required.",
+    };
+  }
+
+  if (scenario?.source === "domain-manifest") {
+    if (hasEntrypoint && hasChecks) {
+      return {
+        status: "commit-candidate",
+        reason: "Committed domain scenario matched the changed files with checks and an entrypoint.",
+        action: "Promote the scenario into a durable E2E flow once fixture data and assertions are confirmed.",
+      };
+    }
+    return {
+      status: "needs-review",
+      reason: "Committed domain language matched the change, but the testable route or checks still need confirmation.",
+      action: "Fill in checks, fixture data, and route ownership before promoting it to a core flow.",
+    };
+  }
+
+  if (scenario) {
+    if (hasEntrypoint && hasChecks && flow.files.length > 0) {
+      return {
+        status: "needs-review",
+        reason: "The scenario came from changed code or UI copy, so a human should confirm the product wording.",
+        action: "Review the scenario name with the team, then commit it to `.codeward/domains.yml` or `.codeward/flows.yml` if it is durable.",
+      };
+    }
+    return {
+      status: "low-signal",
+      reason: "The scenario is heuristic and lacks enough route or check evidence.",
+      action: "Add domain or flow manifests before treating this draft as stable regression coverage.",
+    };
+  }
+
+  if (hasEntrypoint && flow.files.length > 0) {
+    return {
+      status: "needs-review",
+      reason: "The draft has changed files and an entrypoint, but no team-owned domain or flow language yet.",
+      action: "Name the user journey and promote it into manifests before making it required.",
+    };
+  }
+
+  return {
+    status: "low-signal",
+    reason: "The draft is a fallback smoke path without enough domain, route, or check evidence.",
+    action: "Create a domain or flow manifest after the first real user journey is identified.",
+  };
+}
+
 export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
   const lines: string[] = [];
   lines.push("# CodeWard E2E Plan");
@@ -1425,6 +1509,20 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
     lines.push("");
     for (const gap of result.plan.missingTestability) {
       lines.push(`- ${escapeMarkdownInline(gap)}`);
+    }
+    lines.push("");
+  }
+
+  const promotedFiles = result.files.filter((file) => file.promotionStatus !== undefined);
+  if (promotedFiles.length > 0) {
+    lines.push("## Manifest Promotion Guidance");
+    lines.push("");
+    for (const file of promotedFiles) {
+      const reason = file.promotionReason ? ` - ${file.promotionReason}` : "";
+      lines.push(`- ${file.promotionStatus}: \`${escapeMarkdownInline(file.flowTitle)}\`${reason}`);
+      if (file.promotionAction) {
+        lines.push(`  Next: ${escapeMarkdownInline(file.promotionAction)}`);
+      }
     }
     lines.push("");
   }
@@ -2968,6 +3066,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   appendSetupHints(lines, flow, "#");
   appendFixtureReadinessHints(lines, flow, "#");
   appendValidationGapComments(lines, flow, "#");
+  appendDraftPromotionComments(lines, flow, "#");
   for (const step of flow.steps) {
     const command = maestroCommandForStep(step, selectorQueue);
     lines.push(...formatMaestroCommand(command));
@@ -3044,6 +3143,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   appendSetupHints(lines, flow, "  //");
   appendFixtureReadinessHints(lines, flow, "  //");
   appendValidationGapComments(lines, flow, "  //");
+  appendDraftPromotionComments(lines, flow, "  //");
   const routeEntrypoint = primaryRouteEntrypoint(flow);
   const routeDraft = buildPlaywrightRouteDraft(routeEntrypoint?.value ?? "/");
   if (routeDraft.params.length > 0) {
@@ -3143,6 +3243,7 @@ function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
     }
   }
   appendManualValidationGaps(lines, flow);
+  appendManualDraftPromotion(lines, flow);
   if (scenario) {
     lines.push("");
     lines.push("## Scenario Checks");
@@ -3246,6 +3347,15 @@ function appendValidationGapComments(lines: string[], flow: E2eFlow, commentPref
   }
 }
 
+function appendDraftPromotionComments(lines: string[], flow: E2eFlow, commentPrefix: string): void {
+  const guidance = buildDraftPromotionGuidance(flow);
+  lines.push("");
+  lines.push(`${commentPrefix} Manifest promotion guidance:`);
+  lines.push(`${commentPrefix} - Status: ${guidance.status}`);
+  lines.push(`${commentPrefix} - Why: ${guidance.reason}`);
+  lines.push(`${commentPrefix} - Next: ${guidance.action}`);
+}
+
 function appendManualValidationGaps(lines: string[], flow: E2eFlow): void {
   const rows = validationRowsForDraftFlow(flow).filter((row) => row.status !== "ready");
   if (rows.length === 0) {
@@ -3257,6 +3367,16 @@ function appendManualValidationGaps(lines: string[], flow: E2eFlow): void {
   for (const row of rows.slice(0, maxFilesPerFlow)) {
     lines.push(`- [ ] [${row.status}] ${row.area} - ${row.nextAction}`);
   }
+}
+
+function appendManualDraftPromotion(lines: string[], flow: E2eFlow): void {
+  const guidance = buildDraftPromotionGuidance(flow);
+  lines.push("");
+  lines.push("## Manifest Promotion Guidance");
+  lines.push("");
+  lines.push(`- Status: ${guidance.status}`);
+  lines.push(`- Why: ${guidance.reason}`);
+  lines.push(`- Next: ${guidance.action}`);
 }
 
 interface DraftBrief {
@@ -3552,6 +3672,9 @@ function formatDraftFileQuality(file: E2eDraftFile): string | undefined {
   const details: string[] = [];
   if (file.source !== undefined) {
     details.push(file.source);
+  }
+  if (file.promotionStatus !== undefined) {
+    details.push(`${file.promotionStatus} promotion`);
   }
   if (file.stability !== undefined) {
     details.push(file.stability);
