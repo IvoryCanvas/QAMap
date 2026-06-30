@@ -1468,7 +1468,7 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
 
 function inferFlowActor(flow: Omit<E2eFlow, "languageBrief">): string {
   const haystack = `${flow.title} ${flow.reason} ${flow.files.join(" ")}`.toLowerCase();
-  if (/\bapi contract\b/i.test(flow.title)) {
+  if (isApiContractFocusedFlow(flow)) {
     return "API consumer or upstream service";
   }
   if (/\b(configuration|dependency|build|runtime|environment|feature[- ]?flag|package\.json|tsconfig|docker|serverless|deploy)\b/.test(haystack)) {
@@ -1516,7 +1516,7 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
     return `Run ${command.value}.`;
   }
   if (flow.files.length > 0) {
-    if (/\bapi contract\b/i.test(flow.title)) {
+    if (isApiContractFocusedFlow(flow)) {
       return `Call the endpoint, handler, or service path affected by ${flow.files[0]}.`;
     }
     if (/\bconfiguration verification\b/i.test(flow.title)) {
@@ -1528,7 +1528,7 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
 }
 
 function inferFlowGoal(flow: Omit<E2eFlow, "languageBrief">): string {
-  if (/\bapi contract\b/i.test(flow.title)) {
+  if (isApiContractFocusedFlow(flow)) {
     return `Protect ${flow.title} by verifying the changed request, response, auth, and failure contract.`;
   }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
@@ -1542,7 +1542,7 @@ function inferFlowGoal(flow: Omit<E2eFlow, "languageBrief">): string {
 }
 
 function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
-  if (/\bapi contract\b/i.test(flow.title)) {
+  if (isApiContractFocusedFlow(flow)) {
     return "the changed contract returns the expected status, response shape, auth behavior, and failure handling";
   }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
@@ -1560,13 +1560,21 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
 }
 
 function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSignal: string): string {
-  if (/\bapi contract\b/i.test(flow.title)) {
+  if (isApiContractFocusedFlow(flow)) {
     return `Can a reviewer confirm that the changed endpoint, handler, or service contract is exercised and that "${successSignal}" is asserted?`;
   }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return `Can a reviewer confirm that the affected build, startup, or release variant is exercised and that "${successSignal}" is asserted?`;
   }
   return `Can a reviewer confirm that ${flow.title} still works from this entrypoint and that "${successSignal}" is asserted?`;
+}
+
+function isApiContractFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return (
+    /\bapi contract\b/i.test(flow.title) ||
+    (flow.coverage.some((target) => target.title === "API contract compatibility") &&
+      !hasUserFacingEntrypointOrFile(flow))
+  );
 }
 
 function inferFlowEdgeCases(flow: Omit<E2eFlow, "languageBrief">): string[] {
@@ -3387,6 +3395,18 @@ async function buildDomainScenarioDraftFlow(
 ): Promise<DraftE2eFlow> {
   const coreFlow = matchedCoreFlowForScenario(plan, scenario);
   const baseFlow = bestBaseFlowForScenario(scenario, baseFlows);
+  const apiContractScenario = isApiContractDomainScenario(scenario, baseFlow);
+  const title = domainScenarioDraftTitle(scenario, apiContractScenario);
+  const reason = domainScenarioDraftIntent(scenario, apiContractScenario);
+  const steps = domainScenarioDraftSteps(scenario, baseFlow, apiContractScenario);
+  const draftScenario = apiContractScenario
+    ? {
+        ...scenario,
+        title,
+        intent: reason,
+        checks: steps,
+      }
+    : scenario;
   const scenarioFiles = normalizeScenarioFilesForRoot(plan, scenario.files);
   const files = uniqueStrings(scenarioFiles.length > 0 ? scenarioFiles : (baseFlow?.files ?? [])).slice(0, 20);
   const coverage = baseFlow?.coverage ?? buildCoverageTargets("domain", files, plan.recommendedRunner.name);
@@ -3406,10 +3426,10 @@ async function buildDomainScenarioDraftFlow(
     ...(await inferFlowSetupHints(plan.root, files, "domain")),
   ]);
   const flow: Omit<DraftE2eFlow, "languageBrief"> = {
-    title: scenario.title,
-    reason: scenario.intent,
+    title,
+    reason,
     files,
-    steps: scenario.checks.length > 0 ? scenario.checks : (baseFlow?.steps ?? []),
+    steps,
     coverage,
     coverageEvidence: baseFlow?.coverageEvidence ?? [],
     entrypoints,
@@ -3418,13 +3438,42 @@ async function buildDomainScenarioDraftFlow(
     selectors,
     missingTestability: await findFlowTestabilityGaps(plan.root, files, runner),
     draftSource: scenario.source === "core-flow" ? "core-flow" : "domain-language",
-    domainScenario: scenario,
+    domainScenario: draftScenario,
     coreFlow,
   };
   return {
     ...flow,
     languageBrief: buildFlowLanguageBrief(flow),
   };
+}
+
+function isApiContractDomainScenario(scenario: DomainScenarioSuggestion, baseFlow: E2eFlow | undefined): boolean {
+  return scenario.source === "changed-file" && Boolean(baseFlow && isApiContractFocusedFlow(baseFlow));
+}
+
+function domainScenarioDraftTitle(scenario: DomainScenarioSuggestion, apiContractScenario: boolean): string {
+  if (!apiContractScenario) {
+    return scenario.title;
+  }
+  return `${scenario.title.replace(/\s+primary journey$/i, "")} API contract`;
+}
+
+function domainScenarioDraftIntent(scenario: DomainScenarioSuggestion, apiContractScenario: boolean): string {
+  if (!apiContractScenario) {
+    return scenario.intent;
+  }
+  return `Verify "${scenario.title.replace(/\s+primary journey$/i, "")}" through the changed API or service contract instead of assuming a browser or device journey.`;
+}
+
+function domainScenarioDraftSteps(
+  scenario: DomainScenarioSuggestion,
+  baseFlow: E2eFlow | undefined,
+  apiContractScenario: boolean,
+): string[] {
+  if (apiContractScenario && baseFlow) {
+    return baseFlow.steps;
+  }
+  return scenario.checks.length > 0 ? scenario.checks : (baseFlow?.steps ?? []);
 }
 
 function matchedCoreFlowForScenario(

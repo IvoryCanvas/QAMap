@@ -725,10 +725,20 @@ test("generateE2ePlan names versioned API service paths with domain language", a
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const flow = plan.flows.find((item) => /API contract/.test(item.title));
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e" });
+  const draftFile = draft.files.find((file) => file.flowTitle === "Offer API contract");
 
   assert.ok(flow);
   assert.equal(flow.title, "Offer API contract smoke checklist");
   assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Offer"));
+  assert.ok(draftFile);
+  assert.equal(draftFile.languageBrief.actor, "API consumer or upstream service");
+  assert.match(draftFile.languageBrief.trigger, /Call the endpoint, handler, or service path/);
+  assert.equal(draftFile.source, "domain-language");
+  const manualDraft = await readFile(path.join(root, draftFile.path), "utf8");
+  assert.match(manualDraft, /# Offer API contract/);
+  assert.match(manualDraft, /Call the changed endpoint, client, command, or handler with a valid request/);
+  assert.doesNotMatch(manualDraft, /Start from the normal entry point for Offer/);
 });
 
 test("generateE2ePlan uses matched core flow names for API service contracts", async () => {
