@@ -226,6 +226,7 @@ function termsFromPath(file: string): PathTermCandidate[] {
     { key: "pages", confidence: "medium" },
     { key: "screens", confidence: "medium" },
     { key: "app", confidence: "medium" },
+    { key: "src", confidence: "medium" },
   ];
   for (const { key, confidence } of semanticKeys) {
     const index = segments.indexOf(key);
@@ -255,7 +256,7 @@ function semanticSegmentAfterKey(segments: string[], keyIndex: number): string |
 
 function isStructuralSegment(segment: string): boolean {
   const normalized = segment.toLowerCase().replace(/[^a-z0-9가-힣]+/g, "-").replace(/^-+|-+$/g, "");
-  return structuralSegments.has(normalized);
+  return /^v?\d+(?:-\d+)?$/i.test(normalized) || structuralSegments.has(normalized);
 }
 
 function extractUiCopyTerms(text: string): string[] {
@@ -455,9 +456,22 @@ const structuralSegments = new Set([
   "apps",
   "components",
   "content",
+  "common",
+  "commons",
+  "controller",
+  "controllers",
+  "core",
   "docs",
+  "handler",
+  "handlers",
+  "helper",
+  "helpers",
+  "lib",
+  "libs",
   "features",
   "layouts",
+  "middleware",
+  "middlewares",
   "modules",
   "navigation",
   "navigations",
@@ -471,4 +485,6 @@ const structuralSegments = new Set([
   "services",
   "shared",
   "src",
+  "util",
+  "utils",
 ]);

@@ -285,7 +285,14 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const domainManifest = await loadDomainManifest(coreFlowRoot);
   const domains = matchDomains(domainManifest, coreFlowChangedFiles);
   const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows, domains);
-  const flows = await buildFlows(root, testPlan.changedFiles, recommendedRunner.name, project.type, testSuiteInventory);
+  const flows = await buildFlows(
+    root,
+    testPlan.changedFiles,
+    recommendedRunner.name,
+    project.type,
+    testSuiteInventory,
+    domainLanguage,
+  );
   const testSuite = summarizeTestSuiteInventory(testSuiteInventory);
   const missingTestability = uniqueStrings([
     ...flows.flatMap((flow) => flow.missingTestability),
@@ -2134,11 +2141,12 @@ async function buildFlows(
   runner: E2eRunnerName,
   projectType: E2eProjectType,
   testSuiteInventory: TestSuiteInventory,
+  domainLanguage: DomainLanguageSummary,
 ): Promise<E2eFlow[]> {
   const files = changedFiles.map((file) => file.path);
   const fixtureContext = await collectFixtureReadinessContext(root, files);
   const flowResults = await Promise.all(
-    buildFlowCandidates(files, runner, projectType).map((candidate) =>
+    buildFlowCandidates(files, runner, projectType, domainLanguage).map((candidate) =>
       buildFlow(root, runner, candidate, testSuiteInventory, fixtureContext),
     ),
   );
@@ -2147,7 +2155,12 @@ async function buildFlows(
   return dedupeFlows(flows).slice(0, 4);
 }
 
-function buildFlowCandidates(files: string[], runner: E2eRunnerName, projectType: E2eProjectType): FlowCandidate[] {
+function buildFlowCandidates(
+  files: string[],
+  runner: E2eRunnerName,
+  projectType: E2eProjectType,
+  domainLanguage: DomainLanguageSummary,
+): FlowCandidate[] {
   const behaviorFiles = files.filter((file) => !isTestLikeFile(file));
   const candidateFiles = behaviorFiles.length > 0 ? behaviorFiles : files;
   const uiFiles = candidateFiles.filter(isUserFacingFile);
@@ -2166,7 +2179,7 @@ function buildFlowCandidates(files: string[], runner: E2eRunnerName, projectType
   const candidates: FlowCandidate[] = [];
 
   if (uiFiles.length > 0) {
-    const subject = summarizeFlowSubject(uiFiles, "Changed");
+    const subject = summarizeFlowSubject(uiFiles, "Changed", domainLanguage);
     candidates.push({
       kind: "ui",
       title: `${subject} UI smoke flow`,
@@ -2182,7 +2195,7 @@ function buildFlowCandidates(files: string[], runner: E2eRunnerName, projectType
   }
 
   if (contractFiles.length > 0) {
-    const subject = summarizeFlowSubject(contractFiles, "Changed");
+    const subject = summarizeFlowSubject(contractFiles, "Changed", domainLanguage);
     candidates.push({
       kind: "api",
       title: `${subject} API contract smoke ${runner === "manual" ? "checklist" : "flow"}`,
@@ -2209,7 +2222,7 @@ function buildFlowCandidates(files: string[], runner: E2eRunnerName, projectType
   }
 
   if (stateFiles.length > 0) {
-    const subject = summarizeFlowSubject(stateFiles, "Changed");
+    const subject = summarizeFlowSubject(stateFiles, "Changed", domainLanguage);
     candidates.push({
       kind: "state",
       title: `${subject} state transition flow`,
@@ -2225,7 +2238,7 @@ function buildFlowCandidates(files: string[], runner: E2eRunnerName, projectType
   }
 
   if (contentFiles.length > 0) {
-    const subject = summarizeFlowSubject(contentFiles, "Changed");
+    const subject = summarizeFlowSubject(contentFiles, "Changed", domainLanguage);
     candidates.push({
       kind: "content",
       title: `${subject} content and theme smoke flow`,
@@ -2241,7 +2254,7 @@ function buildFlowCandidates(files: string[], runner: E2eRunnerName, projectType
   }
 
   if (configFiles.length > 0) {
-    const subject = summarizeFlowSubject(configFiles, "Changed");
+    const subject = summarizeFlowSubject(configFiles, "Changed", domainLanguage);
     candidates.push({
       kind: "config",
       title: `${subject} configuration verification ${runner === "manual" ? "checklist" : "flow"}`,
@@ -2258,7 +2271,7 @@ function buildFlowCandidates(files: string[], runner: E2eRunnerName, projectType
 
   const remainingDomainFiles = domainFiles.filter((file) => !isUserFacingFile(file) && !isApiLikeFile(file));
   if (remainingDomainFiles.length > 0) {
-    const subject = summarizeFlowSubject(remainingDomainFiles, "Changed domain");
+    const subject = summarizeFlowSubject(remainingDomainFiles, "Changed domain", domainLanguage);
     candidates.push({
       kind: "domain",
       title: `${subject} workflow smoke ${runner === "manual" || projectType === "unknown" ? "checklist" : "flow"}`,
@@ -2276,7 +2289,7 @@ function buildFlowCandidates(files: string[], runner: E2eRunnerName, projectType
   if (candidates.length === 0 && candidateFiles.length > 0) {
     candidates.push({
       kind: "changed-file",
-      title: `${summarizeFlowSubject(candidateFiles, "Changed-file")} smoke ${runner === "manual" ? "checklist" : "flow"}`,
+      title: `${summarizeFlowSubject(candidateFiles, "Changed-file", domainLanguage)} smoke ${runner === "manual" ? "checklist" : "flow"}`,
       reason: "Changed files did not match a specialized E2E pattern, so CodeWard generated a conservative smoke path tied only to the changed files.",
       files: candidateFiles,
       steps: [
@@ -3008,7 +3021,12 @@ function isServiceSourceFile(file: string): boolean {
   return /(?:^|\/)src\/.+\.(?:[cm]?[jt]s|py|go|rs|java|kt|cs)$/i.test(file);
 }
 
-function summarizeFlowSubject(files: string[], fallback: string): string {
+function summarizeFlowSubject(files: string[], fallback: string, domainLanguage?: DomainLanguageSummary): string {
+  const languageSubject = summarizeFlowSubjectFromDomainLanguage(files, domainLanguage);
+  if (languageSubject) {
+    return languageSubject;
+  }
+
   const labelCounts = countLabels(files.flatMap(labelCandidatesFromPath));
   if (labelCounts.length === 0) {
     return fallback;
@@ -3025,6 +3043,68 @@ function summarizeFlowSubject(files: string[], fallback: string): string {
     return fallback;
   }
   return representativeLabels.map((label) => titleCase(label.value)).join(" / ");
+}
+
+function summarizeFlowSubjectFromDomainLanguage(
+  files: string[],
+  domainLanguage: DomainLanguageSummary | undefined,
+): string | undefined {
+  if (!domainLanguage) {
+    return undefined;
+  }
+  const scenario = domainLanguage.scenarios
+    .filter((item) => item.source === "core-flow" || item.source === "domain-manifest")
+    .filter((item) => filesOverlap(files, item.files))
+    .sort(compareDomainScenariosForSubject)[0];
+  if (scenario) {
+    return scenario.title;
+  }
+
+  const term = domainLanguage.terms
+    .filter((item) => filesOverlap(files, item.files))
+    .sort(compareDomainTermsForSubject)[0];
+  return term?.term;
+}
+
+function compareDomainScenariosForSubject(
+  left: DomainScenarioSuggestion,
+  right: DomainScenarioSuggestion,
+): number {
+  const leftRank = left.source === "core-flow" ? 2 : 1;
+  const rightRank = right.source === "core-flow" ? 2 : 1;
+  return rightRank - leftRank || left.title.localeCompare(right.title);
+}
+
+function compareDomainTermsForSubject(
+  left: DomainLanguageSummary["terms"][number],
+  right: DomainLanguageSummary["terms"][number],
+): number {
+  return domainTermRank(right) - domainTermRank(left) || left.term.localeCompare(right.term);
+}
+
+function domainTermRank(term: DomainLanguageSummary["terms"][number]): number {
+  const sourceRank =
+    term.source === "core-flow" ? 30 : term.source === "domain-manifest" ? 20 : term.source === "changed-file" ? 10 : 0;
+  const confidenceRank = term.confidence === "high" ? 3 : term.confidence === "medium" ? 2 : 1;
+  return sourceRank + confidenceRank;
+}
+
+function filesOverlap(left: string[], right: string[]): boolean {
+  return left.some((leftFile) => right.some((rightFile) => sameOrNestedFileReference(leftFile, rightFile)));
+}
+
+function sameOrNestedFileReference(left: string, right: string): boolean {
+  const normalizedLeft = normalizeComparisonPath(left);
+  const normalizedRight = normalizeComparisonPath(right);
+  return (
+    normalizedLeft === normalizedRight ||
+    normalizedLeft.endsWith(`/${normalizedRight}`) ||
+    normalizedRight.endsWith(`/${normalizedLeft}`)
+  );
+}
+
+function normalizeComparisonPath(file: string): string {
+  return toPosixPath(file).replace(/^\.\/+/, "").replace(/\/+$/g, "");
 }
 
 function countLabels(labels: string[]): Array<{ value: string; count: number }> {
@@ -3057,6 +3137,11 @@ function labelCandidatesFromPath(file: string): string[] {
   const surface = surfaceFromPath(file);
   if (surface) {
     return [surface];
+  }
+
+  const serviceDomain = serviceDomainFromPath(file);
+  if (serviceDomain) {
+    return [serviceDomain];
   }
 
   const stem = normalizePathSegment(path.basename(file));
@@ -3092,6 +3177,22 @@ function surfaceFromPath(file: string): string | undefined {
   return undefined;
 }
 
+function serviceDomainFromPath(file: string): string | undefined {
+  const segments = file.split("/");
+  const srcIndex = segments.indexOf("src");
+  if (srcIndex < 0) {
+    return undefined;
+  }
+  for (const segment of segments.slice(srcIndex + 1)) {
+    const candidate = normalizePathSegment(segment);
+    if (!candidate || isVersionSegment(candidate) || isBackendStructuralLabel(candidate)) {
+      continue;
+    }
+    return candidate;
+  }
+  return undefined;
+}
+
 function normalizePathSegment(segment: string | undefined): string | undefined {
   if (!segment) {
     return undefined;
@@ -3104,6 +3205,35 @@ function normalizePathSegment(segment: string | undefined): string | undefined {
     .replace(/^_+|_+$/g, "")
     .trim();
   return isMeaningfulLabel(normalized) ? normalized : undefined;
+}
+
+function isVersionSegment(value: string): boolean {
+  return /^v?\d+(?:\.\d+)?$/i.test(value);
+}
+
+function isBackendStructuralLabel(value: string): boolean {
+  return new Set([
+    "common",
+    "commons",
+    "controller",
+    "controllers",
+    "core",
+    "handler",
+    "handlers",
+    "helper",
+    "helpers",
+    "interface",
+    "interfaces",
+    "lib",
+    "libs",
+    "middleware",
+    "middlewares",
+    "model",
+    "models",
+    "schema",
+    "schemas",
+    "shared",
+  ]).has(value.toLowerCase());
 }
 
 function isMeaningfulLabel(value: string): boolean {

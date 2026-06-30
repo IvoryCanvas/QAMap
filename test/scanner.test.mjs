@@ -701,6 +701,88 @@ test("generateE2ePlan treats API service source utilities as contract-impacting 
   assert.equal(plan.flows.some((item) => item.title === "Changed-file smoke checklist"), false);
 });
 
+test("generateE2ePlan names versioned API service paths with domain language", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/v1/offer"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      dependencies: {
+        express: "^4.18.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "src/v1/offer/utils.ts"), "export function getToken() { return undefined; }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/offer-token"]);
+  await writeFile(path.join(root, "src/v1/offer/utils.ts"), "export function getToken() { return 'cookie-token'; }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update offer token"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((item) => /API contract/.test(item.title));
+
+  assert.ok(flow);
+  assert.equal(flow.title, "Offer API contract smoke checklist");
+  assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Offer"));
+});
+
+test("generateE2ePlan uses matched core flow names for API service contracts", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, "src/v1/offer"), { recursive: true });
+  await writeFile(
+    path.join(root, ".codeward/flows.yml"),
+    [
+      "flows:",
+      "  - id: offer-token-fallback",
+      "    name: Offer token fallback",
+      "    priority: critical",
+      "    files:",
+      "      - src/v1/offer/**",
+      "    checks:",
+      "      - Read token from the authorization header.",
+      "      - Fall back to the token cookie when the header is absent.",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      dependencies: {
+        express: "^4.18.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "src/v1/offer/utils.ts"), "export function getToken() { return undefined; }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/offer-token-fallback"]);
+  await writeFile(path.join(root, "src/v1/offer/utils.ts"), "export function getToken() { return 'cookie-token'; }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update offer token fallback"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((item) => /API contract/.test(item.title));
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e" });
+  const draftFile = draft.files.find((file) => file.flowTitle === "Offer token fallback");
+
+  assert.equal(plan.coreFlows.length, 1);
+  assert.ok(flow);
+  assert.equal(flow.title, "Offer token fallback API contract smoke checklist");
+  assert.equal(flow.languageBrief.actor, "API consumer or upstream service");
+  assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Offer token fallback"));
+  assert.ok(draftFile);
+  assert.equal(draftFile.source, "core-flow");
+  assert.equal(draftFile.promotionStatus, "needs-review");
+});
+
 test("generateE2ePlan keeps service changes generic and avoids fixture-specific names", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
