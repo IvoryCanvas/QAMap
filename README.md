@@ -100,7 +100,7 @@ HIGH
 
 ## Install
 
-The package metadata is ready for the first npm release, but the public package should wait until release validation covers representative web, mobile, monorepo, and test-light repositories.
+The package metadata is ready for the first npm release, but the public package should wait until release validation covers representative web, mobile, monorepo, and test-light repositories. See [0.1.0 release validation](docs/release-validation.md).
 
 ```sh
 pnpm dlx @ivorycanvas/codeward scan .
@@ -324,7 +324,7 @@ CodeWard starts as a local CLI and should stay small enough that maintainers can
 
 Near-term priorities:
 
-- finish `0.1.0` release validation across representative web, mobile, monorepo, and test-light repositories
+- finish the [0.1.0 release validation](docs/release-validation.md) checklist across representative web, mobile, monorepo, and test-light repositories
 - publish a versioned GitHub Action release tag after the first public package is ready
 - improve branch-aware `review` changed-line locations
 - improve generated domain test plans with framework-specific test skeletons
