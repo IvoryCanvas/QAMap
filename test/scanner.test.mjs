@@ -1988,6 +1988,145 @@ test("generateE2ePlan infers Playwright base URLs from dev scripts", async () =>
   assert.match(runnerAction.detail, /http:\/\/localhost:3004/);
 });
 
+test("generateE2eDraft supports Next app router route groups and concrete route hints", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/app/(shop)/products/[productId]"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      packageManager: "pnpm@10.32.1",
+      scripts: {
+        dev: "next dev",
+        test: "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        next: "^15.0.0",
+        react: "^19.0.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/app/(shop)/products/[productId]/page.tsx"),
+    [
+      "import Link from 'next/link';",
+      "export default function ProductPage() {",
+      "  return <main>",
+      "    <Link href=\"/products/demo-product\">Demo product</Link>",
+      "    <button aria-label=\"Buy product\">Buy</button>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/product-page"]);
+  await writeFile(
+    path.join(root, "src/app/(shop)/products/[productId]/page.tsx"),
+    [
+      "import Link from 'next/link';",
+      "export default function ProductPage() {",
+      "  return <main>",
+      "    <Link href=\"/products/demo-product\">Demo product</Link>",
+      "    <button aria-label=\"Buy product\">Buy product</button>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update product page"]);
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const draftFile = draft.files.find((file) => /route \/products\/:productId/.test(file.primaryEntrypoint ?? ""));
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+
+  assert.equal(draft.plan.project.type, "web");
+  assert.match(spec, /route \/products\/:productId \[high\]/);
+  assert.match(spec, /route \/products\/demo-product \[medium\]/);
+  assert.match(spec, /productId: "demo-product"/);
+  assert.match(spec, /page\.goto\(`\/products\/\$\{routeParams\.productId\}`\)/);
+  assert.match(spec, /page\.getByLabel\("Buy product"\)\.click\(\)/);
+  assert.doesNotMatch(spec, /route \/\(shop\)/);
+  assert.doesNotMatch(spec, /page\.goto\(`\/\(shop\)\//);
+  assert.doesNotMatch(spec, /TODO-productId/);
+});
+
+test("generateE2ePlan reads React Router object route paths", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        dev: "vite",
+        test: "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        react: "^19.0.0",
+        "react-dom": "^19.0.0",
+        "react-router-dom": "^7.0.0",
+        vite: "^7.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/AppRoutes.tsx"),
+    [
+      "import { createBrowserRouter } from 'react-router-dom';",
+      "export const router = createBrowserRouter([",
+      "  { path: '/reports/:reportId', element: <div>Report</div> },",
+      "]);",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/report-route"]);
+  await writeFile(
+    path.join(root, "src/AppRoutes.tsx"),
+    [
+      "import { createBrowserRouter } from 'react-router-dom';",
+      "export const router = createBrowserRouter([",
+      "  { path: '/reports/:reportId', element: <button data-testid=\"refresh-report\">Refresh report</button> },",
+      "]);",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update report route"]);
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const routeEntrypoints = draft.plan.flows.flatMap((flow) => flow.entrypoints.filter((entrypoint) => entrypoint.kind === "route"));
+  const draftFile = draft.files.find((file) => /route \/reports\/:reportId/.test(file.primaryEntrypoint ?? ""));
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+
+  assert.equal(draft.plan.project.type, "web");
+  assert.ok(routeEntrypoints.some((entrypoint) => entrypoint.value === "/reports/:reportId"));
+  assert.equal(routeEntrypoints.some((entrypoint) => entrypoint.value === "/app-routes"), false);
+  assert.match(spec, /route \/reports\/:reportId \[medium\]/);
+  assert.match(spec, /reportId: "TODO-report-id"/);
+  assert.match(spec, /page\.goto\(`\/reports\/\$\{routeParams\.reportId\}`\)/);
+  assert.match(spec, /page\.getByTestId\("refresh-report"\)\.click\(\)/);
+});
+
 test("generateE2eDraft emits runnable Playwright role and input actions", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);

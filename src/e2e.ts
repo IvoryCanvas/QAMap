@@ -2521,6 +2521,7 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
     "next",
     "nuxt",
     "react-dom",
+    "react-router-dom",
     "svelte",
     "vue",
     "vite",
@@ -4058,12 +4059,16 @@ function entrypointsFromPath(file: string, runner: E2eRunnerName): E2eEntrypoint
 function entrypointsFromText(file: string, text: string, runner: E2eRunnerName): E2eEntrypoint[] {
   const entrypoints: E2eEntrypoint[] = [];
   if (runner !== "maestro") {
-    const routeMatcher =
-      /(?:href|to)\s*=\s*(?:"([^"]+)"|'([^']+)'|\{\s*["']([^"']+)["']\s*\})|(?:router\.(?:push|replace)|navigate)\(\s*["']([^"']+)["']/g;
-    for (const match of text.matchAll(routeMatcher)) {
-      const route = normalizeEntrypointRoute(match[1] ?? match[2] ?? match[3] ?? match[4]);
-      if (route) {
-        entrypoints.push({ kind: "route", value: route, file, confidence: "medium" });
+    const routeMatchers = [
+      /(?:href|to)\s*=\s*(?:"([^"]+)"|'([^']+)'|\{\s*["']([^"']+)["']\s*\})|(?:router\.(?:push|replace)|navigate)\(\s*["']([^"']+)["']/g,
+      /\b(?:path|pathname)\s*:\s*["']([^"']+)["']/g,
+    ];
+    for (const matcher of routeMatchers) {
+      for (const match of text.matchAll(matcher)) {
+        const route = normalizeEntrypointRoute(match[1] ?? match[2] ?? match[3] ?? match[4]);
+        if (route) {
+          entrypoints.push({ kind: "route", value: route, file, confidence: "medium" });
+        }
       }
     }
   }
@@ -4084,6 +4089,9 @@ function routeEntrypointFromPath(
   file: string,
 ): { value: string; confidence: E2eEntrypointConfidence } | undefined {
   if (!isPotentialRouteEntrypointFile(file)) {
+    return undefined;
+  }
+  if (isRouteConfigEntrypointFile(file)) {
     return undefined;
   }
   const segments = file.split("/");
@@ -4129,6 +4137,11 @@ function isPotentialRouteEntrypointFile(file: string): boolean {
   return isUiImplementationFile(file) || /(?:^|\/)(?:app|pages|routes)\/.*(?:page|route)\.[cm]?[jt]sx?$/i.test(file);
 }
 
+function isRouteConfigEntrypointFile(file: string): boolean {
+  const basename = stripKnownExtension(path.basename(file));
+  return /^(?:app[-_ ]?)?routes?|(?:app[-_ ]?)?router|route[-_ ]?config$/i.test(basename);
+}
+
 function isPotentialScreenEntrypointFile(file: string): boolean {
   return isUiImplementationFile(file) || /(?:^|\/)(?:screens?|navigations?)\//i.test(file);
 }
@@ -4152,17 +4165,21 @@ function normalizeRouteSegments(rawSegments: string[]): string[] {
 
 function normalizeRouteSegment(segment: string): string | undefined {
   const stem = stripKnownExtension(segment);
-  if (!stem || /^\([^)]*\)$/.test(stem) || stem.startsWith("_")) {
+  if (!stem || /^\([^)]*\)$/.test(stem) || stem.startsWith("_") || stem.startsWith("@")) {
     return undefined;
   }
-  if (/^(?:index|page|route|layout|template|loading|error|not-found|404|500)$/i.test(stem)) {
+  const routeStem = stem.replace(/^\((?:\.{1,3})\)/, "");
+  if (!routeStem) {
     return undefined;
   }
-  const dynamic = dynamicRouteSegmentName(stem);
+  if (/^(?:index|page|route|layout|template|loading|error|not-found|404|500)$/i.test(routeStem)) {
+    return undefined;
+  }
+  const dynamic = dynamicRouteSegmentName(routeStem);
   if (dynamic) {
     return `:${normalizeRouteParamName(dynamic)}`;
   }
-  return slugify(stem.replace(/Page$/i, ""));
+  return slugify(routeStem.replace(/Page$/i, ""));
 }
 
 function dynamicRouteSegmentName(segment: string): string | undefined {
@@ -4198,7 +4215,39 @@ function normalizeEntrypointRoute(value: string | undefined): string | undefined
     return undefined;
   }
   const withoutQuery = value.split(/[?#]/)[0];
-  return withoutQuery.length > 0 && withoutQuery.length <= 120 ? withoutQuery : undefined;
+  if (withoutQuery.length === 0 || withoutQuery.length > 120) {
+    return undefined;
+  }
+  const segments = withoutQuery.split("/").filter(Boolean);
+  const normalizedSegments: string[] = [];
+  for (const segment of segments) {
+    const normalized = normalizeEntrypointRouteSegment(segment);
+    if (normalized) {
+      normalizedSegments.push(normalized);
+    }
+  }
+  return normalizedSegments.length === 0 ? "/" : `/${normalizedSegments.join("/")}`;
+}
+
+function normalizeEntrypointRouteSegment(segment: string): string | undefined {
+  if (!segment || /^\([^)]*\)$/.test(segment) || segment.startsWith("_") || segment.startsWith("@")) {
+    return undefined;
+  }
+  const routeSegment = segment.replace(/^\((?:\.{1,3})\)/, "");
+  if (!routeSegment) {
+    return undefined;
+  }
+  const dynamic = dynamicRouteSegmentName(routeSegment);
+  if (dynamic) {
+    return `:${normalizeRouteParamName(dynamic)}`;
+  }
+  if (routeSegment.startsWith(":")) {
+    return `:${normalizeRouteParamName(routeSegment.slice(1))}`;
+  }
+  if (/[\s<>"'`\\]/.test(routeSegment)) {
+    return undefined;
+  }
+  return routeSegment;
 }
 
 function normalizeScreenName(value: string | undefined): string | undefined {

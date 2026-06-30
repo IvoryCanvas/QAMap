@@ -73,6 +73,24 @@ Command: pnpm run test:e2e
 Summary: Playwright draft passed static runner checks.
 ```
 
+For framework-native routing, CodeWard should preserve the route a user can actually open rather than framework-only folder syntax. A Next App Router file such as `src/app/(shop)/products/[productId]/page.tsx` should become `/products/:productId`, and a concrete link such as `/products/demo-product` can seed the generated route params:
+
+```ts
+const routeParams = {
+  productId: "demo-product",
+};
+
+await page.goto(`/products/${routeParams.productId}`);
+```
+
+React Router config should work similarly when route objects expose path values:
+
+```ts
+createBrowserRouter([
+  { path: "/reports/:reportId", element: <ReportPage /> },
+]);
+```
+
 ## Expo / React Native Flow
 
 For an Expo or React Native change, CodeWard should recommend Maestro and carry mobile selectors into the draft:
