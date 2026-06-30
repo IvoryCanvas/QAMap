@@ -239,6 +239,7 @@ export interface E2eDraftFile {
   stability?: "ready" | "needs-selector" | "needs-setup" | "needs-selector-and-setup";
   runnableStatus?: "runnable-candidate" | "near-runnable" | "review-only";
   executionBlockers?: string[];
+  selfCheck?: E2eDraftSelfCheck;
   todoCount?: number;
   entrypointCount?: number;
   primaryEntrypoint?: string;
@@ -254,6 +255,22 @@ export interface E2eDraftFile {
 
 export type E2eDraftActionKind = "assertion" | "fixture" | "manifest" | "runner" | "selector" | "setup" | "validation";
 export type E2eDraftActionPriority = "required" | "recommended";
+
+export type E2eDraftSelfCheckStatus = "pass" | "warning" | "fail";
+
+export interface E2eDraftSelfCheckItem {
+  name: string;
+  status: E2eDraftSelfCheckStatus;
+  detail: string;
+}
+
+export interface E2eDraftSelfCheck {
+  status: E2eDraftSelfCheckStatus;
+  summary: string;
+  command?: string;
+  checks: E2eDraftSelfCheckItem[];
+  blockers: string[];
+}
 
 export interface E2eDraftActionItem {
   kind: E2eDraftActionKind;
@@ -415,10 +432,14 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
     const displayPath = toDisplayPath(root, filePath);
     const validationSummary = summarizeDraftValidation(flow);
     const promotionGuidance = buildDraftPromotionGuidance(flow);
-    const actionItems = buildDraftActionItems(plan, flow, runner, validationSummary, promotionGuidance);
-    const executionBlockers = draftExecutionBlockers(plan, flow, runner, validationSummary);
-    const runnableStatus = draftRunnableStatus(plan, flow, runner, validationSummary, executionBlockers);
-    if ((await exists(filePath)) && !options.force) {
+    const shouldSkip = (await exists(filePath)) && !options.force;
+    const content = shouldSkip ? ((await readTextIfExists(filePath)) ?? "") : draftContentForFlow(plan, flow, runner);
+    const todoCount = countTodos(content);
+    const selfCheck = evaluateDraftSelfCheck(plan, flow, runner, content, todoCount);
+    const actionItems = buildDraftActionItems(plan, flow, runner, validationSummary, promotionGuidance, selfCheck);
+    const executionBlockers = draftExecutionBlockers(plan, flow, runner, validationSummary, selfCheck);
+    const runnableStatus = draftRunnableStatus(plan, flow, runner, validationSummary, executionBlockers, selfCheck);
+    if (shouldSkip) {
       files.push({
         path: displayPath,
         flowTitle: flow.title,
@@ -433,6 +454,8 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
         stability: draftStability(plan, flow),
         runnableStatus,
         executionBlockers,
+        selfCheck,
+        todoCount,
         entrypointCount: flow.entrypoints.length,
         primaryEntrypoint: primaryEntrypointLabel(flow),
         setupHintCount: flow.setupHints.length,
@@ -445,7 +468,6 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
       });
       continue;
     }
-    const content = draftContentForFlow(plan, flow, runner);
     await fs.writeFile(filePath, content, "utf8");
     files.push({
       path: displayPath,
@@ -461,7 +483,8 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
       stability: draftStability(plan, flow),
       runnableStatus,
       executionBlockers,
-      todoCount: countTodos(content),
+      selfCheck,
+      todoCount,
       entrypointCount: flow.entrypoints.length,
       primaryEntrypoint: primaryEntrypointLabel(flow),
       setupHintCount: flow.setupHints.length,
@@ -1362,6 +1385,7 @@ function buildDraftActionItems(
   runner: E2eRunnerName,
   validationSummary: ReturnType<typeof summarizeDraftValidation>,
   promotionGuidance: E2eDraftPromotionGuidance,
+  selfCheck?: E2eDraftSelfCheck,
 ): E2eDraftActionItem[] {
   const items: E2eDraftActionItem[] = [];
   const runnerGap = runnerSetupGap(plan, runner);
@@ -1428,12 +1452,28 @@ function buildDraftActionItems(
     ));
   }
 
-  if (flow.steps.length > 0) {
+  if (flow.steps.length > 0 && draftNeedsAssertionWork(selfCheck)) {
     items.push(draftActionItem(
       "assertion",
       "required",
       "Turn generated TODOs into runnable assertions",
       `Preserve the success signal "${flow.languageBrief.successSignal}" while replacing placeholder interactions and expects.`,
+    ));
+  }
+
+  if (selfCheck?.status === "fail") {
+    items.push(draftActionItem(
+      "validation",
+      "required",
+      "Resolve generated draft self-check",
+      selfCheck.blockers[0] ?? selfCheck.summary,
+    ));
+  } else if (selfCheck?.status === "warning") {
+    items.push(draftActionItem(
+      "validation",
+      "recommended",
+      "Review generated draft self-check",
+      selfCheck.summary,
     ));
   }
 
@@ -1463,6 +1503,17 @@ function buildDraftActionItems(
   }
 
   return uniqueDraftActionItems(items).slice(0, 8);
+}
+
+function draftNeedsAssertionWork(selfCheck?: E2eDraftSelfCheck): boolean {
+  if (!selfCheck) {
+    return true;
+  }
+  return selfCheck.checks.some(
+    (check) =>
+      (check.name === "Unresolved placeholders" && check.status !== "pass") ||
+      (check.name === "TODO comments" && check.status !== "pass"),
+  );
 }
 
 function runnerSetupGap(plan: E2ePlanResult, runner: E2eRunnerName): string | undefined {
@@ -2073,6 +2124,26 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
     lines.push(`- ${file.status}: \`${escapeMarkdownInline(file.path)}\` (${escapeMarkdownInline(file.flowTitle)})${suffix}`);
   }
   lines.push("");
+
+  const filesWithSelfChecks = result.files.filter((file) => file.selfCheck !== undefined);
+  if (filesWithSelfChecks.length > 0) {
+    lines.push("## Draft Self Checks");
+    lines.push("");
+    for (const file of filesWithSelfChecks) {
+      const selfCheck = file.selfCheck;
+      if (!selfCheck) {
+        continue;
+      }
+      lines.push(`- \`${escapeMarkdownInline(file.flowTitle)}\` (${escapeMarkdownInline(file.path)}): ${selfCheck.status} - ${escapeMarkdownInline(selfCheck.summary)}`);
+      if (selfCheck.command) {
+        lines.push(`  - Command: \`${escapeMarkdownInline(selfCheck.command)}\``);
+      }
+      for (const check of selfCheck.checks.filter((item) => item.status !== "pass").slice(0, 4)) {
+        lines.push(`  - [${check.status}] ${escapeMarkdownInline(check.name)}: ${escapeMarkdownInline(check.detail)}`);
+      }
+    }
+    lines.push("");
+  }
 
   const filesWithActionItems = result.files.filter((file) => (file.actionItems?.length ?? 0) > 0);
   if (filesWithActionItems.length > 0) {
@@ -4271,6 +4342,7 @@ function draftExecutionBlockers(
   flow: E2eFlow,
   runner: E2eRunnerName,
   validationSummary: ReturnType<typeof summarizeDraftValidation>,
+  selfCheck?: E2eDraftSelfCheck,
 ): string[] {
   const blockers = [...plan.executionProfile.blockers];
   if (runner !== "manual" && flow.entrypoints.length === 0) {
@@ -4285,6 +4357,9 @@ function draftExecutionBlockers(
   if (validationSummary.blockingGapCount > 0) {
     blockers.push(`${validationSummary.blockingGapCount} blocking validation gap${validationSummary.blockingGapCount === 1 ? "" : "s"} remain.`);
   }
+  if (selfCheck?.status === "fail") {
+    blockers.push(...selfCheck.blockers);
+  }
   return uniqueStrings(blockers).slice(0, 8);
 }
 
@@ -4294,15 +4369,20 @@ function draftRunnableStatus(
   runner: E2eRunnerName,
   validationSummary: ReturnType<typeof summarizeDraftValidation>,
   executionBlockers: string[],
+  selfCheck?: E2eDraftSelfCheck,
 ): "runnable-candidate" | "near-runnable" | "review-only" {
   if (runner === "manual") {
+    return "review-only";
+  }
+  if (selfCheck?.status === "fail") {
     return "review-only";
   }
   if (
     executionBlockers.length === 0 &&
     validationSummary.blockingGapCount === 0 &&
     flow.missingTestability.length === 0 &&
-    (flow.fixtureReadiness.status === "ready" || flow.fixtureReadiness.status === "not-needed")
+    (flow.fixtureReadiness.status === "ready" || flow.fixtureReadiness.status === "not-needed") &&
+    selfCheck?.status === "pass"
   ) {
     return "runnable-candidate";
   }
@@ -4310,6 +4390,173 @@ function draftRunnableStatus(
     return "near-runnable";
   }
   return "review-only";
+}
+
+function evaluateDraftSelfCheck(
+  plan: E2ePlanResult,
+  flow: E2eFlow,
+  runner: E2eRunnerName,
+  content: string,
+  todoCount: number,
+): E2eDraftSelfCheck {
+  if (runner === "playwright") {
+    return evaluatePlaywrightDraftSelfCheck(plan, flow, content, todoCount);
+  }
+  if (runner === "maestro") {
+    return evaluateMaestroDraftSelfCheck(plan, content, todoCount);
+  }
+  return buildDraftSelfCheck(
+    "warning",
+    "Manual checklist output cannot be runner-checked automatically.",
+    undefined,
+    [
+      draftSelfCheckItem(
+        "Manual runner",
+        "warning",
+        "Manual E2E drafts are review evidence until the project declares a runnable runner.",
+      ),
+    ],
+  );
+}
+
+function evaluatePlaywrightDraftSelfCheck(
+  plan: E2ePlanResult,
+  flow: E2eFlow,
+  content: string,
+  todoCount: number,
+): E2eDraftSelfCheck {
+  const checks: E2eDraftSelfCheckItem[] = [];
+  checks.push(draftSelfCheckItem(
+    "Playwright import",
+    content.includes('from "@playwright/test"') ? "pass" : "fail",
+    content.includes('from "@playwright/test"')
+      ? "The draft imports Playwright test APIs."
+      : "The draft does not import Playwright test APIs.",
+  ));
+  checks.push(draftSelfCheckItem(
+    "Test case",
+    /\btest\(\s*["'`][^"'`]+["'`]\s*,\s*async\s*\(\s*\{\s*page\s*\}\s*\)/.test(content) ? "pass" : "fail",
+    "The draft should expose one Playwright test that receives a page fixture.",
+  ));
+  const needsEntrypoint = flow.entrypoints.some((entrypoint) => entrypoint.kind === "route");
+  const hasRunnableGoto = /page\.goto\(\s*(?:"(?!TODO)[^"]+"|'(?!TODO)[^']+'|`(?!.*TODO)[^`]+`)\s*\)/.test(content);
+  checks.push(draftSelfCheckItem(
+    "Runnable entrypoint",
+    !needsEntrypoint || hasRunnableGoto ? "pass" : "fail",
+    needsEntrypoint
+      ? "The draft should navigate to an inferred route without placeholder route values."
+      : "No route entrypoint was required for this flow.",
+  ));
+  const unresolvedPlaceholder =
+    /getBy(?:Text|Label|Placeholder|TestId)\(\s*["'`]TODO["'`]\s*\)|getByRole\([^)]*name:\s*["'`]TODO["'`][^)]*\)|TODO-[A-Za-z0-9-]+|Replace routeParams/i.test(content);
+  checks.push(draftSelfCheckItem(
+    "Unresolved placeholders",
+    unresolvedPlaceholder ? "fail" : "pass",
+    unresolvedPlaceholder
+      ? "The draft still contains placeholder locators or route parameters."
+      : "No placeholder locators or route parameters were detected.",
+  ));
+  checks.push(draftSelfCheckItem(
+    "TODO comments",
+    todoCount === 0 ? "pass" : "warning",
+    todoCount === 0
+      ? "No TODO comments remain in the generated draft."
+      : `${todoCount} TODO marker${todoCount === 1 ? "" : "s"} remain for reviewer follow-up.`,
+  ));
+  checks.push(draftSelfCheckItem(
+    "Execution profile",
+    plan.executionProfile.confidence === "low" || plan.executionProfile.blockers.length > 0 ? "warning" : "pass",
+    plan.executionProfile.confidence === "low" || plan.executionProfile.blockers.length > 0
+      ? "Runner setup, base URL, launch command, or config evidence is incomplete."
+      : "Runner setup evidence is strong enough for a local execution attempt.",
+  ));
+  return buildDraftSelfCheck(
+    draftSelfCheckStatus(checks),
+    draftSelfCheckSummary(checks, "Playwright"),
+    plan.executionProfile.testCommand ?? "npx playwright test",
+    checks,
+  );
+}
+
+function evaluateMaestroDraftSelfCheck(
+  plan: E2ePlanResult,
+  content: string,
+  todoCount: number,
+): E2eDraftSelfCheck {
+  const hasAppId = /^appId:\s*(?!\$\{APP_ID\})\S+/m.test(content);
+  const checks = [
+    draftSelfCheckItem(
+      "Maestro app id",
+      hasAppId || plan.executionProfile.appId ? "pass" : "warning",
+      hasAppId || plan.executionProfile.appId
+        ? "The draft has an app id signal."
+        : "The draft still depends on APP_ID being supplied by the runner environment.",
+    ),
+    draftSelfCheckItem(
+      "Launch app",
+      /-\s*launchApp\b/.test(content) ? "pass" : "fail",
+      "The draft should launch the app before interactions.",
+    ),
+    draftSelfCheckItem(
+      "TODO comments",
+      todoCount === 0 ? "pass" : "warning",
+      todoCount === 0
+        ? "No TODO comments remain in the generated draft."
+        : `${todoCount} TODO marker${todoCount === 1 ? "" : "s"} remain for reviewer follow-up.`,
+    ),
+  ];
+  return buildDraftSelfCheck(
+    draftSelfCheckStatus(checks),
+    draftSelfCheckSummary(checks, "Maestro"),
+    plan.executionProfile.testCommand ?? "maestro test .maestro",
+    checks,
+  );
+}
+
+function buildDraftSelfCheck(
+  status: E2eDraftSelfCheckStatus,
+  summary: string,
+  command: string | undefined,
+  checks: E2eDraftSelfCheckItem[],
+): E2eDraftSelfCheck {
+  return {
+    status,
+    summary,
+    command,
+    checks,
+    blockers: checks.filter((check) => check.status === "fail").map((check) => `${check.name}: ${check.detail}`),
+  };
+}
+
+function draftSelfCheckItem(
+  name: string,
+  status: E2eDraftSelfCheckStatus,
+  detail: string,
+): E2eDraftSelfCheckItem {
+  return { name, status, detail };
+}
+
+function draftSelfCheckStatus(checks: E2eDraftSelfCheckItem[]): E2eDraftSelfCheckStatus {
+  if (checks.some((check) => check.status === "fail")) {
+    return "fail";
+  }
+  if (checks.some((check) => check.status === "warning")) {
+    return "warning";
+  }
+  return "pass";
+}
+
+function draftSelfCheckSummary(checks: E2eDraftSelfCheckItem[], runnerName: string): string {
+  const status = draftSelfCheckStatus(checks);
+  const failures = checks.filter((check) => check.status === "fail").length;
+  const warnings = checks.filter((check) => check.status === "warning").length;
+  if (status === "pass") {
+    return `${runnerName} draft passed static runner checks.`;
+  }
+  if (status === "fail") {
+    return `${runnerName} draft failed ${failures} static runner check${failures === 1 ? "" : "s"}.`;
+  }
+  return `${runnerName} draft passed required static checks with ${warnings} warning${warnings === 1 ? "" : "s"}.`;
 }
 
 function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
@@ -5189,6 +5436,9 @@ function formatDraftFileQuality(file: E2eDraftFile): string | undefined {
   }
   if (file.executionBlockers !== undefined && file.executionBlockers.length > 0) {
     details.push(`${file.executionBlockers.length} execution blocker${file.executionBlockers.length === 1 ? "" : "s"}`);
+  }
+  if (file.selfCheck !== undefined) {
+    details.push(`self-check ${file.selfCheck.status}`);
   }
   if (file.stability !== undefined) {
     details.push(file.stability);

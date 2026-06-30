@@ -215,6 +215,7 @@ The draft result is meant to be useful as a PR artifact, not only as generated f
 - `languageBrief`: actor, trigger, goal, success signal, reviewer question, and edge cases for each draft file
 - `promotionStatus`: whether the draft is a `commit-candidate`, `needs-review`, or `low-signal`
 - `runnableStatus`: whether the draft is a `runnable-candidate`, `near-runnable`, or `review-only`
+- `selfCheck`: static runner checks for generated draft structure, unresolved placeholders, TODO markers, and the execution profile
 - `actionItems`: required and recommended follow-up work, grouped by assertion, fixture, selector, runner, validation, and manifest
 - `actionSummary`: total required/recommended action counts, ready file count, and the most common action categories
 

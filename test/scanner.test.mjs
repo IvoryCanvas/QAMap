@@ -1570,7 +1570,7 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
   assert.match(spec, /Inferred selectors/);
 });
 
-test("generateE2ePlan captures Playwright execution profile for runnable drafts", async () => {
+test("generateE2ePlan captures Playwright execution profile and self-check blockers", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, "src/pages/profile"), { recursive: true });
@@ -1625,9 +1625,12 @@ test("generateE2ePlan captures Playwright execution profile for runnable drafts"
   assert.match(markdown, /## Execution Profile/);
   assert.match(markdown, /Start command: `pnpm run dev`/);
   assert.match(markdown, /Base URL: `http:\/\/127\.0\.0\.1:4173`/);
-  assert.equal(draftFile.runnableStatus, "near-runnable");
+  assert.equal(draftFile.runnableStatus, "review-only");
+  assert.equal(draftFile.selfCheck?.status, "fail");
+  assert.ok(draftFile.selfCheck?.blockers.some((blocker) => /Unresolved placeholders/.test(blocker)));
   assert.deepEqual(draftFile.executionBlockers?.filter((blocker) => /Playwright|baseURL|start command/i.test(blocker)), []);
-  assert.match(formatMarkdownE2eDraft(draft), /near-runnable/);
+  assert.match(formatMarkdownE2eDraft(draft), /review-only/);
+  assert.match(formatMarkdownE2eDraft(draft), /## Draft Self Checks/);
   assert.match(spec, /Execution profile:/);
   assert.match(spec, /Start command: pnpm run dev/);
   assert.match(spec, /Test command: pnpm run test:e2e/);
@@ -1702,7 +1705,7 @@ test("generateE2eDraft emits runnable Playwright role and input actions", async 
       "    <input placeholder=\"Profile email\" />",
       "    <button>Save settings</button>",
       "    <a href=\"/settings/history\">View history</a>",
-      "    <p>Saved settings</p>",
+      "    <span title=\"Saved settings\">Saved settings</span>",
       "  </main>;",
       "}",
     ].join("\n"),
@@ -1717,11 +1720,17 @@ test("generateE2eDraft emits runnable Playwright role and input actions", async 
 
   assert.match(spec, /page\.getByPlaceholder\("Profile email"\)\.fill\("codeward@example.com"\)/);
   assert.match(spec, /page\.getByRole\("button", \{ name: "Save settings" \}\)\.click\(\)/);
+  assert.match(spec, /expect\(page\.getByText\("Saved settings"\)\)\.toBeVisible\(\)/);
   assert.match(spec, /role-button: Save settings/);
   assert.match(spec, /role-link: View history/);
+  assert.equal(draftFile.selfCheck?.status, "pass");
+  assert.equal(draftFile.selfCheck?.summary, "Playwright draft passed static runner checks.");
+  assert.match(formatMarkdownE2eDraft(draft), /Draft Self Checks/);
+  assert.doesNotMatch(formatMarkdownE2eDraft(draft), /Turn generated TODOs into runnable assertions/);
   assert.doesNotMatch(spec, /page\.getByLabel\("Profile email"\)/);
   assert.doesNotMatch(spec, /\/\/ TODO: Fill profile email/);
   assert.doesNotMatch(spec, /\/\/ TODO: Save settings/);
+  assert.doesNotMatch(spec, /\bTODO\b/);
 });
 
 test("generateE2eDraft normalizes dynamic routes without creating id domain scenarios", async () => {

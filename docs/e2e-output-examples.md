@@ -65,6 +65,14 @@ await test.step("Save settings.", async () => {
 });
 ```
 
+The draft result should also explain whether the generated file passed static runner checks:
+
+```txt
+Draft self-check: pass
+Command: pnpm run test:e2e
+Summary: Playwright draft passed static runner checks.
+```
+
 ## Expo / React Native Flow
 
 For an Expo or React Native change, CodeWard should recommend Maestro and carry mobile selectors into the draft:
@@ -136,6 +144,7 @@ Draft action items should make the next developer action explicit:
 ```txt
 Action summary:
 - runnable status: near-runnable
+- self-check: warning or fail when placeholder locators remain
 - required assertion: Turn generated TODOs into runnable assertions
 - required fixture: Add deterministic fixture or mock data
 - required validation: Resolve missing validation evidence
