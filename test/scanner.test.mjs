@@ -1190,13 +1190,19 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   const draftFile = draft.files.find((file) => file.flowTitle === "Checkout purchase");
   assert.ok(draftFile);
   assert.equal(draftFile.source, "core-flow");
+  assert.equal(draftFile.promotionStatus, "commit-candidate");
+  assert.match(draftFile.promotionReason, /Team-approved core flow already exists/);
   assert.ok((draftFile.validationGapCount ?? 0) > 0);
   assert.match(draftFile.primaryEntrypoint ?? "", /route \/checkout \[high\] \(\.codeward\/flows\.yml\)/);
+  assert.match(formatMarkdownE2eDraft(draft), /## Manifest Promotion Guidance/);
+  assert.match(formatMarkdownE2eDraft(draft), /commit-candidate: `Checkout purchase`/);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
   assert.match(spec, /Core flow: checkout-purchase \[critical\]/);
   assert.match(spec, /Keep manifest checks required: Complete checkout with a valid payment method and Verify declined payment recovery\./);
   assert.match(spec, /route \/checkout \[high\] \(\.codeward\/flows\.yml\)/);
   assert.match(spec, /Validation gaps before this draft can be required/);
+  assert.match(spec, /Manifest promotion guidance/);
+  assert.match(spec, /Status: commit-candidate/);
   assert.match(spec, /\[partial\] Checkout purchase: Make the matched core flow checks required validation evidence/);
   assert.match(spec, /page\.goto\("\/checkout"\)/);
   assert.match(spec, /TODO: Complete checkout with a valid payment method\./);
@@ -1280,10 +1286,14 @@ test("generateE2ePlan uses committed domain manifests for language and draft rou
   const draftFile = draft.files.find((file) => file.flowTitle === "Membership renewal");
   assert.ok(draftFile);
   assert.equal(draftFile.source, "domain-language");
+  assert.equal(draftFile.promotionStatus, "commit-candidate");
+  assert.match(draftFile.promotionReason, /Committed domain scenario matched/);
   assert.match(draftFile.primaryEntrypoint ?? "", /route \/membership\/renewal \[high\] \(\.codeward\/domains\.yml\)/);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
   assert.match(spec, /Domain scenario: Membership renewal/);
   assert.match(spec, /route \/membership\/renewal \[high\] \(\.codeward\/domains\.yml\)/);
+  assert.match(spec, /Manifest promotion guidance/);
+  assert.match(spec, /Status: commit-candidate/);
   assert.match(spec, /page\.goto\("\/membership\/renewal"\)/);
   assert.match(spec, /TODO: Renew an active membership with realistic billing data\./);
 });
@@ -1498,7 +1508,9 @@ test("generateE2eDraft creates a fallback smoke draft without changed files", as
 
   assert.equal(draft.files.length, 1);
   assert.equal(draft.files[0].flowTitle, "App launch smoke flow");
+  assert.equal(draft.files[0].promotionStatus, "low-signal");
   assert.match(spec, /Flow: App launch smoke flow/);
+  assert.match(spec, /Status: low-signal/);
   assert.match(spec, /page\.goto\("\/"\)/);
 });
 
