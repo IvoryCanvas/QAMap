@@ -100,7 +100,7 @@ HIGH
 
 ## Install
 
-The package metadata is ready for the first npm release, but the public package should wait until release validation covers representative web, mobile, monorepo, and test-light repositories. See [0.1.0 release validation](docs/release-validation.md).
+The package metadata is ready for the first npm release, but the public package should wait until release validation covers representative web, mobile, API/service, monorepo, and test-light repositories. See [0.1.0 release validation](docs/release-validation.md) and [E2E output examples](docs/e2e-output-examples.md).
 
 ```sh
 pnpm dlx @ivorycanvas/codeward scan .
@@ -213,6 +213,8 @@ The draft result is meant to be useful as a PR artifact, not only as generated f
 - `actionItems`: required and recommended follow-up work, grouped by assertion, fixture, selector, runner, validation, and manifest
 - `actionSummary`: total required/recommended action counts, ready file count, and the most common action categories
 
+See [docs/e2e-output-examples.md](docs/e2e-output-examples.md) for compact examples of web, mobile, API/service, test-light, and monorepo output.
+
 Generated Playwright drafts use the flow language as `test.step()` names so the file reads like the user journey it protects:
 
 ```ts
@@ -324,7 +326,7 @@ CodeWard starts as a local CLI and should stay small enough that maintainers can
 
 Near-term priorities:
 
-- finish the [0.1.0 release validation](docs/release-validation.md) checklist across representative web, mobile, monorepo, and test-light repositories
+- finish the [0.1.0 release validation](docs/release-validation.md) checklist across representative web, mobile, API/service, monorepo, and test-light repositories
 - publish a versioned GitHub Action release tag after the first public package is ready
 - improve branch-aware `review` changed-line locations
 - improve generated domain test plans with framework-specific test skeletons

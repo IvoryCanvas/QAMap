@@ -70,6 +70,32 @@ The E2E draft should show:
 - `actionSummary` with required and recommended action counts
 - Playwright `test.step()` names that read like the product journey
 
+## Current Fixture Evidence Matrix
+
+The matrix below is public, fixture-backed evidence from the repository test suite. It is not a substitute for final manual validation against real projects, but it proves the release bar with reproducible scenarios that can run in CI without an LLM call.
+
+| Target | Fixture-backed coverage | Expected output |
+| --- | --- | --- |
+| Web app with Playwright routes | `generateE2ePlan matches committed core flow definitions`; `generateE2eDraft uses web selectors in Playwright specs` | `Web` project profile, `playwright` runner, core-flow names such as `Checkout purchase`, route-aware Playwright drafts, stable selector hints, action items, and validation gaps. |
+| Expo / React Native mobile app | `generateE2ePlan recommends mobile flows for Expo changes`; `generateE2eDraft scopes entrypoint hints to each domain scenario` | `Expo / React Native` project profile, `maestro` runner, Maestro YAML drafts, `testID`/`accessibilityLabel` selector hints, and mobile setup actions. |
+| API or backend service | `generateE2ePlan detects API service projects and suggests contract checklists`; `generateE2ePlan names versioned API service paths with domain language`; `generateE2ePlan uses matched core flow names for API service contracts` | `API / service` project profile, manual contract checklist, domain-aware titles such as `Offer API contract`, API consumer actor, endpoint/handler/service-path trigger, and contract failure coverage. |
+| Monorepo package with workspace policy | `generateE2ePlan matches workspace core flows for package scans`; `generateTestPlan scopes monorepo changes to the requested package` | Package-local changed files, workspace-level `.codeward/flows.yml` matches, package-local generated drafts, and no leaked workspace path prefixes in package drafts. |
+| Test-light project | `generateE2ePlan builds a bootstrap plan for projects without tests`; `generateE2eDraft creates a fallback smoke draft without changed files` | Required bootstrap steps for runner setup, first draft generation, fixture/mock data, testability, and validation evidence before generated drafts are treated as regression coverage. |
+| API-dependent UI flow | `generateE2ePlan flags missing mock fixtures for API-dependent UI flows` | Playwright-compatible UI flow plus fixture/mock readiness actions for success, empty, unauthorized, timeout, and server-error responses. |
+| Existing test evidence | `generateE2ePlan evaluates existing test suite coverage evidence`; `generateE2ePlan keeps generic test filenames from overmatching unrelated services` | Coverage evidence rows that distinguish covered, partial, and missing targets without matching unrelated generic test filenames. |
+
+See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft snippets users should see before `0.1.0`.
+
+## Remaining 0.1.0 Validation Work
+
+Before publishing the package, run the fixture-backed suite plus at least one representative real project per row above. Record only public-safe notes in this document or in release notes:
+
+- whether the generated flow names match the team's domain language
+- whether the recommended runner is plausible
+- whether generated drafts identify the right actor, trigger, success signal, and edge cases
+- whether action items are concrete enough for a developer to convert into runnable tests
+- whether false positives are caused by missing manifests, weak selectors, or unsupported project structure
+
 ## Stop Conditions
 
 Do not publish `0.1.0` if any representative target shows one of these problems:

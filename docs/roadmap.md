@@ -5,7 +5,7 @@ CodeWard starts as a local CLI for repo-level AI agent readiness. The project ca
 ## Now
 
 - Keep the scanner fast, static, and easy to understand.
-- Finish the [`0.1.0` release validation checklist](release-validation.md) before the first public package release.
+- Finish the [`0.1.0` release validation checklist](release-validation.md) and public [E2E output examples](e2e-output-examples.md) before the first package release.
 - Improve adoption docs and sample output so new maintainers can try CodeWard quickly.
 - Make `verify` the best first-run experience for AI-assisted PRs.
 - Keep `eval` explainable enough that maintainers trust the score and know what to fix.
