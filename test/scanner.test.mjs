@@ -1113,6 +1113,7 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   assert.match(markdown, /Checkout purchase/);
   assert.match(markdown, /Human-approved checks:/);
   assert.match(markdown, /Declared routes:/);
+  assert.doesNotMatch(markdown, /\.\./);
 
   const draft = await generateE2eDraft(root, {
     base: "main",
@@ -1127,7 +1128,7 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   assert.match(draftFile.primaryEntrypoint ?? "", /route \/checkout \[high\] \(\.codeward\/flows\.yml\)/);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
   assert.match(spec, /Core flow: checkout-purchase \[critical\]/);
-  assert.match(spec, /Keep manifest checks required: Complete checkout with a valid payment method\. and Verify declined payment recovery\./);
+  assert.match(spec, /Keep manifest checks required: Complete checkout with a valid payment method and Verify declined payment recovery\./);
   assert.match(spec, /route \/checkout \[high\] \(\.codeward\/flows\.yml\)/);
   assert.match(spec, /Validation gaps before this draft can be required/);
   assert.match(spec, /\[partial\] Checkout purchase: Make the matched core flow checks required validation evidence/);

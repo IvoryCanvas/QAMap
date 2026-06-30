@@ -2957,7 +2957,9 @@ function formatFileSummary(files: string[]): string {
 }
 
 function formatHumanList(values: string[]): string {
-  const visibleValues = values.length > 0 ? values.slice(0, 3) : ["the primary success path"];
+  const visibleValues = values.length > 0
+    ? values.slice(0, 3).map(stripTerminalPunctuation)
+    : ["the primary success path"];
   if (values.length > visibleValues.length) {
     visibleValues.push(`${values.length - visibleValues.length} more coverage target${values.length - visibleValues.length === 1 ? "" : "s"}`);
   }
@@ -2968,6 +2970,10 @@ function formatHumanList(values: string[]): string {
     return `${visibleValues[0]} and ${visibleValues[1]}`;
   }
   return `${visibleValues.slice(0, -1).join(", ")}, and ${visibleValues.at(-1)}`;
+}
+
+function stripTerminalPunctuation(value: string): string {
+  return value.replace(/[.!?]+$/g, "");
 }
 
 function appendDomainScenarioComments(lines: string[], flow: E2eFlow, commentPrefix: string): void {
