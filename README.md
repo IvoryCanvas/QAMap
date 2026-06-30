@@ -99,7 +99,7 @@ HIGH
 
 ## Install
 
-The package metadata is ready for the first npm release:
+The package metadata is ready for the first npm release, but the public package should wait until the E2E planning workflow is closer to the intended `0.1.0` shape.
 
 ```sh
 pnpm dlx @ivorycanvas/codeward scan .
@@ -130,7 +130,7 @@ node dist/cli.js scan /path/to/repo
 | `codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md` | Score change readiness across intent, risk, tests, and review size. |
 | `codeward github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `codeward test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
-| `codeward e2e plan . --base origin/main --head HEAD` | Suggest E2E runner, user flows, coverage targets, existing test evidence, and missing testability hooks for changed files. |
+| `codeward e2e plan . --base origin/main --head HEAD` | Suggest E2E runner, bootstrap steps, user flows, coverage targets, existing test evidence, and missing testability hooks for changed files. |
 | `codeward e2e plan . --base origin/main --head HEAD --record-history` | Save a compact local run snapshot under `.codeward/runs/` while keeping JSON/Markdown output usable. |
 | `codeward e2e draft . --base origin/main --head HEAD` | Generate first-pass Maestro or Playwright E2E draft files from changed flows. |
 | `codeward flows init .` | Create a starter `.codeward/flows.yml` for team-approved core flow definitions. |
@@ -148,7 +148,9 @@ For monorepos, pass `--workspace-root` when scanning a package. Package-local ch
 
 `codeward test-plan` turns changed file paths into a review-ready domain test checklist. It also discovers common validation commands from `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, Gradle files, and Maven `pom.xml`. Add `--include-working-tree` for local, uncommitted changes while iterating.
 
-`codeward e2e plan` turns changed file paths into a first-pass E2E testing plan. It detects whether a project looks like Expo/React Native or web, recommends a runner such as Maestro or Playwright, suggests domain language for the changed behavior, suggests candidate user flows, adds coverage targets, compares those targets with existing test-suite evidence when tests are present, flags API-dependent flows that need mock or fixture responses, and points out missing stable selectors such as `testID` or `data-testid` before anyone starts writing tests from a blank file.
+`codeward e2e plan` turns changed file paths into a first-pass E2E testing plan. It detects whether a project looks like Expo/React Native or web, recommends a runner such as Maestro or Playwright, suggests bootstrap steps for repos with little or no test history, suggests domain language for the changed behavior, suggests candidate user flows, adds coverage targets, compares those targets with existing test-suite evidence when tests are present, flags API-dependent flows that need mock or fixture responses, and points out missing stable selectors such as `testID` or `data-testid` before anyone starts writing tests from a blank file.
+
+The bootstrap section answers what must happen before generated drafts can be treated as real regression coverage. For example, a testless web project can get required steps for Playwright setup, first draft generation, stable selector work, fixture/mock data, and missing validation evidence, plus recommended steps for `.codeward/domains.yml`, `.codeward/flows.yml`, and local history recording.
 
 The domain language section is intentionally less implementation-oriented than the raw file list. For example, changes under `src/features/in-app-purchase/` become terms such as `In App Purchase` and scenarios such as `In App Purchase primary journey`. When `.codeward/domains.yml` exists, declared product terms and routes receive higher confidence. When `.codeward/flows.yml` exists, team-approved flow names appear as preferred scenario names.
 
@@ -297,8 +299,8 @@ CodeWard starts as a local CLI and should stay small enough that maintainers can
 
 Near-term priorities:
 
-- publish the first npm package
-- publish a versioned GitHub Action release tag
+- reach the intended `0.1.0` E2E planning coverage before the first npm release
+- publish a versioned GitHub Action release tag after the first public package is ready
 - improve branch-aware `review` changed-line locations
 - improve generated domain test plans with framework-specific test skeletons
 - refine generated Maestro and Playwright drafts with stronger app-specific selector discovery

@@ -911,6 +911,70 @@ test("generateE2ePlan flags missing mock fixtures for API-dependent UI flows", a
   assert.match(spec, /\[missing\].*fixture\/mock readiness/);
 });
 
+test("generateE2ePlan builds a bootstrap plan for projects without tests", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/billing"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      dependencies: {
+        vite: "^7.0.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/pages/billing/BillingPage.tsx"),
+    [
+      "export function BillingPage() {",
+      "  return <button onClick={() => undefined}>Load billing</button>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/billing-api"]);
+  await writeFile(
+    path.join(root, "src/pages/billing/BillingPage.tsx"),
+    [
+      "export async function loadBilling() {",
+      "  const response = await fetch('/api/billing/current');",
+      "  return response.json();",
+      "}",
+      "export function BillingPage() {",
+      "  return <button onClick={() => undefined}>Load billing</button>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "load billing data"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const markdown = formatMarkdownE2ePlan(plan);
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "tests/e2e" });
+
+  assert.equal(plan.testSuite.hasTestSuite, false);
+  assert.equal(plan.recommendedRunner.name, "playwright");
+  assert.ok(plan.bootstrap.counts.required >= 4);
+  assert.ok(plan.bootstrap.steps.some((step) => step.category === "runner" && step.status === "required"));
+  assert.ok(plan.bootstrap.steps.some((step) => step.category === "draft" && step.status === "required"));
+  assert.ok(plan.bootstrap.steps.some((step) => step.category === "fixture" && step.status === "required"));
+  assert.ok(plan.bootstrap.steps.some((step) => step.category === "testability" && step.status === "required"));
+  assert.ok(plan.bootstrap.steps.some((step) => step.category === "domain-language" && step.status === "recommended"));
+  assert.ok(plan.bootstrap.steps.some((step) => step.category === "core-flow" && step.status === "recommended"));
+  assert.ok(plan.bootstrap.steps.some((step) => step.commands.includes("codeward domains init .")));
+  assert.ok(plan.bootstrap.steps.some((step) => step.commands.includes("codeward flows init .")));
+  assert.match(plan.bootstrap.summary, /required bootstrap step/);
+  assert.match(markdown, /## Bootstrap Plan/);
+  assert.match(markdown, /Create the first changed-flow E2E draft/);
+  assert.match(markdown, /Add deterministic fixture or mock responses/);
+  assert.match(markdown, /codeward e2e draft \. --base main --head HEAD/);
+  assert.match(formatMarkdownE2eDraft(draft), /Resolve required bootstrap steps/);
+});
+
 test("generateE2eDraft uses web selectors in Playwright specs", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
@@ -1831,9 +1895,13 @@ test("e2e plan can record compact local history without breaking JSON output", a
   assert.equal(snapshot.plan.scope, ".");
   assert.equal(snapshot.plan.recommendedRunner, "playwright");
   assert.equal(typeof plan.validationMatrix.summary.partial, "number");
+  assert.equal(typeof plan.bootstrap.counts.recommended, "number");
   assert.equal(typeof snapshot.plan.validationMatrix.summary.partial, "number");
+  assert.equal(typeof snapshot.plan.bootstrap.counts.recommended, "number");
   assert.equal(snapshot.plan.validationMatrix.rows.length > 0, true);
+  assert.equal(snapshot.plan.bootstrap.steps.length > 0, true);
   assert.equal(snapshot.summary.validationMatrix.partial > 0, true);
+  assert.equal(typeof snapshot.summary.bootstrap.recommended, "number");
   assert.equal(snapshot.summary.changedFiles, 1);
   assert.equal(JSON.stringify(snapshot).includes(root), false);
   for (const pattern of localHistoryGitignorePatterns) {

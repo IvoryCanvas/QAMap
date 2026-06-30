@@ -163,7 +163,7 @@ Supported match fields:
 
 ## Domain Language Suggestions
 
-`codeward e2e plan` includes a domain language section before the lower-level E2E candidates. CodeWard derives these suggestions from:
+`codeward e2e plan` includes a bootstrap section and a domain language section before the lower-level E2E candidates. The bootstrap section separates required setup, recommended policy capture, and ready evidence, which is especially useful when a project has no existing tests yet. CodeWard derives domain language suggestions from:
 
 - team-approved `.codeward/flows.yml` names
 - shared `.codeward/domains.yml` names, aliases, routes, and scenarios

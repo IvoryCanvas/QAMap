@@ -27,6 +27,16 @@ export type E2eSetupHintConfidence = "high" | "medium" | "low";
 export type E2eFixtureReadinessStatus = "ready" | "partial" | "missing" | "not-needed";
 export type E2eValidationMatrixStatus = "ready" | "partial" | "missing";
 export type E2eValidationMatrixCategory = "core-flow" | "coverage" | "fixture" | "testability" | "setup";
+export type E2eBootstrapStepStatus = "required" | "recommended" | "ready";
+export type E2eBootstrapStepCategory =
+  | "runner"
+  | "draft"
+  | "domain-language"
+  | "core-flow"
+  | "fixture"
+  | "testability"
+  | "validation"
+  | "history";
 export type E2eSelectorKind =
   | "test-id"
   | "accessibility-label"
@@ -127,6 +137,26 @@ export interface E2eValidationMatrix {
   };
 }
 
+export interface E2eBootstrapStep {
+  category: E2eBootstrapStepCategory;
+  status: E2eBootstrapStepStatus;
+  title: string;
+  reason: string;
+  action: string;
+  commands: string[];
+  files: string[];
+}
+
+export interface E2eBootstrapPlan {
+  summary: string;
+  steps: E2eBootstrapStep[];
+  counts: {
+    required: number;
+    recommended: number;
+    ready: number;
+  };
+}
+
 export interface E2ePlanResult {
   tool: {
     name: string;
@@ -151,6 +181,7 @@ export interface E2ePlanResult {
   localHistory?: LocalHistoryReference;
   flows: E2eFlow[];
   validationMatrix: E2eValidationMatrix;
+  bootstrap: E2eBootstrapPlan;
   missingTestability: string[];
   setupNotes: string[];
 }
@@ -211,11 +242,28 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const domains = matchDomains(domainManifest, coreFlowChangedFiles);
   const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows, domains);
   const flows = await buildFlows(root, testPlan.changedFiles, recommendedRunner.name, project.type, testSuiteInventory);
+  const testSuite = summarizeTestSuiteInventory(testSuiteInventory);
   const missingTestability = uniqueStrings([
     ...flows.flatMap((flow) => flow.missingTestability),
     ...(await buildGlobalTestabilityGaps(root, recommendedRunner.name)),
   ]);
   const validationMatrix = buildE2eValidationMatrix(flows, coreFlows);
+  const setupNotes = await buildSetupNotes(root, recommendedRunner.name, project);
+  const bootstrap = buildE2eBootstrapPlan({
+    base: testPlan.base,
+    head: testPlan.head,
+    recommendedRunner,
+    testSuite,
+    coreFlowManifestPath: coreFlowManifest.path,
+    domainManifestPath: domainManifest.path,
+    coreFlows,
+    domains,
+    domainLanguage,
+    flows,
+    validationMatrix,
+    missingTestability,
+    suggestedCommands: testPlan.suggestedCommands,
+  });
 
   return {
     tool: {
@@ -230,7 +278,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     includeWorkingTree: testPlan.includeWorkingTree,
     project,
     recommendedRunner,
-    testSuite: summarizeTestSuiteInventory(testSuiteInventory),
+    testSuite,
     coreFlowManifestPath: coreFlowManifest.path,
     coreFlows,
     domainManifestPath: domainManifest.path,
@@ -240,8 +288,9 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     suggestedCommands: testPlan.suggestedCommands,
     flows,
     validationMatrix,
+    bootstrap,
     missingTestability,
-    setupNotes: await buildSetupNotes(root, recommendedRunner.name, project),
+    setupNotes,
   };
 }
 
@@ -572,6 +621,356 @@ function buildE2eValidationMatrix(
   };
 }
 
+interface E2eBootstrapPlanInput {
+  base: string;
+  head: string;
+  recommendedRunner: E2eRunnerRecommendation;
+  testSuite: TestSuiteSummary;
+  coreFlowManifestPath?: string;
+  domainManifestPath?: string;
+  coreFlows: MatchedCoreFlow[];
+  domains: MatchedDomain[];
+  domainLanguage: DomainLanguageSummary;
+  flows: E2eFlow[];
+  validationMatrix: E2eValidationMatrix;
+  missingTestability: string[];
+  suggestedCommands: string[];
+}
+
+function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
+  const steps: E2eBootstrapStep[] = [];
+  const runnerGap = input.missingTestability.find((gap) => /No \.maestro|No Playwright config/i.test(gap));
+  const draftCommand = `codeward e2e draft . --base ${input.base} --head ${input.head}`;
+  const planHistoryCommand = `codeward e2e plan . --base ${input.base} --head ${input.head} --record-history`;
+
+  if (input.recommendedRunner.name === "manual") {
+    steps.push(
+      bootstrapStep(
+        "runner",
+        "required",
+        "Choose the first runnable E2E runner",
+        "CodeWard could not detect a web, Expo, or React Native app surface, so generated output should start as a manual checklist.",
+        "Document the app entrypoint and pick Playwright, Maestro, or a project-specific runner before requiring generated drafts in CI.",
+        [],
+        [],
+      ),
+    );
+  } else if (runnerGap) {
+    steps.push(
+      bootstrapStep(
+        "runner",
+        "required",
+        `Configure ${formatRunnerName(input.recommendedRunner.name)} before making drafts required`,
+        runnerGap,
+        input.recommendedRunner.name === "playwright"
+          ? "Add a Playwright config, baseURL, and app serve command, then run the generated spec locally."
+          : "Add a .maestro directory or documented Maestro setup, app id, and simulator launch command.",
+        [],
+        [],
+      ),
+    );
+  } else {
+    steps.push(
+      bootstrapStep(
+        "runner",
+        "ready",
+        `${formatRunnerName(input.recommendedRunner.name)} setup signal detected`,
+        "CodeWard found enough runner setup evidence to generate runnable drafts.",
+        "Keep runner setup documented and linked from PR validation notes.",
+        [],
+        [],
+      ),
+    );
+  }
+
+  if (!input.testSuite.hasTestSuite) {
+    steps.push(
+      bootstrapStep(
+        "draft",
+        "required",
+        "Create the first changed-flow E2E draft",
+        "No existing test files were detected, so this branch needs a concrete first draft before CodeWard can compare coverage evidence.",
+        "Generate the first draft, replace TODO selectors and setup values, then decide which paths should become required regression coverage.",
+        [draftCommand],
+        input.flows.flatMap((flow) => flow.files).slice(0, maxFilesPerFlow),
+      ),
+    );
+  } else {
+    steps.push(
+      bootstrapStep(
+        "draft",
+        "ready",
+        "Existing test suite detected",
+        `${input.testSuite.testFileCount} test file${input.testSuite.testFileCount === 1 ? "" : "s"} can be used as coverage evidence.`,
+        "Use the validation matrix to expand existing tests or generated drafts only where evidence is weak.",
+        [],
+        [],
+      ),
+    );
+  }
+
+  if (!input.domainManifestPath && input.domainLanguage.terms.length > 0) {
+    steps.push(
+      bootstrapStep(
+        "domain-language",
+        "recommended",
+        "Promote repeated product words into a domain manifest",
+        `CodeWard inferred ${input.domainLanguage.terms.length} domain term${input.domainLanguage.terms.length === 1 ? "" : "s"} from changed files, but no shared domain manifest was found.`,
+        "Create or update .codeward/domains.yml with the terms reviewers already use for this behavior.",
+        ["codeward domains init ."],
+        input.domainLanguage.terms.flatMap((term) => term.files).slice(0, maxFilesPerFlow),
+      ),
+    );
+  } else if (input.domainManifestPath || input.domains.length > 0) {
+    steps.push(
+      bootstrapStep(
+        "domain-language",
+        "ready",
+        "Domain language has shared policy evidence",
+        input.domainManifestPath
+          ? `Domain manifest found at ${input.domainManifestPath}.`
+          : "Matched domain definitions were found.",
+        "Keep committed domain language aligned with the names used in generated E2E drafts.",
+        [],
+        [],
+      ),
+    );
+  }
+
+  if (!input.coreFlowManifestPath) {
+    steps.push(
+      bootstrapStep(
+        "core-flow",
+        input.flows.length > 0 ? "recommended" : "required",
+        "Capture the first durable core flows",
+        "No .codeward/flows.yml manifest was found, so CodeWard can infer changed-flow candidates but cannot distinguish team-critical journeys yet.",
+        "Add the highest-value product journeys to .codeward/flows.yml so future PRs can be evaluated against team-approved lifecycle checks.",
+        ["codeward flows init ."],
+        input.flows.flatMap((flow) => flow.files).slice(0, maxFilesPerFlow),
+      ),
+    );
+  } else {
+    steps.push(
+      bootstrapStep(
+        "core-flow",
+        input.coreFlows.length > 0 ? "ready" : "recommended",
+        input.coreFlows.length > 0 ? "Core flow manifest matched this change" : "Review core flow manifest coverage",
+        input.coreFlows.length > 0
+          ? `${input.coreFlows.length} declared core flow${input.coreFlows.length === 1 ? "" : "s"} matched the changed files.`
+          : `Core flow manifest found at ${input.coreFlowManifestPath}, but this change did not match a declared flow.`,
+        input.coreFlows.length > 0
+          ? "Keep the matched flow checks as explicit PR validation evidence."
+          : "Add or adjust flow file patterns, routes, domains, or tags if this change touches a critical journey.",
+        [],
+        input.coreFlows.flatMap((flow) => flow.matchedFiles).slice(0, maxFilesPerFlow),
+      ),
+    );
+  }
+
+  const fixtureRows = input.validationMatrix.rows.filter((row) => row.category === "fixture");
+  const missingFixtureRows = fixtureRows.filter((row) => row.status === "missing");
+  const partialFixtureRows = fixtureRows.filter((row) => row.status === "partial");
+  if (missingFixtureRows.length > 0 || partialFixtureRows.length > 0) {
+    steps.push(
+      bootstrapStep(
+        "fixture",
+        missingFixtureRows.length > 0 ? "required" : "recommended",
+        "Add deterministic fixture or mock responses",
+        missingFixtureRows.length > 0
+          ? `${missingFixtureRows.length} API-dependent flow${missingFixtureRows.length === 1 ? "" : "s"} lack fixture evidence.`
+          : `${partialFixtureRows.length} API-dependent flow${partialFixtureRows.length === 1 ? "" : "s"} have only partial fixture evidence.`,
+        "Cover success plus one empty, unauthorized, timeout, rejected, or server-error response before requiring the generated draft.",
+        [],
+        uniqueStrings([...missingFixtureRows, ...partialFixtureRows].flatMap((row) => row.files)).slice(0, maxFilesPerFlow),
+      ),
+    );
+  }
+
+  const nonRunnerTestabilityGaps = input.missingTestability.filter((gap) => !/No \.maestro|No Playwright config/i.test(gap));
+  if (nonRunnerTestabilityGaps.length > 0) {
+    steps.push(
+      bootstrapStep(
+        "testability",
+        "required",
+        "Add stable selectors for changed user actions",
+        `${nonRunnerTestabilityGaps.length} selector or interaction gap${nonRunnerTestabilityGaps.length === 1 ? "" : "s"} were detected.`,
+        "Add stable test ids, accessibility labels, roles, or durable visible copy for the controls the draft must tap, type into, or assert.",
+        [],
+        input.flows.flatMap((flow) => flow.files).slice(0, maxFilesPerFlow),
+      ),
+    );
+  } else if (input.flows.some((flow) => flow.selectors.length > 0 || flow.entrypoints.length > 0)) {
+    steps.push(
+      bootstrapStep(
+        "testability",
+        "ready",
+        "Entrypoint or selector evidence detected",
+        "Generated drafts can reuse detected routes, screens, selectors, labels, or visible copy.",
+        "Review the generated locators and replace weak TODO placeholders before promoting the draft.",
+        [],
+        input.flows.flatMap((flow) => flow.selectors.map((selector) => selector.file)).slice(0, maxFilesPerFlow),
+      ),
+    );
+  }
+
+  if (input.validationMatrix.summary.missing > 0) {
+    steps.push(
+      bootstrapStep(
+        "validation",
+        "required",
+        "Close missing validation matrix rows",
+        `${input.validationMatrix.summary.missing} validation row${input.validationMatrix.summary.missing === 1 ? "" : "s"} are missing evidence.`,
+        "Resolve missing coverage, fixture, setup, and testability rows before calling generated E2E coverage sufficient.",
+        [],
+        input.validationMatrix.rows.filter((row) => row.status === "missing").flatMap((row) => row.files).slice(0, maxFilesPerFlow),
+      ),
+    );
+  } else if (input.validationMatrix.summary.partial > 0) {
+    steps.push(
+      bootstrapStep(
+        "validation",
+        "recommended",
+        "Strengthen partial validation evidence",
+        `${input.validationMatrix.summary.partial} validation row${input.validationMatrix.summary.partial === 1 ? "" : "s"} are only partial.`,
+        "Expand the generated draft or existing tests until the critical rows have concrete evidence.",
+        [],
+        input.validationMatrix.rows.filter((row) => row.status === "partial").flatMap((row) => row.files).slice(0, maxFilesPerFlow),
+      ),
+    );
+  } else if (input.validationMatrix.rows.length > 0) {
+    steps.push(
+      bootstrapStep(
+        "validation",
+        "ready",
+        "Validation matrix is ready",
+        "All validation matrix rows currently have ready evidence.",
+        "Keep the matrix linked in PR evidence when the generated draft is promoted.",
+        [],
+        [],
+      ),
+    );
+  }
+
+  steps.push(
+    bootstrapStep(
+      "history",
+      "recommended",
+      "Record local plan history while iterating",
+      "Local run history lets the team compare how domain language, core flows, fixtures, and validation gaps evolve without spending more agent tokens.",
+      "Run the plan with --record-history after important draft or manifest changes.",
+      [planHistoryCommand],
+      [],
+    ),
+  );
+
+  if (input.suggestedCommands.length === 0) {
+    steps.push(
+      bootstrapStep(
+        "validation",
+        "recommended",
+        "Expose at least one validation command",
+        "No test, typecheck, lint, build, or E2E command was discovered for this project.",
+        "Add a project script or CodeWard validation command so PR evidence can include repeatable checks.",
+        [],
+        [],
+      ),
+    );
+  }
+
+  const sortedSteps = dedupeBootstrapSteps(steps).sort(compareBootstrapSteps).slice(0, 12);
+  const counts = {
+    required: sortedSteps.filter((step) => step.status === "required").length,
+    recommended: sortedSteps.filter((step) => step.status === "recommended").length,
+    ready: sortedSteps.filter((step) => step.status === "ready").length,
+  };
+  return {
+    summary: bootstrapSummary(counts, sortedSteps),
+    steps: sortedSteps,
+    counts,
+  };
+}
+
+function bootstrapStep(
+  category: E2eBootstrapStepCategory,
+  status: E2eBootstrapStepStatus,
+  title: string,
+  reason: string,
+  action: string,
+  commands: string[],
+  files: string[],
+): E2eBootstrapStep {
+  return {
+    category,
+    status,
+    title,
+    reason,
+    action,
+    commands,
+    files: uniqueStrings(files).slice(0, maxFilesPerFlow),
+  };
+}
+
+function dedupeBootstrapSteps(steps: E2eBootstrapStep[]): E2eBootstrapStep[] {
+  const seen = new Set<string>();
+  const deduped: E2eBootstrapStep[] = [];
+  for (const step of steps) {
+    const key = `${step.category}:${step.title}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(step);
+  }
+  return deduped;
+}
+
+function compareBootstrapSteps(left: E2eBootstrapStep, right: E2eBootstrapStep): number {
+  const statusDiff = bootstrapStatusRank(left.status) - bootstrapStatusRank(right.status);
+  if (statusDiff !== 0) {
+    return statusDiff;
+  }
+  return bootstrapCategoryRank(left.category) - bootstrapCategoryRank(right.category);
+}
+
+function bootstrapStatusRank(status: E2eBootstrapStepStatus): number {
+  if (status === "required") {
+    return 0;
+  }
+  if (status === "recommended") {
+    return 1;
+  }
+  return 2;
+}
+
+function bootstrapCategoryRank(category: E2eBootstrapStepCategory): number {
+  const order: E2eBootstrapStepCategory[] = [
+    "runner",
+    "draft",
+    "testability",
+    "fixture",
+    "validation",
+    "domain-language",
+    "core-flow",
+    "history",
+  ];
+  return order.indexOf(category);
+}
+
+function bootstrapSummary(
+  counts: E2eBootstrapPlan["counts"],
+  steps: E2eBootstrapStep[],
+): string {
+  const firstRequired = steps.find((step) => step.status === "required");
+  if (firstRequired) {
+    return `${counts.required} required bootstrap step${counts.required === 1 ? "" : "s"} must be resolved before generated E2E drafts should be treated as regression coverage. Start with: ${firstRequired.title}.`;
+  }
+  const firstRecommended = steps.find((step) => step.status === "recommended");
+  if (firstRecommended) {
+    return `${counts.recommended} recommended bootstrap step${counts.recommended === 1 ? "" : "s"} remain before the E2E workflow feels durable. Start with: ${firstRecommended.title}.`;
+  }
+  return "The detected E2E bootstrap signals look ready for this change.";
+}
+
 function coverageTargetRequirement(flow: E2eFlow, targetTitle: string): string {
   const target = flow.coverage.find((item) => item.title === targetTitle);
   if (!target) {
@@ -762,6 +1161,25 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
     }
   }
   lines.push("");
+
+  if (result.bootstrap.steps.length > 0) {
+    lines.push("## Bootstrap Plan");
+    lines.push("");
+    lines.push(result.bootstrap.summary);
+    lines.push("");
+    lines.push(
+      `Summary: ${result.bootstrap.counts.required} required, ${result.bootstrap.counts.recommended} recommended, ${result.bootstrap.counts.ready} ready.`,
+    );
+    lines.push("");
+    lines.push("| Status | Area | Reason | Action | Commands |");
+    lines.push("| --- | --- | --- | --- | --- |");
+    for (const step of result.bootstrap.steps) {
+      lines.push(
+        `| ${step.status} | ${escapeMarkdownTableCell(step.title)} | ${escapeMarkdownTableCell(step.reason)} | ${escapeMarkdownTableCell(step.action)} | ${escapeMarkdownTableCell(step.commands.length > 0 ? step.commands.join("<br>") : "")} |`,
+      );
+    }
+    lines.push("");
+  }
 
   if (result.domainLanguage.terms.length > 0 || result.domainLanguage.scenarios.length > 0) {
     lines.push("## Domain Language");
@@ -3111,6 +3529,13 @@ function buildDraftNextSteps(plan: E2ePlanResult, runner: E2eRunnerName): string
     steps.push("Run `npx playwright test` after the app can be served locally.");
   } else {
     steps.push("Choose a runnable E2E framework once the primary app surface is documented.");
+  }
+  if (plan.bootstrap.counts.required > 0) {
+    const requiredTitles = plan.bootstrap.steps
+      .filter((step) => step.status === "required")
+      .map((step) => step.title)
+      .slice(0, 3);
+    steps.push(`Resolve required bootstrap steps before treating drafts as regression coverage: ${formatHumanList(requiredTitles)}.`);
   }
   if (plan.missingTestability.length > 0) {
     steps.push("Address the listed testability gaps before treating the generated drafts as stable regression tests.");

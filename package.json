@@ -1,7 +1,7 @@
 {
   "name": "@ivorycanvas/codeward",
   "version": "0.1.0",
-  "description": "Preflight and workspace hygiene for AI coding agents.",
+  "description": "No-token guardrails, review checks, and E2E validation planning for AI coding agents.",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
   "bin": {
@@ -9,8 +9,10 @@
   },
   "files": [
     "dist",
+    "docs",
     "schema",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
@@ -29,6 +31,9 @@
     "ai-security",
     "mcp",
     "preflight",
+    "e2e",
+    "qa",
+    "test-planning",
     "repository-security",
     "security",
     "developer-tools",

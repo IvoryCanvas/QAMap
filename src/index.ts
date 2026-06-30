@@ -59,6 +59,10 @@ export type {
 export type {
   E2eCoveragePriority,
   E2eCoverageTarget,
+  E2eBootstrapPlan,
+  E2eBootstrapStep,
+  E2eBootstrapStepCategory,
+  E2eBootstrapStepStatus,
   E2eEntrypoint,
   E2eEntrypointConfidence,
   E2eEntrypointKind,

@@ -88,6 +88,22 @@ export interface E2ePlanHistorySnapshot {
         nextAction: string;
       }>;
     };
+    bootstrap: {
+      summary: string;
+      counts: {
+        required: number;
+        recommended: number;
+        ready: number;
+      };
+      steps: Array<{
+        category: string;
+        status: string;
+        title: string;
+        action: string;
+        commands: string[];
+        files: string[];
+      }>;
+    };
     changedFilesCount: number;
     changedFiles: string[];
     suggestedCommands: string[];
@@ -136,6 +152,11 @@ export interface E2ePlanHistorySnapshot {
       ready: number;
       partial: number;
       missing: number;
+    };
+    bootstrap: {
+      required: number;
+      recommended: number;
+      ready: number;
     };
     missingTestability: number;
   };
@@ -253,6 +274,18 @@ function buildE2ePlanHistorySnapshot(historyRoot: string, plan: E2ePlanResult): 
           nextAction: row.nextAction,
         })),
       },
+      bootstrap: {
+        summary: plan.bootstrap.summary,
+        counts: plan.bootstrap.counts,
+        steps: plan.bootstrap.steps.slice(0, 12).map((step) => ({
+          category: step.category,
+          status: step.status,
+          title: step.title,
+          action: step.action,
+          commands: step.commands.slice(0, 5),
+          files: step.files.slice(0, 8),
+        })),
+      },
       changedFilesCount: plan.changedFiles.length,
       changedFiles: plan.changedFiles.map((file) => file.path).slice(0, 50),
       suggestedCommands: plan.suggestedCommands.slice(0, 20),
@@ -298,6 +331,7 @@ function buildE2ePlanHistorySnapshot(historyRoot: string, plan: E2ePlanResult): 
         missing: plan.flows.filter((flow) => flow.fixtureReadiness.status === "missing").length,
       },
       validationMatrix: plan.validationMatrix.summary,
+      bootstrap: plan.bootstrap.counts,
       missingTestability: plan.missingTestability.length,
     },
   };

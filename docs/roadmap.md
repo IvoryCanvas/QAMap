@@ -5,7 +5,7 @@ CodeWard starts as a local CLI for repo-level AI agent readiness. The project ca
 ## Now
 
 - Keep the scanner fast, static, and easy to understand.
-- Make the first public npm release.
+- Reach the intended `0.1.0` E2E planning coverage before the first public package release.
 - Improve README, adoption docs, and sample output so new maintainers can try CodeWard quickly.
 - Make `verify` the best first-run experience for AI-assisted PRs.
 - Keep `eval` explainable enough that maintainers trust the score and know what to fix.
@@ -13,7 +13,7 @@ CodeWard starts as a local CLI for repo-level AI agent readiness. The project ca
 
 ## Next
 
-- Publish a versioned GitHub Action release tag.
+- Publish a versioned GitHub Action release tag after the first public package is ready.
 - Improve `doctor` output with clearer scoring and remediation grouping.
 - Improve `review` output for changed-line locations.
 - Expand `eval` with repository-specific verification manifests and configurable taste rubrics.
