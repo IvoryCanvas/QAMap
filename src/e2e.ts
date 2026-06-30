@@ -18,7 +18,14 @@ import type { LocalHistoryReference } from "./history.js";
 import type { CoverageEvidence, TestSuiteInventory, TestSuiteSummary } from "./test-evidence.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
-export type E2eProjectType = "expo-react-native" | "react-native" | "web" | "api-service" | "unknown";
+export type E2eProjectType =
+  | "expo-react-native"
+  | "react-native"
+  | "web"
+  | "api-service"
+  | "design-tokens"
+  | "data-catalog"
+  | "unknown";
 export type E2eRunnerName = "maestro" | "playwright" | "manual";
 export type E2eEntrypointKind = "route" | "screen" | "command";
 export type E2eEntrypointConfidence = "high" | "medium" | "low";
@@ -619,7 +626,8 @@ function buildCoverageTargets(kind: E2eFlowKind, files: string[], runner: E2eRun
     );
   }
 
-  if (kind === "content" || files.some(isContentOrStyleFile)) {
+  const hasArtifactOrCatalogFiles = files.some((file) => isDesignTokenFile(file) || isCatalogDataFile(file));
+  if (kind === "content" || (files.some(isContentOrStyleFile) && !hasArtifactOrCatalogFiles)) {
     targets.push(
       coverageTarget(
         "Viewport and visual variants",
@@ -637,6 +645,54 @@ function buildCoverageTargets(kind: E2eFlowKind, files: string[], runner: E2eRun
         [
           "Run the changed surface with the default locale and at least one alternate locale when available.",
           "Run default theme and alternate theme when the project exposes theme switching.",
+        ],
+      ),
+    );
+  }
+
+  if (kind === "artifact" || files.some(isDesignTokenFile)) {
+    targets.push(
+      coverageTarget(
+        "Token schema and generated artifact compatibility",
+        "critical",
+        "Design token changes can break consumers even when no app screen changed.",
+        [
+          "Validate required token fields, references, aliases, and naming conventions.",
+          "Regenerate published artifacts such as CSS variables, theme JSON, platform files, or package output.",
+          "Verify removed or renamed tokens have an intentional migration path for consumers.",
+        ],
+      ),
+      coverageTarget(
+        "Downstream consumer visual fixture",
+        "recommended",
+        "A token diff is most valuable when at least one consumer sample proves the visual effect is intentional.",
+        [
+          "Render or inspect a representative component, theme sample, or screenshot fixture.",
+          "Compare light, dark, semantic, or platform-specific variants when those tokens changed.",
+        ],
+      ),
+    );
+  }
+
+  if (kind === "catalog" || files.some(isCatalogDataFile)) {
+    targets.push(
+      coverageTarget(
+        "Catalog schema and generated output compatibility",
+        "critical",
+        "Taxonomy and catalog changes should preserve machine-readable contracts for downstream consumers.",
+        [
+          "Validate changed entries against the catalog schema, migration script, or build command.",
+          "Regenerate the published site, JSON export, markdown table, or package artifact.",
+          "Verify event, property, owner, and description fields remain backward compatible where required.",
+        ],
+      ),
+      coverageTarget(
+        "Consumer fixture and migration coverage",
+        "recommended",
+        "Catalog updates often need one representative consumer or migration fixture instead of a browser E2E.",
+        [
+          "Run one analytics, documentation, ingestion, or SDK fixture that reads the changed catalog.",
+          "Check renamed, removed, deprecated, or newly-required fields with realistic sample data.",
         ],
       ),
     );
@@ -770,12 +826,12 @@ function buildE2eValidationMatrix(
     rows.push({
       area: `${flow.title}: testability`,
       category: "testability",
-      requiredEvidence: "Stable selectors, entrypoint hints, and no unresolved testability gaps.",
+      requiredEvidence: testabilityRequiredEvidence(flow),
       currentEvidence: testabilityEvidenceSummary(flow),
       status: validationStatusFromTestability(flow),
       nextAction: nextActionForTestability(flow),
       flowTitle: flow.title,
-      files: flow.missingTestability.length > 0 ? flow.files : flow.selectors.map((selector) => selector.file).slice(0, maxFilesPerFlow),
+      files: testabilityEvidenceFiles(flow),
     });
   }
 
@@ -840,15 +896,9 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
       bootstrapStep(
         "runner",
         "required",
-        input.projectType === "api-service"
-          ? "Start with API contract validation"
-          : "Choose the first runnable E2E runner",
-        input.projectType === "api-service"
-          ? "CodeWard detected an API or backend service, so generated output should start as a contract checklist before assuming a browser or device runner."
-          : "CodeWard could not detect a web, Expo, React Native, or API service surface, so generated output should start as a manual checklist.",
-        input.projectType === "api-service"
-          ? "Document the local service start command, base URL, auth fixture, and request examples before making API contract checks required in CI."
-          : "Document the app entrypoint and pick Playwright, Maestro, or a project-specific runner before requiring generated drafts in CI.",
+        manualBootstrapTitle(input.projectType),
+        manualBootstrapReason(input.projectType),
+        manualBootstrapAction(input.projectType),
         [],
         [],
       ),
@@ -1102,6 +1152,45 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
   };
 }
 
+function manualBootstrapTitle(projectType: E2eProjectType): string {
+  if (projectType === "api-service") {
+    return "Start with API contract validation";
+  }
+  if (projectType === "design-tokens") {
+    return "Start with design token artifact validation";
+  }
+  if (projectType === "data-catalog") {
+    return "Start with catalog artifact validation";
+  }
+  return "Choose the first runnable E2E runner";
+}
+
+function manualBootstrapReason(projectType: E2eProjectType): string {
+  if (projectType === "api-service") {
+    return "CodeWard detected an API or backend service, so generated output should start as a contract checklist before assuming a browser or device runner.";
+  }
+  if (projectType === "design-tokens") {
+    return "CodeWard detected design token artifacts, so generated output should verify schema, generated outputs, and consumer samples before assuming a browser journey.";
+  }
+  if (projectType === "data-catalog") {
+    return "CodeWard detected taxonomy or catalog artifacts, so generated output should verify schema, generated outputs, and downstream consumers before assuming a browser journey.";
+  }
+  return "CodeWard could not detect a web, Expo, React Native, or API service surface, so generated output should start as a manual checklist.";
+}
+
+function manualBootstrapAction(projectType: E2eProjectType): string {
+  if (projectType === "api-service") {
+    return "Document the local service start command, base URL, auth fixture, and request examples before making API contract checks required in CI.";
+  }
+  if (projectType === "design-tokens") {
+    return "Document the token validation command, artifact generation command, and one representative consumer or visual fixture before making the checklist required in CI.";
+  }
+  if (projectType === "data-catalog") {
+    return "Document the catalog validation command, generation command, and one downstream consumer or migration fixture before making the checklist required in CI.";
+  }
+  return "Document the app entrypoint and pick Playwright, Maestro, or a project-specific runner before requiring generated drafts in CI.";
+}
+
 function bootstrapStep(
   category: E2eBootstrapStepCategory,
   status: E2eBootstrapStepStatus,
@@ -1238,9 +1327,25 @@ function validationStatusFromFixtureReadiness(status: E2eFixtureReadinessStatus)
   return "missing";
 }
 
+function testabilityRequiredEvidence(flow: E2eFlow): string {
+  if (isDesignTokenFocusedFlow(flow)) {
+    return "Documented token validation command, generated artifact path, and downstream consumer or visual fixture.";
+  }
+  if (isCatalogFocusedFlow(flow)) {
+    return "Documented catalog validation command, generated output path, and downstream consumer or migration fixture.";
+  }
+  return "Stable selectors, entrypoint hints, and no unresolved testability gaps.";
+}
+
 function testabilityEvidenceSummary(flow: E2eFlow): string {
   if (flow.missingTestability.length > 0) {
     return `${flow.missingTestability.length} testability gap${flow.missingTestability.length === 1 ? "" : "s"} detected.`;
+  }
+  if (isDesignTokenFocusedFlow(flow)) {
+    return "Artifact verification flow uses token validation commands, generated artifacts, and a consumer fixture as stability evidence.";
+  }
+  if (isCatalogFocusedFlow(flow)) {
+    return "Catalog verification flow uses catalog validation commands, generated outputs, and a consumer or migration fixture as stability evidence.";
   }
   const signals = [
     flow.selectors.length > 0 ? `${flow.selectors.length} selector${flow.selectors.length === 1 ? "" : "s"}` : "",
@@ -1253,6 +1358,9 @@ function validationStatusFromTestability(flow: E2eFlow): E2eValidationMatrixStat
   if (flow.missingTestability.length > 0) {
     return "missing";
   }
+  if (isDesignTokenFocusedFlow(flow) || isCatalogFocusedFlow(flow)) {
+    return "ready";
+  }
   if (flow.selectors.length > 0 || flow.entrypoints.length > 0) {
     return "ready";
   }
@@ -1263,10 +1371,23 @@ function nextActionForTestability(flow: E2eFlow): string {
   if (flow.missingTestability.length > 0) {
     return "Add stable test ids, accessibility labels, roles, route hints, or visible copy before making this draft required.";
   }
+  if (isDesignTokenFocusedFlow(flow)) {
+    return "Use the artifact validation and consumer fixture checks in the generated checklist.";
+  }
+  if (isCatalogFocusedFlow(flow)) {
+    return "Use the catalog generation and consumer fixture checks in the generated checklist.";
+  }
   if (flow.selectors.length > 0 || flow.entrypoints.length > 0) {
     return "Use the detected selectors and entrypoints in the generated draft.";
   }
   return "Identify a stable entrypoint and selector strategy for this flow.";
+}
+
+function testabilityEvidenceFiles(flow: E2eFlow): string[] {
+  if (flow.missingTestability.length > 0 || isDesignTokenFocusedFlow(flow) || isCatalogFocusedFlow(flow)) {
+    return flow.files.slice(0, maxFilesPerFlow);
+  }
+  return flow.selectors.map((selector) => selector.file).slice(0, maxFilesPerFlow);
 }
 
 function compareValidationMatrixRows(left: E2eValidationMatrixRow, right: E2eValidationMatrixRow): number {
@@ -1768,6 +1889,12 @@ function inferFlowActor(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isApiContractFocusedFlow(flow)) {
     return "API consumer or upstream service";
   }
+  if (isDesignTokenFocusedFlow(flow)) {
+    return "Design system consumer or maintainer";
+  }
+  if (isCatalogFocusedFlow(flow)) {
+    return "Data catalog consumer or maintainer";
+  }
   if (/\b(configuration|dependency|build|runtime|environment|feature[- ]?flag|package\.json|tsconfig|docker|serverless|deploy)\b/.test(haystack)) {
     return "Maintainer or release operator";
   }
@@ -1816,6 +1943,12 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
     if (isApiContractFocusedFlow(flow)) {
       return `Call the endpoint, handler, or service path affected by ${flow.files[0]}.`;
     }
+    if (isDesignTokenFocusedFlow(flow)) {
+      return `Regenerate or inspect the token artifact affected by ${flow.files[0]}.`;
+    }
+    if (isCatalogFocusedFlow(flow)) {
+      return `Regenerate or validate the catalog artifact affected by ${flow.files[0]}.`;
+    }
     if (/\bconfiguration verification\b/i.test(flow.title)) {
       return `Run the build, startup, or release path affected by ${flow.files[0]}.`;
     }
@@ -1827,6 +1960,12 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
 function inferFlowGoal(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isApiContractFocusedFlow(flow)) {
     return `Protect ${flow.title} by verifying the changed request, response, auth, and failure contract.`;
+  }
+  if (isDesignTokenFocusedFlow(flow)) {
+    return `Protect ${flow.title} by verifying token schema, generated artifacts, and at least one consumer sample.`;
+  }
+  if (isCatalogFocusedFlow(flow)) {
+    return `Protect ${flow.title} by verifying catalog schema, generated output, and downstream consumer compatibility.`;
   }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return `Protect ${flow.title} by verifying clean install, startup, and fallback configuration variants.`;
@@ -1841,6 +1980,12 @@ function inferFlowGoal(flow: Omit<E2eFlow, "languageBrief">): string {
 function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isApiContractFocusedFlow(flow)) {
     return "the changed contract returns the expected status, response shape, auth behavior, and failure handling";
+  }
+  if (isDesignTokenFocusedFlow(flow)) {
+    return "the token schema, generated artifacts, semantic aliases, and consumer sample all reflect the intended change";
+  }
+  if (isCatalogFocusedFlow(flow)) {
+    return "the catalog schema, generated output, and representative consumer fixture all accept the changed entries";
   }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return "the affected build or runtime variant starts cleanly and handles fallback values";
@@ -1860,6 +2005,12 @@ function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSi
   if (isApiContractFocusedFlow(flow)) {
     return `Can a reviewer confirm that the changed endpoint, handler, or service contract is exercised and that "${successSignal}" is asserted?`;
   }
+  if (isDesignTokenFocusedFlow(flow)) {
+    return `Can a reviewer confirm that the changed token artifact is regenerated, consumed, and that "${successSignal}" is asserted?`;
+  }
+  if (isCatalogFocusedFlow(flow)) {
+    return `Can a reviewer confirm that the changed catalog artifact is regenerated, consumed, and that "${successSignal}" is asserted?`;
+  }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return `Can a reviewer confirm that the affected build, startup, or release variant is exercised and that "${successSignal}" is asserted?`;
   }
@@ -1872,6 +2023,14 @@ function isApiContractFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean
     (flow.coverage.some((target) => target.title === "API contract compatibility") &&
       !hasUserFacingEntrypointOrFile(flow))
   );
+}
+
+function isDesignTokenFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return /\bdesign token contract\b/i.test(flow.title) || flow.files.some(isDesignTokenFile);
+}
+
+function isCatalogFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return /\btaxonomy catalog verification\b/i.test(flow.title) || flow.files.some(isCatalogDataFile);
 }
 
 function inferFlowEdgeCases(flow: Omit<E2eFlow, "languageBrief">): string[] {
@@ -2414,6 +2573,9 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
     "routers.py",
     "admin.py",
   ]);
+  const projectFilePaths = (await collectProjectFiles(root, 2000)).map((file) => file.path);
+  const hasDesignTokenProject = projectFilePaths.some(isDesignTokenFile);
+  const hasDataCatalogProject = projectFilePaths.some(isCatalogDataFile);
 
   if (hasExpoDependency) {
     evidence.push("package.json dependency: expo");
@@ -2451,6 +2613,12 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
   if (hasPythonServiceModule) {
     evidence.push("Python web service module file found");
   }
+  if (hasDesignTokenProject) {
+    evidence.push("Design token files found");
+  }
+  if (hasDataCatalogProject) {
+    evidence.push("Catalog or taxonomy files found");
+  }
 
   if (hasExpoDependency || (hasExpoConfig && hasReactNativeDependency)) {
     return { type: "expo-react-native", evidence };
@@ -2463,6 +2631,12 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
   }
   if (apiServiceDependency || hasApiServiceConfig || hasDjangoEntrypoint || hasPythonServiceDependency || hasPythonServiceModule) {
     return { type: "api-service", evidence };
+  }
+  if (hasDesignTokenProject) {
+    return { type: "design-tokens", evidence };
+  }
+  if (hasDataCatalogProject) {
+    return { type: "data-catalog", evidence };
   }
   return {
     type: "unknown",
@@ -2530,6 +2704,20 @@ function recommendRunner(project: E2eProjectProfile): E2eRunnerRecommendation {
       name: "manual",
       reason:
         "Use a manual API contract checklist first because this looks like a backend service without a browser or device surface.",
+    };
+  }
+  if (project.type === "design-tokens") {
+    return {
+      name: "manual",
+      reason:
+        "Use an artifact verification checklist because this looks like a design token package, where schema, generated outputs, and consumer samples matter more than a browser journey.",
+    };
+  }
+  if (project.type === "data-catalog") {
+    return {
+      name: "manual",
+      reason:
+        "Use a catalog verification checklist because this looks like a taxonomy or data catalog, where schema, generated output, and downstream consumers matter more than a browser journey.",
     };
   }
   return {
@@ -2970,7 +3158,7 @@ function executionProfileBlockers(input: {
 }): string[] {
   const blockers: string[] = [];
   if (input.runner === "manual") {
-    if (input.projectType !== "api-service") {
+    if (!manualChecklistIsExpected(input.projectType)) {
       blockers.push("No runnable E2E runner was selected for this project surface.");
     }
     if (input.projectType === "api-service" && !input.startCommand) {
@@ -2999,6 +3187,10 @@ function executionProfileBlockers(input: {
     blockers.push(`No ${formatRunnerName(input.runner)} test command was detected.`);
   }
   return blockers;
+}
+
+function manualChecklistIsExpected(projectType: E2eProjectType): boolean {
+  return projectType === "api-service" || projectType === "design-tokens" || projectType === "data-catalog";
 }
 
 function executionProfileConfidence(
@@ -3160,7 +3352,16 @@ function toCoreFlowChangedFiles(
   }));
 }
 
-type E2eFlowKind = "ui" | "api" | "state" | "content" | "config" | "domain" | "changed-file";
+type E2eFlowKind =
+  | "ui"
+  | "api"
+  | "state"
+  | "content"
+  | "config"
+  | "artifact"
+  | "catalog"
+  | "domain"
+  | "changed-file";
 type FlowCandidate = Omit<
   E2eFlow,
   | "languageBrief"
@@ -3219,7 +3420,12 @@ function buildFlowCandidates(
       : [];
   const contractFiles = uniqueStrings([...apiFiles, ...apiServiceSourceFiles]);
   const stateFiles = candidateFiles.filter(isStateLikeFile);
-  const contentFiles = candidateFiles.filter(isContentOrStyleFile);
+  const designTokenFiles = candidateFiles.filter(isDesignTokenFile);
+  const catalogFiles = candidateFiles.filter((file) => isCatalogDataFile(file) && !designTokenFiles.includes(file));
+  const artifactFiles = uniqueStrings([...designTokenFiles]);
+  const contentFiles = candidateFiles.filter(
+    (file) => isContentOrStyleFile(file) && !artifactFiles.includes(file) && !catalogFiles.includes(file),
+  );
   const configFiles = candidateFiles.filter(isConfigLikeFile);
   const domainFiles = candidateFiles.filter(isDomainOwnedFile);
   const candidates: FlowCandidate[] = [];
@@ -3299,6 +3505,40 @@ function buildFlowCandidates(
     });
   }
 
+  if (artifactFiles.length > 0) {
+    const subject = summarizeFlowSubject(artifactFiles, "Design token", domainLanguage);
+    candidates.push({
+      kind: "artifact",
+      title: `${subject} design token contract checklist`,
+      reason:
+        "Design token files changed, so the draft should verify token schema, generated artifacts, and at least one downstream consumer sample instead of assuming a user-facing app journey.",
+      files: artifactFiles,
+      steps: [
+        "Validate the changed token JSON or source format against the token schema.",
+        "Regenerate token artifacts, CSS variables, theme files, or package outputs.",
+        "Compare affected semantic aliases, component variables, and fallback values.",
+        "Verify one downstream consumer sample or visual fixture renders the changed tokens intentionally.",
+      ],
+    });
+  }
+
+  if (catalogFiles.length > 0) {
+    const subject = summarizeFlowSubject(catalogFiles, "Taxonomy", domainLanguage);
+    candidates.push({
+      kind: "catalog",
+      title: `${subject} taxonomy catalog verification checklist`,
+      reason:
+        "Taxonomy, analytics catalog, or generated documentation files changed, so the draft should verify schema validity, generated catalog output, and downstream event/property consumers.",
+      files: catalogFiles,
+      steps: [
+        "Validate changed catalog entries against the documented schema or migration script.",
+        "Regenerate the catalog site, JSON export, or published artifact.",
+        "Verify event names, property names, ownership, and descriptions remain backward compatible for consumers.",
+        "Check one representative downstream analytics, documentation, or ingestion fixture.",
+      ],
+    });
+  }
+
   if (configFiles.length > 0) {
     const subject = isReleaseMetadataOnlyChange(configFiles)
       ? "Release metadata"
@@ -3323,6 +3563,8 @@ function buildFlowCandidates(
       !isApiLikeFile(file) &&
       !isConfigLikeFile(file) &&
       !isContentOrStyleFile(file) &&
+      !isDesignTokenFile(file) &&
+      !isCatalogDataFile(file) &&
       !isReleaseMetadataFile(file),
   );
   if (remainingDomainFiles.length > 0) {
@@ -3540,6 +3782,17 @@ async function inferFlowFixtureReadiness(
   setupHints: E2eSetupHint[],
   context: FixtureReadinessContext,
 ): Promise<E2eFixtureReadiness> {
+  if (kind === "artifact" || kind === "catalog") {
+    return {
+      status: "not-needed",
+      reason: "This verification flow targets generated artifacts, schema, catalog output, or consumer fixtures rather than API response data.",
+      apiSignals: [],
+      backendSignals: [],
+      mockSignals: [],
+      nextActions: [],
+    };
+  }
+
   const apiSignals = await findApiDependencySignals(root, files, kind, setupHints);
   const requiresMock = apiSignals.length > 0 || setupHints.some((hint) => hint.kind === "network" || hint.kind === "payment");
   if (!requiresMock) {
@@ -4052,6 +4305,21 @@ function isContentOrStyleFile(file: string): boolean {
   );
 }
 
+function isDesignTokenFile(file: string): boolean {
+  return /(?:^|\/)(?:tokens?|design-tokens?)\/.+\.(?:json|ya?ml)$/i.test(file) ||
+    /(?:^|\/)(?:style-dictionary|tokens?)\.config\.[cm]?[jt]s$/i.test(file) ||
+    /(?:^|\/)(?:semantic|color|colors|spacing|radius|typography|font|fonts|size|sizes|shadow|shadows)\.tokens?\.(?:json|ya?ml)$/i.test(
+      file,
+    );
+}
+
+function isCatalogDataFile(file: string): boolean {
+  return /(?:^|\/)(?:catalog|taxonomy|schema|schemas)\/.+\.(?:json|ya?ml|csv|tsv|xlsx?)$/i.test(file) ||
+    /(?:^|\/)(?:source|sources)\/.+\.(?:csv|tsv|xlsx?)$/i.test(file) ||
+    /(?:^|\/)tools\/(?:build|generate|validate)[-_]?(?:catalog|taxonomy|site)?\.(?:py|[cm]?[jt]s)$/i.test(file) ||
+    /(?:^|\/)site\/index\.html$/i.test(file);
+}
+
 function isConfigLikeFile(file: string): boolean {
   return isReleaseMetadataFile(file) || /(?:(?:^|\/)(?:\.agents?|\.claude|\.cursor|\.dev|\.gemini|\.github|docs?)\/|(?:^|\/)(?:AGENTS|CLAUDE|CODEX|DECISIONS|GEMINI|PLAN|README|SKILL)\.md$|\.gitignore|package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|bun\.lockb|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|release-please|docker|env|feature-?flags?|experiments?)/i.test(
     file,
@@ -4469,11 +4737,11 @@ async function buildDomainScenarioDraftFlow(
 ): Promise<DraftE2eFlow> {
   const coreFlow = matchedCoreFlowForScenario(plan, scenario);
   const baseFlow = bestBaseFlowForScenario(scenario, baseFlows);
-  const apiContractScenario = isApiContractDomainScenario(scenario, baseFlow);
-  const title = domainScenarioDraftTitle(scenario, apiContractScenario);
-  const reason = domainScenarioDraftIntent(scenario, apiContractScenario);
-  const steps = domainScenarioDraftSteps(scenario, baseFlow, apiContractScenario);
-  const draftScenario = apiContractScenario
+  const specializedScenario = specializedDomainScenarioDraft(scenario, baseFlow);
+  const title = specializedScenario?.title ?? scenario.title;
+  const reason = specializedScenario?.reason ?? scenario.intent;
+  const steps = specializedScenario?.steps ?? (scenario.checks.length > 0 ? scenario.checks : (baseFlow?.steps ?? []));
+  const draftScenario = specializedScenario
     ? {
         ...scenario,
         title,
@@ -4521,33 +4789,35 @@ async function buildDomainScenarioDraftFlow(
   };
 }
 
-function isApiContractDomainScenario(scenario: DomainScenarioSuggestion, baseFlow: E2eFlow | undefined): boolean {
-  return scenario.source === "changed-file" && Boolean(baseFlow && isApiContractFocusedFlow(baseFlow));
+interface SpecializedDomainScenarioDraft {
+  title: string;
+  reason: string;
+  steps: string[];
 }
 
-function domainScenarioDraftTitle(scenario: DomainScenarioSuggestion, apiContractScenario: boolean): string {
-  if (!apiContractScenario) {
-    return scenario.title;
-  }
-  return `${scenario.title.replace(/\s+primary journey$/i, "")} API contract`;
-}
-
-function domainScenarioDraftIntent(scenario: DomainScenarioSuggestion, apiContractScenario: boolean): string {
-  if (!apiContractScenario) {
-    return scenario.intent;
-  }
-  return `Verify "${scenario.title.replace(/\s+primary journey$/i, "")}" through the changed API or service contract instead of assuming a browser or device journey.`;
-}
-
-function domainScenarioDraftSteps(
+function specializedDomainScenarioDraft(
   scenario: DomainScenarioSuggestion,
   baseFlow: E2eFlow | undefined,
-  apiContractScenario: boolean,
-): string[] {
-  if (apiContractScenario && baseFlow) {
-    return baseFlow.steps;
+): SpecializedDomainScenarioDraft | undefined {
+  if (scenario.source !== "changed-file" || !baseFlow) {
+    return undefined;
   }
-  return scenario.checks.length > 0 ? scenario.checks : (baseFlow?.steps ?? []);
+  if (isApiContractFocusedFlow(baseFlow)) {
+    const subject = scenario.title.replace(/\s+primary journey$/i, "");
+    return {
+      title: `${subject} API contract`,
+      reason: `Verify "${subject}" through the changed API or service contract instead of assuming a browser or device journey.`,
+      steps: baseFlow.steps,
+    };
+  }
+  if (isDesignTokenFocusedFlow(baseFlow) || isCatalogFocusedFlow(baseFlow)) {
+    return {
+      title: baseFlow.title,
+      reason: baseFlow.reason,
+      steps: baseFlow.steps,
+    };
+  }
+  return undefined;
 }
 
 function matchedCoreFlowForScenario(
@@ -5547,6 +5817,14 @@ function buildHumanFixtureInputs(flow: E2eFlow, runner: E2eRunnerName): string[]
   if (coreFlow?.checks.length) {
     inputs.push(`Keep manifest checks required: ${formatHumanList(coreFlow.checks.slice(0, 3))}.`);
   }
+  if (isDesignTokenFocusedFlow(flow)) {
+    inputs.push("Record the token validation command and the artifact generation command used by this repository.");
+    inputs.push("Keep one representative consumer, visual fixture, or theme sample that reads the changed tokens.");
+  }
+  if (isCatalogFocusedFlow(flow)) {
+    inputs.push("Record the catalog validation command and the generation command for the published catalog artifact.");
+    inputs.push("Keep one representative analytics, documentation, ingestion, or migration fixture that reads the changed entries.");
+  }
   if (runner === "maestro") {
     inputs.push("Set APP_ID to the target app id or export it before running the flow.");
   }
@@ -5790,7 +6068,7 @@ function buildDraftNextSteps(plan: E2ePlanResult, runner: E2eRunnerName): string
       ? `Serve the app with \`${plan.executionProfile.startCommand}\`, then run \`${plan.executionProfile.testCommand ?? "npx playwright test"}\`.`
       : `Run \`${plan.executionProfile.testCommand ?? "npx playwright test"}\` after the app can be served locally.`);
   } else {
-    steps.push("Choose a runnable E2E framework once the primary app surface is documented.");
+    steps.push(manualDraftNextStep(plan.project.type));
   }
   if (plan.bootstrap.counts.required > 0) {
     const requiredTitles = plan.bootstrap.steps
@@ -5806,6 +6084,19 @@ function buildDraftNextSteps(plan: E2ePlanResult, runner: E2eRunnerName): string
     steps.push("Resolve missing validation matrix rows before promoting generated drafts to required PR evidence.");
   }
   return steps;
+}
+
+function manualDraftNextStep(projectType: E2eProjectType): string {
+  if (projectType === "api-service") {
+    return "Document the API contract start command, request examples, auth fixture, and failure cases before treating the checklist as PR evidence.";
+  }
+  if (projectType === "design-tokens") {
+    return "Document the token validation command, artifact generation command, and representative consumer fixture before treating the checklist as PR evidence.";
+  }
+  if (projectType === "data-catalog") {
+    return "Document the catalog validation command, generation command, and downstream consumer or migration fixture before treating the checklist as PR evidence.";
+  }
+  return "Choose a runnable E2E framework once the primary app surface is documented.";
 }
 
 function playwrightConfigGuidance(profile: E2eExecutionProfile): string {
@@ -6316,6 +6607,12 @@ function formatProjectType(type: E2eProjectType): string {
   }
   if (type === "api-service") {
     return "API / service";
+  }
+  if (type === "design-tokens") {
+    return "Design tokens";
+  }
+  if (type === "data-catalog") {
+    return "Data catalog";
   }
   return "Unknown";
 }

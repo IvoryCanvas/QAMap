@@ -774,6 +774,152 @@ test("generateE2ePlan detects API service projects and suggests contract checkli
   assert.match(markdown, /Start with API contract validation/);
 });
 
+test("generateE2ePlan detects design token packages and suggests artifact validation", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "tokens"), { recursive: true });
+  await mkdir(path.join(root, "examples/button"), { recursive: true });
+  await writeFile(
+    path.join(root, "tokens/color.json"),
+    JSON.stringify({
+      color: {
+        brand: {
+          primary: { value: "#3366ff", type: "color" },
+        },
+      },
+    }),
+  );
+  await writeFile(path.join(root, "examples/button/theme.css"), ".button { color: var(--color-brand-primary); }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/token-artifact"]);
+  await writeFile(
+    path.join(root, "tokens/color.json"),
+    JSON.stringify({
+      color: {
+        brand: {
+          primary: { value: "#2457f5", type: "color" },
+          accent: { value: "#19a974", type: "color" },
+        },
+      },
+    }),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update token artifact"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e" });
+  const markdown = formatMarkdownE2ePlan(plan);
+  const draftMarkdown = formatMarkdownE2eDraft(draft);
+  const flow = plan.flows.find((item) => /design token contract checklist/.test(item.title));
+  assert.ok(flow);
+  const draftFile = draft.files.find((item) => /design token contract checklist/.test(item.flowTitle));
+  assert.ok(draftFile);
+  const draftText = await readFile(path.join(root, draftFile.path), "utf8");
+  const testabilityRow = plan.validationMatrix.rows.find(
+    (row) => row.flowTitle === flow.title && row.category === "testability",
+  );
+  assert.ok(testabilityRow);
+
+  assert.equal(plan.project.type, "design-tokens");
+  assert.ok(plan.project.evidence.some((item) => item === "Design token files found"));
+  assert.equal(plan.recommendedRunner.name, "manual");
+  assert.match(plan.recommendedRunner.reason, /design token package/);
+  assert.equal(plan.executionProfile.confidence, "medium");
+  assert.equal(plan.executionProfile.blockers.some((blocker) => /No runnable E2E runner/.test(blocker)), false);
+  assert.ok(plan.bootstrap.steps.some((step) => step.title === "Start with design token artifact validation"));
+  assert.equal(flow.fixtureReadiness.status, "not-needed");
+  assert.equal(flow.languageBrief.actor, "Design system consumer or maintainer");
+  assert.match(flow.languageBrief.successSignal, /token schema, generated artifacts, semantic aliases/);
+  assert.ok(flow.coverage.some((target) => target.title === "Token schema and generated artifact compatibility"));
+  assert.ok(flow.coverage.some((target) => target.title === "Downstream consumer visual fixture"));
+  assert.equal(testabilityRow.status, "ready");
+  assert.doesNotMatch(testabilityRow.requiredEvidence, /selector|entrypoint/i);
+  assert.match(testabilityRow.currentEvidence, /token validation commands/);
+  assert.match(testabilityRow.nextAction, /artifact validation and consumer fixture/);
+  assert.match(markdown, /Project: Design tokens/);
+  assert.match(markdown, /Start with design token artifact validation/);
+  assert.match(draftMarkdown, /token validation command, artifact generation command/);
+  assert.match(draftText, /token validation command and the artifact generation command/);
+  assert.match(draftText, /representative consumer, visual fixture, or theme sample/);
+});
+
+test("generateE2ePlan detects data catalog repositories and suggests catalog verification", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "catalog/events"), { recursive: true });
+  await mkdir(path.join(root, "tools"), { recursive: true });
+  await mkdir(path.join(root, "site"), { recursive: true });
+  await writeFile(
+    path.join(root, "catalog/events/creator.yaml"),
+    [
+      "events:",
+      "  - name: creator_registered",
+      "    owner: growth",
+      "    description: Tracks creator registration completion.",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, "tools/build_catalog.py"), "print('build catalog')\n");
+  await writeFile(path.join(root, "site/index.html"), "<main>Catalog</main>\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/catalog-entry"]);
+  await writeFile(
+    path.join(root, "catalog/events/creator.yaml"),
+    [
+      "events:",
+      "  - name: creator_registered",
+      "    owner: growth",
+      "    description: Tracks creator registration completion.",
+      "    properties:",
+      "      - name: source",
+      "        type: string",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update catalog entry"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e" });
+  const markdown = formatMarkdownE2ePlan(plan);
+  const draftMarkdown = formatMarkdownE2eDraft(draft);
+  const flow = plan.flows.find((item) => /taxonomy catalog verification checklist/.test(item.title));
+  assert.ok(flow);
+  const draftFile = draft.files.find((item) => /taxonomy catalog verification checklist/.test(item.flowTitle));
+  assert.ok(draftFile);
+  const draftText = await readFile(path.join(root, draftFile.path), "utf8");
+  const testabilityRow = plan.validationMatrix.rows.find(
+    (row) => row.flowTitle === flow.title && row.category === "testability",
+  );
+  assert.ok(testabilityRow);
+
+  assert.equal(plan.project.type, "data-catalog");
+  assert.ok(plan.project.evidence.some((item) => item === "Catalog or taxonomy files found"));
+  assert.equal(plan.recommendedRunner.name, "manual");
+  assert.match(plan.recommendedRunner.reason, /taxonomy or data catalog/);
+  assert.equal(plan.executionProfile.confidence, "medium");
+  assert.equal(plan.executionProfile.blockers.some((blocker) => /No runnable E2E runner/.test(blocker)), false);
+  assert.ok(plan.bootstrap.steps.some((step) => step.title === "Start with catalog artifact validation"));
+  assert.equal(flow.fixtureReadiness.status, "not-needed");
+  assert.equal(flow.languageBrief.actor, "Data catalog consumer or maintainer");
+  assert.match(flow.languageBrief.successSignal, /catalog schema, generated output/);
+  assert.ok(flow.coverage.some((target) => target.title === "Catalog schema and generated output compatibility"));
+  assert.ok(flow.coverage.some((target) => target.title === "Consumer fixture and migration coverage"));
+  assert.equal(testabilityRow.status, "ready");
+  assert.doesNotMatch(testabilityRow.requiredEvidence, /selector|entrypoint/i);
+  assert.match(testabilityRow.currentEvidence, /catalog validation commands/);
+  assert.match(testabilityRow.nextAction, /catalog generation and consumer fixture/);
+  assert.match(markdown, /Project: Data catalog/);
+  assert.match(markdown, /Start with catalog artifact validation/);
+  assert.match(draftMarkdown, /catalog validation command, generation command/);
+  assert.match(draftText, /catalog validation command and the generation command/);
+  assert.match(draftText, /analytics, documentation, ingestion, or migration fixture/);
+});
+
 test("generateE2ePlan detects Nuxt and Vue projects as web before API service dependencies", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
