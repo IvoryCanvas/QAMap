@@ -317,6 +317,18 @@ function isDomainLanguageFile(file: string): boolean {
   if (/(?:^|\/)(?:assets?|images?|icons?|fonts?)\//i.test(file)) {
     return false;
   }
+  if (/(?:^|\/)(?:\.agents?|\.claude|\.cursor|\.dev|\.gemini|\.github|docs?)\//i.test(file)) {
+    return false;
+  }
+  if (/(?:^|\/)(?:AGENTS|CLAUDE|CODEX|DECISIONS|GEMINI|README|SKILL)\.md$/i.test(file)) {
+    return false;
+  }
+  if (/(?:^|\/)\.gitignore$/i.test(file)) {
+    return false;
+  }
+  if (/(?:^|\/)(?:CHANGELOG|RELEASES?|release-notes?|\.release-please-manifest)\.(?:md|json)$/i.test(file)) {
+    return false;
+  }
   if (/(?:package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|bun\.lockb|Podfile\.lock|\.xcodeproj|eas\.json|app\.config\.)/i.test(file)) {
     return false;
   }

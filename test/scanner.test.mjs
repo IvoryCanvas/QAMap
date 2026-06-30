@@ -626,6 +626,42 @@ test("generateE2ePlan detects API service projects and suggests contract checkli
   assert.match(markdown, /Start with API contract validation/);
 });
 
+test("generateE2ePlan detects Nuxt and Vue projects as web before API service dependencies", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/admin"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      dependencies: {
+        express: "^4.18.0",
+        nuxt: "^2.17.0",
+        vue: "^2.7.0",
+      },
+      devDependencies: {
+        webpack: "^5.0.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "nuxt.config.js"), "export default { srcDir: 'src/' };\n");
+  await writeFile(path.join(root, "src/pages/admin/index.vue"), "<template><button>Save</button></template>\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/admin-page"]);
+  await writeFile(path.join(root, "src/pages/admin/index.vue"), "<template><button data-testid=\"save-admin\">Save</button></template>\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update admin page"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+
+  assert.equal(plan.project.type, "web");
+  assert.equal(plan.recommendedRunner.name, "playwright");
+  assert.ok(plan.project.evidence.some((item) => item.includes("nuxt")));
+  assert.ok(plan.flows.some((flow) => flow.title === "Admin UI smoke flow"));
+});
+
 test("generateE2ePlan assigns configuration changes to release operators", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
@@ -664,6 +700,90 @@ test("generateE2ePlan assigns configuration changes to release operators", async
   assert.match(flow.languageBrief.trigger, /Run the build, startup, or release path/);
   assert.match(flow.languageBrief.successSignal, /build or runtime variant/);
   assert.match(flow.languageBrief.reviewQuestion, /affected build, startup, or release variant/);
+});
+
+test("generateE2ePlan avoids turning release metadata into domain journeys", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      version: "1.0.0",
+      dependencies: {
+        express: "^4.18.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## 1.0.0\n");
+  await writeFile(path.join(root, ".release-please-manifest.json"), JSON.stringify({ ".": "1.0.0" }));
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/release-metadata"]);
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      version: "1.0.1",
+      dependencies: {
+        express: "^4.18.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## 1.0.1\n");
+  await writeFile(path.join(root, ".release-please-manifest.json"), JSON.stringify({ ".": "1.0.1" }));
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update release metadata"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e" });
+
+  assert.equal(plan.domainLanguage.terms.some((term) => /changelog|release please/i.test(term.term)), false);
+  assert.equal(draft.files.some((file) => /changelog|release-please/i.test(file.flowTitle)), false);
+  assert.ok(plan.flows.some((flow) => /configuration verification/.test(flow.title)));
+});
+
+test("generateE2ePlan treats agent and repo metadata as configuration, not product journeys", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, ".agents/review"), { recursive: true });
+  await mkdir(path.join(root, ".github/workflows"), { recursive: true });
+  await mkdir(path.join(root, ".dev/specs/qa-sync"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      dependencies: {
+        express: "^4.18.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "CLAUDE.md"), "# Agent notes\n");
+  await writeFile(path.join(root, ".agents/review/SKILL.md"), "# Review skill\n");
+  await writeFile(path.join(root, ".github/workflows/deploy.yml"), "name: Deploy\n");
+  await writeFile(path.join(root, ".dev/specs/qa-sync/PLAN.md"), "# Plan\n");
+  await writeFile(path.join(root, ".gitignore"), "node_modules\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/repo-metadata"]);
+  await writeFile(path.join(root, "CLAUDE.md"), "# Agent notes\n\n- Use safe commands.\n");
+  await writeFile(path.join(root, ".agents/review/SKILL.md"), "# Review skill\n\nCheck changes.\n");
+  await writeFile(path.join(root, ".github/workflows/deploy.yml"), "name: Deploy\non: push\n");
+  await writeFile(path.join(root, ".dev/specs/qa-sync/PLAN.md"), "# Plan\n\nUpdated.\n");
+  await writeFile(path.join(root, ".gitignore"), "node_modules\n.env\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update repo metadata"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e" });
+  const unwanted = /agent|claude|deploy|gitignore|plan|skill/i;
+
+  assert.equal(plan.domainLanguage.terms.some((term) => unwanted.test(term.term)), false);
+  assert.equal(draft.files.some((file) => file.source === "domain-language" && unwanted.test(file.flowTitle)), false);
+  assert.equal(draft.files.some((file) => /primary journey/i.test(file.flowTitle)), false);
+  assert.ok(plan.flows.every((flow) => /configuration verification/.test(flow.title)));
+  assert.ok(plan.flows.every((flow) => flow.languageBrief.actor === "Maintainer or release operator"));
 });
 
 test("generateE2ePlan treats API service source utilities as contract-impacting changes", async () => {

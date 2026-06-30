@@ -1988,8 +1988,23 @@ async function detectProjectProfile(root: string): Promise<E2eProjectProfile> {
   const hasExpoDependency = "expo" in dependencies;
   const hasReactNativeDependency = "react-native" in dependencies;
   const hasPlaywrightDependency = "@playwright/test" in dependencies || "playwright" in dependencies;
-  const hasWebDependency =
-    "next" in dependencies || "vite" in dependencies || "react-dom" in dependencies || hasPlaywrightDependency;
+  const webDependencies = [
+    "@angular/core",
+    "@remix-run/react",
+    "@storybook/react",
+    "@storybook/react-vite",
+    "@storybook/vue",
+    "@storybook/vue3",
+    "astro",
+    "next",
+    "nuxt",
+    "react-dom",
+    "svelte",
+    "vue",
+    "vite",
+  ];
+  const webDependency = webDependencies.find((dependency) => dependency in dependencies);
+  const hasWebDependency = Boolean(webDependency) || hasPlaywrightDependency;
   const apiServiceDependencies = [
     "@apollo/server",
     "@nestjs/core",
@@ -2007,6 +2022,21 @@ async function detectProjectProfile(root: string): Promise<E2eProjectProfile> {
   const apiServiceDependency = apiServiceDependencies.find((dependency) => dependency in dependencies);
   const hasExpoConfig = await hasAnyFile(root, ["app.json", "app.config.js", "app.config.ts"]);
   const hasNativeDirs = (await exists(path.join(root, "ios"))) || (await exists(path.join(root, "android")));
+  const hasWebConfig = await hasAnyFile(root, [
+    "angular.json",
+    "astro.config.js",
+    "astro.config.mjs",
+    "astro.config.ts",
+    "next.config.js",
+    "next.config.mjs",
+    "nuxt.config.js",
+    "nuxt.config.ts",
+    "svelte.config.js",
+    "vite.config.js",
+    "vite.config.mjs",
+    "vite.config.ts",
+    "vue.config.js",
+  ]);
   const hasApiServiceConfig = await hasAnyFile(root, [
     "serverless.yml",
     "serverless.yaml",
@@ -2024,6 +2054,12 @@ async function detectProjectProfile(root: string): Promise<E2eProjectProfile> {
   }
   if (hasPlaywrightDependency) {
     evidence.push("package.json dependency: Playwright");
+  }
+  if (webDependency) {
+    evidence.push(`package.json dependency: ${webDependency}`);
+  }
+  if (hasWebConfig) {
+    evidence.push("Web app or component configuration file found");
   }
   if (hasExpoConfig) {
     evidence.push("Expo app configuration file found");
@@ -2044,7 +2080,7 @@ async function detectProjectProfile(root: string): Promise<E2eProjectProfile> {
   if (hasReactNativeDependency || hasNativeDirs) {
     return { type: "react-native", evidence };
   }
-  if (hasWebDependency) {
+  if (hasWebDependency || hasWebConfig) {
     return { type: "web", evidence };
   }
   if (apiServiceDependency || hasApiServiceConfig) {
@@ -3005,7 +3041,7 @@ function isContentOrStyleFile(file: string): boolean {
 }
 
 function isConfigLikeFile(file: string): boolean {
-  return /(?:package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|bun\.lockb|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|docker|env|feature-?flags?|experiments?)/i.test(
+  return /(?:(?:^|\/)(?:\.agents?|\.claude|\.cursor|\.dev|\.gemini|\.github|docs?)\/|(?:^|\/)(?:AGENTS|CLAUDE|CODEX|DECISIONS|GEMINI|PLAN|README|SKILL)\.md$|\.gitignore|package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|bun\.lockb|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|release-please|docker|env|feature-?flags?|experiments?)/i.test(
     file,
   );
 }
@@ -3249,9 +3285,13 @@ function isMeaningfulLabel(value: string): boolean {
   const ignored = new Set([
     "api",
     "apis",
+    "agent",
+    "agents",
     "app",
     "apps",
     "client",
+    "changelog",
+    "claude",
     "component",
     "components",
     "config",
@@ -3262,7 +3302,10 @@ function isMeaningfulLabel(value: string): boolean {
     "contexts",
     "default",
     "development",
+    "decisions",
     "env",
+    "gemini",
+    "gitignore",
     "hook",
     "hooks",
     "index",
@@ -3276,9 +3319,12 @@ function isMeaningfulLabel(value: string): boolean {
     "page",
     "pages",
     "package",
+    "plan",
     "production",
     "provider",
     "providers",
+    "readme",
+    "release",
     "route",
     "routes",
     "screen",
@@ -3286,6 +3332,7 @@ function isMeaningfulLabel(value: string): boolean {
     "server",
     "service",
     "services",
+    "skill",
     "src",
     "staging",
     "state",
