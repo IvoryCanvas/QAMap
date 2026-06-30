@@ -663,6 +663,64 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.ok(cliDraft.files.some((file) => file.validationGapCount > 0));
 });
 
+test("generateE2ePlan detects Maestro app ids from app config files", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, ".maestro"), { recursive: true });
+  await mkdir(path.join(root, "src/screens/profile"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      packageManager: "pnpm@10.32.1",
+      scripts: {
+        ios: "expo run:ios",
+        test: "jest",
+      },
+      dependencies: {
+        expo: "^54.0.0",
+        "react-native": "0.81.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "app.config.ts"),
+    [
+      "const androidPackage = process.env.QA_APP === '1' ? 'com.example.fixture.qa' : 'com.example.fixture';",
+      "module.exports = {",
+      "  expo: {",
+      "    name: 'Fixture',",
+      "    slug: 'fixture-app',",
+      "    ios: { bundleIdentifier: 'com.example.fixture.ios' },",
+      "    android: { package: androidPackage },",
+      "  },",
+      "};",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, ".maestro/profile.yaml"), "appId: ${APP_ID}\n---\n- launchApp\n");
+  await writeFile(
+    path.join(root, "src/screens/profile/ProfileScreen.tsx"),
+    "export function ProfileScreen() { return null; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/profile-screen"]);
+  await writeFile(
+    path.join(root, "src/screens/profile/ProfileScreen.tsx"),
+    "export function ProfileScreen() { return <Text accessibilityLabel=\"Profile ready\">Profile</Text>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update profile screen"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+
+  assert.equal(plan.executionProfile.runner, "maestro");
+  assert.equal(plan.executionProfile.appId, "com.example.fixture");
+  assert.ok(plan.executionProfile.configFiles.includes(".maestro"));
+  assert.equal(plan.executionProfile.blockers.some((blocker) => /mobile app id/i.test(blocker)), false);
+});
+
 test("generateE2ePlan detects API service projects and suggests contract checklists", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
@@ -1717,6 +1775,50 @@ test("generateE2ePlan captures Playwright execution profile and self-check block
   assert.match(spec, /Start command: pnpm run dev/);
   assert.match(spec, /Test command: pnpm run test:e2e/);
   assert.match(spec, /Base URL: http:\/\/127\.0\.0\.1:4173/);
+});
+
+test("generateE2ePlan infers Playwright base URLs from dev scripts", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/settings"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      packageManager: "pnpm@10.32.1",
+      scripts: {
+        dev: "next dev -p 3004",
+      },
+      dependencies: {
+        next: "^15.0.0",
+        react: "^19.0.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/pages/settings/SettingsPage.tsx"),
+    "export function SettingsPage() { return <button>Save settings</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/settings-port"]);
+  await writeFile(
+    path.join(root, "src/pages/settings/SettingsPage.tsx"),
+    "export function SettingsPage() { return <button aria-label=\"Save settings\">Save settings</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update settings page"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+
+  assert.equal(plan.executionProfile.runner, "playwright");
+  assert.equal(plan.executionProfile.startCommand, "pnpm run dev");
+  assert.equal(plan.executionProfile.testCommand, "npx playwright test");
+  assert.equal(plan.executionProfile.baseUrl, "http://localhost:3004");
+  assert.ok(plan.executionProfile.blockers.some((blocker) => /Playwright config/.test(blocker)));
+  assert.equal(plan.executionProfile.blockers.some((blocker) => /baseURL|base URL/.test(blocker)), false);
 });
 
 test("generateE2eDraft emits runnable Playwright role and input actions", async () => {

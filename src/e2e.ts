@@ -2569,13 +2569,20 @@ async function buildExecutionProfile(
   const packageJson = await readPackageJson(root);
   const scripts = packageJson?.scripts ?? {};
   const packageManager = await detectPackageManager(root, packageJson?.packageManager, workspaceRoot);
-  const configFiles = await existingFiles(root, executionConfigCandidates(runner));
-  const envFiles = await existingFiles(root, [
+  const configFiles = await existingFilesInRoots(root, workspaceRoot, executionConfigCandidates(runner));
+  const envFiles = await existingFilesInRoots(root, workspaceRoot, [
+    ".env",
+    ".env.local",
     ".env.example",
     ".env.local.example",
     ".env.test",
+    ".env.test.local",
     ".env.e2e",
+    ".env.e2e.local",
     ".env.development",
+    ".env.development.local",
+    ".env.production",
+    ".env.production.local",
   ]);
   const startScript = chooseScript(scripts, startScriptCandidates(runner, project.type));
   const testScript = chooseScript(scripts, testScriptCandidates(runner));
@@ -2585,8 +2592,11 @@ async function buildExecutionProfile(
   const apiTestCommand = project.type === "api-service" ? await detectApiServiceTestCommand(root) : undefined;
   const startCommand = scriptStartCommand ?? apiStartCommand;
   const testCommand = scriptTestCommand ?? apiTestCommand;
-  const baseUrl = runner === "playwright" ? await detectPlaywrightBaseUrl(root, configFiles, envFiles) : undefined;
-  const appId = runner === "maestro" ? await detectMobileAppId(root) : undefined;
+  const baseUrl =
+    runner === "playwright"
+      ? await detectPlaywrightBaseUrl(root, configFiles, envFiles, scripts, startScript, packageJson)
+      : undefined;
+  const appId = runner === "maestro" ? await detectMobileAppId(root, workspaceRoot) : undefined;
   const evidence = executionProfileEvidence({
     runner,
     startCommand,
@@ -2760,7 +2770,28 @@ async function existingFiles(root: string, candidates: string[]): Promise<string
   return files;
 }
 
-async function detectPlaywrightBaseUrl(root: string, configFiles: string[], envFiles: string[]): Promise<string | undefined> {
+async function existingFilesInRoots(root: string, workspaceRoot: string | undefined, candidates: string[]): Promise<string[]> {
+  const files: string[] = [];
+  const roots = profileSearchRoots(root, workspaceRoot);
+  for (const candidateRoot of roots) {
+    for (const candidate of candidates) {
+      const absolutePath = path.join(candidateRoot, candidate);
+      if (await exists(absolutePath)) {
+        files.push(toPosixPath(path.relative(root, absolutePath)) || candidate);
+      }
+    }
+  }
+  return uniqueStrings(files);
+}
+
+async function detectPlaywrightBaseUrl(
+  root: string,
+  configFiles: string[],
+  envFiles: string[],
+  scripts: Record<string, string>,
+  startScript: string | undefined,
+  packageJson: PackageJson | undefined,
+): Promise<string | undefined> {
   for (const configFile of configFiles) {
     const text = await readTextIfExists(path.join(root, configFile));
     const baseUrl = text?.match(/\bbaseURL\s*:\s*["'`]([^"'`]+)["'`]/)?.[1];
@@ -2771,33 +2802,127 @@ async function detectPlaywrightBaseUrl(root: string, configFiles: string[], envF
 
   for (const envFile of envFiles) {
     const text = await readTextIfExists(path.join(root, envFile));
-    const baseUrl = text?.match(/^(?:PLAYWRIGHT_BASE_URL|BASE_URL|E2E_BASE_URL|NEXT_PUBLIC_SITE_URL)=(.+)$/m)?.[1]?.trim();
+    const baseUrl = text
+      ?.match(/^(?:PLAYWRIGHT_BASE_URL|BASE_URL|E2E_BASE_URL|TEST_BASE_URL|APP_BASE_URL|APP_URL|PUBLIC_URL|NEXT_PUBLIC_SITE_URL)=(.+)$/m)?.[1]
+      ?.trim();
     if (baseUrl && !/\$\{|<|TODO/i.test(baseUrl)) {
       return baseUrl.replace(/^["']|["']$/g, "");
     }
   }
 
+  const startScriptValue = startScript ? scripts[startScript] : undefined;
+  return detectPlaywrightBaseUrlFromScript(startScriptValue, packageJson);
+}
+
+function detectPlaywrightBaseUrlFromScript(
+  startScript: string | undefined,
+  packageJson: PackageJson | undefined,
+): string | undefined {
+  if (!startScript) {
+    return undefined;
+  }
+  const host = detectDevServerHost(startScript) ?? "localhost";
+  const port = detectDevServerPort(startScript) ?? frameworkDefaultPort(startScript, packageJson);
+  return port ? `http://${host}:${port}` : undefined;
+}
+
+function detectDevServerHost(script: string): string | undefined {
+  const hostMatch = script.match(/(?:--host(?:=|\s+)|-H\s+)([A-Za-z0-9._-]+)/);
+  if (!hostMatch?.[1] || hostMatch[1] === "0.0.0.0" || hostMatch[1] === "::") {
+    return undefined;
+  }
+  return hostMatch[1];
+}
+
+function detectDevServerPort(script: string): string | undefined {
+  const envPort = script.match(/(?:^|\s)(?:PORT|VITE_PORT|NEXT_PORT)=(\d{2,5})(?:\s|$)/)?.[1];
+  if (envPort) {
+    return envPort;
+  }
+  return script.match(/(?:--port(?:=|\s+)|-p(?:=|\s+))(\d{2,5})(?:\s|$)/)?.[1];
+}
+
+function frameworkDefaultPort(script: string, packageJson: PackageJson | undefined): string | undefined {
+  const dependencies = {
+    ...(packageJson?.dependencies ?? {}),
+    ...(packageJson?.devDependencies ?? {}),
+  };
+  if (/\bnext\b/.test(script) || "next" in dependencies || /\bnuxt\b/.test(script) || "nuxt" in dependencies) {
+    return "3000";
+  }
+  if (/\bvite\b/.test(script) || "vite" in dependencies || /\bsvelte-kit\b/.test(script)) {
+    return "5173";
+  }
+  if (/\bastro\b/.test(script) || "astro" in dependencies) {
+    return "4321";
+  }
+  if (/\bremix\b/.test(script) || "@remix-run/react" in dependencies) {
+    return "3000";
+  }
   return undefined;
 }
 
-async function detectMobileAppId(root: string): Promise<string | undefined> {
+async function detectMobileAppId(root: string, workspaceRoot: string | undefined): Promise<string | undefined> {
   const appJson = await readTextIfExists(path.join(root, "app.json"));
-  if (!appJson) {
-    return undefined;
-  }
-  try {
-    const parsed = JSON.parse(appJson) as {
-      expo?: {
-        android?: { package?: string };
-        ios?: { bundleIdentifier?: string };
-        slug?: string;
-        name?: string;
+  if (appJson) {
+    try {
+      const parsed = JSON.parse(appJson) as {
+        expo?: {
+          android?: { package?: string };
+          ios?: { bundleIdentifier?: string };
+          slug?: string;
+          name?: string;
+        };
       };
-    };
-    return parsed.expo?.android?.package ?? parsed.expo?.ios?.bundleIdentifier ?? parsed.expo?.slug ?? parsed.expo?.name;
-  } catch {
+      const jsonId = parsed.expo?.android?.package ?? parsed.expo?.ios?.bundleIdentifier ?? parsed.expo?.slug ?? parsed.expo?.name;
+      if (jsonId) {
+        return jsonId;
+      }
+    } catch {
+      // Fall through to app.config.* parsing.
+    }
+  }
+
+  for (const configFile of await existingFilesInRoots(root, workspaceRoot, ["app.config.ts", "app.config.js", "app.config.mjs", "app.config.cjs"])) {
+    const text = await readTextIfExists(path.join(root, configFile));
+    const appId = text ? extractMobileAppIdFromConfigText(text) : undefined;
+    if (appId) {
+      return appId;
+    }
+  }
+  return undefined;
+}
+
+function extractMobileAppIdFromConfigText(text: string): string | undefined {
+  return (
+    extractLiteralPropertyValue(text, "package") ??
+    resolveConfigIdentifier(text, "package") ??
+    extractLiteralPropertyValue(text, "bundleIdentifier") ??
+    resolveConfigIdentifier(text, "bundleIdentifier") ??
+    extractLiteralPropertyValue(text, "slug") ??
+    extractLiteralPropertyValue(text, "name")
+  );
+}
+
+function extractLiteralPropertyValue(text: string, property: string): string | undefined {
+  const quotePattern = `["'\\x60]`;
+  const match = text.match(new RegExp(`\\b${property}\\s*:\\s*${quotePattern}([^"'\\x60]+)${quotePattern}`));
+  return match?.[1];
+}
+
+function resolveConfigIdentifier(text: string, property: string): string | undefined {
+  const identifier = text.match(new RegExp(`\\b${property}\\s*:\\s*([A-Za-z_$][A-Za-z0-9_$]*)`))?.[1];
+  if (!identifier) {
     return undefined;
   }
+  return extractStringAssignmentDefault(text, identifier);
+}
+
+function extractStringAssignmentDefault(text: string, identifier: string): string | undefined {
+  const escapedIdentifier = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = text.match(new RegExp(`\\b(?:const|let|var)\\s+${escapedIdentifier}\\s*=([\\s\\S]*?)(?:\\n\\s*(?:const|let|var|module\\.exports|export\\s+default)\\b|;\\s*\\n|$)`));
+  const values = match?.[1] ? [...match[1].matchAll(/["'`]([^"'`]+)["'`]/g)].map((item) => item[1]) : [];
+  return values.at(-1);
 }
 
 function executionProfileEvidence(input: {
