@@ -2316,6 +2316,9 @@ test("generateE2ePlan infers Playwright base URLs from dev scripts", async () =>
   assert.match(setupDraftText, /page\.goto\("\/settings"\)/);
   assert.match(setupDraftText, /page\.getByLabel\("Save settings"\)\.click\(\)/);
   assert.match(setupDraftText, /expect\(page\.getByRole\("button", \{ name: "Save settings" \}\)\)\.toBeVisible\(\)/);
+  assert.match(setupDraftText, /Goal: Protect Settings primary journey by complete the main Settings action with realistic data/);
+  assert.doesNotMatch(setupDraftText, /TODO: Start from the normal entry point/);
+  assert.doesNotMatch(setupDraftText, /test\.step\("Start from the normal entry point/);
   assert.match(setupMarkdown, /## Generated Draft/);
   assert.match(setupMarkdown, /settings-primary-journey\.spec\.ts/);
 });

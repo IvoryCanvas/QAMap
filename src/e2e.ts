@@ -2047,11 +2047,15 @@ function inferFlowGoal(flow: Omit<E2eFlow, "languageBrief">): string {
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return `Protect ${flow.title} by verifying clean install, startup, and fallback configuration variants.`;
   }
-  const primaryStep = flow.steps.find((step) => !/^record\b|^run or open\b/i.test(step)) ?? flow.steps[0];
+  const primaryStep = flow.steps.find(isFlowGoalCandidateStep) ?? flow.steps[0];
   if (primaryStep) {
     return `Protect ${flow.title} by ${lowercaseFirst(stripTerminalPunctuation(primaryStep))}.`;
   }
   return `Protect ${flow.title} for the changed behavior.`;
+}
+
+function isFlowGoalCandidateStep(step: string): boolean {
+  return !isEntrypointPreparationStep(step) && !/^record\b|^run or open\b/i.test(step);
 }
 
 function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
@@ -6012,7 +6016,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   appendValidationGapComments(lines, flow, "#");
   appendFlowLanguageBriefComments(lines, flow.languageBrief, "#");
   appendDraftPromotionComments(lines, flow, "#");
-  for (const step of flow.steps) {
+  for (const step of draftExecutableSteps(flow, "maestro")) {
     const command = maestroCommandForStep(step, selectorQueue);
     lines.push(...formatMaestroCommand(command));
   }
@@ -6122,7 +6126,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   appendPlaywrightTestStep(lines, flow.languageBrief.trigger, [
     `await page.goto(${routeDraft.expression});`,
   ]);
-  for (const step of flow.steps) {
+  for (const step of draftExecutableSteps(flow, "playwright")) {
     const selector = takeSelectorForStep(selectorQueue, step);
     const locator = selector ? playwrightLocator(selector) : 'page.getByText("TODO")';
     const body = selector
@@ -6156,6 +6160,36 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   }
   lines.push("");
   return lines.join("\n");
+}
+
+function draftExecutableSteps(flow: E2eFlow, runner: E2eRunnerName): string[] {
+  const executableSteps = flow.steps.filter((step) => !shouldSkipDraftStep(step, flow, runner));
+  return executableSteps.length > 0 ? executableSteps : flow.steps;
+}
+
+function shouldSkipDraftStep(step: string, flow: E2eFlow, runner: E2eRunnerName): boolean {
+  if (!isEntrypointPreparationStep(step)) {
+    return false;
+  }
+  if (runner === "playwright") {
+    return Boolean(primaryRouteEntrypoint(flow));
+  }
+  if (runner === "maestro") {
+    return stepMatchesLaunchStep(step) || flow.entrypoints.length > 0;
+  }
+  return false;
+}
+
+function isEntrypointPreparationStep(step: string): boolean {
+  return /^start from\b/i.test(step) ||
+    /^launch the app\b/i.test(step) ||
+    /^open route\b/i.test(step) ||
+    /^open the .+ screen\b/i.test(step) ||
+    /^(?:navigate|go) to\b/i.test(step);
+}
+
+function stepMatchesLaunchStep(step: string): boolean {
+  return /^launch\b/i.test(step);
 }
 
 function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
