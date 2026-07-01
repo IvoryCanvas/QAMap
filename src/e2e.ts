@@ -4,6 +4,7 @@ import { buildDomainLanguageSummary } from "./domain-language.js";
 import { defaultDomainManifestPath, loadDomainManifest, matchDomains } from "./domains.js";
 import { collectProjectFiles } from "./fs.js";
 import { loadCoreFlowManifest, matchCoreFlows } from "./flows.js";
+import { loadVerificationManifest, matchVerificationManifest } from "./manifest.js";
 import {
   collectTestSuiteInventory,
   evaluateFlowCoverageEvidence,
@@ -14,6 +15,7 @@ import type { TestPlanChangedFile, TestPlanOptions, TestPlanResult } from "./tes
 import type { DomainLanguageSummary, DomainScenarioSuggestion } from "./domain-language.js";
 import type { MatchedDomain } from "./domains.js";
 import type { MatchedCoreFlow } from "./flows.js";
+import type { VerificationManifestMatch } from "./manifest.js";
 import type { LocalHistoryReference } from "./history.js";
 import type { CoverageEvidence, TestSuiteInventory, TestSuiteSummary } from "./test-evidence.js";
 import { TOOL_NAME, VERSION } from "./version.js";
@@ -229,6 +231,8 @@ export interface E2ePlanResult {
   coreFlows: MatchedCoreFlow[];
   domainManifestPath?: string;
   domains: MatchedDomain[];
+  verificationManifestPath?: string;
+  verificationManifestMatches: VerificationManifestMatch[];
   domainLanguage: DomainLanguageSummary;
   changedFiles: TestPlanChangedFile[];
   suggestedCommands: string[];
@@ -261,7 +265,7 @@ export interface E2eDraftFile {
   flowTitle: string;
   runner: E2eRunnerName;
   status: "created" | "skipped" | "preview";
-  source?: "domain-language" | "core-flow" | "heuristic";
+  source?: "verification-manifest" | "domain-language" | "core-flow" | "heuristic";
   languageBrief?: E2eFlowLanguageBrief;
   actionItems?: E2eDraftActionItem[];
   promotionStatus?: E2eDraftPromotionStatus;
@@ -424,6 +428,8 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const coreFlows = matchCoreFlows(coreFlowManifest, coreFlowChangedFiles);
   const domainManifest = await loadDomainManifest(coreFlowRoot);
   const domains = matchDomains(domainManifest, coreFlowChangedFiles);
+  const verificationManifest = await loadVerificationManifest(coreFlowRoot);
+  const verificationManifestMatches = matchVerificationManifest(verificationManifest, coreFlowChangedFiles);
   const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows, domains);
   const workspaceTargets = await buildWorkspaceTargets(root, testPlan);
   const flows = await buildFlows(
@@ -490,6 +496,8 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     coreFlows,
     domainManifestPath: domainManifest.path,
     domains,
+    verificationManifestPath: verificationManifest.path,
+    verificationManifestMatches,
     domainLanguage,
     changedFiles: testPlan.changedFiles,
     suggestedCommands: testPlan.suggestedCommands,
@@ -1681,10 +1689,30 @@ interface E2eDraftPromotionGuidance {
 }
 
 function buildDraftPromotionGuidance(flow: E2eFlow): E2eDraftPromotionGuidance {
+  const manifestMatch = manifestMatchForDraftFlow(flow);
   const coreFlow = coreFlowForDraftFlow(flow);
   const scenario = domainScenarioForFlow(flow);
   const hasEntrypoint = flow.entrypoints.length > 0;
-  const hasChecks = flow.steps.length > 0 || (scenario?.checks.length ?? 0) > 0 || (coreFlow?.checks.length ?? 0) > 0;
+  const hasChecks =
+    flow.steps.length > 0 ||
+    (manifestMatch?.checks?.length ?? 0) > 0 ||
+    (scenario?.checks.length ?? 0) > 0 ||
+    (coreFlow?.checks.length ?? 0) > 0;
+
+  if (manifestMatch) {
+    if (hasEntrypoint && hasChecks) {
+      return {
+        status: "commit-candidate",
+        reason: "Verification manifest matched the changed files with flow checks and an entrypoint.",
+        action: "Keep the manifest checks as required PR evidence, then wire them to runnable assertions and fixtures.",
+      };
+    }
+    return {
+      status: "needs-review",
+      reason: "Verification manifest matched the change, but runnable entrypoint, selectors, or checks still need confirmation.",
+      action: "Refine `.codeward/manifest.yaml` anchors, route, and checks so the next draft is closer to runnable coverage.",
+    };
+  }
 
   if (coreFlow) {
     if (hasEntrypoint && hasChecks) {
@@ -2410,8 +2438,12 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
   if (result.domainManifestPath) {
     lines.push(`- Domain manifest: \`${escapeMarkdownInline(result.domainManifestPath)}\``);
   }
+  if (result.verificationManifestPath) {
+    lines.push(`- Verification manifest: \`${escapeMarkdownInline(result.verificationManifestPath)}\``);
+  }
   lines.push(`- Matched core flows: ${result.coreFlows.length}`);
   lines.push(`- Matched domains: ${result.domains.length}`);
+  lines.push(`- Manifest recommendations: ${result.verificationManifestMatches.length}`);
   if (result.workspaceTargets.length > 0) {
     lines.push(`- Changed app/package targets: ${result.workspaceTargets.length}`);
   }
@@ -2498,6 +2530,8 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
       lines.push("");
     }
   }
+
+  appendVerificationManifestMatchesMarkdown(lines, result.verificationManifestMatches);
 
   if (result.coreFlows.length > 0) {
     lines.push("## Matched Core Flows");
@@ -2692,6 +2726,36 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
   return lines.join("\n");
 }
 
+function appendVerificationManifestMatchesMarkdown(lines: string[], matches: VerificationManifestMatch[]): void {
+  if (matches.length === 0) {
+    return;
+  }
+
+  lines.push("## Manifest Recommendations");
+  lines.push("");
+  lines.push(
+    "These recommendations come from `.codeward/manifest.yaml`. If they are wrong, update the manifest path shown below so the next PR gets better suggestions.",
+  );
+  lines.push("");
+
+  for (const match of matches.slice(0, 10)) {
+    lines.push(`### ${escapeMarkdownInline(match.name)} \`${escapeMarkdownInline(match.id)}\``);
+    lines.push("");
+    lines.push(`- Kind: ${match.kind}`);
+    lines.push(`- Confidence: ${match.confidence}`);
+    lines.push(`- Why this was recommended: ${escapeMarkdownInline(match.reason)}`);
+    lines.push(`- Manifest evidence: \`${escapeMarkdownInline(match.manifestPath)}\``);
+    lines.push(`- If this is wrong: update \`${escapeMarkdownInline(match.updatePath)}\``);
+    if (match.matchedFiles.length > 0) {
+      lines.push("- Matched files:");
+      for (const file of match.matchedFiles.slice(0, maxFilesPerFlow)) {
+        lines.push(`  - \`${escapeMarkdownInline(file)}\``);
+      }
+    }
+    lines.push("");
+  }
+}
+
 export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
   const lines: string[] = [];
   lines.push("# CodeWard E2E Draft");
@@ -2736,6 +2800,8 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
     lines.push(`- Action categories: ${formatDraftActionKindSummary(result.actionSummary.byKind)}`);
   }
   lines.push("");
+
+  appendVerificationManifestMatchesMarkdown(lines, result.plan.verificationManifestMatches);
 
   lines.push("## Files");
   lines.push("");
@@ -4107,11 +4173,12 @@ type FlowCandidate = Omit<
 > & {
   kind: E2eFlowKind;
 };
-type DraftFlowSource = "domain-language" | "core-flow" | "heuristic";
+type DraftFlowSource = "verification-manifest" | "domain-language" | "core-flow" | "heuristic";
 type DraftE2eFlow = E2eFlow & {
   draftSource?: DraftFlowSource;
   domainScenario?: DomainScenarioSuggestion;
   coreFlow?: MatchedCoreFlow;
+  manifestMatch?: VerificationManifestMatch;
 };
 
 async function buildFlows(
@@ -5799,6 +5866,7 @@ function dedupeFlows(flows: E2eFlow[]): E2eFlow[] {
 
 async function buildDraftFlows(plan: E2ePlanResult): Promise<DraftE2eFlow[]> {
   const baseFlows = plan.flows.length > 0 ? plan.flows : [buildFallbackFlow(plan)];
+  const manifestFlows = await buildManifestDraftFlows(plan, baseFlows);
   const domainScenarios = shouldUseDomainScenariosForDraft(plan) ? plan.domainLanguage.scenarios : [];
   const scenarioFlows = await Promise.all(
     domainScenarios
@@ -5807,7 +5875,7 @@ async function buildDraftFlows(plan: E2ePlanResult): Promise<DraftE2eFlow[]> {
       .map((scenario) => buildDomainScenarioDraftFlow(plan, scenario, baseFlows)),
   );
 
-  if (scenarioFlows.length === 0) {
+  if (manifestFlows.length === 0 && scenarioFlows.length === 0) {
     return baseFlows.map((flow) => ({
       ...flow,
       draftSource: "heuristic",
@@ -5815,7 +5883,7 @@ async function buildDraftFlows(plan: E2ePlanResult): Promise<DraftE2eFlow[]> {
   }
 
   const combined = prioritizeImportantBaseDraftFlow(dedupeDraftFlowsByOutputPath(
-    dedupeFlows([...scenarioFlows, ...baseFlows]),
+    dedupeFlows([...manifestFlows, ...scenarioFlows, ...baseFlows]),
     plan.recommendedRunner.name,
   ), baseFlows).slice(0, 4);
   return combined.map((flow) => ({
@@ -5882,6 +5950,7 @@ function mergeDraftFlows(left: DraftE2eFlow, right: DraftE2eFlow): DraftE2eFlow 
     selectors: uniqueSelectors([...left.selectors, ...right.selectors]).slice(0, 12),
     missingTestability: uniqueStrings([...left.missingTestability, ...right.missingTestability]),
     draftSource: preferredDraftSource(left.draftSource, right.draftSource),
+    manifestMatch: left.manifestMatch ?? right.manifestMatch,
     domainScenario: left.domainScenario ?? right.domainScenario,
     coreFlow: left.coreFlow ?? right.coreFlow,
   };
@@ -5893,9 +5962,10 @@ function mergeDraftFlows(left: DraftE2eFlow, right: DraftE2eFlow): DraftE2eFlow 
 
 function preferredDraftSource(left: DraftFlowSource | undefined, right: DraftFlowSource | undefined): DraftFlowSource | undefined {
   const ranks: Record<DraftFlowSource, number> = {
-    "core-flow": 0,
-    "domain-language": 1,
-    heuristic: 2,
+    "verification-manifest": 0,
+    "core-flow": 1,
+    "domain-language": 2,
+    heuristic: 3,
   };
   if (!left) {
     return right;
@@ -5904,6 +5974,156 @@ function preferredDraftSource(left: DraftFlowSource | undefined, right: DraftFlo
     return left;
   }
   return ranks[right] < ranks[left] ? right : left;
+}
+
+async function buildManifestDraftFlows(
+  plan: E2ePlanResult,
+  baseFlows: E2eFlow[],
+): Promise<DraftE2eFlow[]> {
+  const flowMatches = plan.verificationManifestMatches
+    .filter((match) => match.kind === "flow")
+    .slice(0, 4);
+  const checkMatches = plan.verificationManifestMatches.filter((match) => match.kind === "check");
+  return Promise.all(
+    flowMatches.map((match) => buildManifestDraftFlow(plan, match, checkMatches, baseFlows)),
+  );
+}
+
+async function buildManifestDraftFlow(
+  plan: E2ePlanResult,
+  match: VerificationManifestMatch,
+  checkMatches: VerificationManifestMatch[],
+  baseFlows: E2eFlow[],
+): Promise<DraftE2eFlow> {
+  const relatedChecks = checkMatches.filter((check) => check.id.startsWith(`${match.id}:`));
+  const manifestFiles = normalizeScenarioFilesForRoot(plan, match.matchedFiles);
+  const baseFlow = bestBaseFlowForManifestMatch(manifestFiles, baseFlows);
+  const files = uniqueStrings(manifestFiles.length > 0 ? manifestFiles : (baseFlow?.files ?? [])).slice(0, 20);
+  const runner = plan.recommendedRunner.name;
+  const manifestSteps = manifestStepsForMatch(match, relatedChecks);
+  const baseCoverage = baseFlow?.coverage ?? buildCoverageTargets("domain", files, runner);
+  const coverage = uniqueCoverageTargets([...manifestCoverageTargets(match, relatedChecks), ...baseCoverage]).slice(0, 7);
+  const entrypoints = uniqueEntrypoints([
+    ...manifestEntrypoints(plan, match, runner),
+    ...filterEntrypointsForFiles(baseFlows.flatMap((flow) => flow.entrypoints), files),
+    ...(await inferFlowEntrypoints(plan.root, files, runner)),
+  ]);
+  const selectors = uniqueSelectors([
+    ...filterSelectorsForFiles(baseFlows.flatMap((flow) => flow.selectors), files),
+    ...(await inferFlowSelectors(plan.root, files, runner)),
+  ]);
+  const refinedSteps = refineStepsForInferredSelectors(manifestSteps.length > 0 ? manifestSteps : (baseFlow?.steps ?? []), selectors);
+  const setupHints = uniqueSetupHints([
+    ...filterSetupHintsForFiles(baseFlows.flatMap((flow) => flow.setupHints), files),
+    ...(await inferFlowSetupHints(plan.root, files, "domain")),
+  ]);
+  const flow: Omit<DraftE2eFlow, "languageBrief"> = {
+    title: match.name,
+    reason: match.reason,
+    files,
+    steps: refinedSteps,
+    coverage,
+    coverageEvidence: baseFlow?.coverageEvidence ?? [],
+    entrypoints,
+    setupHints,
+    fixtureReadiness: scenarioFixtureReadiness(baseFlow, setupHints),
+    selectors,
+    missingTestability: await findFlowTestabilityGaps(plan.root, files, runner),
+    draftSource: "verification-manifest",
+    manifestMatch: match,
+    coreFlow: coreFlowForManifestMatch(plan, match),
+  };
+  return {
+    ...flow,
+    languageBrief: buildFlowLanguageBrief(flow),
+  };
+}
+
+function bestBaseFlowForManifestMatch(files: string[], baseFlows: E2eFlow[]): E2eFlow | undefined {
+  let best: { flow: E2eFlow; score: number } | undefined;
+  for (const flow of baseFlows) {
+    const score = fileOverlapScore(files, flow.files);
+    if (!best || score > best.score) {
+      best = { flow, score };
+    }
+  }
+  return best && best.score > 0 ? best.flow : baseFlows[0];
+}
+
+function coreFlowForManifestMatch(plan: E2ePlanResult, match: VerificationManifestMatch): MatchedCoreFlow | undefined {
+  return plan.coreFlows.find((flow) => flow.name === match.name || flow.id === match.id);
+}
+
+function manifestStepsForMatch(
+  match: VerificationManifestMatch,
+  relatedChecks: VerificationManifestMatch[],
+): string[] {
+  const checks = relatedChecks.length > 0 ? relatedChecks : (match.checks ?? []).map((checkTitle, index) => ({
+    ...match,
+    id: `${match.id}:check-${index + 1}`,
+    name: checkTitle,
+    checks: [checkTitle],
+  }));
+  return uniqueStrings(checks.map(manifestStepForCheckMatch));
+}
+
+function manifestStepForCheckMatch(match: VerificationManifestMatch): string {
+  const title = stripTerminalPunctuation(match.name.trim());
+  if (!title) {
+    return "Verify the manifest-declared behavior.";
+  }
+  if (/^(?:verify|assert|check|confirm)\b/i.test(title)) {
+    return `${title}.`;
+  }
+  if (match.checkType === "success" && isInteractionStep(title)) {
+    return `${title}.`;
+  }
+  if (/^(?:show|display|render|return|surface|preserve)\b/i.test(title)) {
+    return `Verify the flow can ${lowercaseFirst(title)}.`;
+  }
+  return `Verify ${lowercaseFirst(title)}.`;
+}
+
+function manifestCoverageTargets(
+  match: VerificationManifestMatch,
+  relatedChecks: VerificationManifestMatch[],
+): E2eCoverageTarget[] {
+  const checks = relatedChecks.length > 0
+    ? relatedChecks.map((check) => manifestStepForCheckMatch(check))
+    : (match.checks ?? []).map((check) => `Verify ${lowercaseFirst(stripTerminalPunctuation(check))}.`);
+  if (checks.length === 0) {
+    return [];
+  }
+  return [
+    coverageTarget(
+      "Manifest-required checks",
+      match.criticality === "high" ? "critical" : "recommended",
+      "The verification manifest declares these checks as team-owned PR evidence for this flow.",
+      checks,
+    ),
+  ];
+}
+
+function manifestEntrypoints(
+  plan: E2ePlanResult,
+  match: VerificationManifestMatch,
+  runner: E2eRunnerName,
+): E2eEntrypoint[] {
+  if (runner === "maestro" || !match.entryRoute) {
+    return [];
+  }
+  const route = normalizeEntrypointRoute(match.entryRoute);
+  if (!route) {
+    return [];
+  }
+  return [
+    {
+      kind: "route",
+      value: route,
+      file: plan.verificationManifestPath ?? ".codeward/manifest.yaml",
+      confidence: match.confidence === "high" ? "high" : "medium",
+    },
+  ];
 }
 
 async function buildDomainScenarioDraftFlow(
@@ -6514,6 +6734,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   appendValidationGapComments(lines, flow, "#");
   appendFlowLanguageBriefComments(lines, flow.languageBrief, "#");
   appendDraftPromotionComments(lines, flow, "#");
+  appendManifestMatchComments(lines, flow, "#");
   for (const step of draftExecutableSteps(flow, "maestro")) {
     const command = maestroCommandForStep(step, selectorQueue);
     lines.push(...formatMaestroCommand(command));
@@ -6605,6 +6826,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   appendValidationGapComments(lines, flow, "  //");
   appendFlowLanguageBriefComments(lines, flow.languageBrief, "  //");
   appendDraftPromotionComments(lines, flow, "  //");
+  appendManifestMatchComments(lines, flow, "  //");
   const routeEntrypoint = primaryRouteEntrypoint(flow);
   const routeDraft = buildPlaywrightRouteDraft(routeEntrypoint?.value ?? "/", flow.entrypoints);
   if (routeDraft.params.length > 0) {
@@ -6743,6 +6965,7 @@ function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   appendManualValidationGaps(lines, flow);
   appendManualFlowLanguageBrief(lines, flow.languageBrief);
   appendManualDraftPromotion(lines, flow);
+  appendManualManifestMatch(lines, flow);
   if (scenario) {
     lines.push("");
     lines.push("## Scenario Checks");
@@ -6965,6 +7188,28 @@ function appendDraftPromotionComments(lines: string[], flow: E2eFlow, commentPre
   lines.push(`${commentPrefix} - Next: ${guidance.action}`);
 }
 
+function appendManifestMatchComments(lines: string[], flow: E2eFlow, commentPrefix: string): void {
+  const match = manifestMatchForDraftFlow(flow);
+  if (!match) {
+    return;
+  }
+  lines.push("");
+  lines.push(`${commentPrefix} Verification manifest evidence:`);
+  lines.push(`${commentPrefix} - Flow: ${match.name} (${match.id})`);
+  lines.push(`${commentPrefix} - Confidence: ${match.confidence}`);
+  lines.push(`${commentPrefix} - Evidence: ${match.manifestPath}`);
+  lines.push(`${commentPrefix} - If wrong: update ${match.updatePath}`);
+  if (match.entryRoute) {
+    lines.push(`${commentPrefix} - Entry route: ${match.entryRoute}`);
+  }
+  if (match.checks && match.checks.length > 0) {
+    lines.push(`${commentPrefix} - Required checks:`);
+    for (const check of match.checks.slice(0, maxFilesPerFlow)) {
+      lines.push(`${commentPrefix}   - [ ] ${check}`);
+    }
+  }
+}
+
 function appendManualValidationGaps(lines: string[], flow: E2eFlow): void {
   const rows = validationRowsForDraftFlow(flow).filter((row) => row.status !== "ready");
   if (rows.length === 0) {
@@ -6986,6 +7231,29 @@ function appendManualDraftPromotion(lines: string[], flow: E2eFlow): void {
   lines.push(`- Status: ${guidance.status}`);
   lines.push(`- Why: ${guidance.reason}`);
   lines.push(`- Next: ${guidance.action}`);
+}
+
+function appendManualManifestMatch(lines: string[], flow: E2eFlow): void {
+  const match = manifestMatchForDraftFlow(flow);
+  if (!match) {
+    return;
+  }
+  lines.push("");
+  lines.push("## Verification Manifest Evidence");
+  lines.push("");
+  lines.push(`- Flow: ${match.name} (${match.id})`);
+  lines.push(`- Confidence: ${match.confidence}`);
+  lines.push(`- Evidence: \`${match.manifestPath}\``);
+  lines.push(`- If wrong: update \`${match.updatePath}\``);
+  if (match.entryRoute) {
+    lines.push(`- Entry route: \`${match.entryRoute}\``);
+  }
+  if (match.checks && match.checks.length > 0) {
+    lines.push("- Required checks:");
+    for (const check of match.checks.slice(0, maxFilesPerFlow)) {
+      lines.push(`  - [ ] ${check}`);
+    }
+  }
 }
 
 interface DraftBrief {
@@ -7123,6 +7391,7 @@ function appendManualRunnerSetupProposal(lines: string[], setup: E2eRunnerSetupP
 }
 
 function buildDraftBrief(flow: E2eFlow, runner: E2eRunnerName): DraftBrief {
+  const manifestMatch = manifestMatchForDraftFlow(flow);
   const scenario = domainScenarioForFlow(flow);
   const coreFlow = coreFlowForDraftFlow(flow);
   const changedBehavior = flow.files.length > 0
@@ -7130,7 +7399,10 @@ function buildDraftBrief(flow: E2eFlow, runner: E2eRunnerName): DraftBrief {
     : flow.reason;
   const criticalCoverage = flow.coverage.filter((target) => target.priority === "critical").map((target) => target.title);
   let whyThisFlowMatters: string;
-  if (coreFlow) {
+  if (manifestMatch) {
+    whyThisFlowMatters =
+      `Verification manifest: ${manifestMatch.id} [${manifestMatch.confidence} confidence]. It protects the team-declared "${manifestMatch.name}" flow and ${formatHumanList(criticalCoverage)}.`;
+  } else if (coreFlow) {
     whyThisFlowMatters =
       `Core flow: ${coreFlow.id} [${coreFlow.priority}]. It protects the team-approved "${coreFlow.name}" flow and ${formatHumanList(criticalCoverage)}.`;
   } else if (scenario) {
@@ -7149,6 +7421,10 @@ function buildDraftBrief(flow: E2eFlow, runner: E2eRunnerName): DraftBrief {
 
 function buildHumanFixtureInputs(flow: E2eFlow, runner: E2eRunnerName): string[] {
   const inputs: string[] = [];
+  const manifestMatch = manifestMatchForDraftFlow(flow);
+  if (manifestMatch?.checks?.length) {
+    inputs.push(`Keep verification manifest checks required: ${formatHumanList(manifestMatch.checks.slice(0, 3))}.`);
+  }
   const coreFlow = coreFlowForDraftFlow(flow);
   if (coreFlow?.checks.length) {
     inputs.push(`Keep manifest checks required: ${formatHumanList(coreFlow.checks.slice(0, 3))}.`);
@@ -7200,6 +7476,10 @@ function buildHumanFixtureInputs(flow: E2eFlow, runner: E2eRunnerName): string[]
 
 function coreFlowForDraftFlow(flow: E2eFlow): MatchedCoreFlow | undefined {
   return (flow as DraftE2eFlow).coreFlow;
+}
+
+function manifestMatchForDraftFlow(flow: E2eFlow): VerificationManifestMatch | undefined {
+  return (flow as DraftE2eFlow).manifestMatch;
 }
 
 function humanFixtureInputForSetupHint(hint: E2eSetupHint): string {

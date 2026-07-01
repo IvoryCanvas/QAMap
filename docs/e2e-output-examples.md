@@ -1,6 +1,64 @@
 # E2E Output Examples
 
-These examples show the shape of CodeWard output that should be good enough for the first public release. They are intentionally short snippets, not full generated files. The important property is that they are derived from repository structure, git changes, manifests, and test evidence without an LLM call.
+These examples show the shape of CodeWard output that should be good enough for the current public release. They are intentionally short snippets, not full generated files. The important property is that they are derived from repository structure, git changes, manifests, and test evidence without an LLM call.
+
+## Verification Manifest Feedback
+
+When a repository has `.codeward/manifest.yaml`, CodeWard should explain why a recommendation happened and how a maintainer can correct it:
+
+```txt
+Manifest recommendations: 3
+
+Campaign Application Complete `campaign-application-complete`
+- Kind: flow
+- Confidence: high
+- Why this was recommended: Changed files match anchors for the Campaign Application Complete flow.
+- Manifest evidence: .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+- If this is wrong: update .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+```
+
+This is the feedback loop: static analysis proposes a baseline, humans correct durable manifest entries, and future E2E recommendations become more specific.
+
+`codeward manifest validate .` checks whether that repo-local knowledge is usable:
+
+```txt
+CodeWard Manifest Validate
+Status: valid
+Manifest: .codeward/manifest.yaml
+Issues: 0 errors, 0 warnings, 0 info
+```
+
+`codeward manifest explain . --base origin/main --head HEAD` makes a single branch debuggable:
+
+```txt
+CodeWard Manifest Explain
+Changed files: 1
+Matches: 3
+
+Matches:
+- Campaign Application Complete (flow, high)
+  Why: Changed files match anchors for the Campaign Application Complete flow.
+  Evidence: .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+  If wrong: update .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+  Checks: Submit content URL successfully; Show validation error for invalid content URL
+```
+
+When that flow includes an entry route and checks, `codeward e2e draft` promotes it ahead of heuristic drafts:
+
+```ts
+// Verification manifest evidence:
+// - Flow: Campaign Application Complete (campaign-application-complete)
+// - Entry route: /campaign/official/applicationComplete
+// - Required checks:
+//   - [ ] Submit content URL successfully
+//   - [ ] Show validation error for invalid content URL
+
+test("Campaign Application Complete", async ({ page }) => {
+  await test.step("Open route /campaign/official/applicationComplete.", async () => {
+    await page.goto("/campaign/official/applicationComplete");
+  });
+});
+```
 
 ## Web Core Flow
 
@@ -313,4 +371,4 @@ Good CodeWard output should answer these questions quickly:
 - Which runner or checklist is the right first shape?
 - Which setup, selector, fixture, or validation gap blocks this from becoming real regression coverage?
 
-If the output only says "make an E2E test" without these answers, it is not ready for `0.1.0`.
+If the output only says "make an E2E test" without these answers, it is not ready for the current release bar.

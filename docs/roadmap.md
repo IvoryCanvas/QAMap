@@ -4,14 +4,15 @@ CodeWard starts as a local CLI for repo-level AI agent readiness. The project ca
 
 ## North Star
 
-CodeWard should become a local-first PR verification designer: it understands a repository's domain language, remembers durable core flows, reads the current branch or PR diff, and drafts the E2E, fixture, selector, and validation work needed to prove the changed product behavior. The goal is not to replace reviewers or QA. The goal is to remove the repeated blank-page work that makes developers skip good verification.
+CodeWard should become a local-first QA meta framework: it builds a repository-level verification manifest, maps PR changes to product domains, flows, anchors, and checks, and drafts the E2E, fixture, selector, and validation work needed to prove the changed behavior. The goal is not to replace reviewers or QA. The goal is to remove the repeated blank-page work that makes developers skip good verification.
 
 ## Now
 
 - Keep the scanner fast, static, and easy to understand.
-- Keep the [`0.1.0` release validation checklist](release-validation.md) and public [E2E output examples](e2e-output-examples.md) aligned with the current release bar.
+- Keep the [`0.2.0` release validation checklist](release-validation.md), [manifest guide](manifest.md), and public [E2E output examples](e2e-output-examples.md) aligned with the current release bar.
 - Keep the [release runbook](releasing.md) ready for npm publishing and versioned GitHub Action follow-up.
 - Improve adoption docs and sample output so new maintainers can try CodeWard quickly.
+- Stabilize the manifest feedback loop with `.codeward/manifest.yaml`, `manifest init`, `manifest validate`, `manifest explain`, JSON Schema, and manifest-driven E2E draft shaping.
 - Make `verify` the best first-run experience for AI-assisted PRs.
 - Keep `eval` explainable enough that maintainers trust the score and know what to fix.
 - Keep expanding representative validation targets beyond JavaScript so planning advice works for Python, Go, Rust, and JVM repositories.
@@ -21,7 +22,8 @@ CodeWard should become a local-first PR verification designer: it understands a 
 - Publish a versioned GitHub Action release tag after the first public package is ready.
 - Improve `doctor` output with clearer scoring and remediation grouping.
 - Improve `review` output for changed-line locations.
-- Expand `eval` with repository-specific verification manifests and configurable taste rubrics.
+- Expand manifest support with richer anchors, symbol-level matching, and configurable taste rubrics.
+- Map changed symbols to manifest anchors after the path/route baseline is stable.
 - Add language-specific domain patterns for backend services, CLIs, libraries, mobile apps, and infrastructure repositories.
 - Continue expanding agent surface detection across Codex, Claude Code, Cursor, GitHub Copilot, Gemini, and related tools.
 - Generate rule documentation from scanner metadata.

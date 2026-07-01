@@ -115,7 +115,7 @@ test("Checkout purchase", async ({ page }) => {
 });
 ```
 
-See [docs/quickstart-demo.md](docs/quickstart-demo.md) for a compact walkthrough and [docs/e2e-output-examples.md](docs/e2e-output-examples.md) for more output shapes.
+See [docs/quickstart-demo.md](docs/quickstart-demo.md) for a compact walkthrough, [docs/manifest.md](docs/manifest.md) for the verification manifest loop, and [docs/e2e-output-examples.md](docs/e2e-output-examples.md) for more output shapes.
 
 ## What CodeWard Is For
 
@@ -142,7 +142,7 @@ CodeWard는 AI 코딩 에이전트에게 레포지토리를 맡기기 전에 빠
 
 누락된 에이전트 지침, 위험한 MCP 설정, 커밋된 로컬 환경 파일, 위험한 자동화 스크립트, 과도한 GitHub Actions 권한, 약한 검증 신호를 찾아냅니다.
 
-목표는 거대한 보안 플랫폼이 아니라, 유지보수자가 매번 에이전트에게 프로젝트 맥락과 안전한 검증 방법을 설명하느라 쓰는 시간을 줄여주는 작고 선명한 도구입니다. PR 변경사항을 팀의 도메인 언어, 핵심 플로우, 필요한 E2E/fixture/selector 작업으로 바꿔 검증의 빈 화면을 줄이는 것이 0.1.0의 중심입니다.
+목표는 거대한 보안 플랫폼이 아니라, 유지보수자가 매번 에이전트에게 프로젝트 맥락과 안전한 검증 방법을 설명하느라 쓰는 시간을 줄여주는 작고 선명한 도구입니다. PR 변경사항을 팀의 도메인 언어, manifest 기반 핵심 플로우, 필요한 E2E/fixture/selector 작업으로 바꿔 검증의 빈 화면을 줄이는 것이 현재 릴리스의 중심입니다.
 
 </details>
 
@@ -151,6 +151,8 @@ CodeWard는 AI 코딩 에이전트에게 레포지토리를 맡기기 전에 빠
 ```sh
 pnpm exec codeward scan .
 pnpm exec codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
+pnpm exec codeward manifest validate .
+pnpm exec codeward manifest explain . --base origin/main --head HEAD
 pnpm exec codeward e2e draft . --base origin/main --head HEAD --dry-run
 ```
 
@@ -199,7 +201,7 @@ pnpm build
 node dist/cli.js scan /path/to/repo
 ```
 
-CodeWard `0.1.0` is a local-first PR verification planner, not a finished automatic QA bot. A good first result is a clear answer to "what should this branch prove before merge?", plus draft E2E, fixture, selector, and validation work that a developer can turn into real regression coverage. Many first drafts will correctly report `review-only` or `near-runnable` until the project adds runner config, stable selectors, deterministic fixtures, or team-owned flow manifests.
+CodeWard `0.2.0` is a local-first PR verification planner with a repository-level verification manifest loop, not a finished automatic QA bot. A good result is a clear answer to "what should this branch prove before merge?", plus manifest-backed E2E, fixture, selector, and validation work that a developer can turn into real regression coverage. Many first drafts will correctly report `review-only` or `near-runnable` until the project adds runner config, stable selectors, deterministic fixtures, or team-owned manifest entries.
 
 ## What CodeWard Produces
 
@@ -207,6 +209,7 @@ On a changed branch, CodeWard tries to produce reviewable verification artifacts
 
 - a branch-aware verification plan that names the changed domain, actor, trigger, goal, success signal, and edge cases
 - draft Playwright, Maestro, CLI command, or manual checklist files when the repository shape supports them
+- a repo-level verification manifest loop where humans correct durable flows once and later PRs get sharper route/check/test draft suggestions
 - a runner setup proposal that explains why Playwright or Maestro fits the changed surface and which files/commands would be created if the team accepts it
 - readiness evidence that explains missing runner config, selectors, fixture data, assertions, validation commands, or flow manifests
 - repo-local suggestions for `.codeward/domains.yml`, `.codeward/flows.yml`, and ignored `.codeward/runs/` history so teams can improve the next run without spending LLM tokens
@@ -233,6 +236,9 @@ That means CodeWard is most valuable when it becomes the team's verification bas
 | `codeward e2e setup . --runner playwright` | Explicitly apply the accepted runner setup and create the first changed-flow E2E draft without overwriting existing files. |
 | `codeward e2e draft . --base origin/main --head HEAD --dry-run` | Preview generated Maestro, Playwright, or manual E2E drafts without writing files. |
 | `codeward e2e draft . --base origin/main --head HEAD` | Write generated Maestro, Playwright, or manual E2E drafts with flow language, readiness summaries, and action items. |
+| `codeward manifest init .` | Create a baseline `.codeward/manifest.yaml` with inferred domains, flows, anchors, checks, source, and confidence. |
+| `codeward manifest validate .` | Check whether `.codeward/manifest.yaml` is present, parseable, anchored to real files, and ready to shape PR evidence. |
+| `codeward manifest explain . --base origin/main --head HEAD` | Explain which manifest domains, flows, and checks match the current branch and which manifest path to edit if the match is wrong. |
 | `codeward flows init .` | Create a starter `.codeward/flows.yml` for team-approved core flow definitions. |
 | `codeward flows suggest . --base origin/main --head HEAD` | Generate suggested `.codeward/flows.yml` entries with commit-readiness guidance from changed files and E2E plan context. |
 | `codeward domains init .` | Create a starter `.codeward/domains.yml` for shared product/domain language. |
@@ -262,7 +268,40 @@ When run at a monorepo root, the E2E plan also reports changed app/package targe
 
 Each candidate flow also includes a flow language brief: actor, trigger, goal, success signal, reviewer question, and edge cases. The brief keeps generated tests tied to product behavior rather than only changed file names.
 
-The bootstrap section answers what must happen before generated drafts can be treated as real regression coverage. For example, a testless web project can get required steps for Playwright setup, first draft generation, stable selector work, fixture/mock data, and missing validation evidence, plus recommended steps for `.codeward/domains.yml`, `.codeward/flows.yml`, and local history recording.
+The bootstrap section answers what must happen before generated drafts can be treated as real regression coverage. For example, a testless web project can get required steps for Playwright setup, first draft generation, stable selector work, fixture/mock data, and missing validation evidence, plus recommended steps for `.codeward/manifest.yaml`, `.codeward/domains.yml`, `.codeward/flows.yml`, and local history recording.
+
+Run `codeward manifest init .` to create a baseline verification manifest. CodeWard infers domains, flows, route/component anchors, checks, runner hints, source, and confidence from the current checkout.
+
+> **Important:** create the shared team baseline from the repository's default branch, after pulling the latest changes. CodeWard does not silently switch branches or rewrite the repository state, so running `manifest init` from a feature branch creates a feature-branch snapshot, not the team's default QA map.
+
+```sh
+git switch main
+git pull
+codeward manifest init . --write .codeward/manifest.yaml
+```
+
+After the baseline is committed, feature branches should usually run `manifest explain`, `e2e plan`, or `e2e draft` against the PR base such as `origin/main`. The manifest is not meant to be perfect on the first run. It is meant to start the feedback loop: CodeWard recommends E2E work from the manifest, shows why a recommendation happened, and points to the manifest path to edit when the recommendation is wrong.
+
+Generated manifests include a `$schema` reference to `schema/codeward-manifest.schema.json`, so teams can validate and edit `.codeward/manifest.yaml` with a documented contract. See [docs/manifest.md](docs/manifest.md) for the full field guide and adoption workflow.
+
+Use `codeward manifest validate .` before treating the manifest as shared team policy. It reports missing manifests, invalid YAML/schema shape, duplicate ids, missing domain paths, stale anchor files, suspicious route hints, and low-confidence inferred entries that should be reviewed.
+
+Use `codeward manifest explain . --base origin/main --head HEAD` when you want to understand one branch. It reads the git diff, lists the matched manifest domains/flows/checks, shows the declared entry route and required checks, and names the exact manifest path to update if the recommendation is wrong.
+
+When `.codeward/manifest.yaml` exists, `codeward verify`, `codeward e2e plan`, and `codeward e2e draft` include a Manifest Recommendations section:
+
+```txt
+Why this was recommended:
+- Changed files match anchors for the Campaign Application Complete flow.
+
+Manifest evidence:
+- .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+
+If this is wrong:
+- Update .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+```
+
+When a matched manifest flow has an entry route and checks, `codeward e2e draft` promotes it ahead of heuristic candidates. The generated Playwright, Maestro, or manual draft carries the manifest evidence, uses the manifest route as an entrypoint when possible, and turns manifest checks into draft steps and required coverage notes. This is the core cost-saving loop: humans fix durable QA context once, then future PRs start from a stronger draft instead of a blank test file.
 
 The domain language section is intentionally less implementation-oriented than the raw file list. For example, changes under `src/features/in-app-purchase/` become terms such as `In App Purchase` and scenarios such as `In App Purchase primary journey`. When a changed component or service file names a concrete behavior, CodeWard should prefer that behavior before the generic primary journey: `src/features/offer/components/ContentUrlSubmitModal.tsx` can become `Offer Content URL Submit`, and the generated draft file can become `.maestro/offer-content-url-submit.yaml`. When `.codeward/domains.yml` exists, declared product terms and routes receive higher confidence. When `.codeward/flows.yml` exists, team-approved flow names appear as preferred scenario names.
 
@@ -445,7 +484,7 @@ CodeWard starts as a local CLI and should stay small enough that maintainers can
 
 Near-term priorities:
 
-- finish the [0.1.0 release validation](docs/release-validation.md) checklist across representative web, mobile, API/service, CLI, monorepo, and test-light repositories
+- finish the [0.2.0 release validation](docs/release-validation.md) checklist across representative manifest, web, mobile, API/service, CLI, monorepo, and test-light repositories
 - keep the [release runbook](docs/releasing.md) aligned with the npm package and GitHub Action release process
 - publish a versioned GitHub Action release tag after the first public package is ready
 - improve branch-aware `review` changed-line locations

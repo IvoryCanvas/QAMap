@@ -1,5 +1,11 @@
 import { evaluateChangeReadiness } from "./eval.js";
+import {
+  changedFilesRelativeToManifestRoot,
+  loadVerificationManifest,
+  matchVerificationManifest,
+} from "./manifest.js";
 import type { EvalOptions, EvalResult } from "./eval.js";
+import type { VerificationManifestMatch } from "./manifest.js";
 import { reviewProject } from "./review.js";
 import type { ReviewResult } from "./review.js";
 import type { Finding, ScanOptions } from "./types.js";
@@ -21,6 +27,8 @@ export interface VerifyResult {
   head: string;
   review: ReviewResult;
   evaluation: EvalResult;
+  verificationManifestPath?: string;
+  verificationManifestMatches: VerificationManifestMatch[];
   recommendations: string[];
 }
 
@@ -42,6 +50,10 @@ export async function verifyChange(rootInput: string, options: VerifyOptions = {
     prBodyFile: options.prBodyFile,
     validationCommands: options.validationCommands,
   });
+  const manifestRoot = evaluation.workspaceRoot ?? evaluation.root;
+  const verificationManifest = await loadVerificationManifest(manifestRoot);
+  const manifestChangedFiles = changedFilesRelativeToManifestRoot(evaluation.changedFiles, evaluation.root, manifestRoot);
+  const verificationManifestMatches = matchVerificationManifest(verificationManifest, manifestChangedFiles);
 
   return {
     tool: {
@@ -55,6 +67,8 @@ export async function verifyChange(rootInput: string, options: VerifyOptions = {
     head: evaluation.head,
     review,
     evaluation,
+    verificationManifestPath: verificationManifest.path,
+    verificationManifestMatches,
     recommendations: buildRecommendations(review, evaluation),
   };
 }
@@ -72,6 +86,10 @@ export function formatVerifyReport(result: VerifyResult): string {
   lines.push(`Changed files: ${result.evaluation.changedFiles.length}`);
   lines.push(`New findings: ${result.review.newFindings.length}`);
   lines.push(`Changed risky files: ${result.review.changedRiskyFindings.length}`);
+  if (result.verificationManifestPath) {
+    lines.push(`Verification manifest: ${result.verificationManifestPath}`);
+    lines.push(`Manifest recommendations: ${result.verificationManifestMatches.length}`);
+  }
 
   lines.push("");
   lines.push("Verification gates:");
@@ -84,6 +102,16 @@ export function formatVerifyReport(result: VerifyResult): string {
     lines.push("Suggested domain tests:");
     for (const item of result.evaluation.testPlanItems) {
       lines.push(`- ${item.title}: ${item.checks[0]}`);
+    }
+  }
+
+  if (result.verificationManifestMatches.length > 0) {
+    lines.push("");
+    lines.push("Manifest recommendations:");
+    for (const match of result.verificationManifestMatches.slice(0, 8)) {
+      lines.push(`- ${match.name}: ${match.reason}`);
+      lines.push(`  Evidence: ${match.manifestPath}`);
+      lines.push(`  If wrong: update ${match.updatePath}`);
     }
   }
 
@@ -123,6 +151,10 @@ export function formatMarkdownVerifyReport(result: VerifyResult): string {
   lines.push(`- Changed files: ${result.evaluation.changedFiles.length}`);
   lines.push(`- New findings: ${result.review.newFindings.length}`);
   lines.push(`- Changed risky files: ${result.review.changedRiskyFindings.length}`);
+  if (result.verificationManifestPath) {
+    lines.push(`- Verification manifest: \`${escapeMarkdownInline(result.verificationManifestPath)}\``);
+    lines.push(`- Manifest recommendations: ${result.verificationManifestMatches.length}`);
+  }
   lines.push("");
 
   lines.push("## Verification Gates");
@@ -163,6 +195,31 @@ export function formatMarkdownVerifyReport(result: VerifyResult): string {
       lines.push("Checks:");
       for (const check of item.checks) {
         lines.push(`- ${escapeMarkdownInline(check)}`);
+      }
+      lines.push("");
+    }
+  }
+
+  if (result.verificationManifestMatches.length > 0) {
+    lines.push("## Manifest Recommendations");
+    lines.push("");
+    lines.push(
+      "These recommendations come from `.codeward/manifest.yaml`. If they are wrong, update the manifest path shown below so future PRs get better suggestions.",
+    );
+    lines.push("");
+    for (const match of result.verificationManifestMatches.slice(0, 8)) {
+      lines.push(`### ${escapeMarkdownInline(match.name)} \`${escapeMarkdownInline(match.id)}\``);
+      lines.push("");
+      lines.push(`- Kind: ${match.kind}`);
+      lines.push(`- Confidence: ${match.confidence}`);
+      lines.push(`- Why this was recommended: ${escapeMarkdownInline(match.reason)}`);
+      lines.push(`- Manifest evidence: \`${escapeMarkdownInline(match.manifestPath)}\``);
+      lines.push(`- If this is wrong: update \`${escapeMarkdownInline(match.updatePath)}\``);
+      if (match.matchedFiles.length > 0) {
+        lines.push("- Matched files:");
+        for (const file of match.matchedFiles.slice(0, 8)) {
+          lines.push(`  - \`${escapeMarkdownInline(file)}\``);
+        }
       }
       lines.push("");
     }

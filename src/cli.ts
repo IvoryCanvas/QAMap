@@ -26,6 +26,15 @@ import {
   generateFlowManifestSuggestion,
   writeSuggestedManifest,
 } from "./manifest-suggestions.js";
+import {
+  defaultVerificationManifestPath,
+  explainVerificationManifest,
+  formatVerificationManifestExplainResult,
+  formatVerificationManifestInitResult,
+  formatVerificationManifestValidationResult,
+  validateVerificationManifest,
+  writeVerificationManifestBaseline,
+} from "./manifest.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
@@ -369,6 +378,49 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
+  if (command === "manifest") {
+    const [subcommand, ...subcommandRest] = rest;
+    if (!subcommand || subcommand === "--help" || subcommand === "-h") {
+      printManifestHelp();
+      return 0;
+    }
+    if (subcommand !== "init" && subcommand !== "validate" && subcommand !== "explain") {
+      throw new Error(`Unknown manifest subcommand: ${subcommand}`);
+    }
+    const options = parseOptions(subcommandRest);
+    if (subcommand === "validate") {
+      const result = await validateVerificationManifest(options.path, options.workspaceRoot);
+      const format = manifestCommandFormat(options.format ?? (options.json ? "json" : "text"));
+      await printOrWrite(formatVerificationManifestValidationResult(result, format), options.output);
+      return result.status === "invalid" || result.status === "missing" ? 1 : 0;
+    }
+    if (subcommand === "explain") {
+      const loadedConfig = await loadOptionsConfig(options);
+      const result = await explainVerificationManifest(options.path, {
+        base: options.base,
+        head: options.head,
+        workspaceRoot: options.workspaceRoot,
+        includeWorkingTree: options.includeWorkingTree,
+        validationCommands: loadedConfig.config.validationCommands,
+      });
+      const format = manifestCommandFormat(options.format ?? (options.json ? "json" : "markdown"));
+      await printOrWrite(formatVerificationManifestExplainResult(result, format), options.output);
+      return 0;
+    }
+    const result = await writeVerificationManifestBaseline(options.path, {
+      workspaceRoot: options.workspaceRoot,
+      write: options.write ?? defaultVerificationManifestPath,
+      force: options.force,
+      maxFiles: options.maxFiles,
+    });
+    if (options.json || options.format === "json") {
+      await printOrWrite(`${JSON.stringify(result, null, 2)}\n`, options.output);
+    } else {
+      await printOrWrite(formatVerificationManifestInitResult(result), options.output);
+    }
+    return 0;
+  }
+
   if (command === "context") {
     const options = parseOptions(rest);
     const context = await generateAgentContext(options.path);
@@ -704,6 +756,13 @@ function manifestSuggestionFormat(format: OutputFormat, command: "domains" | "fl
   return format;
 }
 
+function manifestCommandFormat(format: OutputFormat): "text" | "json" | "markdown" {
+  if (format === "sarif") {
+    throw new Error("manifest supports text, json, or markdown output, not sarif");
+  }
+  return format;
+}
+
 function manifestWritePath(writeOption: string, defaultPath: string): string {
   return writeOption === "AGENTS.md" ? defaultPath : writeOption;
 }
@@ -781,6 +840,9 @@ Usage:
   codeward e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   codeward e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force]
   codeward e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
+  codeward manifest init [path] [--workspace-root <path>] [--write <file>] [--max-files <n>] [--force]
+  codeward manifest validate [path] [--workspace-root <path>] [--format <format>]
+  codeward manifest explain [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>]
   codeward flows init [path] [--write <file>] [--force]
   codeward flows suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>] [--write <file>] [--force]
   codeward domains init [path] [--write <file>] [--force]
@@ -811,6 +873,8 @@ Examples:
   codeward e2e plan . --base origin/main --head HEAD --record-history
   codeward e2e setup . --runner playwright
   codeward e2e draft . --base origin/main --head HEAD --dry-run
+  codeward manifest init .
+  codeward manifest explain . --base origin/main --head HEAD
   codeward flows init .
   codeward flows suggest . --base origin/main --head HEAD
   codeward domains init .
@@ -819,6 +883,25 @@ Examples:
   codeward test-plan services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
   codeward context . --write AGENTS.md
   codeward init .
+`);
+}
+
+function printManifestHelp(): void {
+  console.log(`CodeWard ${VERSION}
+
+Repository-level verification manifest.
+
+Usage:
+  codeward manifest init [path] [--workspace-root <path>] [--write <file>] [--max-files <n>] [--force] [--format json] [--output <file>]
+  codeward manifest validate [path] [--workspace-root <path>] [--format text|json|markdown] [--output <file>]
+  codeward manifest explain [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format text|json|markdown] [--output <file>]
+
+Examples:
+  codeward manifest init .
+  codeward manifest init services/offer --workspace-root .
+  codeward manifest init . --write .codeward/manifest.yaml --force
+  codeward manifest validate .
+  codeward manifest explain . --base origin/main --head HEAD
 `);
 }
 

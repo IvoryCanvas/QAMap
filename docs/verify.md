@@ -7,6 +7,7 @@ It combines:
 - `review`: new CodeWard findings and changed risky files introduced by a branch
 - `eval`: verification-readiness gates for intent, risk, tests, and review size
 - `test-plan`: domain-oriented scenarios inferred from changed files
+- verification manifest matches from `.codeward/manifest.yaml` when the repository has team-owned domains, flows, anchors, and checks
 
 Suggested commands are discovered statically from common project files:
 
@@ -26,7 +27,7 @@ codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
 codeward verify services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
 ```
 
-Use `--fail-on high` or `--fail-on medium` to fail on CodeWard review findings at or above a severity threshold. Readiness scoring stays advisory in the first release.
+Use `--fail-on high` or `--fail-on medium` to fail on CodeWard review findings at or above a severity threshold. Readiness and manifest recommendations stay advisory until the team decides to make them required PR evidence.
 
 ## Output
 
@@ -36,6 +37,7 @@ The report answers the questions reviewers usually ask after an AI-assisted PR a
 - Did it touch files that already had risky findings?
 - Does the PR explain its intent, risk, rollback, or validation evidence?
 - Which domain scenarios should be tested?
+- Which manifest flows or checks explain the recommended verification work?
 - Which commands should the author or reviewer run?
 - Is the diff small enough to review without excessive verification tax?
 

@@ -43,6 +43,20 @@ export {
   generateFlowManifestSuggestion,
   writeSuggestedManifest,
 } from "./manifest-suggestions.js";
+export {
+  changedFilesRelativeToManifestRoot,
+  defaultVerificationManifestPath,
+  explainVerificationManifest,
+  formatVerificationManifestExplainResult,
+  formatVerificationManifestInitResult,
+  formatVerificationManifestValidationResult,
+  formatVerificationManifestYaml,
+  loadVerificationManifest,
+  matchVerificationManifest,
+  validateVerificationManifest,
+  verificationManifestSchemaUrl,
+  writeVerificationManifestBaseline,
+} from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 export { scanProject } from "./scanner.js";
@@ -125,6 +139,31 @@ export type {
   ManifestPromotionStatus,
   ManifestSuggestionOptions,
 } from "./manifest-suggestions.js";
+export type {
+  LoadedVerificationManifest,
+  VerificationManifest,
+  VerificationManifestAnchor,
+  VerificationManifestAnchorKind,
+  VerificationManifestCheck,
+  VerificationManifestCheckType,
+  VerificationManifestConfidence,
+  VerificationManifestCriticality,
+  VerificationManifestDomain,
+  VerificationManifestFlow,
+  VerificationManifestInitOptions,
+  VerificationManifestInitResult,
+  VerificationManifestExplainOptions,
+  VerificationManifestExplainResult,
+  VerificationManifestMatch,
+  VerificationManifestMatchKind,
+  VerificationManifestRunner,
+  VerificationManifestSource,
+  VerificationManifestSourceKind,
+  VerificationManifestValidationIssue,
+  VerificationManifestValidationResult,
+  VerificationManifestValidationSeverity,
+  VerificationManifestValidationStatus,
+} from "./manifest.js";
 export type { ChangedFile, ChangedRiskyFinding, ReviewOptions, ReviewResult } from "./review.js";
 export type { TestPlanChangedFile, TestPlanItem, TestPlanOptions, TestPlanResult } from "./test-plan.js";
 export type { CodeWardConfig, Finding, ScanCounts, ScanOptions, ScanResult, Severity } from "./types.js";

@@ -53,6 +53,7 @@ CodeWard separates shared project policy from generated local history.
 Commit-friendly files:
 
 - `codeward.config.json`
+- `.codeward/manifest.yaml` when a project wants one repo-level verification baseline
 - `.codeward/flows.yml` when a project chooses to define durable core flows
 - `.codeward/domains.yml` when a project chooses to define durable domain mappings
 
@@ -74,6 +75,90 @@ Use `--record-history` when an analysis should leave a compact local snapshot fo
 ```sh
 codeward e2e plan . --base origin/main --head HEAD --record-history
 ```
+
+## Verification Manifest
+
+Create a baseline repo-level verification manifest from the checkout you want to treat as the shared team baseline. For most projects, that means the latest default branch:
+
+> **Important:** run the first shared `manifest init` from the default branch. CodeWard reads the current checkout and does not silently switch branches, so a feature-branch run creates a feature-branch snapshot rather than the team's default QA map.
+
+```sh
+git switch main
+git pull
+codeward manifest init .
+codeward manifest init services/offer --workspace-root .
+codeward manifest validate .
+codeward manifest explain . --base origin/main --head HEAD
+```
+
+`.codeward/manifest.yaml` is meant to start the feedback loop. CodeWard infers a baseline from routes, pages, components, API calls, package signals, and testable UI surfaces in the current checkout. It does not automatically switch to the default branch. A maintainer can then correct the manifest when recommendations are wrong, and future `verify`, `e2e plan`, and `e2e draft` output will use the corrected context. See [Verification Manifest](manifest.md) for the full schema, field guide, and adoption workflow.
+
+Use the manifest commands in this order when adopting a repository:
+
+1. `codeward manifest init .` creates a baseline that is useful but intentionally reviewable.
+2. `codeward manifest validate .` checks whether the baseline is parseable, anchored to real files, and specific enough to shape PR evidence.
+3. `codeward manifest explain . --base origin/main --head HEAD` shows which domains, flows, and checks match the current branch, plus the exact manifest path to edit when a recommendation is wrong.
+4. `codeward e2e draft . --base origin/main --head HEAD --dry-run` uses matched manifest flows as higher-confidence draft sources before falling back to domain-language or heuristic candidates.
+
+```yaml
+$schema: https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward-manifest.schema.json
+version: 1
+
+domains:
+  - id: campaign
+    name: Campaign
+    paths:
+      - src/pages/campaign/**
+    criticality: medium
+    source:
+      kind: inferred
+      confidence: medium
+      from:
+        - pages
+
+flows:
+  - id: campaign-application-complete
+    domain: campaign
+    name: Campaign Application Complete
+    entry:
+      route: /campaign/official/applicationComplete
+      source: inferred
+    runner: playwright
+    anchors:
+      - kind: route
+        path: src/pages/campaign/official/applicationComplete.tsx
+        route: /campaign/official/applicationComplete
+        source: inferred
+        confidence: high
+    checks:
+      - id: happy-path
+        title: Campaign Application Complete happy path works
+        type: success
+      - id: api-failure-fixture
+        title: Campaign Application Complete handles failed, empty, or unauthorized responses
+        type: failure
+    source:
+      kind: inferred
+      confidence: medium
+      from:
+        - route-file
+```
+
+Supported manifest concepts:
+
+| Field | Description |
+| --- | --- |
+| `domains[].paths` | Glob-like path patterns that map changed files to product areas. |
+| `domains[].criticality` | `low`, `medium`, or `high` signal for reviewer attention. |
+| `flows[].entry.route` | User-facing route used as an E2E entry hint. |
+| `flows[].anchors` | Route, component, file, API, or test anchors that connect changed code to a flow. |
+| `flows[].checks` | Success, failure, edge, contract, or visual checks that should shape generated E2E drafts. |
+| `source.kind` | `inferred` for CodeWard-generated baseline entries or `declared` after human review. |
+| `source.confidence` | `low`, `medium`, or `high` confidence for how strongly CodeWard should trust the entry. |
+
+When a recommendation is wrong, update the manifest path printed by CodeWard instead of trying to make static analysis perfect. That turns one bad suggestion into durable repo-local knowledge.
+
+When a matched flow has `entry.route` and `checks`, generated E2E drafts will carry the manifest evidence, use the route as the entrypoint when the runner supports it, and turn checks into draft steps plus coverage notes. That lets client teams create useful UI or flow tests even before a backend is complete: the manifest can describe the route, required success/failure checks, and fixture/mock expectations, while the draft keeps TODOs only for the project-specific selector, data, or runner details.
 
 ## Domain Manifest
 
