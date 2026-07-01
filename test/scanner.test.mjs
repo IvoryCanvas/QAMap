@@ -1435,7 +1435,7 @@ test("generateE2ePlan keeps service changes generic and avoids fixture-specific 
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e" });
   assert.ok(draft.files.some((file) => file.flowTitle === "Audit Record"));
   assert.equal(draft.files.some((file) => /Ink drawing|Record mode|Saved entry|Localized visual/i.test(file.flowTitle)), false);
-  const manualDraftFile = draft.files.find((file) => file.flowTitle === "Audit API contract");
+  const manualDraftFile = draft.files.find((file) => /Audit API contract/.test(file.flowTitle));
   assert.ok(manualDraftFile);
   const manualDraft = await readFile(path.join(root, manualDraftFile.path), "utf8");
   assert.match(manualDraft, /## Draft Brief/);
@@ -1631,6 +1631,62 @@ test("generateE2eDraft names changed component actions before generic primary jo
   assert.match(draftText, /Content URL Submit/);
   assert.match(draftText, /src\/features\/offer\/components\/ContentUrlSubmitModal\.tsx/);
   assert.match(draftText, /offer-content-url-submit/);
+});
+
+test("generateE2ePlan ranks action scenarios by changed domain impact without one domain crowding out others", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/features/offer/components"), { recursive: true });
+  await mkdir(path.join(root, "src/features/partners/components"), { recursive: true });
+  await mkdir(path.join(root, "src/features/link-admin/components"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        ios: "expo run:ios",
+      },
+      dependencies: {
+        expo: "^54.0.0",
+        "react-native": "^0.81.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "app.json"), JSON.stringify({ expo: { name: "Fixture" } }));
+  const changedFiles = [
+    "src/features/offer/components/OfferApplicationCompleteScreen.tsx",
+    "src/features/offer/components/OfferCampaignApplyScreen.tsx",
+    "src/features/offer/components/OfferShippingAddressScreen.tsx",
+    "src/features/partners/components/PartnersCollectionSelectScreen.tsx",
+    "src/features/partners/components/PartnersManagementScreen.tsx",
+    "src/features/link-admin/components/OnboardingScreen.tsx",
+  ];
+  for (const file of changedFiles) {
+    await writeFile(path.join(root, file), "export function Screen() { return null; }\n");
+  }
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/native-flow-batch"]);
+  for (const file of changedFiles) {
+    await writeFile(path.join(root, file), "export function Screen() { return <Text>Changed</Text>; }\n");
+  }
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update native flow batch"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "maestro" });
+  const scenarioTitles = plan.domainLanguage.scenarios.map((scenario) => scenario.title);
+  const topActionTitles = scenarioTitles.slice(0, 4);
+
+  assert.deepEqual(topActionTitles, [
+    "Offer Application Complete",
+    "Offer Campaign Apply",
+    "Partners Collection Select",
+    "Partners Management",
+  ]);
+  assert.equal(topActionTitles.includes("Link Admin Onboarding"), false);
+  assert.equal(topActionTitles.filter((title) => title.startsWith("Offer ")).length, 2);
+  assert.equal(topActionTitles.filter((title) => title.startsWith("Partners ")).length, 2);
 });
 
 test("generateE2ePlan evaluates existing test suite coverage evidence", async () => {

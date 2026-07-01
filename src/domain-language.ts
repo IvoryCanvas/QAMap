@@ -40,6 +40,7 @@ interface BehaviorScenarioCandidate {
   term: string;
   behavior: string;
   files: string[];
+  domainFileCount: number;
 }
 
 const maxFilesPerTerm = 8;
@@ -186,7 +187,10 @@ function buildScenarioSuggestions(
 
   scenarios.push(...behaviorScenarios);
 
-  for (const term of terms.filter((item) => item.source !== "core-flow").slice(0, 5)) {
+  for (const term of terms
+    .filter((item) => item.source !== "core-flow")
+    .filter((item) => !hasBehaviorScenarioForTerm(item, behaviorScenarios))
+    .slice(0, 5)) {
     scenarios.push({
       title: `${term.term} primary journey`,
       intent: `Use "${term.term}" as the shared name for this changed behavior until the team chooses a better domain term.`,
@@ -202,6 +206,11 @@ function buildScenarioSuggestions(
   }
 
   return dedupeScenarios(scenarios).slice(0, 6);
+}
+
+function hasBehaviorScenarioForTerm(term: DomainLanguageTerm, scenarios: DomainScenarioSuggestion[]): boolean {
+  const prefix = `${term.term.toLowerCase()} `;
+  return scenarios.some((scenario) => scenario.source === "changed-file" && scenario.title.toLowerCase().startsWith(prefix));
 }
 
 function buildBehaviorScenarioSuggestions(
@@ -230,12 +239,11 @@ function buildBehaviorScenarioSuggestions(
       term: term.term,
       behavior,
       files: [file],
+      domainFileCount: term.files.length,
     });
   }
 
-  return [...candidates.values()]
-    .sort(compareBehaviorScenarioCandidates)
-    .slice(0, 4)
+  return selectBehaviorScenarioCandidates([...candidates.values()])
     .map((candidate) => ({
       title: candidate.title,
       intent: `Verify the changed "${candidate.behavior}" behavior inside ${candidate.term} instead of stopping at a generic primary journey.`,
@@ -248,6 +256,25 @@ function buildBehaviorScenarioSuggestions(
       files: candidate.files,
       source: "changed-file",
     }));
+}
+
+function selectBehaviorScenarioCandidates(candidates: BehaviorScenarioCandidate[]): BehaviorScenarioCandidate[] {
+  const selected: BehaviorScenarioCandidate[] = [];
+  const deferred: BehaviorScenarioCandidate[] = [];
+  const selectedByTerm = new Map<string, number>();
+  for (const candidate of candidates.sort(compareBehaviorScenarioCandidates)) {
+    const currentTermCount = selectedByTerm.get(candidate.term) ?? 0;
+    if (currentTermCount < 2) {
+      selected.push(candidate);
+      selectedByTerm.set(candidate.term, currentTermCount + 1);
+    } else {
+      deferred.push(candidate);
+    }
+    if (selected.length === 4) {
+      return selected;
+    }
+  }
+  return [...selected, ...deferred].slice(0, 4);
 }
 
 function bestBehaviorDomainTermForFile(terms: DomainLanguageTerm[], file: string): DomainLanguageTerm | undefined {
@@ -278,7 +305,7 @@ function normalizeComparisonPath(file: string): string {
 function isBehaviorOnlyTerm(term: string, file: string): boolean {
   const basenameTokens = behaviorTokensFromText(path.basename(file));
   const termTokens = behaviorTokensFromText(term);
-  if (termTokens.length === 0 || basenameTokens.length === 0) {
+  if (termTokens.length < 2 || basenameTokens.length === 0) {
     return false;
   }
   return termTokens.every((token) => basenameTokens.some((basenameToken) => sameToken(token, basenameToken)));
@@ -334,13 +361,17 @@ function isLikelyBusinessObjectToken(token: string): boolean {
 }
 
 function compareBehaviorScenarioCandidates(left: BehaviorScenarioCandidate, right: BehaviorScenarioCandidate): number {
-  const fileDiff = right.files.length - left.files.length;
-  if (fileDiff !== 0) {
-    return fileDiff;
+  const domainImpactDiff = right.domainFileCount - left.domainFileCount;
+  if (domainImpactDiff !== 0) {
+    return domainImpactDiff;
   }
   const actionDiff = Number(hasActionToken(right.behavior)) - Number(hasActionToken(left.behavior));
   if (actionDiff !== 0) {
     return actionDiff;
+  }
+  const fileDiff = right.files.length - left.files.length;
+  if (fileDiff !== 0) {
+    return fileDiff;
   }
   return left.title.localeCompare(right.title);
 }
@@ -678,6 +709,7 @@ const behaviorStructuralTokens = new Set([
   "layout",
   "list",
   "modal",
+  "overview",
   "page",
   "pages",
   "panel",

@@ -5256,14 +5256,32 @@ async function buildDraftFlows(plan: E2ePlanResult): Promise<DraftE2eFlow[]> {
     }));
   }
 
-  const combined = dedupeDraftFlowsByOutputPath(
+  const combined = prioritizeImportantBaseDraftFlow(dedupeDraftFlowsByOutputPath(
     dedupeFlows([...scenarioFlows, ...baseFlows]),
     plan.recommendedRunner.name,
-  ).slice(0, 4);
+  ), baseFlows).slice(0, 4);
   return combined.map((flow) => ({
     ...flow,
     draftSource: draftFlowSource(flow),
   }));
+}
+
+function prioritizeImportantBaseDraftFlow(flows: DraftE2eFlow[], baseFlows: E2eFlow[]): DraftE2eFlow[] {
+  const importantBaseFlow = baseFlows.find(isImportantBaseDraftFlow);
+  if (!importantBaseFlow) {
+    return flows;
+  }
+  const existingIndex = flows.findIndex((flow) => flow.title === importantBaseFlow.title);
+  if (existingIndex < 0 || existingIndex < 4) {
+    return flows;
+  }
+  const copy = [...flows];
+  const [flow] = copy.splice(existingIndex, 1);
+  return [...copy.slice(0, 3), flow, ...copy.slice(3)];
+}
+
+function isImportantBaseDraftFlow(flow: E2eFlow): boolean {
+  return isApiContractFocusedFlow(flow) || isDesignTokenFocusedFlow(flow) || isCatalogFocusedFlow(flow);
 }
 
 function dedupeDraftFlowsByOutputPath(flows: DraftE2eFlow[], runner: E2eRunnerName): DraftE2eFlow[] {
