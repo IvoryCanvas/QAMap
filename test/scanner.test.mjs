@@ -15,6 +15,7 @@ import {
   formatMarkdownDoctorReport,
   formatMarkdownE2eDraft,
   formatMarkdownE2ePlan,
+  formatMarkdownE2eSetup,
   formatMarkdownReviewReport,
   formatMarkdownTestPlan,
   formatMarkdownVerifyReport,
@@ -2293,16 +2294,30 @@ test("generateE2ePlan infers Playwright base URLs from dev scripts", async () =>
   const setup = await setupE2eRunner(root, { base: "main", head: "HEAD", runner: "playwright" });
   const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
   const configText = await readFile(path.join(root, "playwright.config.ts"), "utf8");
+  const setupDraftFile = setup.draftFiles[0];
+  assert.ok(setupDraftFile);
+  const setupDraftText = await readFile(path.join(root, setupDraftFile.path), "utf8");
+  const setupMarkdown = formatMarkdownE2eSetup(setup);
 
   assert.equal(setup.runner, "playwright");
   assert.ok(setup.createdFiles.includes("playwright.config.ts"));
   assert.ok(setup.createdFiles.includes("tests/e2e/"));
   assert.ok(setup.updatedFiles.includes("package.json"));
   assert.deepEqual(setup.installCommands, ["pnpm add -D @playwright/test"]);
+  assert.equal(setup.draftFiles.length, 1);
+  assert.equal(setupDraftFile.status, "created");
+  assert.match(setupDraftFile.path, /^tests\/e2e\/settings-primary-journey\.spec\.ts$/);
+  assert.equal(setup.nextCommands.some((command) => /^codeward e2e draft\b/.test(command)), false);
   assert.equal(packageJson.scripts["test:e2e"], "playwright test");
   assert.match(configText, /testDir: "\.\/tests\/e2e"/);
   assert.match(configText, /http:\/\/localhost:3004/);
   assert.match(configText, /command: "pnpm run dev"/);
+  assert.match(setupDraftText, /test\("Settings primary journey"/);
+  assert.match(setupDraftText, /page\.goto\("\/settings"\)/);
+  assert.match(setupDraftText, /page\.getByLabel\("Save settings"\)\.click\(\)/);
+  assert.match(setupDraftText, /expect\(page\.getByRole\("button", \{ name: "Save settings" \}\)\)\.toBeVisible\(\)/);
+  assert.match(setupMarkdown, /## Generated Draft/);
+  assert.match(setupMarkdown, /settings-primary-journey\.spec\.ts/);
 });
 
 test("generateE2eDraft supports Next app router route groups and concrete route hints", async () => {

@@ -152,7 +152,7 @@ That means CodeWard is most valuable when it becomes the team's verification bas
 | `codeward test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
 | `codeward e2e plan . --base origin/main --head HEAD` | Suggest E2E runner, bootstrap steps, user flows, coverage targets, existing test evidence, and missing testability hooks for changed files. |
 | `codeward e2e plan . --base origin/main --head HEAD --record-history` | Save a compact local run snapshot under `.codeward/runs/` while keeping JSON/Markdown output usable. |
-| `codeward e2e setup . --runner playwright` | Explicitly apply the accepted runner setup by creating minimal config/script files for generated E2E drafts. |
+| `codeward e2e setup . --runner playwright` | Explicitly apply the accepted runner setup and create the first changed-flow E2E draft without overwriting existing files. |
 | `codeward e2e draft . --base origin/main --head HEAD` | Generate Maestro or Playwright E2E drafts with flow language, readiness summaries, and action items. |
 | `codeward flows init .` | Create a starter `.codeward/flows.yml` for team-approved core flow definitions. |
 | `codeward flows suggest . --base origin/main --head HEAD` | Generate suggested `.codeward/flows.yml` entries with commit-readiness guidance from changed files and E2E plan context. |
@@ -177,7 +177,7 @@ The plan also includes an execution profile: detected start command, test comman
 
 When a repository does not already have the selected E2E runner, the plan includes a runner setup proposal instead of silently changing the project. The proposal explains why the runner fits the changed surface, which package command installs the library, which config/script files would be created, and the explicit acceptance command such as `codeward e2e setup . --runner playwright`.
 
-`codeward e2e setup` is the opt-in apply step. For Playwright it can create `playwright.config.ts`, `tests/e2e/`, and a `test:e2e` script. For Maestro it can create `.maestro/`, `.maestro/README.md`, and a `test:e2e` script. It does not run package installation automatically; it prints the install command so teams can keep dependency policy under review.
+`codeward e2e setup` is the opt-in apply step. For Playwright it can create `playwright.config.ts`, `tests/e2e/`, a `test:e2e` script, and the first changed-flow Playwright spec. For Maestro it can create `.maestro/`, `.maestro/README.md`, a `test:e2e` script, and the first changed-flow YAML draft. Existing draft files are skipped unless `--force` is passed. It does not run package installation automatically; it prints the install command so teams can keep dependency policy under review.
 
 When run at a monorepo root, the E2E plan also reports changed app/package targets. This helps a maintainer move from a broad workspace diff to scoped commands such as `codeward e2e plan services/offer --workspace-root . --base origin/main --head HEAD`, where package-specific runner detection and flow naming are usually sharper.
 

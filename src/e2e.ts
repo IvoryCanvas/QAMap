@@ -67,6 +67,7 @@ export interface E2ePlanOptions extends TestPlanOptions {
 export interface E2eDraftOptions extends E2ePlanOptions {
   output?: string;
   force?: boolean;
+  maxDrafts?: number;
 }
 
 export interface E2eProjectProfile {
@@ -376,6 +377,9 @@ export interface E2eSetupResult {
   skippedFiles: string[];
   installCommands: string[];
   nextCommands: string[];
+  draftOutputDirectory?: string;
+  draftFiles: E2eDraftFile[];
+  draftReadinessSummary?: E2eDraftReadinessSummary;
 }
 
 interface PackageJson {
@@ -499,7 +503,8 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
   const plan = await generateE2ePlan(root, options);
   const runner = plan.recommendedRunner.name;
   const outputDirectory = path.resolve(root, options.output ?? defaultDraftOutputDirectory(runner));
-  const flows = await buildDraftFlows(plan);
+  const draftLimit = options.maxDrafts && options.maxDrafts > 0 ? Math.floor(options.maxDrafts) : undefined;
+  const flows = (await buildDraftFlows(plan)).slice(0, draftLimit);
 
   await fs.mkdir(outputDirectory, { recursive: true });
 
@@ -2580,6 +2585,27 @@ export function formatMarkdownE2eSetup(result: E2eSetupResult): string {
   lines.push(`- Updated: ${result.updatedFiles.length > 0 ? result.updatedFiles.map((file) => `\`${escapeMarkdownInline(file)}\``).join(", ") : "none"}`);
   lines.push(`- Skipped: ${result.skippedFiles.length > 0 ? result.skippedFiles.map((file) => `\`${escapeMarkdownInline(file)}\``).join(", ") : "none"}`);
   lines.push("");
+  if (result.draftFiles.length > 0) {
+    lines.push("## Generated Draft");
+    lines.push("");
+    if (result.draftOutputDirectory) {
+      lines.push(`- Output directory: \`${escapeMarkdownInline(result.draftOutputDirectory)}\``);
+    }
+    if (result.draftReadinessSummary) {
+      lines.push(`- Readiness: ${result.draftReadinessSummary.level} (${result.draftReadinessSummary.score}/100)`);
+    }
+    for (const file of result.draftFiles) {
+      const details = [
+        file.runnableStatus ? `runnable: ${file.runnableStatus}` : undefined,
+        file.selfCheck ? `self-check: ${file.selfCheck.status}` : undefined,
+        file.todoCount !== undefined ? `TODOs: ${file.todoCount}` : undefined,
+      ].filter(Boolean);
+      lines.push(
+        `- [${file.status}] \`${escapeMarkdownInline(file.path)}\` for ${escapeMarkdownInline(file.flowTitle)}${details.length > 0 ? ` (${details.join(", ")})` : ""}`,
+      );
+    }
+    lines.push("");
+  }
   if (result.installCommands.length > 0) {
     lines.push("## Install Commands");
     lines.push("");
@@ -3046,6 +3072,18 @@ export async function setupE2eRunner(rootInput: string, options: E2eSetupOptions
   } else {
     skippedFiles.push("manual runner setup");
   }
+  const draftResult = runner === "manual"
+    ? undefined
+    : await generateE2eDraft(root, {
+        base: plan.base,
+        head: plan.head,
+        workspaceRoot: plan.workspaceRoot,
+        includeWorkingTree: options.includeWorkingTree,
+        validationCommands: options.validationCommands,
+        runner,
+        force: options.force,
+        maxDrafts: 1,
+      });
 
   return {
     tool: {
@@ -3059,8 +3097,18 @@ export async function setupE2eRunner(rootInput: string, options: E2eSetupOptions
     updatedFiles,
     skippedFiles,
     installCommands: proposal.installCommands,
-    nextCommands: proposal.nextCommands,
+    nextCommands: setupNextCommands(proposal.nextCommands, draftResult),
+    draftOutputDirectory: draftResult?.outputDirectory,
+    draftFiles: draftResult?.files ?? [],
+    draftReadinessSummary: draftResult?.readinessSummary,
   };
+}
+
+function setupNextCommands(commands: string[], draftResult: E2eDraftResult | undefined): string[] {
+  if (!draftResult || draftResult.files.length === 0) {
+    return commands;
+  }
+  return commands.filter((command) => !/^codeward e2e draft\b/.test(command));
 }
 
 async function applyPlaywrightSetup(
