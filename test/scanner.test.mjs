@@ -38,6 +38,7 @@ import {
   scanProject,
   setupE2eRunner,
   validateVerificationManifest,
+  verificationManifestSchemaUrl,
   verifyChange,
   writeDefaultConfig,
   writeVerificationManifestBaseline,
@@ -3999,6 +4000,8 @@ test("manifest init creates a baseline verification manifest", async () => {
 
   assert.equal(result.summary.domains > 0, true);
   assert.equal(result.summary.flows > 0, true);
+  assert.equal(manifest.$schema, verificationManifestSchemaUrl);
+  assert.match(manifestText, /\$schema: https:\/\/raw\.githubusercontent\.com\/IvoryCanvas\/codeward\/main\/schema\/codeward-manifest\.schema\.json/);
   assert.match(manifestText, /version: 1/);
   assert.match(manifestText, /src\/app\/\(shop\)\/products\/\[productId\]\/page\.tsx/);
   assert.ok(manifest.flows.some((flow) => flow.entry?.route === "/products/:productId"));
@@ -4210,7 +4213,13 @@ test("manifest validate reports missing and stale manifest policy", async () => 
       "        route: checkout/payment",
       "        source: declared",
       "        confidence: high",
-      "    checks: []",
+      "    checks:",
+      "      - id: happy-path",
+      "        title: Payment Complete succeeds",
+      "        type: success",
+      "      - id: happy-path",
+      "        title: Payment Complete duplicate success",
+      "        type: success",
       "    source:",
       "      kind: declared",
       "      confidence: high",
@@ -4225,8 +4234,10 @@ test("manifest validate reports missing and stale manifest policy", async () => 
   assert.equal(invalid.status, "invalid");
   assert.ok(invalid.issues.some((issue) => issue.path.includes("domains.checkout.paths")));
   assert.ok(invalid.issues.some((issue) => issue.path.includes("flows.payment-complete.domain")));
+  assert.ok(invalid.issues.some((issue) => issue.path.includes("flows.payment-complete.checks[1].id")));
   assert.match(invalidText, /Domain has no path patterns/);
   assert.match(invalidText, /Flow references unknown domain 'missing-domain'/);
+  assert.match(invalidText, /Duplicate check id 'happy-path'/);
 
   await assert.rejects(
     execFileAsync(process.execPath, [cliPath, "manifest", "validate", missingRoot]),

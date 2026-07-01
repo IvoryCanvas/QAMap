@@ -65,8 +65,9 @@ npm publish --access public
 After publish, verify the public package can be executed without a source checkout:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward@0.1.0 scan .
-pnpm dlx @ivorycanvas/codeward@0.1.0 e2e draft . --base origin/main --head HEAD --dry-run
+pnpm dlx @ivorycanvas/codeward@0.2.0 scan .
+pnpm dlx @ivorycanvas/codeward@0.2.0 manifest validate .
+pnpm dlx @ivorycanvas/codeward@0.2.0 e2e draft . --base origin/main --head HEAD --dry-run
 ```
 
 Use a fresh shell or temporary directory for the smoke check when possible.
@@ -76,8 +77,8 @@ Use a fresh shell or temporary directory for the smoke check when possible.
 After npm publish succeeds:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 Create a GitHub Release for the tag with:
@@ -92,12 +93,13 @@ Create a GitHub Release for the tag with:
 After the tag and GitHub Release are visible, run:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward@0.1.0 --version
-pnpm dlx @ivorycanvas/codeward@0.1.0 scan .
-pnpm dlx @ivorycanvas/codeward@0.1.0 verify . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/codeward@0.2.0 --version
+pnpm dlx @ivorycanvas/codeward@0.2.0 scan .
+pnpm dlx @ivorycanvas/codeward@0.2.0 manifest explain . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/codeward@0.2.0 verify . --base origin/main --head HEAD
 ```
 
-Then update any public setup examples that should pin to `v0.1.0`.
+Then update any public setup examples that should pin to `v0.2.0`.
 
 ## Rollback Notes
 

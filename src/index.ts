@@ -54,6 +54,7 @@ export {
   loadVerificationManifest,
   matchVerificationManifest,
   validateVerificationManifest,
+  verificationManifestSchemaUrl,
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";

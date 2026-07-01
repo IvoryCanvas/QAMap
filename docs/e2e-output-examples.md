@@ -1,6 +1,6 @@
 # E2E Output Examples
 
-These examples show the shape of CodeWard output that should be good enough for the first public release. They are intentionally short snippets, not full generated files. The important property is that they are derived from repository structure, git changes, manifests, and test evidence without an LLM call.
+These examples show the shape of CodeWard output that should be good enough for the current public release. They are intentionally short snippets, not full generated files. The important property is that they are derived from repository structure, git changes, manifests, and test evidence without an LLM call.
 
 ## Verification Manifest Feedback
 
@@ -371,4 +371,4 @@ Good CodeWard output should answer these questions quickly:
 - Which runner or checklist is the right first shape?
 - Which setup, selector, fixture, or validation gap blocks this from becoming real regression coverage?
 
-If the output only says "make an E2E test" without these answers, it is not ready for `0.1.0`.
+If the output only says "make an E2E test" without these answers, it is not ready for the current release bar.

@@ -87,7 +87,7 @@ codeward manifest validate .
 codeward manifest explain . --base origin/main --head HEAD
 ```
 
-`.codeward/manifest.yaml` is meant to start the feedback loop. CodeWard infers a baseline from routes, pages, components, API calls, package signals, and testable UI surfaces. A maintainer can then correct the manifest when recommendations are wrong, and future `verify`, `e2e plan`, and `e2e draft` output will use the corrected context.
+`.codeward/manifest.yaml` is meant to start the feedback loop. CodeWard infers a baseline from routes, pages, components, API calls, package signals, and testable UI surfaces. A maintainer can then correct the manifest when recommendations are wrong, and future `verify`, `e2e plan`, and `e2e draft` output will use the corrected context. See [Verification Manifest](manifest.md) for the full schema, field guide, and adoption workflow.
 
 Use the manifest commands in this order when adopting a repository:
 
@@ -97,6 +97,7 @@ Use the manifest commands in this order when adopting a repository:
 4. `codeward e2e draft . --base origin/main --head HEAD --dry-run` uses matched manifest flows as higher-confidence draft sources before falling back to domain-language or heuristic candidates.
 
 ```yaml
+$schema: https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward-manifest.schema.json
 version: 1
 
 domains:

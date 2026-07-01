@@ -115,7 +115,7 @@ test("Checkout purchase", async ({ page }) => {
 });
 ```
 
-See [docs/quickstart-demo.md](docs/quickstart-demo.md) for a compact walkthrough and [docs/e2e-output-examples.md](docs/e2e-output-examples.md) for more output shapes.
+See [docs/quickstart-demo.md](docs/quickstart-demo.md) for a compact walkthrough, [docs/manifest.md](docs/manifest.md) for the verification manifest loop, and [docs/e2e-output-examples.md](docs/e2e-output-examples.md) for more output shapes.
 
 ## What CodeWard Is For
 
@@ -142,7 +142,7 @@ CodeWard는 AI 코딩 에이전트에게 레포지토리를 맡기기 전에 빠
 
 누락된 에이전트 지침, 위험한 MCP 설정, 커밋된 로컬 환경 파일, 위험한 자동화 스크립트, 과도한 GitHub Actions 권한, 약한 검증 신호를 찾아냅니다.
 
-목표는 거대한 보안 플랫폼이 아니라, 유지보수자가 매번 에이전트에게 프로젝트 맥락과 안전한 검증 방법을 설명하느라 쓰는 시간을 줄여주는 작고 선명한 도구입니다. PR 변경사항을 팀의 도메인 언어, 핵심 플로우, 필요한 E2E/fixture/selector 작업으로 바꿔 검증의 빈 화면을 줄이는 것이 0.1.0의 중심입니다.
+목표는 거대한 보안 플랫폼이 아니라, 유지보수자가 매번 에이전트에게 프로젝트 맥락과 안전한 검증 방법을 설명하느라 쓰는 시간을 줄여주는 작고 선명한 도구입니다. PR 변경사항을 팀의 도메인 언어, manifest 기반 핵심 플로우, 필요한 E2E/fixture/selector 작업으로 바꿔 검증의 빈 화면을 줄이는 것이 현재 릴리스의 중심입니다.
 
 </details>
 
@@ -201,7 +201,7 @@ pnpm build
 node dist/cli.js scan /path/to/repo
 ```
 
-CodeWard `0.1.0` is a local-first PR verification planner, not a finished automatic QA bot. A good first result is a clear answer to "what should this branch prove before merge?", plus draft E2E, fixture, selector, and validation work that a developer can turn into real regression coverage. Many first drafts will correctly report `review-only` or `near-runnable` until the project adds runner config, stable selectors, deterministic fixtures, or team-owned flow manifests.
+CodeWard `0.2.0` is a local-first PR verification planner with a repository-level verification manifest loop, not a finished automatic QA bot. A good result is a clear answer to "what should this branch prove before merge?", plus manifest-backed E2E, fixture, selector, and validation work that a developer can turn into real regression coverage. Many first drafts will correctly report `review-only` or `near-runnable` until the project adds runner config, stable selectors, deterministic fixtures, or team-owned manifest entries.
 
 ## What CodeWard Produces
 
@@ -271,6 +271,8 @@ Each candidate flow also includes a flow language brief: actor, trigger, goal, s
 The bootstrap section answers what must happen before generated drafts can be treated as real regression coverage. For example, a testless web project can get required steps for Playwright setup, first draft generation, stable selector work, fixture/mock data, and missing validation evidence, plus recommended steps for `.codeward/manifest.yaml`, `.codeward/domains.yml`, `.codeward/flows.yml`, and local history recording.
 
 Run `codeward manifest init .` to create a baseline verification manifest. CodeWard infers domains, flows, route/component anchors, checks, runner hints, source, and confidence from the repository. The manifest is not meant to be perfect on the first run. It is meant to start the feedback loop: CodeWard recommends E2E work from the manifest, shows why a recommendation happened, and points to the manifest path to edit when the recommendation is wrong.
+
+Generated manifests include a `$schema` reference to `schema/codeward-manifest.schema.json`, so teams can validate and edit `.codeward/manifest.yaml` with a documented contract. See [docs/manifest.md](docs/manifest.md) for the full field guide and adoption workflow.
 
 Use `codeward manifest validate .` before treating the manifest as shared team policy. It reports missing manifests, invalid YAML/schema shape, duplicate ids, missing domain paths, stale anchor files, suspicious route hints, and low-confidence inferred entries that should be reviewed.
 
@@ -472,7 +474,7 @@ CodeWard starts as a local CLI and should stay small enough that maintainers can
 
 Near-term priorities:
 
-- finish the [0.1.0 release validation](docs/release-validation.md) checklist across representative web, mobile, API/service, CLI, monorepo, and test-light repositories
+- finish the [0.2.0 release validation](docs/release-validation.md) checklist across representative manifest, web, mobile, API/service, CLI, monorepo, and test-light repositories
 - keep the [release runbook](docs/releasing.md) aligned with the npm package and GitHub Action release process
 - publish a versioned GitHub Action release tag after the first public package is ready
 - improve branch-aware `review` changed-line locations

@@ -9,10 +9,10 @@ CodeWard should become a local-first QA meta framework: it builds a repository-l
 ## Now
 
 - Keep the scanner fast, static, and easy to understand.
-- Keep the [`0.1.0` release validation checklist](release-validation.md) and public [E2E output examples](e2e-output-examples.md) aligned with the current release bar.
+- Keep the [`0.2.0` release validation checklist](release-validation.md), [manifest guide](manifest.md), and public [E2E output examples](e2e-output-examples.md) aligned with the current release bar.
 - Keep the [release runbook](releasing.md) ready for npm publishing and versioned GitHub Action follow-up.
 - Improve adoption docs and sample output so new maintainers can try CodeWard quickly.
-- Start the manifest feedback loop with `.codeward/manifest.yaml`, `manifest init`, `manifest validate`, `manifest explain`, and manifest-driven E2E draft shaping.
+- Stabilize the manifest feedback loop with `.codeward/manifest.yaml`, `manifest init`, `manifest validate`, `manifest explain`, JSON Schema, and manifest-driven E2E draft shaping.
 - Make `verify` the best first-run experience for AI-assisted PRs.
 - Keep `eval` explainable enough that maintainers trust the score and know what to fix.
 - Keep expanding representative validation targets beyond JavaScript so planning advice works for Python, Go, Rust, and JVM repositories.

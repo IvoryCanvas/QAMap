@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward-manifest.schema.json",
+  "title": "CodeWard verification manifest",
+  "description": "Repository-local verification knowledge used by CodeWard to map branch changes to domains, flows, anchors, checks, and E2E draft requirements.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "domains", "flows"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional JSON Schema URL for editor validation."
+    },
+    "version": {
+      "const": 1
+    },
+    "domains": {
+      "type": "array",
+      "description": "Product or repository areas that map changed files to team language.",
+      "items": {
+        "$ref": "#/$defs/domain"
+      },
+      "default": []
+    },
+    "flows": {
+      "type": "array",
+      "description": "User, API, command, or artifact flows that should shape PR verification evidence.",
+      "items": {
+        "$ref": "#/$defs/flow"
+      },
+      "default": []
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "sourceKind": {
+      "type": "string",
+      "enum": ["declared", "inferred"]
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "criticality": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "runner": {
+      "type": "string",
+      "enum": ["manual", "maestro", "playwright"]
+    },
+    "anchorKind": {
+      "type": "string",
+      "enum": ["api", "component", "file", "route", "test"]
+    },
+    "checkType": {
+      "type": "string",
+      "enum": ["contract", "edge", "failure", "success", "visual"]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "confidence", "from"],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/sourceKind"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "from": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "domain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "paths", "criticality", "source"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "paths": {
+          "type": "array",
+          "description": "Glob-like path patterns relative to the manifest root.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "criticality": {
+          "$ref": "#/$defs/criticality"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {
+        "route": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "$ref": "#/$defs/sourceKind"
+        }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "source", "confidence"],
+      "anyOf": [
+        { "required": ["path"] },
+        { "required": ["route"] },
+        { "required": ["symbol"] }
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/anchorKind"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "route": {
+          "type": "string",
+          "minLength": 1
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "$ref": "#/$defs/sourceKind"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "type"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "$ref": "#/$defs/checkType"
+        }
+      }
+    },
+    "flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "anchors", "checks", "source"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "domain": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entry": {
+          "$ref": "#/$defs/entry"
+        },
+        "runner": {
+          "$ref": "#/$defs/runner"
+        },
+        "anchors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/anchor"
+          },
+          "minItems": 1
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/check"
+          },
+          "minItems": 1
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        }
+      }
+    }
+  }
+}
