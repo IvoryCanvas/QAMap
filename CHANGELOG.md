@@ -4,6 +4,16 @@
 
 No changes yet.
 
+## 0.1.1 - 2026-07-01
+
+Documentation and launch polish release.
+
+### Changed
+
+- Refreshed the README first screen with `Install & Quick Start`, npm install commands, and clearer local-first/no-LLM-token positioning.
+- Added a 30-second demo GIF and quick start walkthrough showing how a checkout-form PR becomes a domain-aware Playwright draft.
+- Updated npm package metadata keywords and description to match the PR verification and E2E draft generation positioning.
+
 ## 0.1.0 - 2026-07-01
 
 Initial public release.
