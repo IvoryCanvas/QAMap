@@ -1,17 +1,123 @@
 # CodeWard
 
 [![CI](https://github.com/IvoryCanvas/codeward/actions/workflows/ci.yml/badge.svg)](https://github.com/IvoryCanvas/codeward/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@ivorycanvas/codeward.svg)](https://www.npmjs.com/package/@ivorycanvas/codeward)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Save setup time before AI agents touch your codebase.**
+**PR diff in. Domain-aware verification flows and E2E drafts out. No cloud. No LLM token.**
 
-CodeWard is a no-token preflight and workspace hygiene layer for AI coding agents. It checks a repository before agent work starts, then helps reviewers verify whether AI-assisted changes are safe and reviewable before merge.
+CodeWard is a local-first CLI that reads git changes, repository structure, and optional team-owned manifests, then turns a branch into reviewable verification guidance and draft E2E tests.
 
-It is built around a simple idea: teams should not spend the first 30 minutes of every AI coding session re-explaining project context, safe commands, missing guardrails, and review expectations. CodeWard turns those repeated setup checks into one CLI and GitHub Action.
+It is built for the moment when a reviewer asks: "This PR looks plausible, but which user flow could it break, and what should we test before merge?"
 
-For PR verification, CodeWard treats the repository itself as the working base: committed manifests hold durable team language, ignored local history holds generated run observations, and the current branch diff supplies what changed now.
+CodeWard does not call an LLM API, upload source code, or require a service account. It runs in the repository you already have.
 
-It is built for teams using AI coding agents, MCP-powered tools, or any workflow where an agent can read, edit, test, commit, or open pull requests.
+## Install & Quick Start
+
+Requires Node.js 20 or newer.
+
+Install CodeWard in a repository:
+
+```sh
+pnpm add -D @ivorycanvas/codeward
+```
+
+Run the first local scan:
+
+```sh
+pnpm exec codeward scan .
+```
+
+Preview PR-specific E2E drafts without writing files:
+
+```sh
+pnpm exec codeward e2e draft . --base origin/main --head HEAD --dry-run
+```
+
+Or run CodeWard once without adding a dependency:
+
+```sh
+pnpm dlx @ivorycanvas/codeward --help
+```
+
+## 30-Second PR Demo
+
+Preview what CodeWard would generate for the current branch:
+
+```sh
+pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD --dry-run
+```
+
+![CodeWard 30-second PR demo](docs/assets/codeward-30s-demo.gif)
+
+In this demo, CodeWard maps a checkout form PR to the team-owned `Checkout purchase` flow, previews `tests/e2e/checkout-purchase.spec.ts`, and reports that the Playwright draft passes static self-checks. It does **not** claim browser QA has passed during `--dry-run`; it also names the remaining work, such as deterministic fixture data and a real `pnpm run test:e2e` execution.
+
+CodeWard reads the changed files and project signals:
+
+```txt
+Input
+- git diff: origin/main...HEAD
+- project structure: package.json, routes, test config, selectors
+- optional team context: .codeward/domains.yml, .codeward/flows.yml
+```
+
+Then it returns reviewable verification work:
+
+```txt
+Output
+- changed domain language and candidate user flows
+- recommended E2E runner or manual checklist
+- draft Playwright, Maestro, CLI, API, or manual test files
+- readiness status: runnable-candidate, near-runnable, or review-only
+- blockers such as missing runner config, selectors, fixtures, or assertions
+```
+
+Example dry-run output for a small Next.js checkout form change:
+
+```txt
+CodeWard E2E Draft
+Mode: dry run (no files were written)
+Project: Web
+Recommended runner: Playwright
+Files: 0 created, 1 previewed, 0 skipped
+
+- preview: tests/e2e/checkout-purchase.spec.ts
+  Flow: Checkout purchase
+  Actor: Customer
+  Trigger: Open route /checkout.
+  Goal: Complete checkout with realistic form data.
+  Success signal: confirmation state is visible after submit
+  Runnable status: near-runnable
+
+Required action items:
+- Add or confirm stable selectors for changed checkout controls.
+- Add deterministic payment/customer fixture data.
+- Run pnpm run test:e2e after reviewing the generated draft.
+```
+
+The generated draft reads like the user journey instead of a generic file checklist:
+
+```ts
+test("Checkout purchase", async ({ page }) => {
+  await test.step("Open route /checkout.", async () => {
+    await page.goto("/checkout");
+  });
+
+  await test.step("Fill checkout email.", async () => {
+    await page.getByPlaceholder("Email").fill("buyer@example.com");
+  });
+
+  await test.step("Submit checkout.", async () => {
+    await page.getByRole("button", { name: "Complete purchase" }).click();
+  });
+
+  await expect(page.getByText("Order confirmed")).toBeVisible();
+});
+```
+
+See [docs/quickstart-demo.md](docs/quickstart-demo.md) for a compact walkthrough and [docs/e2e-output-examples.md](docs/e2e-output-examples.md) for more output shapes.
+
+## What CodeWard Is For
 
 CodeWard is intentionally small:
 
@@ -25,6 +131,10 @@ CodeWard is intentionally small:
 - CI-friendly: text, JSON, Markdown, and SARIF output are supported
 - explainable: every finding includes a concrete fix
 
+It is built for teams using AI coding agents, MCP-powered tools, or any workflow where an agent can read, edit, test, commit, or open pull requests.
+
+For PR verification, CodeWard treats the repository itself as the working base: committed manifests hold durable team language, ignored local history holds generated run observations, and the current branch diff supplies what changed now.
+
 <details>
 <summary>한국어 소개</summary>
 
@@ -35,6 +145,16 @@ CodeWard는 AI 코딩 에이전트에게 레포지토리를 맡기기 전에 빠
 목표는 거대한 보안 플랫폼이 아니라, 유지보수자가 매번 에이전트에게 프로젝트 맥락과 안전한 검증 방법을 설명하느라 쓰는 시간을 줄여주는 작고 선명한 도구입니다. PR 변경사항을 팀의 도메인 언어, 핵심 플로우, 필요한 E2E/fixture/selector 작업으로 바꿔 검증의 빈 화면을 줄이는 것이 0.1.0의 중심입니다.
 
 </details>
+
+## Quick Commands
+
+```sh
+pnpm exec codeward scan .
+pnpm exec codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
+pnpm exec codeward e2e draft . --base origin/main --head HEAD --dry-run
+```
+
+Use `pnpm dlx @ivorycanvas/codeward ...` for one-off runs without installing CodeWard into the target repository.
 
 ## Why It Matters
 
@@ -54,38 +174,6 @@ CodeWard gives maintainers a quick first line of defense:
 - Is there a real test command for agent-made changes?
 - Does an AI-assisted change explain its intent, risk, and verification evidence?
 
-## Quick Demo
-
-```sh
-codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
-```
-
-Example output from an AI-assisted PR:
-
-```txt
-CodeWard Verify
-Readiness: 6/12 (needs-work)
-Changed files: 5
-New findings: 0
-Changed risky files: 0
-
-Verification gates:
-- WARN Validation commands: package has typecheck/lint/build, but no test command
-- FAIL Changed test coverage: source changed without changed tests
-- WARN Intent capture: PR template exists, but no intent-rich PR body was detected
-- FAIL Risk explanation: domain config changed without risk or rollback context
-
-Suggested domain tests:
-- Campaign workflow regression
-- User-facing UI states
-- Domain configuration and variants
-
-Suggested commands:
-- pnpm run typecheck
-- pnpm run lint
-- pnpm run build
-```
-
 For a repository baseline before broad agent use, run:
 
 ```sh
@@ -99,26 +187,6 @@ Findings: 6 (high: 3, medium: 2, low: 1, info: 0)
 HIGH
 - CW003 Suspicious agent instruction text (AGENTS.md)
   Fix: Remove untrusted instruction text or move examples into clearly fenced documentation.
-```
-
-## Install
-
-Run CodeWard directly with your package manager:
-
-```sh
-pnpm dlx @ivorycanvas/codeward scan .
-```
-
-For PR verification, start with:
-
-```sh
-pnpm dlx @ivorycanvas/codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
-```
-
-For E2E draft preview, inspect the plan before writing files:
-
-```sh
-pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD --dry-run
 ```
 
 When developing CodeWard from source:
