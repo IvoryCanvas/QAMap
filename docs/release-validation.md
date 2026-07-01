@@ -35,6 +35,7 @@ pnpm test
 pnpm scan
 git diff --check
 pnpm pack --dry-run
+node --test --experimental-test-coverage --test-coverage-include='dist/**/*.js' --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 test/*.test.mjs
 ```
 
 Run these against every representative target repository:
@@ -42,15 +43,15 @@ Run these against every representative target repository:
 ```sh
 node dist/cli.js e2e plan <target> --base <base> --head <head> --format markdown
 node dist/cli.js e2e plan <target> --base <base> --head <head> --format json
-node dist/cli.js e2e draft <target> --base <base> --head <head> --format markdown --output <tmp-output-dir>
-node dist/cli.js e2e draft <target> --base <base> --head <head> --format json --output <tmp-output-dir> --force
+node dist/cli.js e2e draft <target> --base <base> --head <head> --output <tmp-output-dir>
+node dist/cli.js e2e draft <target> --base <base> --head <head> --output <tmp-output-dir> --force --json
 ```
 
 For monorepos, include:
 
 ```sh
 node dist/cli.js e2e plan <package> --workspace-root <repo-root> --base <base> --head <head> --format markdown
-node dist/cli.js e2e draft <package> --workspace-root <repo-root> --base <base> --head <head> --format markdown --output <tmp-output-dir>
+node dist/cli.js e2e draft <package> --workspace-root <repo-root> --base <base> --head <head> --output <tmp-output-dir>
 ```
 
 ## Expected Evidence
@@ -82,7 +83,7 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 
 | Target | Fixture-backed coverage | Expected output |
 | --- | --- | --- |
-| Web app with Playwright routes | `generateE2ePlan matches committed core flow definitions`; `generateE2eDraft uses web selectors in Playwright specs`; `generateE2ePlan captures Playwright execution profile and self-check blockers`; `generateE2ePlan infers Playwright base URLs from dev scripts`; `generateE2eDraft emits runnable Playwright role and input actions` | `Web` project profile, `playwright` runner, core-flow names such as `Checkout purchase`, route-aware Playwright drafts, stable selector hints, execution profile, dev-script base URL hints, draft self-check status, action items, and validation gaps. |
+| Web app with Playwright routes | `generateE2ePlan matches committed core flow definitions`; `generateE2eDraft uses web selectors in Playwright specs`; `generateE2ePlan captures Playwright execution profile and self-check blockers`; `generateE2ePlan infers Playwright base URLs from dev scripts`; `generateE2eDraft supports Next app router route groups and concrete route hints`; `generateE2ePlan reads React Router object route paths`; `generateE2eDraft fills dynamic route params from concrete route hints`; `generateE2eDraft emits runnable Playwright role and input actions` | `Web` project profile, `playwright` runner, core-flow names such as `Checkout purchase`, route-aware Playwright drafts, stable selector hints, execution profile, dev-script base URL hints, Next App Router route groups, React Router object paths, dynamic route params, draft self-check status, action items, and validation gaps. |
 | Expo / React Native mobile app | `generateE2ePlan recommends mobile flows for Expo changes`; `generateE2ePlan detects Maestro app ids from app config files`; `generateE2eDraft scopes entrypoint hints to each domain scenario` | `Expo / React Native` project profile, `maestro` runner, app id and launch command hints from `app.json` or `app.config.*`, Maestro YAML drafts, `testID`/`accessibilityLabel` selector hints, and mobile setup actions. |
 | API or backend service | `generateE2ePlan detects API service projects and suggests contract checklists`; `generateE2ePlan detects Django service apps from a workspace root`; `generateE2ePlan names versioned API service paths with domain language`; `generateE2ePlan uses matched core flow names for API service contracts` | `API / service` project profile, manual contract checklist, Django/FastAPI-style service signals when present, domain-aware titles such as `Offer API contract`, API consumer actor, endpoint/handler/service-path trigger, service start/test command hints, and contract failure coverage. |
 | Design tokens and data catalogs | `generateE2ePlan detects design token packages and suggests artifact validation`; `generateE2ePlan detects data catalog repositories and suggests catalog verification` | `Design tokens` and `Data catalog` project profiles, manual artifact/catalog checklist, token or catalog actor language, schema/generated output/consumer fixture coverage, fixture readiness marked not needed for API mocks, and validation matrix rows that do not require browser/device selectors. |
@@ -93,6 +94,33 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 | Existing test evidence | `generateE2ePlan evaluates existing test suite coverage evidence`; `generateE2ePlan keeps generic test filenames from overmatching unrelated services` | Coverage evidence rows that distinguish covered, partial, and missing targets without matching unrelated generic test filenames. |
 
 See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft snippets users should see before `0.1.0`.
+
+## Latest Main Validation Snapshot
+
+Last verified on 2026-07-01 after merging the E2E mock scaffold and route inference work:
+
+| Check | Result |
+| --- | --- |
+| `pnpm test` | 69 tests passed. |
+| `pnpm scan` | 0 findings. |
+| `git diff --check` | Passed. |
+| `pnpm pack --dry-run` | Passed; tarball includes `dist`, `docs`, `schema`, `README.md`, `CHANGELOG.md`, `LICENSE`, and `package.json`. |
+| Coverage threshold | Passed with lines 84.79%, branches 82.19%, functions 93.31%. |
+
+## Real Repository Smoke Snapshot
+
+The latest smoke run used private representative repositories and wrote draft output only under `/tmp/codeward-0.1.0-smoke-*`. Target repository `git status --short --branch` output was identical before and after every run. The table records public-safe target shapes rather than private repository names.
+
+| Target shape | Base/head mode | Result |
+| --- | --- | --- |
+| Private Expo app branch | Feature branch compared with `origin/main` | Detected `expo-react-native`, recommended Maestro, produced 4 drafts, and classified drafts as `near-runnable`. Blockers were useful: missing Maestro flow directory, missing stable `testID`/`accessibilityLabel`, and missing validation evidence. |
+| Private monorepo Next package | Package scan with `--workspace-root`, recent commit range | Detected `web`, recommended Playwright, produced 1 draft, and surfaced review-only status because Playwright config, deterministic fixture/mock data, and validation evidence were missing. |
+| Private Nuxt/Vue app | Recent commit range | Detected `web`, recommended Playwright, produced 2 drafts, and identified missing Playwright config, unresolved placeholders, and selector/testability work. |
+| Private Expo proof-of-concept app | Feature branch compared with `origin/main` | Detected `expo-react-native`, recommended Maestro with high execution confidence, produced 4 drafts, and correctly highlighted missing stable mobile selectors. |
+| Private design token repository | Recent commit range | Detected `design-tokens`, produced a manual design token artifact checklist, and avoided browser/device selector requirements. |
+| Private taxonomy/catalog repository | Recent commit range | Detected `data-catalog`, produced manual taxonomy catalog verification checklists, and avoided API mock requirements. |
+
+Interpretation: the first public release should be described as a planner that removes blank-page verification work. The smoke results are useful, but they also show that many real repositories will start at `review-only` or `near-runnable` until teams add runner config, selectors, fixtures, validation evidence, and durable manifests.
 
 ## Remaining 0.1.0 Validation Work
 

@@ -100,13 +100,13 @@ HIGH
 
 ## Install
 
-The package metadata is ready for the first npm release, but the public package should wait until release validation covers representative web, mobile, API/service, monorepo, and test-light repositories. See [0.1.0 release validation](docs/release-validation.md) and [E2E output examples](docs/e2e-output-examples.md).
+The package metadata is ready for the first public `0.1.0` release. Until the npm package is published, run CodeWard from source. See [0.1.0 release validation](docs/release-validation.md) and [E2E output examples](docs/e2e-output-examples.md) for the current release bar and verified output shape.
 
 ```sh
 pnpm dlx @ivorycanvas/codeward scan .
 ```
 
-Until the npm package is published, run CodeWard from source:
+Source install:
 
 ```sh
 git clone https://github.com/IvoryCanvas/codeward.git
@@ -115,6 +115,8 @@ pnpm install
 pnpm build
 node dist/cli.js scan /path/to/repo
 ```
+
+CodeWard `0.1.0` is a local-first PR verification planner, not a finished automatic QA bot. A good first result is a clear answer to "what should this branch prove before merge?", plus draft E2E, fixture, selector, and validation work that a developer can turn into real regression coverage. Many first drafts will correctly report `review-only` or `near-runnable` until the project adds runner config, stable selectors, deterministic fixtures, or team-owned flow manifests.
 
 ## Commands
 
