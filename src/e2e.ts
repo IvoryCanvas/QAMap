@@ -754,6 +754,76 @@ function buildCoverageTargets(kind: E2eFlowKind, files: string[], runner: E2eRun
     );
   }
 
+  if (kind === "test-evidence") {
+    targets.push(
+      coverageTarget(
+        "Changed test evidence maps to behavior",
+        "critical",
+        "Test-only changes are valuable only when reviewers can see what behavior, bug, or regression risk the tests protect.",
+        [
+          "Run the changed test file or nearest package test command.",
+          "Name the product behavior, bug, or risk protected by the changed test evidence.",
+          "Confirm the evidence is not just a snapshot or assertion update without behavioral intent.",
+        ],
+      ),
+      coverageTarget(
+        "Failure and edge signal",
+        "recommended",
+        "A changed test suite should prove at least one meaningful failure, boundary, or previous-regression case when no product code changed.",
+        [
+          "Verify invalid, empty, failed-response, permission, or previous-regression behavior when relevant.",
+          "Record why the changed test would fail if the protected behavior regressed.",
+        ],
+      ),
+    );
+  }
+
+  if (kind === "documentation") {
+    targets.push(
+      coverageTarget(
+        "Documentation-to-behavior consistency",
+        "critical",
+        "Documentation changes should be checked against the actual command, API, workflow, or policy they describe.",
+        [
+          "Compare changed docs with source, CLI output, examples, or existing tests.",
+          "Run docs build, markdown, link, or example validation when available.",
+        ],
+      ),
+      coverageTarget(
+        "Documented behavior test gap",
+        "recommended",
+        "A doc update can reveal behavior that should be protected later even when this PR does not change runtime code.",
+        [
+          "Identify any documented workflow that lacks automated coverage.",
+          "Record the missing product test as follow-up evidence instead of treating the doc change as E2E coverage.",
+        ],
+      ),
+    );
+  }
+
+  if (kind === "generated-artifact" || files.some(isGeneratedOutputFile)) {
+    targets.push(
+      coverageTarget(
+        "Source-of-truth regeneration",
+        "critical",
+        "Generated output should be reproducible from a committed schema, template, source file, or generator command.",
+        [
+          "Re-run the generator or build command that owns the changed output.",
+          "Confirm the generated diff matches the committed source-of-truth input.",
+        ],
+      ),
+      coverageTarget(
+        "Generated artifact consumer compatibility",
+        "recommended",
+        "Generated artifacts can break consumers even when the generator succeeds.",
+        [
+          "Run a consumer build, typecheck, or test that imports the generated artifact.",
+          "Check renamed, removed, or newly-required generated fields against representative consumers.",
+        ],
+      ),
+    );
+  }
+
   if (kind === "config" || files.some(isConfigLikeFile)) {
     targets.push(
       coverageTarget(
@@ -1405,6 +1475,9 @@ function testabilityRequiredEvidence(flow: E2eFlow): string {
   if (isCatalogFocusedFlow(flow)) {
     return "Documented catalog validation command, generated output path, and downstream consumer or migration fixture.";
   }
+  if (isEvidenceVerificationFocusedFlow(flow)) {
+    return "Documented validation command, result, and the behavior or source-of-truth evidence this change protects.";
+  }
   return "Stable selectors, entrypoint hints, and no unresolved testability gaps.";
 }
 
@@ -1418,6 +1491,9 @@ function testabilityEvidenceSummary(flow: E2eFlow): string {
   if (isCatalogFocusedFlow(flow)) {
     return "Catalog verification flow uses catalog validation commands, generated outputs, and a consumer or migration fixture as stability evidence.";
   }
+  if (isEvidenceVerificationFocusedFlow(flow)) {
+    return "Evidence verification flow uses commands, generated output, docs checks, or changed tests instead of selector coverage.";
+  }
   const signals = [
     flow.selectors.length > 0 ? `${flow.selectors.length} selector${flow.selectors.length === 1 ? "" : "s"}` : "",
     flow.entrypoints.length > 0 ? `${flow.entrypoints.length} entrypoint hint${flow.entrypoints.length === 1 ? "" : "s"}` : "",
@@ -1430,6 +1506,9 @@ function validationStatusFromTestability(flow: E2eFlow): E2eValidationMatrixStat
     return "missing";
   }
   if (isDesignTokenFocusedFlow(flow) || isCatalogFocusedFlow(flow)) {
+    return "ready";
+  }
+  if (isEvidenceVerificationFocusedFlow(flow)) {
     return "ready";
   }
   if (flow.selectors.length > 0 || flow.entrypoints.length > 0) {
@@ -1447,6 +1526,9 @@ function nextActionForTestability(flow: E2eFlow): string {
   }
   if (isCatalogFocusedFlow(flow)) {
     return "Use the catalog generation and consumer fixture checks in the generated checklist.";
+  }
+  if (isEvidenceVerificationFocusedFlow(flow)) {
+    return "Use the evidence validation command, result, and protected behavior in the generated checklist.";
   }
   if (flow.selectors.length > 0 || flow.entrypoints.length > 0) {
     return "Use the detected selectors and entrypoints in the generated draft.";
@@ -1972,6 +2054,15 @@ function inferFlowActor(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isCatalogFocusedFlow(flow)) {
     return "Data catalog consumer or maintainer";
   }
+  if (isTestEvidenceFocusedFlow(flow)) {
+    return "Maintainer or test author";
+  }
+  if (isDocumentationFocusedFlow(flow)) {
+    return "Maintainer or documentation reviewer";
+  }
+  if (isGeneratedArtifactFocusedFlow(flow)) {
+    return "Maintainer or build owner";
+  }
   if (/\b(configuration|dependency|build|runtime|environment|feature[- ]?flag|package\.json|tsconfig|docker|serverless|deploy)\b/.test(haystack)) {
     return "Maintainer or release operator";
   }
@@ -2026,6 +2117,15 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
     if (isCatalogFocusedFlow(flow)) {
       return `Regenerate or validate the catalog artifact affected by ${flow.files[0]}.`;
     }
+    if (isTestEvidenceFocusedFlow(flow)) {
+      return `Run the changed test evidence affected by ${flow.files[0]}.`;
+    }
+    if (isDocumentationFocusedFlow(flow)) {
+      return `Review the documented behavior affected by ${flow.files[0]}.`;
+    }
+    if (isGeneratedArtifactFocusedFlow(flow)) {
+      return `Regenerate the artifact affected by ${flow.files[0]}.`;
+    }
     if (/\bconfiguration verification\b/i.test(flow.title)) {
       return `Run the build, startup, or release path affected by ${flow.files[0]}.`;
     }
@@ -2043,6 +2143,15 @@ function inferFlowGoal(flow: Omit<E2eFlow, "languageBrief">): string {
   }
   if (isCatalogFocusedFlow(flow)) {
     return `Protect ${flow.title} by verifying catalog schema, generated output, and downstream consumer compatibility.`;
+  }
+  if (isTestEvidenceFocusedFlow(flow)) {
+    return `Protect ${flow.title} by proving the changed test evidence maps to a real behavior, bug, or regression risk.`;
+  }
+  if (isDocumentationFocusedFlow(flow)) {
+    return `Protect ${flow.title} by checking that changed documentation still matches actual repository behavior.`;
+  }
+  if (isGeneratedArtifactFocusedFlow(flow)) {
+    return `Protect ${flow.title} by proving generated output is reproducible and accepted by consumers.`;
   }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return `Protect ${flow.title} by verifying clean install, startup, and fallback configuration variants.`;
@@ -2068,6 +2177,15 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isCatalogFocusedFlow(flow)) {
     return "the catalog schema, generated output, and representative consumer fixture all accept the changed entries";
   }
+  if (isTestEvidenceFocusedFlow(flow)) {
+    return "the changed test evidence runs and clearly names the behavior, bug, or regression risk it protects";
+  }
+  if (isDocumentationFocusedFlow(flow)) {
+    return "the changed documentation matches current commands, examples, source behavior, or existing tests";
+  }
+  if (isGeneratedArtifactFocusedFlow(flow)) {
+    return "the generated output can be reproduced from source-of-truth inputs and accepted by consumers";
+  }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return "the affected build or runtime variant starts cleanly and handles fallback values";
   }
@@ -2092,6 +2210,15 @@ function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSi
   if (isCatalogFocusedFlow(flow)) {
     return `Can a reviewer confirm that the changed catalog artifact is regenerated, consumed, and that "${successSignal}" is asserted?`;
   }
+  if (isTestEvidenceFocusedFlow(flow)) {
+    return `Can a reviewer confirm that the changed tests are run and that "${successSignal}" is documented as PR evidence?`;
+  }
+  if (isDocumentationFocusedFlow(flow)) {
+    return `Can a reviewer confirm that docs validation ran and that "${successSignal}" is true?`;
+  }
+  if (isGeneratedArtifactFocusedFlow(flow)) {
+    return `Can a reviewer confirm that the artifact was regenerated and that "${successSignal}" is true?`;
+  }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return `Can a reviewer confirm that the affected build, startup, or release variant is exercised and that "${successSignal}" is asserted?`;
   }
@@ -2099,6 +2226,9 @@ function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSi
 }
 
 function isApiContractFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  if (isEvidenceVerificationFocusedFlow(flow)) {
+    return false;
+  }
   return (
     /\bapi contract\b/i.test(flow.title) ||
     (flow.coverage.some((target) => target.title === "API contract compatibility") &&
@@ -2112,6 +2242,18 @@ function isDesignTokenFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean
 
 function isCatalogFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
   return /\btaxonomy catalog verification\b/i.test(flow.title) || flow.files.some(isCatalogDataFile);
+}
+
+function isTestEvidenceFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return /\btest evidence\b/i.test(flow.title) || (flow.files.length > 0 && flow.files.every(isTestLikeFile));
+}
+
+function isDocumentationFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return /\bdocumentation verification\b/i.test(flow.title) || (flow.files.length > 0 && flow.files.every(isDocumentationFile));
+}
+
+function isGeneratedArtifactFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return /\bgenerated artifact verification\b/i.test(flow.title) || (flow.files.length > 0 && flow.files.every(isGeneratedOutputFile));
 }
 
 function inferFlowEdgeCases(flow: Omit<E2eFlow, "languageBrief">): string[] {
@@ -3820,6 +3962,9 @@ type E2eFlowKind =
   | "state"
   | "content"
   | "config"
+  | "test-evidence"
+  | "documentation"
+  | "generated-artifact"
   | "artifact"
   | "catalog"
   | "domain"
@@ -3870,6 +4015,11 @@ function buildFlowCandidates(
   projectType: E2eProjectType,
   domainLanguage: DomainLanguageSummary,
 ): FlowCandidate[] {
+  const lowSignalCandidate = buildLowSignalChangeCandidate(files);
+  if (lowSignalCandidate) {
+    return [lowSignalCandidate];
+  }
+
   const behaviorFiles = files.filter((file) => !isTestLikeFile(file));
   const candidateFiles = behaviorFiles.length > 0 ? behaviorFiles : files;
   const uiFiles = candidateFiles.filter(isUserFacingFile);
@@ -4063,6 +4213,79 @@ function buildFlowCandidates(
   return candidates;
 }
 
+function buildLowSignalChangeCandidate(files: string[]): FlowCandidate | undefined {
+  const changedFiles = uniqueStrings(files);
+  if (changedFiles.length === 0 || isReleaseMetadataOnlyChange(changedFiles)) {
+    return undefined;
+  }
+
+  if (isTestEvidenceOnlyChange(changedFiles)) {
+    return {
+      kind: "test-evidence",
+      title: "Changed test evidence verification checklist",
+      reason:
+        "Only test files changed, so CodeWard should verify the test evidence and its protected behavior instead of inventing a product journey from test filenames.",
+      files: changedFiles,
+      steps: [
+        "Run the changed test file or the nearest package test command.",
+        "Confirm the changed test names the behavior, bug, or regression risk it protects.",
+        "Verify the test includes a meaningful failure, edge, or previous-regression signal when the branch does not change product code.",
+        "Record the command, result, and behavior protected by this test-only change as PR evidence.",
+      ],
+    };
+  }
+
+  if (isDocumentationOnlyChange(changedFiles)) {
+    return {
+      kind: "documentation",
+      title: "Documentation verification checklist",
+      reason:
+        "Only documentation changed, so the useful verification is whether the documented command, workflow, or policy still matches the repository behavior.",
+      files: changedFiles,
+      steps: [
+        "Open the changed documentation and identify the command, option, workflow, API, or policy it describes.",
+        "Compare the documented behavior with the current source, CLI output, examples, or existing tests.",
+        "Run markdown, link, example, or docs build validation when the repository provides it.",
+        "Record any uncovered product behavior as a follow-up test gap instead of treating the doc change as E2E coverage.",
+      ],
+    };
+  }
+
+  if (isGeneratedOutputOnlyChange(changedFiles)) {
+    return {
+      kind: "generated-artifact",
+      title: "Generated artifact verification checklist",
+      reason:
+        "Only generated output changed, so verification should prove the artifact came from its source of truth and still works for downstream consumers.",
+      files: changedFiles,
+      steps: [
+        "Re-run the generator, codegen, build, or export command that owns the changed output.",
+        "Confirm the generated diff matches a committed source-of-truth input, schema, or template.",
+        "Run the nearest consumer build, typecheck, or test that imports the generated artifact.",
+        "Reject hand-edited generated output unless the repository explicitly documents that workflow.",
+      ],
+    };
+  }
+
+  if (isLowSignalVerificationOnlyChange(changedFiles)) {
+    return {
+      kind: "test-evidence",
+      title: "Changed evidence verification checklist",
+      reason:
+        "The branch only changed verification evidence such as tests, docs, or generated output, so CodeWard should ask for proof that the evidence maps to real behavior before proposing a product E2E journey.",
+      files: changedFiles,
+      steps: [
+        "Classify each changed file as test evidence, documentation, or generated output.",
+        "Run the nearest validation command for each changed evidence type.",
+        "Confirm no runtime product file changed; if product behavior is implied, name the missing product test explicitly.",
+        "Record the validation command, result, and protected behavior as PR evidence.",
+      ],
+    };
+  }
+
+  return undefined;
+}
+
 async function buildFlow(
   root: string,
   runner: E2eRunnerName,
@@ -4152,7 +4375,13 @@ async function inferFlowEntrypoints(root: string, files: string[], runner: E2eRu
 }
 
 async function inferFlowSetupHints(root: string, files: string[], kind: E2eFlowKind): Promise<E2eSetupHint[]> {
-  if (kind === "artifact" || kind === "catalog") {
+  if (
+    kind === "artifact" ||
+    kind === "catalog" ||
+    kind === "test-evidence" ||
+    kind === "documentation" ||
+    kind === "generated-artifact"
+  ) {
     return [];
   }
 
@@ -4296,6 +4525,17 @@ async function inferFlowFixtureReadiness(
   setupHints: E2eSetupHint[],
   context: FixtureReadinessContext,
 ): Promise<E2eFixtureReadiness> {
+  if (kind === "test-evidence" || kind === "documentation" || kind === "generated-artifact") {
+    return {
+      status: "not-needed",
+      reason: "This verification flow targets changed evidence such as tests, docs, or generated output rather than an API-backed product journey.",
+      apiSignals: [],
+      apiEndpoints: [],
+      backendSignals: [],
+      mockSignals: [],
+      nextActions: [],
+    };
+  }
   if (kind === "artifact" || kind === "catalog") {
     return {
       status: "not-needed",
@@ -4973,14 +5213,57 @@ function isReleaseMetadataOnlyChange(files: string[]): boolean {
   return files.some(isReleaseMetadataFile) && files.every((file) => isReleaseMetadataFile(file) || isPackageMetadataFile(file));
 }
 
+function isTestEvidenceOnlyChange(files: string[]): boolean {
+  return files.length > 0 && files.every(isTestLikeFile);
+}
+
+function isDocumentationOnlyChange(files: string[]): boolean {
+  return files.length > 0 && files.every(isDocumentationFile);
+}
+
+function isGeneratedOutputOnlyChange(files: string[]): boolean {
+  return files.length > 0 && files.every(isGeneratedOutputFile);
+}
+
+function isLowSignalVerificationOnlyChange(files: string[]): boolean {
+  return files.length > 0 && files.every((file) => isTestLikeFile(file) || isDocumentationFile(file) || isGeneratedOutputFile(file));
+}
+
 function isTestLikeFile(file: string): boolean {
   return (
+    /(?:^|\/)__snapshots__\//i.test(file) ||
     /(?:^|\/)(?:__tests__|tests?|specs?|e2e)\//i.test(file) ||
+    /\.(?:snap|snapshot)$/i.test(file) ||
     /(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(file) ||
     /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(file) ||
     /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift)$/i.test(file) ||
     /(?:^|\/)[^/]+_(?:test|spec)\.rs$/i.test(file)
+  );
+}
+
+function isDocumentationFile(file: string): boolean {
+  if (isReleaseMetadataFile(file)) {
+    return false;
+  }
+  return (
+    /(?:^|\/)(?:docs?|adr|adrs|decisions|guides?|handbook|rfcs?|specs?)\//i.test(file) ||
+    /(?:^|\/)(?:README|CONTRIBUTING|SECURITY|SUPPORT|CODE_OF_CONDUCT|ARCHITECTURE|DECISIONS|PLAN)\.(?:md|mdx|rst|adoc)$/i.test(
+      file,
+    ) ||
+    /\.(?:md|mdx|rst|adoc)$/i.test(file)
+  );
+}
+
+function isGeneratedOutputFile(file: string): boolean {
+  if (isTestLikeFile(file) || isReleaseMetadataFile(file)) {
+    return false;
+  }
+  return (
+    /(?:^|\/)(?:dist|build|out|coverage|generated|__generated__|codegen)\//i.test(file) ||
+    /(?:^|\/)(?:public|src|lib|packages?)\/(?:generated|__generated__|codegen)\//i.test(file) ||
+    /(?:^|\/)[^/]*(?:generated|codegen)[^/]*\.(?:[cm]?[jt]sx?|json|ya?ml|css|scss|md)$/i.test(file) ||
+    /\.(?:generated|gen)\.[cm]?[jt]sx?$/i.test(file)
   );
 }
 
@@ -5342,8 +5625,9 @@ function dedupeFlows(flows: E2eFlow[]): E2eFlow[] {
 
 async function buildDraftFlows(plan: E2ePlanResult): Promise<DraftE2eFlow[]> {
   const baseFlows = plan.flows.length > 0 ? plan.flows : [buildFallbackFlow(plan)];
+  const domainScenarios = shouldUseDomainScenariosForDraft(plan) ? plan.domainLanguage.scenarios : [];
   const scenarioFlows = await Promise.all(
-    plan.domainLanguage.scenarios
+    domainScenarios
       .filter((scenario) => scenario.files.length > 0 || scenario.source === "core-flow")
       .slice(0, 4)
       .map((scenario) => buildDomainScenarioDraftFlow(plan, scenario, baseFlows)),
@@ -5381,7 +5665,24 @@ function prioritizeImportantBaseDraftFlow(flows: DraftE2eFlow[], baseFlows: E2eF
 }
 
 function isImportantBaseDraftFlow(flow: E2eFlow): boolean {
-  return isApiContractFocusedFlow(flow) || isDesignTokenFocusedFlow(flow) || isCatalogFocusedFlow(flow);
+  return (
+    isApiContractFocusedFlow(flow) ||
+    isDesignTokenFocusedFlow(flow) ||
+    isCatalogFocusedFlow(flow) ||
+    isEvidenceVerificationFocusedFlow(flow)
+  );
+}
+
+function shouldUseDomainScenariosForDraft(plan: E2ePlanResult): boolean {
+  const files = plan.changedFiles.map((file) => file.path);
+  if (isLowSignalVerificationOnlyChange(files)) {
+    return false;
+  }
+  return !plan.flows.every(isEvidenceVerificationFocusedFlow);
+}
+
+function isEvidenceVerificationFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return isTestEvidenceFocusedFlow(flow) || isDocumentationFocusedFlow(flow) || isGeneratedArtifactFocusedFlow(flow);
 }
 
 function dedupeDraftFlowsByOutputPath(flows: DraftE2eFlow[], runner: E2eRunnerName): DraftE2eFlow[] {
@@ -6662,6 +6963,18 @@ function buildHumanFixtureInputs(flow: E2eFlow, runner: E2eRunnerName): string[]
   if (isCatalogFocusedFlow(flow)) {
     inputs.push("Record the catalog validation command and the generation command for the published catalog artifact.");
     inputs.push("Keep one representative analytics, documentation, ingestion, or migration fixture that reads the changed entries.");
+  }
+  if (isTestEvidenceFocusedFlow(flow)) {
+    inputs.push("Record the changed test command and the behavior, bug, or regression risk protected by the test.");
+    inputs.push("Keep one failure, edge, or previous-regression signal visible in the test evidence.");
+  }
+  if (isDocumentationFocusedFlow(flow)) {
+    inputs.push("Record the docs, markdown, link, example, or source comparison command used for the changed documentation.");
+    inputs.push("Name any documented product behavior that still needs automated coverage as follow-up evidence.");
+  }
+  if (isGeneratedArtifactFocusedFlow(flow)) {
+    inputs.push("Record the generator or build command that reproduced the changed artifact.");
+    inputs.push("Keep one consumer build, typecheck, or test that imports the generated output.");
   }
   if (runner === "maestro") {
     inputs.push("Set APP_ID to the target app id or export it before running the flow.");

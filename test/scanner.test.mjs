@@ -1217,6 +1217,153 @@ test("generateE2ePlan treats agent and repo metadata as configuration, not produ
   assert.ok(plan.flows.every((flow) => flow.languageBrief.actor === "Maintainer or release operator"));
 });
 
+test("generateE2ePlan treats test-only changes as evidence verification, not product journeys", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/features/admin"), { recursive: true });
+  await mkdir(path.join(root, "tests/e2e"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        next: "^15.0.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "playwright.config.ts"), "export default {};\n");
+  await writeFile(path.join(root, "src/features/admin/AdminDashboard.tsx"), "export function AdminDashboard() { return null; }\n");
+  await writeFile(
+    path.join(root, "tests/e2e/admin-primary-journey.spec.ts"),
+    [
+      "import { test, expect } from '@playwright/test';",
+      "test('admin primary journey shows dashboard', async ({ page }) => {",
+      "  await page.goto('/admin');",
+      "  await expect(page.getByText('Dashboard')).toBeVisible();",
+      "});",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/admin-test-evidence"]);
+  await writeFile(
+    path.join(root, "tests/e2e/admin-primary-journey.spec.ts"),
+    [
+      "import { test, expect } from '@playwright/test';",
+      "test('admin primary journey handles empty state', async ({ page }) => {",
+      "  await page.goto('/admin');",
+      "  await expect(page.getByText('No requests yet')).toBeVisible();",
+      "});",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update admin test evidence"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    runner: "playwright",
+    output: "docs/e2e",
+  });
+  const draftFile = draft.files.find((file) => file.flowTitle === "Changed test evidence verification checklist");
+
+  assert.deepEqual(plan.flows.map((flow) => flow.title), ["Changed test evidence verification checklist"]);
+  assert.equal(plan.domainLanguage.scenarios.length, 0);
+  assert.equal(plan.flows.some((flow) => /admin primary journey|UI smoke|workflow smoke/i.test(flow.title)), false);
+  assert.equal(plan.flows[0].languageBrief.actor, "Maintainer or test author");
+  assert.match(plan.flows[0].languageBrief.successSignal, /changed test evidence runs/);
+  assert.ok(draftFile);
+  assert.equal(draftFile.source, "heuristic");
+  assert.equal(draft.files.some((file) => /admin primary journey/i.test(file.flowTitle)), false);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+  assert.match(spec, /Flow: Changed test evidence verification checklist/);
+  assert.doesNotMatch(spec, /Domain scenario: Admin/);
+});
+
+test("generateE2ePlan treats docs-only changes as documentation verification", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "docs"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        react: "^19.0.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "playwright.config.ts"), "export default {};\n");
+  await writeFile(path.join(root, "docs/offer-workflow.md"), "# Offer workflow\n\nRun the offer review flow.\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/docs-offer-workflow"]);
+  await writeFile(
+    path.join(root, "docs/offer-workflow.md"),
+    "# Offer workflow\n\nRun the offer review flow and check failed URL submission copy.\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update offer workflow docs"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const markdown = formatMarkdownE2ePlan(plan);
+
+  assert.deepEqual(plan.flows.map((flow) => flow.title), ["Documentation verification checklist"]);
+  assert.equal(plan.domainLanguage.scenarios.length, 0);
+  assert.equal(plan.flows[0].languageBrief.actor, "Maintainer or documentation reviewer");
+  assert.match(plan.flows[0].languageBrief.reviewQuestion, /docs validation/);
+  assert.match(markdown, /Documentation verification checklist/);
+  assert.doesNotMatch(markdown, /Suggested user scenarios:[\s\S]*Offer primary journey/);
+});
+
+test("generateE2ePlan treats generated-only changes as generated artifact verification", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/__generated__"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "tsc --noEmit",
+      },
+      dependencies: {
+        typescript: "^5.8.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "src/__generated__/offerClient.ts"), "export const version = 'v1';\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/generated-offer-client"]);
+  await writeFile(path.join(root, "src/__generated__/offerClient.ts"), "export const version = 'v2';\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update generated offer client"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const titles = plan.flows.map((flow) => flow.title);
+
+  assert.deepEqual(titles, ["Generated artifact verification checklist"]);
+  assert.equal(plan.domainLanguage.terms.length, 0);
+  assert.equal(plan.domainLanguage.scenarios.length, 0);
+  assert.equal(plan.flows[0].languageBrief.actor, "Maintainer or build owner");
+  assert.equal(titles.some((title) => /Offer|API contract|workflow smoke/i.test(title)), false);
+});
+
 test("generateE2ePlan treats API service source utilities as contract-impacting changes", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);

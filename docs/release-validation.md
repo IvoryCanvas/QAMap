@@ -13,6 +13,7 @@ CodeWard is ready for `0.1.0` when the commands below produce useful, reviewable
 - monorepo root that points reviewers to changed app/package targets
 - test-light project with little or no existing E2E coverage
 - API-dependent UI flow that needs deterministic mock or fixture data
+- evidence-only branches where only tests, docs, or generated output changed
 
 For each target, record:
 
@@ -92,20 +93,21 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 | Test-light project | `generateE2ePlan builds a bootstrap plan for projects without tests`; `generateE2ePlan infers Playwright base URLs from dev scripts`; `generateE2eDraft creates a fallback smoke draft without changed files` | Required bootstrap steps for runner setup, opt-in `codeward e2e setup`, generated setup output that includes the first changed-flow draft file, fixture/mock data, testability, and validation evidence before generated drafts are treated as regression coverage. |
 | API-dependent UI flow | `generateE2ePlan flags missing mock fixtures for API-dependent UI flows` | Playwright-compatible UI flow plus fixture/mock readiness actions, inferred endpoint hints, and route-fulfillment scaffold slots for success, empty, unauthorized, timeout, and server-error responses. |
 | Existing test evidence | `generateE2ePlan evaluates existing test suite coverage evidence`; `generateE2ePlan keeps generic test filenames from overmatching unrelated services` | Coverage evidence rows that distinguish covered, partial, and missing targets without matching unrelated generic test filenames. |
+| Evidence-only changes | `generateE2ePlan treats test-only changes as evidence verification, not product journeys`; `generateE2ePlan treats docs-only changes as documentation verification`; `generateE2ePlan treats generated-only changes as generated artifact verification` | Test-only, docs-only, and generated-output-only branches produce maintainer-oriented evidence checklists instead of product journeys inferred from filenames such as `admin-primary-journey.spec.ts` or generated API clients. |
 
 See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft snippets users should see before `0.1.0`.
 
 ## Latest PR Validation Snapshot
 
-Last verified on 2026-07-01 on PR #67 after adding action-specific E2E generation, input-aware actions, opt-in setup scaffolding that creates the first changed-flow draft, and redundant entrypoint TODO reduction:
+Last verified on 2026-07-01 on PR #67 after adding action-specific E2E generation, input-aware actions, opt-in setup scaffolding that creates the first changed-flow draft, redundant entrypoint TODO reduction, and evidence-only change demotion:
 
 | Check | Result |
 | --- | --- |
-| `pnpm test` | 74 tests passed. |
+| `pnpm test` | 77 tests passed. |
 | `pnpm scan` | 0 findings. |
 | `git diff --check` | Passed. |
 | `pnpm pack --dry-run` | Passed; tarball includes `dist`, `docs`, `schema`, `README.md`, `CHANGELOG.md`, `LICENSE`, and `package.json`. |
-| Coverage threshold | Passed the 80% line, branch, and function gates; latest runs report about 85.02% lines, 82.62% branches, and 93.35% functions. |
+| Coverage threshold | Passed the 80% line, branch, and function gates; latest runs report about 85.17% lines, 83.06% branches, and 93.52% functions. |
 | `pnpm run release:check` | Passed as the single local release gate for this PR state. |
 
 ## Real Repository Smoke Snapshot

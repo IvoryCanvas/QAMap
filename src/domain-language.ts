@@ -504,6 +504,9 @@ function isDomainLanguageFile(file: string): boolean {
   if (/(?:^|\/)(?:assets?|images?|icons?|fonts?)\//i.test(file)) {
     return false;
   }
+  if (isGeneratedOutputFile(file)) {
+    return false;
+  }
   if (/(?:^|\/)(?:\.agents?|\.claude|\.cursor|\.dev|\.gemini|\.github|docs?)\//i.test(file)) {
     return false;
   }
@@ -532,6 +535,15 @@ function isTestLikeFile(file: string): boolean {
     /(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(file) ||
     /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(file)
+  );
+}
+
+function isGeneratedOutputFile(file: string): boolean {
+  return (
+    /(?:^|\/)(?:dist|build|out|coverage|generated|__generated__|codegen)\//i.test(file) ||
+    /(?:^|\/)(?:public|src|lib|packages?)\/(?:generated|__generated__|codegen)\//i.test(file) ||
+    /(?:^|\/)[^/]*(?:generated|codegen)[^/]*\.(?:[cm]?[jt]sx?|json|ya?ml|css|scss|md)$/i.test(file) ||
+    /\.(?:generated|gen)\.[cm]?[jt]sx?$/i.test(file)
   );
 }
 
