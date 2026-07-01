@@ -25,6 +25,7 @@ export type E2eProjectType =
   | "api-service"
   | "design-tokens"
   | "data-catalog"
+  | "cli"
   | "unknown";
 export type E2eRunnerName = "maestro" | "playwright" | "manual";
 export type E2eEntrypointKind = "route" | "screen" | "command";
@@ -48,10 +49,14 @@ export type E2eBootstrapStepCategory =
   | "history";
 export type E2eSelectorKind =
   | "test-id"
+  | "input-test-id"
   | "accessibility-label"
+  | "input-accessibility-label"
   | "visible-text"
   | "web-test-id"
+  | "input-web-test-id"
   | "aria-label"
+  | "input-aria-label"
   | "placeholder"
   | "role-button"
   | "role-link";
@@ -63,6 +68,8 @@ export interface E2ePlanOptions extends TestPlanOptions {
 export interface E2eDraftOptions extends E2ePlanOptions {
   output?: string;
   force?: boolean;
+  maxDrafts?: number;
+  dryRun?: boolean;
 }
 
 export interface E2eProjectProfile {
@@ -253,7 +260,7 @@ export interface E2eDraftFile {
   path: string;
   flowTitle: string;
   runner: E2eRunnerName;
-  status: "created" | "skipped";
+  status: "created" | "skipped" | "preview";
   source?: "domain-language" | "core-flow" | "heuristic";
   languageBrief?: E2eFlowLanguageBrief;
   actionItems?: E2eDraftActionItem[];
@@ -348,6 +355,7 @@ export interface E2eDraftResult {
   generatedAt: string;
   runner: E2eRunnerName;
   outputDirectory: string;
+  dryRun: boolean;
   plan: E2ePlanResult;
   files: E2eDraftFile[];
   actionSummary: E2eDraftActionSummary;
@@ -372,6 +380,9 @@ export interface E2eSetupResult {
   skippedFiles: string[];
   installCommands: string[];
   nextCommands: string[];
+  draftOutputDirectory?: string;
+  draftFiles: E2eDraftFile[];
+  draftReadinessSummary?: E2eDraftReadinessSummary;
 }
 
 interface PackageJson {
@@ -380,6 +391,7 @@ interface PackageJson {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
+  bin?: string | Record<string, string>;
 }
 
 const maxFilesPerFlow = 8;
@@ -495,9 +507,13 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
   const plan = await generateE2ePlan(root, options);
   const runner = plan.recommendedRunner.name;
   const outputDirectory = path.resolve(root, options.output ?? defaultDraftOutputDirectory(runner));
-  const flows = await buildDraftFlows(plan);
+  const draftLimit = options.maxDrafts && options.maxDrafts > 0 ? Math.floor(options.maxDrafts) : undefined;
+  const flows = (await buildDraftFlows(plan)).slice(0, draftLimit);
+  const dryRun = options.dryRun ?? false;
 
-  await fs.mkdir(outputDirectory, { recursive: true });
+  if (!dryRun) {
+    await fs.mkdir(outputDirectory, { recursive: true });
+  }
 
   const files: E2eDraftFile[] = [];
   for (const flow of flows) {
@@ -505,13 +521,44 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
     const displayPath = toDisplayPath(root, filePath);
     const validationSummary = summarizeDraftValidation(flow);
     const promotionGuidance = buildDraftPromotionGuidance(flow);
-    const shouldSkip = (await exists(filePath)) && !options.force;
+    const fileAlreadyExists = await exists(filePath);
+    const shouldSkip = fileAlreadyExists && !options.force && !dryRun;
     const content = shouldSkip ? ((await readTextIfExists(filePath)) ?? "") : draftContentForFlow(plan, flow, runner);
     const todoCount = countTodos(content);
     const selfCheck = evaluateDraftSelfCheck(plan, flow, runner, content, todoCount);
     const actionItems = buildDraftActionItems(plan, flow, runner, validationSummary, promotionGuidance, selfCheck);
     const executionBlockers = draftExecutionBlockers(plan, flow, runner, validationSummary, selfCheck);
     const runnableStatus = draftRunnableStatus(plan, flow, runner, validationSummary, executionBlockers, selfCheck);
+    if (dryRun) {
+      files.push({
+        path: displayPath,
+        flowTitle: flow.title,
+        runner,
+        status: "preview",
+        source: draftFlowSource(flow),
+        languageBrief: flow.languageBrief,
+        actionItems,
+        promotionStatus: promotionGuidance.status,
+        promotionReason: promotionGuidance.reason,
+        promotionAction: promotionGuidance.action,
+        stability: draftStability(plan, flow),
+        runnableStatus,
+        executionBlockers,
+        selfCheck,
+        todoCount,
+        entrypointCount: flow.entrypoints.length,
+        primaryEntrypoint: primaryEntrypointLabel(flow),
+        setupHintCount: flow.setupHints.length,
+        fixtureReadinessStatus: flow.fixtureReadiness.status,
+        inferredSelectorCount: flow.selectors.length,
+        coverageTargetCount: flow.coverage.length,
+        validationStatus: validationSummary.status,
+        validationGapCount: validationSummary.gapCount,
+        blockingValidationGapCount: validationSummary.blockingGapCount,
+        reason: dryRunPreviewReason(fileAlreadyExists, options.force ?? false),
+      });
+      continue;
+    }
     if (shouldSkip) {
       files.push({
         path: displayPath,
@@ -580,6 +627,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
     generatedAt: new Date().toISOString(),
     runner,
     outputDirectory: toDisplayPath(root, outputDirectory),
+    dryRun,
     plan,
     files,
     actionSummary,
@@ -740,6 +788,100 @@ function buildCoverageTargets(kind: E2eFlowKind, files: string[], runner: E2eRun
         [
           "Run one analytics, documentation, ingestion, or SDK fixture that reads the changed catalog.",
           "Check renamed, removed, deprecated, or newly-required fields with realistic sample data.",
+        ],
+      ),
+    );
+  }
+
+  if (kind === "command") {
+    targets.push(
+      coverageTarget(
+        "CLI command contract",
+        "critical",
+        "CLI changes should protect the command contract that users automate in scripts and CI.",
+        [
+          "Run the changed command with a valid argument set.",
+          "Verify stdout, stderr, exit code, and any generated files.",
+          "Keep command examples aligned with README or help output.",
+        ],
+      ),
+      coverageTarget(
+        "CLI failure and usage paths",
+        "critical",
+        "Command-line tools need explicit invalid input coverage because silent success or unclear errors break automation.",
+        [
+          "Run missing-argument, invalid-option, and unsupported-input cases when relevant.",
+          "Verify the failure message, exit code, and absence of partial generated output.",
+        ],
+      ),
+    );
+  }
+
+  if (kind === "test-evidence") {
+    targets.push(
+      coverageTarget(
+        "Changed test evidence maps to behavior",
+        "critical",
+        "Test-only changes are valuable only when reviewers can see what behavior, bug, or regression risk the tests protect.",
+        [
+          "Run the changed test file or nearest package test command.",
+          "Name the product behavior, bug, or risk protected by the changed test evidence.",
+          "Confirm the evidence is not just a snapshot or assertion update without behavioral intent.",
+        ],
+      ),
+      coverageTarget(
+        "Failure and edge signal",
+        "recommended",
+        "A changed test suite should prove at least one meaningful failure, boundary, or previous-regression case when no product code changed.",
+        [
+          "Verify invalid, empty, failed-response, permission, or previous-regression behavior when relevant.",
+          "Record why the changed test would fail if the protected behavior regressed.",
+        ],
+      ),
+    );
+  }
+
+  if (kind === "documentation") {
+    targets.push(
+      coverageTarget(
+        "Documentation-to-behavior consistency",
+        "critical",
+        "Documentation changes should be checked against the actual command, API, workflow, or policy they describe.",
+        [
+          "Compare changed docs with source, CLI output, examples, or existing tests.",
+          "Run docs build, markdown, link, or example validation when available.",
+        ],
+      ),
+      coverageTarget(
+        "Documented behavior test gap",
+        "recommended",
+        "A doc update can reveal behavior that should be protected later even when this PR does not change runtime code.",
+        [
+          "Identify any documented workflow that lacks automated coverage.",
+          "Record the missing product test as follow-up evidence instead of treating the doc change as E2E coverage.",
+        ],
+      ),
+    );
+  }
+
+  if (kind === "generated-artifact" || files.some(isGeneratedOutputFile)) {
+    targets.push(
+      coverageTarget(
+        "Source-of-truth regeneration",
+        "critical",
+        "Generated output should be reproducible from a committed schema, template, source file, or generator command.",
+        [
+          "Re-run the generator or build command that owns the changed output.",
+          "Confirm the generated diff matches the committed source-of-truth input.",
+        ],
+      ),
+      coverageTarget(
+        "Generated artifact consumer compatibility",
+        "recommended",
+        "Generated artifacts can break consumers even when the generator succeeds.",
+        [
+          "Run a consumer build, typecheck, or test that imports the generated artifact.",
+          "Check renamed, removed, or newly-required generated fields against representative consumers.",
         ],
       ),
     );
@@ -1223,6 +1365,9 @@ function manualBootstrapTitle(projectType: E2eProjectType): string {
   if (projectType === "data-catalog") {
     return "Start with catalog artifact validation";
   }
+  if (projectType === "cli") {
+    return "Start with CLI command validation";
+  }
   return "Choose the first runnable E2E runner";
 }
 
@@ -1236,6 +1381,9 @@ function manualBootstrapReason(projectType: E2eProjectType): string {
   if (projectType === "data-catalog") {
     return "CodeWard detected taxonomy or catalog artifacts, so generated output should verify schema, generated outputs, and downstream consumers before assuming a browser journey.";
   }
+  if (projectType === "cli") {
+    return "CodeWard detected package executable commands, so generated output should verify command behavior, arguments, output, and exit codes before assuming a browser or device journey.";
+  }
   return "CodeWard could not detect a web, Expo, React Native, or API service surface, so generated output should start as a manual checklist.";
 }
 
@@ -1248,6 +1396,9 @@ function manualBootstrapAction(projectType: E2eProjectType): string {
   }
   if (projectType === "data-catalog") {
     return "Document the catalog validation command, generation command, and one downstream consumer or migration fixture before making the checklist required in CI.";
+  }
+  if (projectType === "cli") {
+    return "Document the changed command path, valid and invalid argument examples, expected stdout/stderr, exit codes, and fixture files before making the checklist required in CI.";
   }
   return "Document the app entrypoint and pick Playwright, Maestro, or a project-specific runner before requiring generated drafts in CI.";
 }
@@ -1396,6 +1547,9 @@ function testabilityRequiredEvidence(flow: E2eFlow): string {
   if (isCatalogFocusedFlow(flow)) {
     return "Documented catalog validation command, generated output path, and downstream consumer or migration fixture.";
   }
+  if (isEvidenceVerificationFocusedFlow(flow)) {
+    return "Documented validation command, result, and the behavior or source-of-truth evidence this change protects.";
+  }
   return "Stable selectors, entrypoint hints, and no unresolved testability gaps.";
 }
 
@@ -1409,6 +1563,9 @@ function testabilityEvidenceSummary(flow: E2eFlow): string {
   if (isCatalogFocusedFlow(flow)) {
     return "Catalog verification flow uses catalog validation commands, generated outputs, and a consumer or migration fixture as stability evidence.";
   }
+  if (isEvidenceVerificationFocusedFlow(flow)) {
+    return "Evidence verification flow uses commands, generated output, docs checks, or changed tests instead of selector coverage.";
+  }
   const signals = [
     flow.selectors.length > 0 ? `${flow.selectors.length} selector${flow.selectors.length === 1 ? "" : "s"}` : "",
     flow.entrypoints.length > 0 ? `${flow.entrypoints.length} entrypoint hint${flow.entrypoints.length === 1 ? "" : "s"}` : "",
@@ -1421,6 +1578,9 @@ function validationStatusFromTestability(flow: E2eFlow): E2eValidationMatrixStat
     return "missing";
   }
   if (isDesignTokenFocusedFlow(flow) || isCatalogFocusedFlow(flow)) {
+    return "ready";
+  }
+  if (isEvidenceVerificationFocusedFlow(flow)) {
     return "ready";
   }
   if (flow.selectors.length > 0 || flow.entrypoints.length > 0) {
@@ -1438,6 +1598,9 @@ function nextActionForTestability(flow: E2eFlow): string {
   }
   if (isCatalogFocusedFlow(flow)) {
     return "Use the catalog generation and consumer fixture checks in the generated checklist.";
+  }
+  if (isEvidenceVerificationFocusedFlow(flow)) {
+    return "Use the evidence validation command, result, and protected behavior in the generated checklist.";
   }
   if (flow.selectors.length > 0 || flow.entrypoints.length > 0) {
     return "Use the detected selectors and entrypoints in the generated draft.";
@@ -1929,12 +2092,16 @@ function draftReadinessRecommendation(level: E2eDraftReadinessLevel, blockers: s
   const blocker = blockers[0];
   if (level === "needs-work") {
     return blocker
-      ? `Resolve the highest-impact blocker first: ${blocker}.`
+      ? `Resolve the highest-impact blocker first: ${withTerminalPeriod(blocker)}`
       : "Close required action items before treating the drafts as regression evidence.";
   }
   return blocker
-    ? `Do not treat these drafts as runnable yet. Start with: ${blocker}.`
+    ? `Do not treat these drafts as runnable yet. Start with: ${withTerminalPeriod(blocker)}`
     : "Do not treat these drafts as runnable until required setup and validation gaps are closed.";
+}
+
+function withTerminalPeriod(value: string): string {
+  return /[.!?)]$/.test(value.trim()) ? value.trim() : `${value.trim()}.`;
 }
 
 function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLanguageBrief {
@@ -1962,6 +2129,18 @@ function inferFlowActor(flow: Omit<E2eFlow, "languageBrief">): string {
   }
   if (isCatalogFocusedFlow(flow)) {
     return "Data catalog consumer or maintainer";
+  }
+  if (isTestEvidenceFocusedFlow(flow)) {
+    return "Maintainer or test author";
+  }
+  if (isDocumentationFocusedFlow(flow)) {
+    return "Maintainer or documentation reviewer";
+  }
+  if (isGeneratedArtifactFocusedFlow(flow)) {
+    return "Maintainer or build owner";
+  }
+  if (isCliCommandFocusedFlow(flow)) {
+    return "CLI user or maintainer";
   }
   if (/\b(configuration|dependency|build|runtime|environment|feature[- ]?flag|package\.json|tsconfig|docker|serverless|deploy)\b/.test(haystack)) {
     return "Maintainer or release operator";
@@ -2017,6 +2196,18 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
     if (isCatalogFocusedFlow(flow)) {
       return `Regenerate or validate the catalog artifact affected by ${flow.files[0]}.`;
     }
+    if (isTestEvidenceFocusedFlow(flow)) {
+      return `Run the changed test evidence affected by ${flow.files[0]}.`;
+    }
+    if (isDocumentationFocusedFlow(flow)) {
+      return `Review the documented behavior affected by ${flow.files[0]}.`;
+    }
+    if (isGeneratedArtifactFocusedFlow(flow)) {
+      return `Regenerate the artifact affected by ${flow.files[0]}.`;
+    }
+    if (isCliCommandFocusedFlow(flow)) {
+      return `Run the CLI command path affected by ${flow.files[0]}.`;
+    }
     if (/\bconfiguration verification\b/i.test(flow.title)) {
       return `Run the build, startup, or release path affected by ${flow.files[0]}.`;
     }
@@ -2035,14 +2226,30 @@ function inferFlowGoal(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isCatalogFocusedFlow(flow)) {
     return `Protect ${flow.title} by verifying catalog schema, generated output, and downstream consumer compatibility.`;
   }
+  if (isTestEvidenceFocusedFlow(flow)) {
+    return `Protect ${flow.title} by proving the changed test evidence maps to a real behavior, bug, or regression risk.`;
+  }
+  if (isDocumentationFocusedFlow(flow)) {
+    return `Protect ${flow.title} by checking that changed documentation still matches actual repository behavior.`;
+  }
+  if (isGeneratedArtifactFocusedFlow(flow)) {
+    return `Protect ${flow.title} by proving generated output is reproducible and accepted by consumers.`;
+  }
+  if (isCliCommandFocusedFlow(flow)) {
+    return `Protect ${flow.title} by verifying command invocation, output, generated files, exit codes, and invalid input behavior.`;
+  }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return `Protect ${flow.title} by verifying clean install, startup, and fallback configuration variants.`;
   }
-  const primaryStep = flow.steps.find((step) => !/^record\b|^run or open\b/i.test(step)) ?? flow.steps[0];
+  const primaryStep = flow.steps.find(isFlowGoalCandidateStep) ?? flow.steps[0];
   if (primaryStep) {
     return `Protect ${flow.title} by ${lowercaseFirst(stripTerminalPunctuation(primaryStep))}.`;
   }
   return `Protect ${flow.title} for the changed behavior.`;
+}
+
+function isFlowGoalCandidateStep(step: string): boolean {
+  return !isEntrypointPreparationStep(step) && !/^record\b|^run or open\b/i.test(step);
 }
 
 function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
@@ -2055,10 +2262,22 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isCatalogFocusedFlow(flow)) {
     return "the catalog schema, generated output, and representative consumer fixture all accept the changed entries";
   }
+  if (isTestEvidenceFocusedFlow(flow)) {
+    return "the changed test evidence runs and clearly names the behavior, bug, or regression risk it protects";
+  }
+  if (isDocumentationFocusedFlow(flow)) {
+    return "the changed documentation matches current commands, examples, source behavior, or existing tests";
+  }
+  if (isGeneratedArtifactFocusedFlow(flow)) {
+    return "the generated output can be reproduced from source-of-truth inputs and accepted by consumers";
+  }
+  if (isCliCommandFocusedFlow(flow)) {
+    return "the command returns the expected stdout, stderr, generated files, and exit code for valid and invalid inputs";
+  }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return "the affected build or runtime variant starts cleanly and handles fallback values";
   }
-  const verificationStep = flow.steps.find((step) => isVerificationStep(step) && !isInteractionStep(step));
+  const verificationStep = flow.steps.find((step) => isAssertionStep(step));
   if (verificationStep) {
     return stripTerminalPunctuation(verificationStep);
   }
@@ -2079,6 +2298,18 @@ function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSi
   if (isCatalogFocusedFlow(flow)) {
     return `Can a reviewer confirm that the changed catalog artifact is regenerated, consumed, and that "${successSignal}" is asserted?`;
   }
+  if (isTestEvidenceFocusedFlow(flow)) {
+    return `Can a reviewer confirm that the changed tests are run and that "${successSignal}" is documented as PR evidence?`;
+  }
+  if (isDocumentationFocusedFlow(flow)) {
+    return `Can a reviewer confirm that docs validation ran and that "${successSignal}" is true?`;
+  }
+  if (isGeneratedArtifactFocusedFlow(flow)) {
+    return `Can a reviewer confirm that the artifact was regenerated and that "${successSignal}" is true?`;
+  }
+  if (isCliCommandFocusedFlow(flow)) {
+    return `Can a reviewer confirm that the changed command path is run and that "${successSignal}" is asserted?`;
+  }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return `Can a reviewer confirm that the affected build, startup, or release variant is exercised and that "${successSignal}" is asserted?`;
   }
@@ -2086,6 +2317,9 @@ function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSi
 }
 
 function isApiContractFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  if (isEvidenceVerificationFocusedFlow(flow)) {
+    return false;
+  }
   return (
     /\bapi contract\b/i.test(flow.title) ||
     (flow.coverage.some((target) => target.title === "API contract compatibility") &&
@@ -2099,6 +2333,22 @@ function isDesignTokenFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean
 
 function isCatalogFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
   return /\btaxonomy catalog verification\b/i.test(flow.title) || flow.files.some(isCatalogDataFile);
+}
+
+function isTestEvidenceFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return /\btest evidence\b/i.test(flow.title) || (flow.files.length > 0 && flow.files.every(isTestLikeFile));
+}
+
+function isDocumentationFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return /\bdocumentation verification\b/i.test(flow.title) || (flow.files.length > 0 && flow.files.every(isDocumentationFile));
+}
+
+function isGeneratedArtifactFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return /\bgenerated artifact verification\b/i.test(flow.title) || (flow.files.length > 0 && flow.files.every(isGeneratedOutputFile));
+}
+
+function isCliCommandFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return /\bCLI command verification\b/i.test(flow.title);
 }
 
 function inferFlowEdgeCases(flow: Omit<E2eFlow, "languageBrief">): string[] {
@@ -2449,7 +2699,12 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   lines.push(`- Runner: ${formatRunnerName(result.runner)}`);
   lines.push(`- Output directory: \`${escapeMarkdownInline(result.outputDirectory)}\``);
-  lines.push(`- Files: ${result.files.filter((file) => file.status === "created").length} created, ${result.files.filter((file) => file.status === "skipped").length} skipped`);
+  if (result.dryRun) {
+    lines.push("- Mode: dry run (no files were written)");
+  }
+  lines.push(
+    `- Files: ${result.files.filter((file) => file.status === "created").length} created, ${result.files.filter((file) => file.status === "preview").length} previewed, ${result.files.filter((file) => file.status === "skipped").length} skipped`,
+  );
   lines.push("");
 
   lines.push("## Draft Readiness Summary");
@@ -2576,6 +2831,27 @@ export function formatMarkdownE2eSetup(result: E2eSetupResult): string {
   lines.push(`- Updated: ${result.updatedFiles.length > 0 ? result.updatedFiles.map((file) => `\`${escapeMarkdownInline(file)}\``).join(", ") : "none"}`);
   lines.push(`- Skipped: ${result.skippedFiles.length > 0 ? result.skippedFiles.map((file) => `\`${escapeMarkdownInline(file)}\``).join(", ") : "none"}`);
   lines.push("");
+  if (result.draftFiles.length > 0) {
+    lines.push("## Generated Draft");
+    lines.push("");
+    if (result.draftOutputDirectory) {
+      lines.push(`- Output directory: \`${escapeMarkdownInline(result.draftOutputDirectory)}\``);
+    }
+    if (result.draftReadinessSummary) {
+      lines.push(`- Readiness: ${result.draftReadinessSummary.level} (${result.draftReadinessSummary.score}/100)`);
+    }
+    for (const file of result.draftFiles) {
+      const details = [
+        file.runnableStatus ? `runnable: ${file.runnableStatus}` : undefined,
+        file.selfCheck ? `self-check: ${file.selfCheck.status}` : undefined,
+        file.todoCount !== undefined ? `TODOs: ${file.todoCount}` : undefined,
+      ].filter(Boolean);
+      lines.push(
+        `- [${file.status}] \`${escapeMarkdownInline(file.path)}\` for ${escapeMarkdownInline(file.flowTitle)}${details.length > 0 ? ` (${details.join(", ")})` : ""}`,
+      );
+    }
+    lines.push("");
+  }
   if (result.installCommands.length > 0) {
     lines.push("## Install Commands");
     lines.push("");
@@ -2688,6 +2964,7 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
   const projectFilePaths = (await collectProjectFiles(root, 2000)).map((file) => file.path);
   const hasDesignTokenProject = projectFilePaths.some(isDesignTokenFile);
   const hasDataCatalogProject = projectFilePaths.some(isCatalogDataFile);
+  const hasCliBin = packageJsonHasCliBin(packageJson);
 
   if (hasExpoDependency) {
     evidence.push("package.json dependency: expo");
@@ -2731,6 +3008,9 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
   if (hasDataCatalogProject) {
     evidence.push("Catalog or taxonomy files found");
   }
+  if (hasCliBin) {
+    evidence.push("package.json bin entry found");
+  }
 
   if (hasExpoDependency || (hasExpoConfig && hasReactNativeDependency)) {
     return { type: "expo-react-native", evidence };
@@ -2750,10 +3030,23 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
   if (hasDataCatalogProject) {
     return { type: "data-catalog", evidence };
   }
+  if (hasCliBin) {
+    return { type: "cli", evidence };
+  }
   return {
     type: "unknown",
     evidence,
   };
+}
+
+function packageJsonHasCliBin(packageJson: PackageJson | undefined): boolean {
+  if (!packageJson?.bin) {
+    return false;
+  }
+  if (typeof packageJson.bin === "string") {
+    return packageJson.bin.trim().length > 0;
+  }
+  return Object.keys(packageJson.bin).length > 0;
 }
 
 function profileSearchRoots(root: string, workspaceRoot: string | undefined): string[] {
@@ -2830,6 +3123,13 @@ function recommendRunner(project: E2eProjectProfile): E2eRunnerRecommendation {
       name: "manual",
       reason:
         "Use a catalog verification checklist because this looks like a taxonomy or data catalog, where schema, generated output, and downstream consumers matter more than a browser journey.",
+    };
+  }
+  if (project.type === "cli") {
+    return {
+      name: "manual",
+      reason:
+        "Use a CLI command verification checklist because this package exposes executable commands rather than a browser or device surface.",
     };
   }
   return {
@@ -3042,6 +3342,18 @@ export async function setupE2eRunner(rootInput: string, options: E2eSetupOptions
   } else {
     skippedFiles.push("manual runner setup");
   }
+  const draftResult = runner === "manual"
+    ? undefined
+    : await generateE2eDraft(root, {
+        base: plan.base,
+        head: plan.head,
+        workspaceRoot: plan.workspaceRoot,
+        includeWorkingTree: options.includeWorkingTree,
+        validationCommands: options.validationCommands,
+        runner,
+        force: options.force,
+        maxDrafts: 1,
+      });
 
   return {
     tool: {
@@ -3055,8 +3367,18 @@ export async function setupE2eRunner(rootInput: string, options: E2eSetupOptions
     updatedFiles,
     skippedFiles,
     installCommands: proposal.installCommands,
-    nextCommands: proposal.nextCommands,
+    nextCommands: setupNextCommands(proposal.nextCommands, draftResult),
+    draftOutputDirectory: draftResult?.outputDirectory,
+    draftFiles: draftResult?.files ?? [],
+    draftReadinessSummary: draftResult?.readinessSummary,
   };
+}
+
+function setupNextCommands(commands: string[], draftResult: E2eDraftResult | undefined): string[] {
+  if (!draftResult || draftResult.files.length === 0) {
+    return commands;
+  }
+  return commands.filter((command) => !/^codeward e2e draft\b/.test(command));
 }
 
 async function applyPlaywrightSetup(
@@ -3596,7 +3918,7 @@ function executionProfileBlockers(input: {
 }
 
 function manualChecklistIsExpected(projectType: E2eProjectType): boolean {
-  return projectType === "api-service" || projectType === "design-tokens" || projectType === "data-catalog";
+  return projectType === "api-service" || projectType === "design-tokens" || projectType === "data-catalog" || projectType === "cli";
 }
 
 function executionProfileConfidence(
@@ -3764,8 +4086,12 @@ type E2eFlowKind =
   | "state"
   | "content"
   | "config"
+  | "test-evidence"
+  | "documentation"
+  | "generated-artifact"
   | "artifact"
   | "catalog"
+  | "command"
   | "domain"
   | "changed-file";
 type FlowCandidate = Omit<
@@ -3814,6 +4140,11 @@ function buildFlowCandidates(
   projectType: E2eProjectType,
   domainLanguage: DomainLanguageSummary,
 ): FlowCandidate[] {
+  const lowSignalCandidate = buildLowSignalChangeCandidate(files);
+  if (lowSignalCandidate) {
+    return [lowSignalCandidate];
+  }
+
   const behaviorFiles = files.filter((file) => !isTestLikeFile(file));
   const candidateFiles = behaviorFiles.length > 0 ? behaviorFiles : files;
   const uiFiles = candidateFiles.filter(isUserFacingFile);
@@ -3823,6 +4154,10 @@ function buildFlowCandidates(
       ? candidateFiles.filter(
           (file) => !apiFiles.includes(file) && !isConfigLikeFile(file) && isServiceSourceFile(file),
         )
+      : [];
+  const cliCommandFiles =
+    projectType === "cli"
+      ? candidateFiles.filter((file) => !isConfigLikeFile(file) && !isTestLikeFile(file) && isServiceSourceFile(file))
       : [];
   const contractFiles = uniqueStrings([...apiFiles, ...apiServiceSourceFiles]);
   const stateFiles = candidateFiles.filter(isStateLikeFile);
@@ -3945,6 +4280,23 @@ function buildFlowCandidates(
     });
   }
 
+  if (cliCommandFiles.length > 0) {
+    const subject = summarizeFlowSubject(cliCommandFiles, "CLI", domainLanguage);
+    candidates.push({
+      kind: "command",
+      title: cliCommandChecklistTitle(subject),
+      reason:
+        "CLI command source changed, so the draft should verify command invocation, output, exit code, and failure behavior instead of inventing a browser or device journey.",
+      files: cliCommandFiles,
+      steps: [
+        "Build or install the package in a clean local environment.",
+        "Run the changed command with a representative valid argument set.",
+        "Verify stdout, stderr, generated files, and exit code match the intended behavior.",
+        "Run one invalid, missing-argument, or unsupported-input path and verify the failure message and exit code.",
+      ],
+    });
+  }
+
   if (configFiles.length > 0) {
     const subject = isReleaseMetadataOnlyChange(configFiles)
       ? "Release metadata"
@@ -3971,6 +4323,7 @@ function buildFlowCandidates(
       !isContentOrStyleFile(file) &&
       !isDesignTokenFile(file) &&
       !isCatalogDataFile(file) &&
+      !cliCommandFiles.includes(file) &&
       !isReleaseMetadataFile(file),
   );
   if (remainingDomainFiles.length > 0) {
@@ -4007,6 +4360,86 @@ function buildFlowCandidates(
   return candidates;
 }
 
+function cliCommandChecklistTitle(subject: string): string {
+  if (/^cli$/i.test(subject.trim())) {
+    return "CLI command verification checklist";
+  }
+  return `${subject} CLI command verification checklist`;
+}
+
+function buildLowSignalChangeCandidate(files: string[]): FlowCandidate | undefined {
+  const changedFiles = uniqueStrings(files);
+  if (changedFiles.length === 0 || isReleaseMetadataOnlyChange(changedFiles)) {
+    return undefined;
+  }
+
+  if (isTestEvidenceOnlyChange(changedFiles)) {
+    return {
+      kind: "test-evidence",
+      title: "Changed test evidence verification checklist",
+      reason:
+        "Only test files changed, so CodeWard should verify the test evidence and its protected behavior instead of inventing a product journey from test filenames.",
+      files: changedFiles,
+      steps: [
+        "Run the changed test file or the nearest package test command.",
+        "Confirm the changed test names the behavior, bug, or regression risk it protects.",
+        "Verify the test includes a meaningful failure, edge, or previous-regression signal when the branch does not change product code.",
+        "Record the command, result, and behavior protected by this test-only change as PR evidence.",
+      ],
+    };
+  }
+
+  if (isDocumentationOnlyChange(changedFiles)) {
+    return {
+      kind: "documentation",
+      title: "Documentation verification checklist",
+      reason:
+        "Only documentation changed, so the useful verification is whether the documented command, workflow, or policy still matches the repository behavior.",
+      files: changedFiles,
+      steps: [
+        "Open the changed documentation and identify the command, option, workflow, API, or policy it describes.",
+        "Compare the documented behavior with the current source, CLI output, examples, or existing tests.",
+        "Run markdown, link, example, or docs build validation when the repository provides it.",
+        "Record any uncovered product behavior as a follow-up test gap instead of treating the doc change as E2E coverage.",
+      ],
+    };
+  }
+
+  if (isGeneratedOutputOnlyChange(changedFiles)) {
+    return {
+      kind: "generated-artifact",
+      title: "Generated artifact verification checklist",
+      reason:
+        "Only generated output changed, so verification should prove the artifact came from its source of truth and still works for downstream consumers.",
+      files: changedFiles,
+      steps: [
+        "Re-run the generator, codegen, build, or export command that owns the changed output.",
+        "Confirm the generated diff matches a committed source-of-truth input, schema, or template.",
+        "Run the nearest consumer build, typecheck, or test that imports the generated artifact.",
+        "Reject hand-edited generated output unless the repository explicitly documents that workflow.",
+      ],
+    };
+  }
+
+  if (isLowSignalVerificationOnlyChange(changedFiles)) {
+    return {
+      kind: "test-evidence",
+      title: "Changed evidence verification checklist",
+      reason:
+        "The branch only changed verification evidence such as tests, docs, or generated output, so CodeWard should ask for proof that the evidence maps to real behavior before proposing a product E2E journey.",
+      files: changedFiles,
+      steps: [
+        "Classify each changed file as test evidence, documentation, or generated output.",
+        "Run the nearest validation command for each changed evidence type.",
+        "Confirm no runtime product file changed; if product behavior is implied, name the missing product test explicitly.",
+        "Record the validation command, result, and protected behavior as PR evidence.",
+      ],
+    };
+  }
+
+  return undefined;
+}
+
 async function buildFlow(
   root: string,
   runner: E2eRunnerName,
@@ -4020,23 +4453,67 @@ async function buildFlow(
   }
   const coverage = buildCoverageTargets(candidate.kind, files, runner);
   const setupHints = await inferFlowSetupHints(root, files, candidate.kind);
+  const selectors = await inferFlowSelectors(root, files, runner);
   const flow: Omit<E2eFlow, "languageBrief"> = {
     title: candidate.title,
     reason: candidate.reason,
     files,
-    steps: candidate.steps,
+    steps: refineStepsForInferredSelectors(candidate.steps, selectors),
     coverage,
     coverageEvidence: evaluateFlowCoverageEvidence({ title: candidate.title, files, coverage }, testSuiteInventory),
     entrypoints: await inferFlowEntrypoints(root, files, runner),
     setupHints,
     fixtureReadiness: await inferFlowFixtureReadiness(root, files, candidate.kind, setupHints, fixtureContext),
-    selectors: await inferFlowSelectors(root, files, runner),
+    selectors,
     missingTestability: await findFlowTestabilityGaps(root, files, runner),
   };
   return {
     ...flow,
     languageBrief: buildFlowLanguageBrief(flow),
   };
+}
+
+function refineStepsForInferredSelectors(steps: string[], selectors: E2eSelector[]): string[] {
+  const inputSelector = selectors.find(isInputSelector);
+  const actionSelector = selectors.find((selector) => selectorCanDriveInteraction(selector) && !isInputSelector(selector));
+  if (!inputSelector || !actionSelector || steps.some((step) => /^\s*(?:fill|input|enter|type|provide|write)\b/i.test(step))) {
+    return steps;
+  }
+
+  const refined: string[] = [];
+  for (const step of steps) {
+    const subject = exerciseStepSubject(step);
+    if (!subject) {
+      refined.push(step);
+      continue;
+    }
+    refined.push(`Fill ${selectorStepLabel(inputSelector)} with realistic data.`);
+    refined.push(`${actionVerbForSelector(actionSelector)} ${subject} using ${selectorStepLabel(actionSelector)}.`);
+  }
+  return uniqueStrings(refined);
+}
+
+function exerciseStepSubject(step: string): string | undefined {
+  const exerciseMatch = step.match(/^Exercise\s+(.+?)\s+with realistic data(?:\s+from[^.]*)?\.?$/i);
+  if (exerciseMatch?.[1]) {
+    return stripTerminalPunctuation(exerciseMatch[1]);
+  }
+  const completeMatch = step.match(/^Complete\s+(.+?)\s+with realistic data(?:\s+from[^.]*)?\.?$/i);
+  if (completeMatch?.[1]) {
+    return stripTerminalPunctuation(completeMatch[1]);
+  }
+  return undefined;
+}
+
+function selectorStepLabel(selector: E2eSelector): string {
+  return titleCase(selector.value.replace(/[-_]+/g, " "));
+}
+
+function actionVerbForSelector(selector: E2eSelector): string {
+  if (/\b(?:submit|send|apply|complete|confirm|save|continue|next|upload)\b/i.test(selector.value.replace(/[-_]+/g, " "))) {
+    return "Submit";
+  }
+  return "Activate";
 }
 
 async function inferFlowEntrypoints(root: string, files: string[], runner: E2eRunnerName): Promise<E2eEntrypoint[]> {
@@ -4052,7 +4529,13 @@ async function inferFlowEntrypoints(root: string, files: string[], runner: E2eRu
 }
 
 async function inferFlowSetupHints(root: string, files: string[], kind: E2eFlowKind): Promise<E2eSetupHint[]> {
-  if (kind === "artifact" || kind === "catalog") {
+  if (
+    kind === "artifact" ||
+    kind === "catalog" ||
+    kind === "test-evidence" ||
+    kind === "documentation" ||
+    kind === "generated-artifact"
+  ) {
     return [];
   }
 
@@ -4067,7 +4550,7 @@ async function inferFlowSetupHints(root: string, files: string[], kind: E2eFlowK
 
   const filesText = files.join("\n");
   const combinedText = `${filesText}\n${fileTexts.map((item) => item.text).join("\n")}`;
-  const shouldUseContentSignals = kind !== "config" && kind !== "content";
+  const shouldUseContentSignals = kind !== "config" && kind !== "content" && kind !== "command";
   const signalText = shouldUseContentSignals ? combinedText : filesText;
   const matchingFiles = (pattern: RegExp) =>
     uniqueStrings([
@@ -4196,6 +4679,17 @@ async function inferFlowFixtureReadiness(
   setupHints: E2eSetupHint[],
   context: FixtureReadinessContext,
 ): Promise<E2eFixtureReadiness> {
+  if (kind === "test-evidence" || kind === "documentation" || kind === "generated-artifact") {
+    return {
+      status: "not-needed",
+      reason: "This verification flow targets changed evidence such as tests, docs, or generated output rather than an API-backed product journey.",
+      apiSignals: [],
+      apiEndpoints: [],
+      backendSignals: [],
+      mockSignals: [],
+      nextActions: [],
+    };
+  }
   if (kind === "artifact" || kind === "catalog") {
     return {
       status: "not-needed",
@@ -4211,6 +4705,20 @@ async function inferFlowFixtureReadiness(
     return {
       status: "not-needed",
       reason: "This verification flow targets configuration, release, documentation, or content changes where clean validation evidence matters more than API fixture responses.",
+      apiSignals: [],
+      apiEndpoints: [],
+      backendSignals: [],
+      mockSignals: [],
+      nextActions: [],
+    };
+  }
+  if (
+    kind === "command" &&
+    !setupHints.some((hint) => hint.kind === "network" || hint.kind === "payment" || hint.kind === "fixture")
+  ) {
+    return {
+      status: "not-needed",
+      reason: "This verification flow targets CLI command behavior; command arguments, output, exit code, and generated files matter more than API fixture responses unless the command path explicitly depends on network data.",
       apiSignals: [],
       apiEndpoints: [],
       backendSignals: [],
@@ -4600,7 +5108,7 @@ function normalizeRouteSegment(segment: string): string | undefined {
   if (dynamic) {
     return `:${normalizeRouteParamName(dynamic)}`;
   }
-  return slugify(routeStem.replace(/Page$/i, ""));
+  return normalizeStaticRouteSegment(routeStem.replace(/Page$/i, ""));
 }
 
 function dynamicRouteSegmentName(segment: string): string | undefined {
@@ -4627,8 +5135,19 @@ function normalizeRouteParamName(value: string): string {
   return normalized || "param";
 }
 
+function normalizeStaticRouteSegment(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || /[\s<>"'`\\{}]/.test(trimmed)) {
+    return undefined;
+  }
+  if (/^[A-Za-z0-9._~-]+$/.test(trimmed)) {
+    return trimmed;
+  }
+  return slugify(trimmed);
+}
+
 function shouldDropRouteLeaf(leaf: string, parent: string | undefined): boolean {
-  return Boolean(parent && leaf === parent);
+  return Boolean(parent && leaf.toLowerCase() === parent.toLowerCase());
 }
 
 function normalizeEntrypointRoute(value: string | undefined): string | undefined {
@@ -4759,6 +5278,12 @@ async function buildSetupNotes(
         : "Add @playwright/test before making generated browser specs required in CI.",
     ];
   }
+  if (project.type === "cli") {
+    return [
+      "Generated CLI checklists should verify valid invocation, invalid arguments, stdout, stderr, exit code, and generated files.",
+      "Prefer one documented example command plus one failure-path command before treating the checklist as PR evidence.",
+    ];
+  }
   return ["Choose an E2E runner after documenting the primary user-facing entry point for this project."];
 }
 
@@ -4862,14 +5387,57 @@ function isReleaseMetadataOnlyChange(files: string[]): boolean {
   return files.some(isReleaseMetadataFile) && files.every((file) => isReleaseMetadataFile(file) || isPackageMetadataFile(file));
 }
 
+function isTestEvidenceOnlyChange(files: string[]): boolean {
+  return files.length > 0 && files.every(isTestLikeFile);
+}
+
+function isDocumentationOnlyChange(files: string[]): boolean {
+  return files.length > 0 && files.every(isDocumentationFile);
+}
+
+function isGeneratedOutputOnlyChange(files: string[]): boolean {
+  return files.length > 0 && files.every(isGeneratedOutputFile);
+}
+
+function isLowSignalVerificationOnlyChange(files: string[]): boolean {
+  return files.length > 0 && files.every((file) => isTestLikeFile(file) || isDocumentationFile(file) || isGeneratedOutputFile(file));
+}
+
 function isTestLikeFile(file: string): boolean {
   return (
+    /(?:^|\/)__snapshots__\//i.test(file) ||
     /(?:^|\/)(?:__tests__|tests?|specs?|e2e)\//i.test(file) ||
+    /\.(?:snap|snapshot)$/i.test(file) ||
     /(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(file) ||
     /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(file) ||
     /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift)$/i.test(file) ||
     /(?:^|\/)[^/]+_(?:test|spec)\.rs$/i.test(file)
+  );
+}
+
+function isDocumentationFile(file: string): boolean {
+  if (isReleaseMetadataFile(file)) {
+    return false;
+  }
+  return (
+    /(?:^|\/)(?:docs?|adr|adrs|decisions|guides?|handbook|rfcs?|specs?)\//i.test(file) ||
+    /(?:^|\/)(?:README|CONTRIBUTING|SECURITY|SUPPORT|CODE_OF_CONDUCT|ARCHITECTURE|DECISIONS|PLAN)\.(?:md|mdx|rst|adoc)$/i.test(
+      file,
+    ) ||
+    /\.(?:md|mdx|rst|adoc)$/i.test(file)
+  );
+}
+
+function isGeneratedOutputFile(file: string): boolean {
+  if (isTestLikeFile(file) || isReleaseMetadataFile(file)) {
+    return false;
+  }
+  return (
+    /(?:^|\/)(?:dist|build|out|coverage|generated|__generated__|codegen)\//i.test(file) ||
+    /(?:^|\/)(?:public|src|lib|packages?)\/(?:generated|__generated__|codegen)\//i.test(file) ||
+    /(?:^|\/)[^/]*(?:generated|codegen)[^/]*\.(?:[cm]?[jt]sx?|json|ya?ml|css|scss|md)$/i.test(file) ||
+    /\.(?:generated|gen)\.[cm]?[jt]sx?$/i.test(file)
   );
 }
 
@@ -5231,8 +5799,9 @@ function dedupeFlows(flows: E2eFlow[]): E2eFlow[] {
 
 async function buildDraftFlows(plan: E2ePlanResult): Promise<DraftE2eFlow[]> {
   const baseFlows = plan.flows.length > 0 ? plan.flows : [buildFallbackFlow(plan)];
+  const domainScenarios = shouldUseDomainScenariosForDraft(plan) ? plan.domainLanguage.scenarios : [];
   const scenarioFlows = await Promise.all(
-    plan.domainLanguage.scenarios
+    domainScenarios
       .filter((scenario) => scenario.files.length > 0 || scenario.source === "core-flow")
       .slice(0, 4)
       .map((scenario) => buildDomainScenarioDraftFlow(plan, scenario, baseFlows)),
@@ -5245,14 +5814,50 @@ async function buildDraftFlows(plan: E2ePlanResult): Promise<DraftE2eFlow[]> {
     }));
   }
 
-  const combined = dedupeDraftFlowsByOutputPath(
+  const combined = prioritizeImportantBaseDraftFlow(dedupeDraftFlowsByOutputPath(
     dedupeFlows([...scenarioFlows, ...baseFlows]),
     plan.recommendedRunner.name,
-  ).slice(0, 4);
+  ), baseFlows).slice(0, 4);
   return combined.map((flow) => ({
     ...flow,
     draftSource: draftFlowSource(flow),
   }));
+}
+
+function prioritizeImportantBaseDraftFlow(flows: DraftE2eFlow[], baseFlows: E2eFlow[]): DraftE2eFlow[] {
+  const importantBaseFlow = baseFlows.find(isImportantBaseDraftFlow);
+  if (!importantBaseFlow) {
+    return flows;
+  }
+  const existingIndex = flows.findIndex((flow) => flow.title === importantBaseFlow.title);
+  if (existingIndex < 0 || existingIndex < 4) {
+    return flows;
+  }
+  const copy = [...flows];
+  const [flow] = copy.splice(existingIndex, 1);
+  return [...copy.slice(0, 3), flow, ...copy.slice(3)];
+}
+
+function isImportantBaseDraftFlow(flow: E2eFlow): boolean {
+  return (
+    isApiContractFocusedFlow(flow) ||
+    isDesignTokenFocusedFlow(flow) ||
+    isCatalogFocusedFlow(flow) ||
+    isCliCommandFocusedFlow(flow) ||
+    isEvidenceVerificationFocusedFlow(flow)
+  );
+}
+
+function shouldUseDomainScenariosForDraft(plan: E2ePlanResult): boolean {
+  const files = plan.changedFiles.map((file) => file.path);
+  if (isLowSignalVerificationOnlyChange(files)) {
+    return false;
+  }
+  return !plan.flows.every(isEvidenceVerificationFocusedFlow);
+}
+
+function isEvidenceVerificationFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return isTestEvidenceFocusedFlow(flow) || isDocumentationFocusedFlow(flow) || isGeneratedArtifactFocusedFlow(flow);
 }
 
 function dedupeDraftFlowsByOutputPath(flows: DraftE2eFlow[], runner: E2eRunnerName): DraftE2eFlow[] {
@@ -5312,14 +5917,6 @@ async function buildDomainScenarioDraftFlow(
   const title = specializedScenario?.title ?? scenario.title;
   const reason = specializedScenario?.reason ?? scenario.intent;
   const steps = specializedScenario?.steps ?? (scenario.checks.length > 0 ? scenario.checks : (baseFlow?.steps ?? []));
-  const draftScenario = specializedScenario
-    ? {
-        ...scenario,
-        title,
-        intent: reason,
-        checks: steps,
-      }
-    : scenario;
   const scenarioFiles = normalizeScenarioFilesForRoot(plan, scenario.files);
   const files = uniqueStrings(scenarioFiles.length > 0 ? scenarioFiles : (baseFlow?.files ?? [])).slice(0, 20);
   const coverage = baseFlow?.coverage ?? buildCoverageTargets("domain", files, plan.recommendedRunner.name);
@@ -5334,15 +5931,22 @@ async function buildDomainScenarioDraftFlow(
     ...filterSelectorsForFiles(baseFlows.flatMap((flow) => flow.selectors), files),
     ...(await inferFlowSelectors(plan.root, files, runner)),
   ]);
+  const refinedSteps = refineStepsForInferredSelectors(steps, selectors);
   const setupHints = uniqueSetupHints([
     ...filterSetupHintsForFiles(baseFlows.flatMap((flow) => flow.setupHints), files),
     ...(shouldInferDomainScenarioSetupHints(baseFlow) ? await inferFlowSetupHints(plan.root, files, "domain") : []),
   ]);
+  const draftScenario = {
+    ...scenario,
+    title,
+    intent: reason,
+    checks: refinedSteps,
+  };
   const flow: Omit<DraftE2eFlow, "languageBrief"> = {
     title,
     reason,
     files,
-    steps,
+    steps: refinedSteps,
     coverage,
     coverageEvidence: baseFlow?.coverageEvidence ?? [],
     entrypoints,
@@ -5389,6 +5993,14 @@ function specializedDomainScenarioDraft(
     return {
       title: baseFlow.title,
       reason: baseFlow.reason,
+      steps: baseFlow.steps,
+    };
+  }
+  if (isCliCommandFocusedFlow(baseFlow)) {
+    const subject = scenario.title.replace(/\s+primary journey$/i, "");
+    return {
+      title: cliCommandChecklistTitle(subject),
+      reason: `Verify "${subject}" through command invocation, output, exit code, and failure behavior instead of assuming a browser or device journey.`,
       steps: baseFlow.steps,
     };
   }
@@ -5587,7 +6199,11 @@ function draftExecutionBlockers(
     blockers.push(flow.fixtureReadiness.nextActions[0] ?? flow.fixtureReadiness.reason);
   }
   if (validationSummary.blockingGapCount > 0) {
-    blockers.push(`${validationSummary.blockingGapCount} blocking validation gap${validationSummary.blockingGapCount === 1 ? "" : "s"} remain.`);
+    blockers.push(
+      `${validationSummary.blockingGapCount} blocking validation gap${validationSummary.blockingGapCount === 1 ? "" : "s"} ${
+        validationSummary.blockingGapCount === 1 ? "remains" : "remain"
+      }.`,
+    );
   }
   if (selfCheck?.status === "fail") {
     blockers.push(...selfCheck.blockers);
@@ -5842,6 +6458,16 @@ function defaultDraftOutputDirectory(runner: E2eRunnerName): string {
   return "docs/e2e";
 }
 
+function dryRunPreviewReason(fileAlreadyExists: boolean, force: boolean): string {
+  if (!fileAlreadyExists) {
+    return "Dry run only; no file was written.";
+  }
+  if (force) {
+    return "Dry run only; no file was written. Existing file would be overwritten because --force is set.";
+  }
+  return "Dry run only; no file was written. Existing file would be skipped unless --force is set.";
+}
+
 function draftExtension(runner: E2eRunnerName): string {
   if (runner === "maestro") {
     return ".yaml";
@@ -5888,7 +6514,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   appendValidationGapComments(lines, flow, "#");
   appendFlowLanguageBriefComments(lines, flow.languageBrief, "#");
   appendDraftPromotionComments(lines, flow, "#");
-  for (const step of flow.steps) {
+  for (const step of draftExecutableSteps(flow, "maestro")) {
     const command = maestroCommandForStep(step, selectorQueue);
     lines.push(...formatMaestroCommand(command));
   }
@@ -5919,10 +6545,14 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   return lines.join("\n");
 }
 
+type MaestroDraftCommand =
+  | { kind: "tapOn" | "assertVisible" | "swipe"; value: string }
+  | { kind: "inputText"; target: string; text: string };
+
 function maestroCommandForStep(
   step: string,
   selectors: E2eSelector[],
-): { kind: "tapOn" | "assertVisible" | "swipe"; value: string } {
+): MaestroDraftCommand {
   if (isGestureStep(step)) {
     return {
       kind: "swipe",
@@ -5930,10 +6560,17 @@ function maestroCommandForStep(
     };
   }
   const selector = takeSelectorForStep(selectors, step);
-  if (isVerificationStep(step) && !isInteractionStep(step)) {
+  if (isAssertionStep(step)) {
     return {
       kind: "assertVisible",
       value: selector ? maestroSelectorValue(selector) : quoteYaml(`TODO: ${step}`),
+    };
+  }
+  if (selector && isInputSelector(selector) && isInteractionStep(step)) {
+    return {
+      kind: "inputText",
+      target: maestroSelectorValue(selector),
+      text: quoteYaml(sampleInputForStepOrSelector(step, selector.value)),
     };
   }
   return {
@@ -5987,7 +6624,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   appendPlaywrightTestStep(lines, flow.languageBrief.trigger, [
     `await page.goto(${routeDraft.expression});`,
   ]);
-  for (const step of flow.steps) {
+  for (const step of draftExecutableSteps(flow, "playwright")) {
     const selector = takeSelectorForStep(selectorQueue, step);
     const locator = selector ? playwrightLocator(selector) : 'page.getByText("TODO")';
     const body = selector
@@ -6021,6 +6658,36 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   }
   lines.push("");
   return lines.join("\n");
+}
+
+function draftExecutableSteps(flow: E2eFlow, runner: E2eRunnerName): string[] {
+  const executableSteps = flow.steps.filter((step) => !shouldSkipDraftStep(step, flow, runner));
+  return executableSteps.length > 0 ? executableSteps : flow.steps;
+}
+
+function shouldSkipDraftStep(step: string, flow: E2eFlow, runner: E2eRunnerName): boolean {
+  if (!isEntrypointPreparationStep(step)) {
+    return false;
+  }
+  if (runner === "playwright") {
+    return Boolean(primaryRouteEntrypoint(flow));
+  }
+  if (runner === "maestro") {
+    return stepMatchesLaunchStep(step) || flow.entrypoints.length > 0;
+  }
+  return false;
+}
+
+function isEntrypointPreparationStep(step: string): boolean {
+  return /^start from\b/i.test(step) ||
+    /^launch the app\b/i.test(step) ||
+    /^open route\b/i.test(step) ||
+    /^open the .+ screen\b/i.test(step) ||
+    /^(?:navigate|go) to\b/i.test(step);
+}
+
+function stepMatchesLaunchStep(step: string): boolean {
+  return /^launch\b/i.test(step);
 }
 
 function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
@@ -6494,6 +7161,18 @@ function buildHumanFixtureInputs(flow: E2eFlow, runner: E2eRunnerName): string[]
     inputs.push("Record the catalog validation command and the generation command for the published catalog artifact.");
     inputs.push("Keep one representative analytics, documentation, ingestion, or migration fixture that reads the changed entries.");
   }
+  if (isTestEvidenceFocusedFlow(flow)) {
+    inputs.push("Record the changed test command and the behavior, bug, or regression risk protected by the test.");
+    inputs.push("Keep one failure, edge, or previous-regression signal visible in the test evidence.");
+  }
+  if (isDocumentationFocusedFlow(flow)) {
+    inputs.push("Record the docs, markdown, link, example, or source comparison command used for the changed documentation.");
+    inputs.push("Name any documented product behavior that still needs automated coverage as follow-up evidence.");
+  }
+  if (isGeneratedArtifactFocusedFlow(flow)) {
+    inputs.push("Record the generator or build command that reproduced the changed artifact.");
+    inputs.push("Keep one consumer build, typecheck, or test that imports the generated output.");
+  }
   if (runner === "maestro") {
     inputs.push("Set APP_ID to the target app id or export it before running the flow.");
   }
@@ -6842,6 +7521,9 @@ function manualDraftNextStep(projectType: E2eProjectType): string {
   if (projectType === "data-catalog") {
     return "Document the catalog validation command, generation command, and downstream consumer or migration fixture before treating the checklist as PR evidence.";
   }
+  if (projectType === "cli") {
+    return "Document the CLI command, representative arguments, expected stdout/stderr, generated files, exit codes, and at least one failure case before treating the checklist as PR evidence.";
+  }
   return "Choose a runnable E2E framework once the primary app surface is documented.";
 }
 
@@ -6919,7 +7601,10 @@ function countTodos(content: string): number {
   return [...content.matchAll(/\bTODO\b/g)].length;
 }
 
-function formatMaestroCommand(command: { kind: "tapOn" | "assertVisible" | "swipe"; value: string }): string[] {
+function formatMaestroCommand(command: MaestroDraftCommand): string[] {
+  if (command.kind === "inputText") {
+    return [`- tapOn: ${command.target}`, `- inputText: ${command.text}`];
+  }
   return [`- ${command.kind}: ${command.value}`];
 }
 
@@ -6927,12 +7612,27 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
   if (/^launch\b/i.test(step)) {
     return undefined;
   }
-  const index = selectors.findIndex((selector) => selectorMatchesStep(selector, step));
+  if (isInputStep(step)) {
+    const inputIndex = selectors.findIndex((selector) => isInputSelector(selector) && selectorMatchesStep(selector, step));
+    if (inputIndex >= 0) {
+      const [selector] = selectors.splice(inputIndex, 1);
+      return selector;
+    }
+    const fallbackInputIndex = selectors.findIndex(isInputSelector);
+    if (fallbackInputIndex >= 0) {
+      const [selector] = selectors.splice(fallbackInputIndex, 1);
+      return selector;
+    }
+  }
+  if (!isInteractionStep(step) && !isVerificationStep(step) && !canUsePrimarySelector(step)) {
+    return undefined;
+  }
+  const index = selectors.findIndex((selector) => !isInputSelector(selector) && selectorMatchesStep(selector, step));
   if (index >= 0) {
     const [selector] = selectors.splice(index, 1);
     return selector;
   }
-  if (isVerificationStep(step) && !isInteractionStep(step)) {
+  if (isAssertionStep(step)) {
     const assertionIndex = selectors.findIndex((selector) => selectorCanSupportAssertion(selector));
     if (assertionIndex >= 0) {
       const [selector] = selectors.splice(assertionIndex, 1);
@@ -6955,7 +7655,8 @@ function selectorMatchesStep(selector: E2eSelector, step: string): boolean {
 }
 
 function canUsePrimarySelector(step: string): boolean {
-  return /\b(?:primary|action|submit|continue|complete|fill|input|enter|upload)\b/i.test(step) && !/^launch\b/i.test(step);
+  return /^(?:complete|submit|continue|fill|input|enter|upload)\b/i.test(step) ||
+    /\bprimary action\b/i.test(step);
 }
 
 function selectorCanDriveInteraction(selector: E2eSelector): boolean {
@@ -6967,6 +7668,18 @@ function selectorCanDriveInteraction(selector: E2eSelector): boolean {
 
 function selectorCanSupportAssertion(selector: E2eSelector): boolean {
   return selector.kind !== "placeholder" && !isPassiveControlLabel(selector.value);
+}
+
+function isInputSelector(selector: E2eSelector): boolean {
+  return selector.kind === "input-test-id" ||
+    selector.kind === "input-web-test-id" ||
+    selector.kind === "input-accessibility-label" ||
+    selector.kind === "input-aria-label" ||
+    selector.kind === "placeholder";
+}
+
+function isInputStep(step: string): boolean {
+  return /\b(?:fill|input|enter|type|provide|write|realistic data)\b/i.test(step);
 }
 
 function isPassiveControlLabel(value: string): boolean {
@@ -7002,7 +7715,12 @@ function keywordsForStep(step: string): string[] {
 }
 
 function maestroSelectorValue(selector: E2eSelector): string {
-  if (selector.kind === "test-id" || selector.kind === "web-test-id") {
+  if (
+    selector.kind === "test-id" ||
+    selector.kind === "web-test-id" ||
+    selector.kind === "input-test-id" ||
+    selector.kind === "input-web-test-id"
+  ) {
     return `{ id: ${quoteYaml(selector.value)} }`;
   }
   return quoteYaml(selector.value);
@@ -7010,7 +7728,12 @@ function maestroSelectorValue(selector: E2eSelector): string {
 
 function playwrightLocator(selector: E2eSelector): string {
   const value = quoteJs(selector.value);
-  if (selector.kind === "test-id" || selector.kind === "web-test-id") {
+  if (
+    selector.kind === "test-id" ||
+    selector.kind === "web-test-id" ||
+    selector.kind === "input-test-id" ||
+    selector.kind === "input-web-test-id"
+  ) {
     return `page.getByTestId("${value}")`;
   }
   if (selector.kind === "role-button") {
@@ -7022,7 +7745,12 @@ function playwrightLocator(selector: E2eSelector): string {
   if (selector.kind === "placeholder") {
     return `page.getByPlaceholder("${value}")`;
   }
-  if (selector.kind === "accessibility-label" || selector.kind === "aria-label") {
+  if (
+    selector.kind === "accessibility-label" ||
+    selector.kind === "aria-label" ||
+    selector.kind === "input-accessibility-label" ||
+    selector.kind === "input-aria-label"
+  ) {
     return `page.getByLabel("${value}")`;
   }
   return `page.getByText("${value}")`;
@@ -7030,16 +7758,20 @@ function playwrightLocator(selector: E2eSelector): string {
 
 function playwrightActionForStep(selector: E2eSelector, locator: string, step: string): string[] {
   const body = [`// Step intent: ${step}`];
-  if (isVerificationStep(step) && !isInteractionStep(step)) {
+  if (isAssertionStep(step)) {
     body.push(`await expect(${locator}).toBeVisible();`);
     return body;
   }
-  if (selector.kind === "placeholder") {
-    body.push(`await ${locator}.fill("${quoteJs(playwrightSampleInput(selector.value))}");`);
+  if (isInputSelector(selector)) {
+    body.push(`await ${locator}.fill("${quoteJs(sampleInputForStepOrSelector(step, selector.value))}");`);
     return body;
   }
   body.push(`await ${locator}.click();`);
   return body;
+}
+
+function sampleInputForStepOrSelector(step: string, selector: string): string {
+  return playwrightSampleInput(`${step} ${selector}`);
 }
 
 function playwrightSampleInput(label: string): string {
@@ -7063,33 +7795,72 @@ function isGestureStep(step: string): boolean {
 }
 
 function isInteractionStep(step: string): boolean {
-  return /^(?:choose|select|open|tap|click|create|save|return|switch|exercise)\b/i.test(step);
+  return /^(?:choose|select|open|tap|click|create|save|submit|continue|complete|renew|apply|approve|confirm|send|fill|input|enter|type|provide|return|switch|exercise|activate)\b/i.test(step);
 }
 
 function isVerificationStep(step: string): boolean {
   return /\b(?:verify|assert|visible|appears|renders|available|usable|remains|survive)\b/i.test(step);
 }
 
+function isAssertionStep(step: string): boolean {
+  return isVerificationStep(step);
+}
+
 function extractSelectorsFromText(file: string, text: string, runner: E2eRunnerName): E2eSelector[] {
   const selectors: E2eSelector[] = [];
   const canUseWebSelectors = runner === "playwright" || runner === "manual";
+  const inputSelectors = [
+    ...extractInputAttributeSelectors(file, text, ["testID"], "input-test-id"),
+    ...extractInputAttributeSelectors(file, text, ["accessibilityLabel"], "input-accessibility-label"),
+  ];
 
+  selectors.push(...inputSelectors);
   selectors.push(
-    ...extractAttributeSelectors(file, text, ["testID"], "test-id"),
-    ...extractAttributeSelectors(file, text, ["accessibilityLabel"], "accessibility-label"),
+    ...withoutSelectorValueDuplicates(extractAttributeSelectors(file, text, ["testID"], "test-id"), inputSelectors),
+    ...withoutSelectorValueDuplicates(
+      extractAttributeSelectors(file, text, ["accessibilityLabel"], "accessibility-label"),
+      inputSelectors,
+    ),
     ...extractAttributeSelectors(file, text, ["placeholder"], "placeholder"),
   );
 
   if (canUseWebSelectors) {
+    const webInputSelectors = [
+      ...extractInputAttributeSelectors(file, text, ["data-testid", "data-test"], "input-web-test-id"),
+      ...extractInputAttributeSelectors(file, text, ["aria-label"], "input-aria-label"),
+    ];
+    selectors.push(...webInputSelectors);
     selectors.push(
-      ...extractAttributeSelectors(file, text, ["data-testid", "data-test"], "web-test-id"),
-      ...extractAttributeSelectors(file, text, ["aria-label"], "aria-label"),
+      ...withoutSelectorValueDuplicates(
+        extractAttributeSelectors(file, text, ["data-testid", "data-test"], "web-test-id"),
+        webInputSelectors,
+      ),
+      ...withoutSelectorValueDuplicates(extractAttributeSelectors(file, text, ["aria-label"], "aria-label"), webInputSelectors),
       ...extractRoleSelectorsFromText(file, text),
     );
   }
 
   selectors.push(...extractTextNodeSelectors(file, text));
   return selectors.filter((selector) => isUsefulSelector(selector.value));
+}
+
+function extractInputAttributeSelectors(
+  file: string,
+  text: string,
+  attributes: string[],
+  kind: E2eSelectorKind,
+): E2eSelector[] {
+  const selectors: E2eSelector[] = [];
+  const inputElementMatcher = /<(?:TextInput|input|textarea)\b[^>]*>/g;
+  for (const elementMatch of text.matchAll(inputElementMatcher)) {
+    selectors.push(...extractAttributeSelectors(file, elementMatch[0], attributes, kind));
+  }
+  return selectors;
+}
+
+function withoutSelectorValueDuplicates(selectors: E2eSelector[], existing: E2eSelector[]): E2eSelector[] {
+  const existingKeys = new Set(existing.map((selector) => `${selector.file}\0${selector.value}`));
+  return selectors.filter((selector) => !existingKeys.has(`${selector.file}\0${selector.value}`));
 }
 
 function extractAttributeSelectors(
@@ -7119,6 +7890,14 @@ function extractTextNodeSelectors(file: string, text: string): E2eSelector[] {
   const textNodeMatcher = /<Text(?:\s[^>]*)?>([^<>{}\n][^<>{}]*)<\/Text>/g;
   for (const match of text.matchAll(textNodeMatcher)) {
     const value = normalizeSelectorValue(match[1]);
+    if (value) {
+      selectors.push({ kind: "visible-text", value, file });
+    }
+  }
+
+  const htmlTextNodeMatcher = /<(p|span|strong|em|small|label|li|output|h[1-6])\b[^>]*>\s*([^<>{}\n][^<>{}]*)\s*<\/\1>/g;
+  for (const match of text.matchAll(htmlTextNodeMatcher)) {
+    const value = normalizeSelectorValue(match[2]);
     if (value) {
       selectors.push({ kind: "visible-text", value, file });
     }
@@ -7301,13 +8080,19 @@ function uniqueSelectors(selectors: E2eSelector[]): E2eSelector[] {
 }
 
 function selectorRank(kind: E2eSelectorKind): number {
-  if (kind === "test-id" || kind === "web-test-id") {
+  if (
+    kind === "input-test-id" ||
+    kind === "input-web-test-id" ||
+    kind === "input-accessibility-label" ||
+    kind === "input-aria-label" ||
+    kind === "placeholder"
+  ) {
     return 0;
   }
-  if (kind === "accessibility-label" || kind === "aria-label") {
+  if (kind === "test-id" || kind === "web-test-id") {
     return 1;
   }
-  if (kind === "placeholder") {
+  if (kind === "accessibility-label" || kind === "aria-label") {
     return 2;
   }
   if (kind === "role-button" || kind === "role-link") {
@@ -7366,6 +8151,9 @@ function formatProjectType(type: E2eProjectType): string {
   }
   if (type === "data-catalog") {
     return "Data catalog";
+  }
+  if (type === "cli") {
+    return "CLI";
   }
   return "Unknown";
 }

@@ -35,6 +35,14 @@ interface PathTermCandidate {
   confidence: DomainLanguageConfidence;
 }
 
+interface BehaviorScenarioCandidate {
+  title: string;
+  term: string;
+  behavior: string;
+  files: string[];
+  domainFileCount: number;
+}
+
 const maxFilesPerTerm = 8;
 
 export async function buildDomainLanguageSummary(
@@ -72,7 +80,8 @@ export async function buildDomainLanguageSummary(
     .filter((term) => isUsefulTerm(term.term))
     .sort(compareTerms)
     .slice(0, 12);
-  const scenarios = buildScenarioSuggestions(terms, coreFlows, domains);
+  const behaviorScenarios = buildBehaviorScenarioSuggestions(terms, files);
+  const scenarios = buildScenarioSuggestions(terms, coreFlows, domains, behaviorScenarios);
 
   return {
     terms,
@@ -119,6 +128,7 @@ function buildScenarioSuggestions(
   terms: DomainLanguageTerm[],
   coreFlows: MatchedCoreFlow[],
   domains: MatchedDomain[],
+  behaviorScenarios: DomainScenarioSuggestion[] = [],
 ): DomainScenarioSuggestion[] {
   const scenarios: DomainScenarioSuggestion[] = [];
 
@@ -175,7 +185,12 @@ function buildScenarioSuggestions(
     });
   }
 
-  for (const term of terms.filter((item) => item.source !== "core-flow").slice(0, 5)) {
+  scenarios.push(...behaviorScenarios);
+
+  for (const term of terms
+    .filter((item) => item.source !== "core-flow")
+    .filter((item) => !hasBehaviorScenarioForTerm(item, behaviorScenarios))
+    .slice(0, 5)) {
     scenarios.push({
       title: `${term.term} primary journey`,
       intent: `Use "${term.term}" as the shared name for this changed behavior until the team chooses a better domain term.`,
@@ -191,6 +206,178 @@ function buildScenarioSuggestions(
   }
 
   return dedupeScenarios(scenarios).slice(0, 6);
+}
+
+function hasBehaviorScenarioForTerm(term: DomainLanguageTerm, scenarios: DomainScenarioSuggestion[]): boolean {
+  const prefix = `${term.term.toLowerCase()} `;
+  return scenarios.some((scenario) => scenario.source === "changed-file" && scenario.title.toLowerCase().startsWith(prefix));
+}
+
+function buildBehaviorScenarioSuggestions(
+  terms: DomainLanguageTerm[],
+  files: string[],
+): DomainScenarioSuggestion[] {
+  const candidates = new Map<string, BehaviorScenarioCandidate>();
+  for (const file of files.filter(isDomainLanguageFile)) {
+    const term = bestBehaviorDomainTermForFile(terms, file);
+    if (!term) {
+      continue;
+    }
+    const behavior = behaviorLabelFromPath(file, term.term);
+    if (!behavior) {
+      continue;
+    }
+    const title = `${term.term} ${behavior}`;
+    const key = title.toLowerCase();
+    const existing = candidates.get(key);
+    if (existing) {
+      existing.files = uniqueStrings([...existing.files, file]).slice(0, maxFilesPerTerm);
+      continue;
+    }
+    candidates.set(key, {
+      title,
+      term: term.term,
+      behavior,
+      files: [file],
+      domainFileCount: term.files.length,
+    });
+  }
+
+  return selectBehaviorScenarioCandidates([...candidates.values()])
+    .map((candidate) => ({
+      title: candidate.title,
+      intent: `Verify the changed "${candidate.behavior}" behavior inside ${candidate.term} instead of stopping at a generic primary journey.`,
+      checks: [
+        `Start from the ${candidate.term} entry point that exposes ${candidate.behavior}.`,
+        `Exercise ${candidate.behavior} with realistic data from the changed branch.`,
+        `Confirm the visible result, saved state, navigation, request, or event that proves ${candidate.behavior} worked.`,
+        `Try one empty, blocked, rejected, or failed ${candidate.behavior} path that a real user or caller could hit.`,
+      ],
+      files: candidate.files,
+      source: "changed-file",
+    }));
+}
+
+function selectBehaviorScenarioCandidates(candidates: BehaviorScenarioCandidate[]): BehaviorScenarioCandidate[] {
+  const selected: BehaviorScenarioCandidate[] = [];
+  const deferred: BehaviorScenarioCandidate[] = [];
+  const selectedByTerm = new Map<string, number>();
+  for (const candidate of candidates.sort(compareBehaviorScenarioCandidates)) {
+    const currentTermCount = selectedByTerm.get(candidate.term) ?? 0;
+    if (currentTermCount < 2) {
+      selected.push(candidate);
+      selectedByTerm.set(candidate.term, currentTermCount + 1);
+    } else {
+      deferred.push(candidate);
+    }
+    if (selected.length === 4) {
+      return selected;
+    }
+  }
+  return [...selected, ...deferred].slice(0, 4);
+}
+
+function bestBehaviorDomainTermForFile(terms: DomainLanguageTerm[], file: string): DomainLanguageTerm | undefined {
+  return terms
+    .filter((term) => term.source !== "ui-copy" && filesOverlap([file], term.files))
+    .filter((term) => !isBehaviorOnlyTerm(term.term, file))
+    .sort(compareTerms)[0];
+}
+
+function filesOverlap(left: string[], right: string[]): boolean {
+  return left.some((leftFile) => right.some((rightFile) => sameOrNestedFileReference(leftFile, rightFile)));
+}
+
+function sameOrNestedFileReference(left: string, right: string): boolean {
+  const normalizedLeft = normalizeComparisonPath(left);
+  const normalizedRight = normalizeComparisonPath(right);
+  return (
+    normalizedLeft === normalizedRight ||
+    normalizedLeft.endsWith(`/${normalizedRight}`) ||
+    normalizedRight.endsWith(`/${normalizedLeft}`)
+  );
+}
+
+function normalizeComparisonPath(file: string): string {
+  return file.replace(/^\.\/+/, "").replace(/\/+$/g, "");
+}
+
+function isBehaviorOnlyTerm(term: string, file: string): boolean {
+  const basenameTokens = behaviorTokensFromText(path.basename(file));
+  const termTokens = behaviorTokensFromText(term);
+  if (termTokens.length < 2 || basenameTokens.length === 0) {
+    return false;
+  }
+  return termTokens.every((token) => basenameTokens.some((basenameToken) => sameToken(token, basenameToken)));
+}
+
+function behaviorLabelFromPath(file: string, domainTerm: string): string | undefined {
+  const basename = path.basename(file).replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|json|ya?ml|md|py|go|rs|kt|java|swift|cs)$/i, "");
+  const domainTokens = behaviorTokensFromText(domainTerm);
+  const tokens = behaviorTokensFromText(basename)
+    .filter((token) => !domainTokens.some((domainToken) => sameToken(domainToken, token)))
+    .filter((token) => !behaviorStructuralTokens.has(token));
+  if (tokens.length === 0) {
+    return undefined;
+  }
+  if (tokens.length === 1 && !behaviorActionTokens.has(tokens[0]) && !isLikelyBusinessObjectToken(tokens[0])) {
+    return undefined;
+  }
+  return titleCase(tokens.map(formatBehaviorToken).join(" "));
+}
+
+function behaviorTokensFromText(value: string): string[] {
+  return uniqueStrings(
+    value
+      .replace(/\.[^.]+$/g, "")
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .split(/[^a-zA-Z0-9가-힣]+/)
+      .map((part) => part.toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+function sameToken(left: string, right: string): boolean {
+  return singularizeToken(left) === singularizeToken(right);
+}
+
+function singularizeToken(token: string): string {
+  return token.endsWith("s") && token.length > 3 ? token.slice(0, -1) : token;
+}
+
+function formatBehaviorToken(token: string): string {
+  const acronyms: Record<string, string> = {
+    api: "API",
+    id: "ID",
+    url: "URL",
+    urls: "URLs",
+    ui: "UI",
+  };
+  return acronyms[token] ?? token;
+}
+
+function isLikelyBusinessObjectToken(token: string): boolean {
+  return token.length > 4 && !behaviorStructuralTokens.has(token);
+}
+
+function compareBehaviorScenarioCandidates(left: BehaviorScenarioCandidate, right: BehaviorScenarioCandidate): number {
+  const domainImpactDiff = right.domainFileCount - left.domainFileCount;
+  if (domainImpactDiff !== 0) {
+    return domainImpactDiff;
+  }
+  const actionDiff = Number(hasActionToken(right.behavior)) - Number(hasActionToken(left.behavior));
+  if (actionDiff !== 0) {
+    return actionDiff;
+  }
+  const fileDiff = right.files.length - left.files.length;
+  if (fileDiff !== 0) {
+    return fileDiff;
+  }
+  return left.title.localeCompare(right.title);
+}
+
+function hasActionToken(value: string): boolean {
+  return behaviorTokensFromText(value).some((token) => behaviorActionTokens.has(token));
 }
 
 async function collectUiCopyTerms(
@@ -317,6 +504,9 @@ function isDomainLanguageFile(file: string): boolean {
   if (/(?:^|\/)(?:assets?|images?|icons?|fonts?)\//i.test(file)) {
     return false;
   }
+  if (isGeneratedOutputFile(file)) {
+    return false;
+  }
   if (/(?:^|\/)(?:\.agents?|\.claude|\.cursor|\.dev|\.gemini|\.github|docs?)\//i.test(file)) {
     return false;
   }
@@ -345,6 +535,15 @@ function isTestLikeFile(file: string): boolean {
     /(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(file) ||
     /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(file)
+  );
+}
+
+function isGeneratedOutputFile(file: string): boolean {
+  return (
+    /(?:^|\/)(?:dist|build|out|coverage|generated|__generated__|codegen)\//i.test(file) ||
+    /(?:^|\/)(?:public|src|lib|packages?)\/(?:generated|__generated__|codegen)\//i.test(file) ||
+    /(?:^|\/)[^/]*(?:generated|codegen)[^/]*\.(?:[cm]?[jt]sx?|json|ya?ml|css|scss|md)$/i.test(file) ||
+    /\.(?:generated|gen)\.[cm]?[jt]sx?$/i.test(file)
   );
 }
 
@@ -499,4 +698,83 @@ const structuralSegments = new Set([
   "src",
   "util",
   "utils",
+]);
+
+const behaviorStructuralTokens = new Set([
+  "api",
+  "apis",
+  "button",
+  "card",
+  "client",
+  "component",
+  "components",
+  "container",
+  "controller",
+  "dialog",
+  "drawer",
+  "form",
+  "fragment",
+  "hook",
+  "hooks",
+  "index",
+  "item",
+  "layout",
+  "list",
+  "modal",
+  "overview",
+  "page",
+  "pages",
+  "panel",
+  "provider",
+  "route",
+  "screen",
+  "screens",
+  "section",
+  "service",
+  "services",
+  "style",
+  "styles",
+  "tab",
+  "tabs",
+  "util",
+  "utils",
+  "view",
+  "widget",
+]);
+
+const behaviorActionTokens = new Set([
+  "add",
+  "apply",
+  "approve",
+  "auth",
+  "block",
+  "cancel",
+  "change",
+  "charge",
+  "check",
+  "complete",
+  "confirm",
+  "connect",
+  "create",
+  "delete",
+  "detail",
+  "edit",
+  "fallback",
+  "filter",
+  "login",
+  "logout",
+  "open",
+  "purchase",
+  "reject",
+  "remove",
+  "renew",
+  "reset",
+  "save",
+  "search",
+  "select",
+  "submit",
+  "sync",
+  "update",
+  "upload",
+  "verify",
 ]);

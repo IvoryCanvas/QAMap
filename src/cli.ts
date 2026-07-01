@@ -66,6 +66,7 @@ interface ParsedOptions {
   includeWorkingTree?: boolean;
   e2eRunner?: E2eRunnerName;
   recordHistory?: boolean;
+  dryRun?: boolean;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -240,6 +241,7 @@ async function main(argv: string[]): Promise<number> {
       ...e2eOptions,
       output: options.output,
       force: options.force,
+      dryRun: options.dryRun,
     });
     const output = formatE2eDraftOutput(result, options.format ?? (options.json ? "json" : "markdown"));
     console.log(output.trimEnd());
@@ -419,6 +421,11 @@ function parseOptions(args: string[]): ParsedOptions {
 
     if (arg === "--force") {
       options.force = true;
+      continue;
+    }
+
+    if (arg === "--dry-run") {
+      options.dryRun = true;
       continue;
     }
 
@@ -773,7 +780,7 @@ Usage:
   codeward test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
   codeward e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   codeward e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force]
-  codeward e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--force]
+  codeward e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
   codeward flows init [path] [--write <file>] [--force]
   codeward flows suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>] [--write <file>] [--force]
   codeward domains init [path] [--write <file>] [--force]
@@ -803,7 +810,7 @@ Examples:
   codeward e2e plan . --base origin/main --head HEAD
   codeward e2e plan . --base origin/main --head HEAD --record-history
   codeward e2e setup . --runner playwright
-  codeward e2e draft . --base origin/main --head HEAD
+  codeward e2e draft . --base origin/main --head HEAD --dry-run
   codeward flows init .
   codeward flows suggest . --base origin/main --head HEAD
   codeward domains init .
@@ -823,14 +830,14 @@ E2E planning for AI-assisted changes.
 Usage:
   codeward e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>] [--output <file>]
   codeward e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force] [--format <format>] [--output <file>]
-  codeward e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--output <dir>] [--force]
+  codeward e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
 
 Examples:
   codeward e2e plan . --base origin/main --head HEAD
   codeward e2e plan . --base origin/main --head HEAD --record-history
   codeward e2e setup . --runner playwright
   codeward e2e setup apps/mobile --workspace-root . --runner maestro
-  codeward e2e draft . --base origin/main --head HEAD
+  codeward e2e draft . --base origin/main --head HEAD --dry-run
   codeward e2e plan apps/mobile --workspace-root . --include-working-tree
 `);
 }

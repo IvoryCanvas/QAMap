@@ -1,11 +1,11 @@
 {
   "name": "@ivorycanvas/codeward",
   "version": "0.1.0",
-  "description": "No-token guardrails, review checks, and E2E validation planning for AI coding agents.",
+  "description": "No-token guardrails, PR verification, and E2E draft generation for AI-assisted codebases.",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
   "bin": {
-    "codeward": "./dist/cli.js"
+    "codeward": "dist/cli.js"
   },
   "files": [
     "dist",

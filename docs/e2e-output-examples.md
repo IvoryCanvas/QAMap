@@ -73,6 +73,18 @@ Command: pnpm run test:e2e
 Summary: Playwright draft passed static runner checks.
 ```
 
+Before writing files, `--dry-run` should expose the same readiness data with preview status:
+
+```txt
+Mode: dry run (no files were written)
+Files: 0 created, 1 previewed, 0 skipped
+
+- preview: `tests/e2e/checkout-purchase.spec.ts` (Checkout purchase)
+  - source: core-flow
+  - runnable status: near-runnable
+  - self-check: pass
+```
+
 For framework-native routing, CodeWard should preserve the route a user can actually open rather than framework-only folder syntax. A Next App Router file such as `src/app/(shop)/products/[productId]/page.tsx` should become `/products/:productId`, and a concrete link such as `/products/demo-product` can seed the generated route params:
 
 ```ts
@@ -115,6 +127,27 @@ appId: ${APP_ID}
 - tapOn: { id: "ink-save-button" }
 ```
 
+When the changed file name exposes a narrower user action, the generated flow should use that action instead of stopping at a broad domain journey:
+
+```txt
+Changed file: src/features/offer/components/ContentUrlSubmitModal.tsx
+Domain term: Offer
+Generated scenario: Offer Content URL Submit
+Generated draft path: .maestro/offer-content-url-submit.yaml
+```
+
+The draft should then carry the same product-action wording into the runnable skeleton:
+
+```yaml
+# Flow: Offer Content URL Submit
+# Domain scenario: Offer Content URL Submit
+# Intent: Verify the changed "Content URL Submit" behavior inside Offer instead of stopping at a generic primary journey.
+appId: ${APP_ID}
+---
+- launchApp
+- tapOn: { id: "offer-content-url-submit" }
+```
+
 ## API / Service Contract
 
 For backend changes such as `src/v1/offer/utils.ts`, CodeWard should not invent a browser journey. It should infer the domain word and stay contract-focused:
@@ -140,6 +173,33 @@ The manual draft should stay actionable:
 - [ ] Verify the response shape, status, and parsed data match the public contract.
 - [ ] Verify invalid input, authorization failure, timeout, and server-error handling.
 - [ ] Check backward compatibility for existing callers.
+```
+
+## CLI Command Verification
+
+For an npm package that exposes `package.json` bin entries, CodeWard should not invent a UI journey. It should stay focused on the command contract users run in terminals, scripts, and CI:
+
+```txt
+Project: CLI
+Recommended runner: Manual
+
+Flow: CLI command verification checklist
+Actor: CLI user or maintainer
+Trigger: Run the CLI command path affected by src/cli.ts.
+Success signal: the command returns the expected stdout, stderr, generated files, and exit code for valid and invalid inputs
+```
+
+The manual draft should name concrete command evidence:
+
+```md
+# CLI command verification checklist
+
+## Steps
+
+- [ ] Build or install the package in a clean local environment.
+- [ ] Run the changed command with a representative valid argument set.
+- [ ] Verify stdout, stderr, generated files, and exit code match the intended behavior.
+- [ ] Run one invalid, missing-argument, or unsupported-input path and verify the failure message and exit code.
 ```
 
 ## Test-Light Project

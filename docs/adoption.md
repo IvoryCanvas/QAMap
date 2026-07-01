@@ -4,7 +4,20 @@ CodeWard works best when teams treat it as a repository preflight check for AI-a
 
 ## First Run
 
-Until the first npm package is published, run CodeWard from a local checkout:
+Start with a non-blocking scan:
+
+```sh
+pnpm dlx @ivorycanvas/codeward scan .
+```
+
+For a changed branch, preview the verification plan and draft E2E output before writing files:
+
+```sh
+pnpm dlx @ivorycanvas/codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
+pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD --dry-run
+```
+
+When developing CodeWard itself from source:
 
 ```sh
 git clone https://github.com/IvoryCanvas/codeward.git
@@ -12,12 +25,6 @@ cd codeward
 pnpm install
 pnpm build
 node dist/cli.js scan /path/to/repo
-```
-
-After the package is published:
-
-```sh
-pnpm dlx @ivorycanvas/codeward scan .
 ```
 
 ## Build A Verification Base
@@ -44,11 +51,13 @@ Start advisory, then tighten the gate once the findings are understood.
 | 3. Verify | `codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md` | Combine review findings, readiness score, suggested domain tests, and next actions. |
 | 4. Review | `codeward review . --base origin/main --head HEAD --format markdown` | See new findings introduced by the branch. |
 | 5. Test plan | `codeward test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed and local files. |
-| 6. Eval | `codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md` | Score intent capture, risk explanation, test evidence, and review size. |
-| 7. PR Action | `uses: IvoryCanvas/codeward@main` | Add annotations, a step summary, a test plan, eval, and a sticky PR comment. |
-| 8. Report | `codeward report . --output CODEWARD_REPORT.md` | Share a readable audit artifact in a PR or maintainer discussion. |
-| 9. High-risk gate | `codeward scan . --fail-on high` | Block obvious risks such as committed env files or unsafe scripts. |
-| 10. Medium-risk gate | `codeward scan . --fail-on medium` | Require stronger agent guidance, tests, and workflow permissions. |
+| 6. E2E preview | `codeward e2e draft . --base origin/main --head HEAD --dry-run` | Preview generated draft paths, readiness, action items, and blockers before writing files. |
+| 7. E2E apply | `codeward e2e draft . --base origin/main --head HEAD` | Write draft files once the preview looks useful enough to review. |
+| 8. Eval | `codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md` | Score intent capture, risk explanation, test evidence, and review size. |
+| 9. PR Action | `uses: IvoryCanvas/codeward@main` | Add annotations, a step summary, a test plan, eval, and a sticky PR comment. |
+| 10. Report | `codeward report . --output CODEWARD_REPORT.md` | Share a readable audit artifact in a PR or maintainer discussion. |
+| 11. High-risk gate | `codeward scan . --fail-on high` | Block obvious risks such as committed env files or unsafe scripts. |
+| 12. Medium-risk gate | `codeward scan . --fail-on medium` | Require stronger agent guidance, tests, and workflow permissions. |
 
 ## Monorepos
 

@@ -10,6 +10,7 @@ CodeWard should become a local-first PR verification designer: it understands a 
 
 - Keep the scanner fast, static, and easy to understand.
 - Keep the [`0.1.0` release validation checklist](release-validation.md) and public [E2E output examples](e2e-output-examples.md) aligned with the current release bar.
+- Keep the [release runbook](releasing.md) ready for npm publishing and versioned GitHub Action follow-up.
 - Improve adoption docs and sample output so new maintainers can try CodeWard quickly.
 - Make `verify` the best first-run experience for AI-assisted PRs.
 - Keep `eval` explainable enough that maintainers trust the score and know what to fix.
