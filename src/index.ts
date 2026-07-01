@@ -46,10 +46,14 @@ export {
 export {
   changedFilesRelativeToManifestRoot,
   defaultVerificationManifestPath,
+  explainVerificationManifest,
+  formatVerificationManifestExplainResult,
   formatVerificationManifestInitResult,
+  formatVerificationManifestValidationResult,
   formatVerificationManifestYaml,
   loadVerificationManifest,
   matchVerificationManifest,
+  validateVerificationManifest,
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
@@ -147,11 +151,17 @@ export type {
   VerificationManifestFlow,
   VerificationManifestInitOptions,
   VerificationManifestInitResult,
+  VerificationManifestExplainOptions,
+  VerificationManifestExplainResult,
   VerificationManifestMatch,
   VerificationManifestMatchKind,
   VerificationManifestRunner,
   VerificationManifestSource,
   VerificationManifestSourceKind,
+  VerificationManifestValidationIssue,
+  VerificationManifestValidationResult,
+  VerificationManifestValidationSeverity,
+  VerificationManifestValidationStatus,
 } from "./manifest.js";
 export type { ChangedFile, ChangedRiskyFinding, ReviewOptions, ReviewResult } from "./review.js";
 export type { TestPlanChangedFile, TestPlanItem, TestPlanOptions, TestPlanResult } from "./test-plan.js";

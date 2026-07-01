@@ -2,8 +2,9 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
 import { collectProjectFiles, pathExists, toPosixPath } from "./fs.js";
+import { generateTestPlan } from "./test-plan.js";
 import { TOOL_NAME, VERSION } from "./version.js";
-import type { TestPlanChangedFile } from "./test-plan.js";
+import type { TestPlanChangedFile, TestPlanOptions } from "./test-plan.js";
 import type { ProjectFile } from "./types.js";
 
 export const defaultVerificationManifestPath = ".codeward/manifest.yaml";
@@ -106,6 +107,57 @@ export interface VerificationManifestMatch {
   reason: string;
   matchedFiles: string[];
   confidence: VerificationManifestConfidence;
+  criticality?: VerificationManifestCriticality;
+  runner?: VerificationManifestRunner;
+  entryRoute?: string;
+  checks?: string[];
+  checkType?: VerificationManifestCheckType;
+}
+
+export type VerificationManifestValidationSeverity = "info" | "warning" | "error";
+export type VerificationManifestValidationStatus = "valid" | "needs-work" | "missing" | "invalid";
+
+export interface VerificationManifestValidationIssue {
+  severity: VerificationManifestValidationSeverity;
+  path: string;
+  message: string;
+  recommendation: string;
+}
+
+export interface VerificationManifestValidationResult {
+  tool: {
+    name: string;
+    version: string;
+  };
+  root: string;
+  workspaceRoot?: string;
+  manifestPath?: string;
+  generatedAt: string;
+  status: VerificationManifestValidationStatus;
+  summary: {
+    errors: number;
+    warnings: number;
+    info: number;
+  };
+  issues: VerificationManifestValidationIssue[];
+}
+
+export interface VerificationManifestExplainOptions extends TestPlanOptions {}
+
+export interface VerificationManifestExplainResult {
+  tool: {
+    name: string;
+    version: string;
+  };
+  root: string;
+  workspaceRoot?: string;
+  manifestPath?: string;
+  generatedAt: string;
+  base: string;
+  head: string;
+  includeWorkingTree: boolean;
+  changedFiles: TestPlanChangedFile[];
+  matches: VerificationManifestMatch[];
 }
 
 const manifestCandidates = [
@@ -187,6 +239,7 @@ export function matchVerificationManifest(
       reason: `Changed files match the declared ${domain.name} domain paths.`,
       matchedFiles: matchedFiles.slice(0, 12),
       confidence: domain.source.confidence,
+      criticality: domain.criticality,
     });
   }
 
@@ -204,6 +257,9 @@ export function matchVerificationManifest(
       reason: `Changed files match anchors for the ${flow.name} flow.`,
       matchedFiles: anchorMatches.slice(0, 12),
       confidence: flow.source.confidence,
+      runner: flow.runner,
+      entryRoute: flow.entry?.route,
+      checks: flow.checks.map((check) => check.title),
     });
     for (const check of flow.checks.slice(0, 4)) {
       matches.push({
@@ -215,6 +271,10 @@ export function matchVerificationManifest(
         reason: `The ${flow.name} flow declares this ${check.type} verification check.`,
         matchedFiles: anchorMatches.slice(0, 12),
         confidence: flow.source.confidence,
+        runner: flow.runner,
+        entryRoute: flow.entry?.route,
+        checks: [check.title],
+        checkType: check.type,
       });
     }
   }
@@ -249,6 +309,143 @@ export function formatVerificationManifestInitResult(result: VerificationManifes
   ].join("\n");
 }
 
+export async function validateVerificationManifest(rootInput: string, workspaceRootInput?: string): Promise<VerificationManifestValidationResult> {
+  const root = path.resolve(rootInput);
+  const manifestRoot = path.resolve(workspaceRootInput ?? rootInput);
+  const issues: VerificationManifestValidationIssue[] = [];
+  let manifest: LoadedVerificationManifest;
+
+  try {
+    manifest = await loadVerificationManifest(manifestRoot);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    issues.push(issue("error", defaultVerificationManifestPath, message, "Fix the manifest syntax or schema, then run `codeward manifest validate` again."));
+    return validationResult(root, workspaceRootInput ? manifestRoot : undefined, undefined, "invalid", issues);
+  }
+
+  if (!manifest.path) {
+    issues.push(issue("error", defaultVerificationManifestPath, "No verification manifest was found.", "Run `codeward manifest init .` to create a baseline."));
+    return validationResult(root, workspaceRootInput ? manifestRoot : undefined, undefined, "missing", issues);
+  }
+
+  validateDomainDefinitions(manifest, issues);
+  await validateFlowDefinitions(manifest, manifestRoot, issues);
+
+  const status = issues.some((item) => item.severity === "error")
+    ? "invalid"
+    : issues.some((item) => item.severity === "warning")
+      ? "needs-work"
+      : "valid";
+  return validationResult(root, workspaceRootInput ? manifestRoot : undefined, manifest.path, status, issues);
+}
+
+export async function explainVerificationManifest(
+  rootInput: string,
+  options: VerificationManifestExplainOptions = {},
+): Promise<VerificationManifestExplainResult> {
+  const testPlan = await generateTestPlan(rootInput, options);
+  const manifestRoot = testPlan.workspaceRoot ?? testPlan.root;
+  const manifest = await loadVerificationManifest(manifestRoot);
+  const manifestChangedFiles = changedFilesRelativeToManifestRoot(testPlan.changedFiles, testPlan.root, manifestRoot);
+  return {
+    tool: {
+      name: TOOL_NAME,
+      version: VERSION,
+    },
+    root: testPlan.root,
+    workspaceRoot: testPlan.workspaceRoot,
+    manifestPath: manifest.path,
+    generatedAt: new Date().toISOString(),
+    base: testPlan.base,
+    head: testPlan.head,
+    includeWorkingTree: testPlan.includeWorkingTree,
+    changedFiles: testPlan.changedFiles,
+    matches: matchVerificationManifest(manifest, manifestChangedFiles),
+  };
+}
+
+export function formatVerificationManifestValidationResult(
+  result: VerificationManifestValidationResult,
+  format: "text" | "json" | "markdown",
+): string {
+  if (format === "json") {
+    return `${JSON.stringify(result, null, 2)}\n`;
+  }
+  const lines: string[] = [];
+  if (format === "markdown") {
+    lines.push("# CodeWard Manifest Validate", "");
+    lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
+    if (result.workspaceRoot) {
+      lines.push(`- Workspace root: \`${escapeMarkdownInline(result.workspaceRoot)}\``);
+    }
+    lines.push(`- Status: ${result.status}`);
+    lines.push(`- Manifest: ${result.manifestPath ? `\`${escapeMarkdownInline(result.manifestPath)}\`` : "not found"}`);
+    lines.push(`- Issues: ${result.summary.errors} errors, ${result.summary.warnings} warnings, ${result.summary.info} info`);
+    lines.push("");
+    if (result.issues.length > 0) {
+      lines.push("## Issues", "");
+      for (const item of result.issues) {
+        lines.push(`- [${item.severity}] \`${escapeMarkdownInline(item.path)}\`: ${escapeMarkdownInline(item.message)}`);
+        lines.push(`  - Fix: ${escapeMarkdownInline(item.recommendation)}`);
+      }
+      lines.push("");
+    }
+    return lines.join("\n");
+  }
+
+  lines.push("CodeWard Manifest Validate");
+  lines.push(`Root: ${result.root}`);
+  if (result.workspaceRoot) {
+    lines.push(`Workspace root: ${result.workspaceRoot}`);
+  }
+  lines.push(`Status: ${result.status}`);
+  lines.push(`Manifest: ${result.manifestPath ?? "not found"}`);
+  lines.push(`Issues: ${result.summary.errors} errors, ${result.summary.warnings} warnings, ${result.summary.info} info`);
+  for (const item of result.issues) {
+    lines.push(`- [${item.severity}] ${item.path}: ${item.message}`);
+    lines.push(`  Fix: ${item.recommendation}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+export function formatVerificationManifestExplainResult(
+  result: VerificationManifestExplainResult,
+  format: "text" | "json" | "markdown",
+): string {
+  if (format === "json") {
+    return `${JSON.stringify(result, null, 2)}\n`;
+  }
+  const lines: string[] = [];
+  if (format === "markdown") {
+    lines.push("# CodeWard Manifest Explain", "");
+    lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
+    if (result.workspaceRoot) {
+      lines.push(`- Workspace root: \`${escapeMarkdownInline(result.workspaceRoot)}\``);
+    }
+    lines.push(`- Base: \`${escapeMarkdownInline(result.base)}\``);
+    lines.push(`- Head: \`${escapeMarkdownInline(result.head)}\``);
+    lines.push(`- Manifest: ${result.manifestPath ? `\`${escapeMarkdownInline(result.manifestPath)}\`` : "not found"}`);
+    lines.push(`- Changed files: ${result.changedFiles.length}`);
+    lines.push(`- Matches: ${result.matches.length}`);
+    lines.push("");
+    appendExplainMatches(lines, result.matches, "markdown");
+    return lines.join("\n");
+  }
+
+  lines.push("CodeWard Manifest Explain");
+  lines.push(`Root: ${result.root}`);
+  if (result.workspaceRoot) {
+    lines.push(`Workspace root: ${result.workspaceRoot}`);
+  }
+  lines.push(`Base: ${result.base}`);
+  lines.push(`Head: ${result.head}`);
+  lines.push(`Manifest: ${result.manifestPath ?? "not found"}`);
+  lines.push(`Changed files: ${result.changedFiles.length}`);
+  lines.push(`Matches: ${result.matches.length}`);
+  appendExplainMatches(lines, result.matches, "text");
+  return `${lines.join("\n")}\n`;
+}
+
 export function formatVerificationManifestYaml(manifest: VerificationManifest): string {
   return `${YAML.stringify(manifest, { lineWidth: 100 }).trimEnd()}\n`;
 }
@@ -273,6 +470,165 @@ function buildVerificationManifestBaseline(
     domains,
     flows,
   };
+}
+
+function validateDomainDefinitions(manifest: LoadedVerificationManifest, issues: VerificationManifestValidationIssue[]): void {
+  if (manifest.domains.length === 0) {
+    issues.push(issue("warning", `${manifest.path} > domains`, "No domains are declared.", "Run `codeward manifest init .` or add product domains manually."));
+  }
+  const ids = new Set<string>();
+  for (const domain of manifest.domains) {
+    const basePath = `${manifest.path} > domains.${domain.id}`;
+    if (ids.has(domain.id)) {
+      issues.push(issue("error", basePath, `Duplicate domain id '${domain.id}'.`, "Give each domain a stable unique id."));
+    }
+    ids.add(domain.id);
+    if (domain.paths.length === 0) {
+      issues.push(issue("error", `${basePath}.paths`, "Domain has no path patterns.", "Add at least one path pattern so PR changes can map to this domain."));
+    }
+    if (domain.source.kind === "inferred" && domain.source.confidence === "low") {
+      issues.push(issue("info", `${basePath}.source`, "Domain is inferred with low confidence.", "Review the domain name and paths, then mark the source as declared if the team accepts it."));
+    }
+  }
+}
+
+async function validateFlowDefinitions(
+  manifest: LoadedVerificationManifest,
+  manifestRoot: string,
+  issues: VerificationManifestValidationIssue[],
+): Promise<void> {
+  if (manifest.flows.length === 0) {
+    issues.push(issue("warning", `${manifest.path} > flows`, "No flows are declared.", "Add at least one flow when the repo has user-facing or contract-critical behavior."));
+  }
+  const domainIds = new Set(manifest.domains.map((domain) => domain.id));
+  const flowIds = new Set<string>();
+  for (const flow of manifest.flows) {
+    const basePath = `${manifest.path} > flows.${flow.id}`;
+    if (flowIds.has(flow.id)) {
+      issues.push(issue("error", basePath, `Duplicate flow id '${flow.id}'.`, "Give each flow a stable unique id."));
+    }
+    flowIds.add(flow.id);
+    if (flow.domain && !domainIds.has(flow.domain)) {
+      issues.push(issue("error", `${basePath}.domain`, `Flow references unknown domain '${flow.domain}'.`, "Use an existing domain id or add the missing domain."));
+    }
+    if (flow.anchors.length === 0) {
+      issues.push(issue("error", `${basePath}.anchors`, "Flow has no anchors.", "Add route, component, file, API, or test anchors so PR changes can match this flow."));
+    }
+    if (flow.checks.length === 0) {
+      issues.push(issue("warning", `${basePath}.checks`, "Flow has no verification checks.", "Add success, failure, edge, contract, or visual checks to shape generated drafts."));
+    }
+    for (const [index, anchor] of flow.anchors.entries()) {
+      const anchorPath = `${basePath}.anchors[${index}]`;
+      if (!anchor.path && !anchor.route && !anchor.symbol) {
+        issues.push(issue("error", anchorPath, "Anchor has no path, route, or symbol.", "Add a matchable path, route, or symbol."));
+      }
+      if (anchor.path && !anchor.path.includes("*") && !(await pathExists(path.join(manifestRoot, anchor.path)))) {
+        issues.push(issue("warning", `${anchorPath}.path`, `Anchor path '${anchor.path}' was not found.`, "Confirm the path is relative to the manifest root or replace it with a glob pattern."));
+      }
+      if (anchor.route && !anchor.route.startsWith("/")) {
+        issues.push(issue("warning", `${anchorPath}.route`, `Route '${anchor.route}' does not start with '/'.`, "Use absolute route hints such as `/checkout`."));
+      }
+    }
+    if (flow.source.kind === "inferred" && flow.source.confidence === "low") {
+      issues.push(issue("info", `${basePath}.source`, "Flow is inferred with low confidence.", "Review the flow name, anchors, and checks before relying on it as team policy."));
+    }
+  }
+}
+
+function validationResult(
+  root: string,
+  workspaceRoot: string | undefined,
+  manifestPath: string | undefined,
+  status: VerificationManifestValidationStatus,
+  issues: VerificationManifestValidationIssue[],
+): VerificationManifestValidationResult {
+  return {
+    tool: {
+      name: TOOL_NAME,
+      version: VERSION,
+    },
+    root,
+    workspaceRoot,
+    manifestPath,
+    generatedAt: new Date().toISOString(),
+    status,
+    summary: {
+      errors: issues.filter((item) => item.severity === "error").length,
+      warnings: issues.filter((item) => item.severity === "warning").length,
+      info: issues.filter((item) => item.severity === "info").length,
+    },
+    issues,
+  };
+}
+
+function issue(
+  severity: VerificationManifestValidationSeverity,
+  itemPath: string,
+  message: string,
+  recommendation: string,
+): VerificationManifestValidationIssue {
+  return {
+    severity,
+    path: itemPath,
+    message,
+    recommendation,
+  };
+}
+
+function appendExplainMatches(
+  lines: string[],
+  matches: VerificationManifestMatch[],
+  format: "text" | "markdown",
+): void {
+  if (matches.length === 0) {
+    lines.push(format === "markdown" ? "No manifest matches were found for the changed files." : "No manifest matches were found for the changed files.");
+    return;
+  }
+
+  if (format === "markdown") {
+    lines.push("## Matches", "");
+    for (const match of matches) {
+      lines.push(`### ${escapeMarkdownInline(match.name)} \`${escapeMarkdownInline(match.id)}\``);
+      lines.push("");
+      lines.push(`- Kind: ${match.kind}`);
+      lines.push(`- Confidence: ${match.confidence}`);
+      if (match.criticality) {
+        lines.push(`- Criticality: ${match.criticality}`);
+      }
+      if (match.entryRoute) {
+        lines.push(`- Entry route: \`${escapeMarkdownInline(match.entryRoute)}\``);
+      }
+      lines.push(`- Why this was recommended: ${escapeMarkdownInline(match.reason)}`);
+      lines.push(`- Manifest evidence: \`${escapeMarkdownInline(match.manifestPath)}\``);
+      lines.push(`- If this is wrong: update \`${escapeMarkdownInline(match.updatePath)}\``);
+      if (match.checks && match.checks.length > 0) {
+        lines.push("- Checks:");
+        for (const check of match.checks) {
+          lines.push(`  - ${escapeMarkdownInline(check)}`);
+        }
+      }
+      if (match.matchedFiles.length > 0) {
+        lines.push("- Matched files:");
+        for (const file of match.matchedFiles) {
+          lines.push(`  - \`${escapeMarkdownInline(file)}\``);
+        }
+      }
+      lines.push("");
+    }
+    return;
+  }
+
+  lines.push("");
+  lines.push("Matches:");
+  for (const match of matches) {
+    lines.push(`- ${match.name} (${match.kind}, ${match.confidence})`);
+    lines.push(`  Why: ${match.reason}`);
+    lines.push(`  Evidence: ${match.manifestPath}`);
+    lines.push(`  If wrong: update ${match.updatePath}`);
+    if (match.checks && match.checks.length > 0) {
+      lines.push(`  Checks: ${match.checks.join("; ")}`);
+    }
+  }
 }
 
 function buildBaselineDomains(files: ProjectFile[]): VerificationManifestDomain[] {
@@ -441,7 +797,9 @@ function domainCandidateFromPath(file: string): { id: string; name: string; from
   }
   const routeIndex = segments.findIndex((segment) => ["app", "pages", "screens"].includes(segment));
   if (routeIndex >= 0) {
-    const segment = segments.slice(routeIndex + 1).find((item) => item && !item.startsWith("_") && !/^\(.+\)$/.test(item));
+    const segment = segments
+      .slice(routeIndex + 1)
+      .find((item) => item && !item.startsWith("_") && !item.startsWith("+") && !/^\(.+\)$/.test(item));
     if (segment) {
       return domainCandidate(segment, segments[routeIndex]);
     }
@@ -463,7 +821,21 @@ function bestDomainForFile(domains: VerificationManifestDomain[], file: string):
 }
 
 function domainPatterns(files: string[]): string[] {
-  return uniqueStrings(files.map((file) => file.split("/").slice(0, -1).join("/")).filter(Boolean).map((dir) => `${dir}/**`));
+  return uniqueStrings(files.map(domainPatternForFile).filter(Boolean) as string[]);
+}
+
+function domainPatternForFile(file: string): string | undefined {
+  const segments = file.split("/").filter(Boolean);
+  const basename = segments.at(-1);
+  const dir = segments.slice(0, -1).join("/");
+  if (!basename || !dir) {
+    return undefined;
+  }
+  const owningDir = segments.at(-2);
+  if (owningDir && ["app", "pages", "screens"].includes(owningDir)) {
+    return file;
+  }
+  return `${dir}/**`;
 }
 
 function matchFlowAnchors(flow: VerificationManifestFlow, files: string[]): string[] {
@@ -697,6 +1069,10 @@ function uniqueStrings(values: string[]): string[] {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeMarkdownInline(value: string): string {
+  return value.replaceAll("`", "'");
 }
 
 function asRecord(value: unknown, message: string): Record<string, unknown> {

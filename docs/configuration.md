@@ -83,9 +83,18 @@ Create a baseline repo-level verification manifest:
 ```sh
 codeward manifest init .
 codeward manifest init services/offer --workspace-root .
+codeward manifest validate .
+codeward manifest explain . --base origin/main --head HEAD
 ```
 
 `.codeward/manifest.yaml` is meant to start the feedback loop. CodeWard infers a baseline from routes, pages, components, API calls, package signals, and testable UI surfaces. A maintainer can then correct the manifest when recommendations are wrong, and future `verify`, `e2e plan`, and `e2e draft` output will use the corrected context.
+
+Use the manifest commands in this order when adopting a repository:
+
+1. `codeward manifest init .` creates a baseline that is useful but intentionally reviewable.
+2. `codeward manifest validate .` checks whether the baseline is parseable, anchored to real files, and specific enough to shape PR evidence.
+3. `codeward manifest explain . --base origin/main --head HEAD` shows which domains, flows, and checks match the current branch, plus the exact manifest path to edit when a recommendation is wrong.
+4. `codeward e2e draft . --base origin/main --head HEAD --dry-run` uses matched manifest flows as higher-confidence draft sources before falling back to domain-language or heuristic candidates.
 
 ```yaml
 version: 1
@@ -143,6 +152,8 @@ Supported manifest concepts:
 | `source.confidence` | `low`, `medium`, or `high` confidence for how strongly CodeWard should trust the entry. |
 
 When a recommendation is wrong, update the manifest path printed by CodeWard instead of trying to make static analysis perfect. That turns one bad suggestion into durable repo-local knowledge.
+
+When a matched flow has `entry.route` and `checks`, generated E2E drafts will carry the manifest evidence, use the route as the entrypoint when the runner supports it, and turn checks into draft steps plus coverage notes. That lets client teams create useful UI or flow tests even before a backend is complete: the manifest can describe the route, required success/failure checks, and fixture/mock expectations, while the draft keeps TODOs only for the project-specific selector, data, or runner details.
 
 ## Domain Manifest
 

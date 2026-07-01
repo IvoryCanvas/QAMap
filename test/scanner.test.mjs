@@ -8,7 +8,10 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
   buildDoctorResult,
+  explainVerificationManifest,
   evaluateChangeReadiness,
+  formatVerificationManifestExplainResult,
+  formatVerificationManifestValidationResult,
   formatMarkdownEvalReport,
   formatMarkdownReport,
   formatDoctorReport,
@@ -34,6 +37,7 @@ import {
   reviewProject,
   scanProject,
   setupE2eRunner,
+  validateVerificationManifest,
   verifyChange,
   writeDefaultConfig,
   writeVerificationManifestBaseline,
@@ -4004,6 +4008,40 @@ test("manifest init creates a baseline verification manifest", async () => {
   assert.match(cliOutput.stdout, /Review and commit this file/);
 });
 
+test("manifest init keeps Expo app file domains specific", async () => {
+  const root = await makeTempRepo();
+  await mkdir(path.join(root, "app"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      dependencies: {
+        expo: "^53.0.0",
+        "react-native": "^0.79.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "app/+not-found.tsx"), "export default function NotFound() { return null; }\n");
+  await writeFile(path.join(root, "app/_layout.tsx"), "export default function Layout() { return null; }\n");
+  await writeFile(
+    path.join(root, "app/EmotionChatPage.tsx"),
+    "export default function EmotionChatPage() { return <Button title=\"Send\" />; }\n",
+  );
+  await writeFile(
+    path.join(root, "app/SettingsPage.tsx"),
+    "export default function SettingsPage() { return <Button title=\"Save\" />; }\n",
+  );
+
+  await writeVerificationManifestBaseline(root);
+  const manifest = await loadVerificationManifest(root);
+
+  assert.equal(manifest.domains.some((domain) => domain.id === "not-found"), false);
+  assert.ok(manifest.domains.some((domain) => domain.id === "emotionchatpage"));
+  assert.ok(manifest.domains.some((domain) => domain.paths.includes("app/EmotionChatPage.tsx")));
+  assert.ok(manifest.domains.some((domain) => domain.paths.includes("app/SettingsPage.tsx")));
+  assert.ok(manifest.flows.some((flow) => flow.domain === "emotionchatpage"));
+  assert.equal(manifest.flows.some((flow) => flow.domain === "not-found"), false);
+});
+
 test("manifest matches explain e2e and verify recommendations", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
@@ -4085,18 +4123,119 @@ test("manifest matches explain e2e and verify recommendations", async () => {
   const planMarkdown = formatMarkdownE2ePlan(plan);
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", dryRun: true, runner: "playwright" });
   const draftMarkdown = formatMarkdownE2eDraft(draft);
+  const writtenDraft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const writtenDraftText = await readFile(path.join(root, writtenDraft.files[0].path), "utf8");
+  const validation = await validateVerificationManifest(root);
+  const validationMarkdown = formatVerificationManifestValidationResult(validation, "markdown");
+  const explain = await explainVerificationManifest(root, { base: "main", head: "HEAD" });
+  const explainMarkdown = formatVerificationManifestExplainResult(explain, "markdown");
   const verify = await verifyChange(root, { base: "main", head: "HEAD" });
   const verifyMarkdown = formatMarkdownVerifyReport(verify);
 
   assert.equal(plan.verificationManifestPath, ".codeward/manifest.yaml");
   assert.ok(plan.verificationManifestMatches.some((match) => match.kind === "flow"));
   assert.ok(plan.verificationManifestMatches.some((match) => match.kind === "check"));
+  assert.equal(validation.status, "valid");
+  assert.match(validationMarkdown, /CodeWard Manifest Validate/);
+  assert.match(explainMarkdown, /CodeWard Manifest Explain/);
+  assert.match(explainMarkdown, /Campaign Application Complete/);
+  assert.match(explainMarkdown, /If this is wrong: update `\.codeward\/manifest\.yaml > flows\.campaign-application-complete\.anchors`/);
   assert.match(planMarkdown, /## Manifest Recommendations/);
   assert.match(planMarkdown, /Why this was recommended/);
   assert.match(planMarkdown, /If this is wrong: update `\.codeward\/manifest\.yaml > flows\.campaign-application-complete\.anchors`/);
+  assert.ok(draft.files.some((file) => file.source === "verification-manifest"));
+  assert.ok(draft.files.some((file) => file.flowTitle === "Campaign Application Complete"));
   assert.match(draftMarkdown, /## Manifest Recommendations/);
+  assert.match(draftMarkdown, /commit-candidate/);
+  assert.match(writtenDraftText, /Verification manifest evidence/);
+  assert.match(writtenDraftText, /Submit content URL successfully/);
+  assert.match(writtenDraftText, /Show validation error for invalid content URL/);
+  assert.match(writtenDraftText, /page\.goto\("\/campaign\/official\/applicationComplete"\)/);
   assert.match(verifyMarkdown, /## Manifest Recommendations/);
   assert.equal(verify.verificationManifestMatches.length > 0, true);
+
+  const cliValidate = await execFileAsync(process.execPath, [cliPath, "manifest", "validate", root, "--format", "markdown"]);
+  assert.match(cliValidate.stdout, /CodeWard Manifest Validate/);
+  const cliExplain = await execFileAsync(process.execPath, [
+    cliPath,
+    "manifest",
+    "explain",
+    root,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+    "--format",
+    "markdown",
+  ]);
+  assert.match(cliExplain.stdout, /CodeWard Manifest Explain/);
+  assert.match(cliExplain.stdout, /Campaign Application Complete/);
+});
+
+test("manifest validate reports missing and stale manifest policy", async () => {
+  const missingRoot = await makeTempRepo();
+  const missing = await validateVerificationManifest(missingRoot);
+  assert.equal(missing.status, "missing");
+  assert.equal(missing.summary.errors, 1);
+
+  const root = await makeTempRepo();
+  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await writeFile(
+    path.join(root, ".codeward/manifest.yaml"),
+    [
+      "version: 1",
+      "domains:",
+      "  - id: checkout",
+      "    name: Checkout",
+      "    paths: []",
+      "    criticality: high",
+      "    source:",
+      "      kind: declared",
+      "      confidence: high",
+      "      from:",
+      "        - qa",
+      "flows:",
+      "  - id: payment-complete",
+      "    domain: missing-domain",
+      "    name: Payment Complete",
+      "    runner: playwright",
+      "    anchors:",
+      "      - kind: route",
+      "        path: src/pages/missing.tsx",
+      "        route: checkout/payment",
+      "        source: declared",
+      "        confidence: high",
+      "    checks: []",
+      "    source:",
+      "      kind: declared",
+      "      confidence: high",
+      "      from:",
+      "        - qa",
+    ].join("\n"),
+  );
+
+  const invalid = await validateVerificationManifest(root);
+  const invalidText = formatVerificationManifestValidationResult(invalid, "text");
+
+  assert.equal(invalid.status, "invalid");
+  assert.ok(invalid.issues.some((issue) => issue.path.includes("domains.checkout.paths")));
+  assert.ok(invalid.issues.some((issue) => issue.path.includes("flows.payment-complete.domain")));
+  assert.match(invalidText, /Domain has no path patterns/);
+  assert.match(invalidText, /Flow references unknown domain 'missing-domain'/);
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [cliPath, "manifest", "validate", missingRoot]),
+    (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stdout, /No verification manifest was found/);
+      return true;
+    },
+  );
 });
 
 test("domains and flows suggest changed-file manifests for package scopes", async () => {

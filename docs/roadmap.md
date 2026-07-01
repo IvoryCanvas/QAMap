@@ -12,7 +12,7 @@ CodeWard should become a local-first QA meta framework: it builds a repository-l
 - Keep the [`0.1.0` release validation checklist](release-validation.md) and public [E2E output examples](e2e-output-examples.md) aligned with the current release bar.
 - Keep the [release runbook](releasing.md) ready for npm publishing and versioned GitHub Action follow-up.
 - Improve adoption docs and sample output so new maintainers can try CodeWard quickly.
-- Start the manifest feedback loop with `.codeward/manifest.yaml`, `manifest init`, and explainable recommendation evidence.
+- Start the manifest feedback loop with `.codeward/manifest.yaml`, `manifest init`, `manifest validate`, `manifest explain`, and manifest-driven E2E draft shaping.
 - Make `verify` the best first-run experience for AI-assisted PRs.
 - Keep `eval` explainable enough that maintainers trust the score and know what to fix.
 - Keep expanding representative validation targets beyond JavaScript so planning advice works for Python, Go, Rust, and JVM repositories.
@@ -22,7 +22,7 @@ CodeWard should become a local-first QA meta framework: it builds a repository-l
 - Publish a versioned GitHub Action release tag after the first public package is ready.
 - Improve `doctor` output with clearer scoring and remediation grouping.
 - Improve `review` output for changed-line locations.
-- Expand manifest support with validation, richer anchors, and configurable taste rubrics.
+- Expand manifest support with richer anchors, symbol-level matching, and configurable taste rubrics.
 - Map changed symbols to manifest anchors after the path/route baseline is stable.
 - Add language-specific domain patterns for backend services, CLIs, libraries, mobile apps, and infrastructure repositories.
 - Continue expanding agent surface detection across Codex, Claude Code, Cursor, GitHub Copilot, Gemini, and related tools.

@@ -151,6 +151,8 @@ CodeWard는 AI 코딩 에이전트에게 레포지토리를 맡기기 전에 빠
 ```sh
 pnpm exec codeward scan .
 pnpm exec codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
+pnpm exec codeward manifest validate .
+pnpm exec codeward manifest explain . --base origin/main --head HEAD
 pnpm exec codeward e2e draft . --base origin/main --head HEAD --dry-run
 ```
 
@@ -207,6 +209,7 @@ On a changed branch, CodeWard tries to produce reviewable verification artifacts
 
 - a branch-aware verification plan that names the changed domain, actor, trigger, goal, success signal, and edge cases
 - draft Playwright, Maestro, CLI command, or manual checklist files when the repository shape supports them
+- a repo-level verification manifest loop where humans correct durable flows once and later PRs get sharper route/check/test draft suggestions
 - a runner setup proposal that explains why Playwright or Maestro fits the changed surface and which files/commands would be created if the team accepts it
 - readiness evidence that explains missing runner config, selectors, fixture data, assertions, validation commands, or flow manifests
 - repo-local suggestions for `.codeward/domains.yml`, `.codeward/flows.yml`, and ignored `.codeward/runs/` history so teams can improve the next run without spending LLM tokens
@@ -234,6 +237,8 @@ That means CodeWard is most valuable when it becomes the team's verification bas
 | `codeward e2e draft . --base origin/main --head HEAD --dry-run` | Preview generated Maestro, Playwright, or manual E2E drafts without writing files. |
 | `codeward e2e draft . --base origin/main --head HEAD` | Write generated Maestro, Playwright, or manual E2E drafts with flow language, readiness summaries, and action items. |
 | `codeward manifest init .` | Create a baseline `.codeward/manifest.yaml` with inferred domains, flows, anchors, checks, source, and confidence. |
+| `codeward manifest validate .` | Check whether `.codeward/manifest.yaml` is present, parseable, anchored to real files, and ready to shape PR evidence. |
+| `codeward manifest explain . --base origin/main --head HEAD` | Explain which manifest domains, flows, and checks match the current branch and which manifest path to edit if the match is wrong. |
 | `codeward flows init .` | Create a starter `.codeward/flows.yml` for team-approved core flow definitions. |
 | `codeward flows suggest . --base origin/main --head HEAD` | Generate suggested `.codeward/flows.yml` entries with commit-readiness guidance from changed files and E2E plan context. |
 | `codeward domains init .` | Create a starter `.codeward/domains.yml` for shared product/domain language. |
@@ -267,6 +272,10 @@ The bootstrap section answers what must happen before generated drafts can be tr
 
 Run `codeward manifest init .` to create a baseline verification manifest. CodeWard infers domains, flows, route/component anchors, checks, runner hints, source, and confidence from the repository. The manifest is not meant to be perfect on the first run. It is meant to start the feedback loop: CodeWard recommends E2E work from the manifest, shows why a recommendation happened, and points to the manifest path to edit when the recommendation is wrong.
 
+Use `codeward manifest validate .` before treating the manifest as shared team policy. It reports missing manifests, invalid YAML/schema shape, duplicate ids, missing domain paths, stale anchor files, suspicious route hints, and low-confidence inferred entries that should be reviewed.
+
+Use `codeward manifest explain . --base origin/main --head HEAD` when you want to understand one branch. It reads the git diff, lists the matched manifest domains/flows/checks, shows the declared entry route and required checks, and names the exact manifest path to update if the recommendation is wrong.
+
 When `.codeward/manifest.yaml` exists, `codeward verify`, `codeward e2e plan`, and `codeward e2e draft` include a Manifest Recommendations section:
 
 ```txt
@@ -279,6 +288,8 @@ Manifest evidence:
 If this is wrong:
 - Update .codeward/manifest.yaml > flows.campaign-application-complete.anchors
 ```
+
+When a matched manifest flow has an entry route and checks, `codeward e2e draft` promotes it ahead of heuristic candidates. The generated Playwright, Maestro, or manual draft carries the manifest evidence, uses the manifest route as an entrypoint when possible, and turns manifest checks into draft steps and required coverage notes. This is the core cost-saving loop: humans fix durable QA context once, then future PRs start from a stronger draft instead of a blank test file.
 
 The domain language section is intentionally less implementation-oriented than the raw file list. For example, changes under `src/features/in-app-purchase/` become terms such as `In App Purchase` and scenarios such as `In App Purchase primary journey`. When a changed component or service file names a concrete behavior, CodeWard should prefer that behavior before the generic primary journey: `src/features/offer/components/ContentUrlSubmitModal.tsx` can become `Offer Content URL Submit`, and the generated draft file can become `.maestro/offer-content-url-submit.yaml`. When `.codeward/domains.yml` exists, declared product terms and routes receive higher confidence. When `.codeward/flows.yml` exists, team-approved flow names appear as preferred scenario names.
 

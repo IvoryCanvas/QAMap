@@ -19,6 +19,47 @@ Campaign Application Complete `campaign-application-complete`
 
 This is the feedback loop: static analysis proposes a baseline, humans correct durable manifest entries, and future E2E recommendations become more specific.
 
+`codeward manifest validate .` checks whether that repo-local knowledge is usable:
+
+```txt
+CodeWard Manifest Validate
+Status: valid
+Manifest: .codeward/manifest.yaml
+Issues: 0 errors, 0 warnings, 0 info
+```
+
+`codeward manifest explain . --base origin/main --head HEAD` makes a single branch debuggable:
+
+```txt
+CodeWard Manifest Explain
+Changed files: 1
+Matches: 3
+
+Matches:
+- Campaign Application Complete (flow, high)
+  Why: Changed files match anchors for the Campaign Application Complete flow.
+  Evidence: .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+  If wrong: update .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+  Checks: Submit content URL successfully; Show validation error for invalid content URL
+```
+
+When that flow includes an entry route and checks, `codeward e2e draft` promotes it ahead of heuristic drafts:
+
+```ts
+// Verification manifest evidence:
+// - Flow: Campaign Application Complete (campaign-application-complete)
+// - Entry route: /campaign/official/applicationComplete
+// - Required checks:
+//   - [ ] Submit content URL successfully
+//   - [ ] Show validation error for invalid content URL
+
+test("Campaign Application Complete", async ({ page }) => {
+  await test.step("Open route /campaign/official/applicationComplete.", async () => {
+    await page.goto("/campaign/official/applicationComplete");
+  });
+});
+```
+
 ## Web Core Flow
 
 When a web app declares a core flow:

@@ -5,7 +5,10 @@
 ### Added
 
 - Added `codeward manifest init` to create a baseline `.codeward/manifest.yaml` with inferred domains, flows, anchors, checks, runner hints, source, and confidence.
+- Added `codeward manifest validate` to check manifest presence, schema shape, duplicate ids, stale anchors, route hints, and low-confidence inferred entries.
+- Added `codeward manifest explain` to show which manifest domains, flows, and checks match a branch and which manifest path should be corrected when a recommendation is wrong.
 - Added verification manifest matches to `e2e plan`, `e2e draft`, and `verify` output so recommendations explain why they were made and which manifest path to update when they are wrong.
+- Promoted matched verification manifest flows into generated E2E drafts so declared entry routes and checks shape Playwright, Maestro, and manual draft content before heuristic candidates.
 
 ## 0.1.1 - 2026-07-01
 
