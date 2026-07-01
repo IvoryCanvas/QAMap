@@ -95,31 +95,31 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 
 See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft snippets users should see before `0.1.0`.
 
-## Latest Main Validation Snapshot
+## Latest PR Validation Snapshot
 
-Last verified on 2026-07-01 after adding the single local release gate, verification-base positioning, non-app false-positive guards, and opt-in E2E runner setup proposals:
+Last verified on 2026-07-01 on PR #67 after adding action-specific E2E generation, input-aware actions, opt-in setup scaffolding that creates the first changed-flow draft, and redundant entrypoint TODO reduction:
 
 | Check | Result |
 | --- | --- |
-| `pnpm test` | 70 tests passed. |
+| `pnpm test` | 74 tests passed. |
 | `pnpm scan` | 0 findings. |
 | `git diff --check` | Passed. |
 | `pnpm pack --dry-run` | Passed; tarball includes `dist`, `docs`, `schema`, `README.md`, `CHANGELOG.md`, `LICENSE`, and `package.json`. |
-| Coverage threshold | Passed the 80% line, branch, and function gates; latest runs report about 84.05% lines, 81.96% branches, and 92.90% functions. |
-| `pnpm run release:check` | Passed as the single local release gate for future candidates. |
+| Coverage threshold | Passed the 80% line, branch, and function gates; latest runs report about 85.02% lines, 82.62% branches, and 93.35% functions. |
+| `pnpm run release:check` | Passed as the single local release gate for this PR state. |
 
 ## Real Repository Smoke Snapshot
 
-The latest smoke run used private representative repositories and wrote draft output only under `/tmp/codeward-0.1.0-smoke-*`. Target repository `git status --short --branch` output was identical before and after every run. The table records public-safe target shapes rather than private repository names.
+The latest smoke run used private representative repositories and wrote draft output only under `/tmp/codeward-preview-*`. The smoke commands did not run `e2e setup` or write generated files into the target repositories. The table records public-safe target shapes rather than private repository names.
 
-| Target shape | Base/head mode | Result |
-| --- | --- | --- |
-| Private Expo app branch | Feature branch compared with `origin/main` | Detected `expo-react-native`, recommended Maestro, produced 4 drafts, and classified drafts as `near-runnable`. Blockers were useful: missing Maestro flow directory, missing stable `testID`/`accessibilityLabel`, and missing validation evidence. |
-| Private monorepo Next package | Package scan with `--workspace-root`, recent commit range | Detected `web`, recommended Playwright, produced 1 draft, and surfaced review-only status because Playwright config, deterministic fixture/mock data, and validation evidence were missing. |
-| Private Nuxt/Vue app | Recent commit range | Detected `web`, recommended Playwright, produced 2 drafts, and identified missing Playwright config, unresolved placeholders, and selector/testability work. |
-| Private Expo proof-of-concept app | Feature branch compared with `origin/main` | Detected `expo-react-native`, recommended Maestro with high execution confidence, produced 4 drafts, and correctly highlighted missing stable mobile selectors. |
-| Private design token repository | Recent commit range | Detected `design-tokens`, produced a manual design token artifact checklist, and avoided browser/device selector requirements. |
-| Private taxonomy/catalog repository | Recent commit range | Detected `data-catalog`, produced manual taxonomy catalog verification checklists, and avoided API mock requirements. |
+| Target shape | Base/head mode | Result | Follow-up signal |
+| --- | --- | --- | --- |
+| Web monorepo package | Package scan with `--workspace-root`, feature branch compared with `main`, working tree included | Detected `web`, recommended Playwright, inferred a concrete route, produced changed-flow specs, and correctly blocked promotion because Playwright config, deterministic fixture/mock data, selector evidence, and validation evidence were missing. | Flow naming improved, but docs/design-only files can still create low-signal drafts that should be filtered or demoted. |
+| Expo / React Native app | Feature branch compared with `develop`, working tree included | Detected `expo-react-native`, recommended Maestro, found an existing Jest suite, produced multiple near-runnable YAML drafts, and gave useful blockers for missing Maestro directory plus missing stable mobile selectors. | Strongest current real-repo result; remaining gap is selector and app-specific setup quality. |
+| Nuxt / Vue web app with existing Playwright tests | `origin/develop` to `HEAD`, working tree included | Detected `web`, recommended Playwright, recognized existing test evidence, and blocked draft promotion because no Playwright config or runnable route/screen entrypoint was inferred. | Test-only or generated-test changes can still produce generic smoke draft names; CodeWard should better distinguish changed tests from changed product behavior. |
+| Django-style API service | `origin/develop` to `HEAD`, working tree included | Detected `api-service`, selected manual output, found a large pytest suite, generated API contract and configuration checklists with zero TODOs, and avoided browser/device runner assumptions. | Good service classification; fixture readiness should become more endpoint-specific. |
+| Design token repository | `main` to `HEAD`, working tree included | Detected `design-tokens`, selected manual output, avoided browser/device selector requirements, and produced review-only artifact validation output. | Docs-only or style-only changes may still surface content/theme wording instead of token artifact language. |
+| Taxonomy / data catalog repository | `main` to `HEAD`, working tree included | Detected `data-catalog`, selected manual output, avoided API mock requirements, and produced review-only checklist output with no TODOs. | Catalog-specific changes are handled, but docs/config-only changes should be labeled more explicitly as low-signal. |
 
 Interpretation: the first public release should be described as a planner that removes blank-page verification work. The smoke results are useful, but they also show that many real repositories will start at `review-only` or `near-runnable` until teams add runner config, selectors, fixtures, validation evidence, and durable manifests.
 
@@ -132,12 +132,14 @@ Before publishing the package, run the fixture-backed suite plus at least one re
 - whether generated drafts identify the right actor, trigger, success signal, and edge cases
 - whether action items are concrete enough for a developer to convert into runnable tests
 - whether false positives are caused by missing manifests, weak selectors, or unsupported project structure
+- whether test-only, docs-only, or generated-output-only changes are clearly demoted instead of being presented as product journeys
 
 ## Stop Conditions
 
 Do not publish `0.1.0` if any representative target shows one of these problems:
 
 - generated flow names are dominated by generic folder names instead of product language
+- test-only or docs-only changes are presented as confident product journeys without low-signal wording
 - execution profiles hide missing start commands, base URLs, app ids, or runner config needed to run generated drafts
 - draft self-checks fail to report unresolved placeholder locators, route params, missing runner structure, or TODO-heavy generated files
 - monorepo package scans report workspace-root paths in generated package-local drafts
