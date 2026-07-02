@@ -4575,6 +4575,19 @@ function refineStepsForInferredSelectors(steps: string[], selectors: E2eSelector
   return uniqueStrings(refined);
 }
 
+function refineManifestStepsForInferredSelectors(steps: string[], selectors: E2eSelector[]): string[] {
+  const inputSelector = selectors.find(isInputSelector);
+  const actionSelector = selectors.find((selector) => selectorCanDriveInteraction(selector) && !isInputSelector(selector));
+  if (!inputSelector || !actionSelector || steps.some(isInputStep)) {
+    return steps;
+  }
+  return uniqueStrings([
+    `Fill ${selectorStepLabel(inputSelector)} with realistic data.`,
+    `${actionVerbForSelector(actionSelector)} using ${selectorStepLabel(actionSelector)}.`,
+    ...steps,
+  ]);
+}
+
 function exerciseStepSubject(step: string): string | undefined {
   const exerciseMatch = step.match(/^Exercise\s+(.+?)\s+with realistic data(?:\s+from[^.]*)?\.?$/i);
   if (exerciseMatch?.[1]) {
@@ -6027,7 +6040,10 @@ async function buildManifestDraftFlow(
     ...filterSelectorsForFiles(baseFlows.flatMap((flow) => flow.selectors), files),
     ...(await inferFlowSelectors(plan.root, files, runner)),
   ]);
-  const refinedSteps = refineStepsForInferredSelectors(manifestSteps.length > 0 ? manifestSteps : (baseFlow?.steps ?? []), selectors);
+  const refinedSteps = refineManifestStepsForInferredSelectors(
+    refineStepsForInferredSelectors(manifestSteps.length > 0 ? manifestSteps : (baseFlow?.steps ?? []), selectors),
+    selectors,
+  );
   const setupHints = uniqueSetupHints([
     ...filterSetupHintsForFiles(baseFlows.flatMap((flow) => flow.setupHints), files),
     ...(await inferFlowSetupHints(plan.root, files, "domain")),

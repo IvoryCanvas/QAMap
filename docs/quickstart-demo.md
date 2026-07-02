@@ -43,6 +43,75 @@ pnpm dlx @ivorycanvas/codeward manifest explain . --base origin/main --head HEAD
 
 The manifest is the durable part. It lets a team correct domains, flows, anchors, and checks once, then reuse that correction across future PRs without re-explaining the same QA context to an LLM.
 
+## Manifest-Backed PoC Path
+
+The practical PoC is not "CodeWard reads every project perfectly." The useful loop is:
+
+```txt
+default branch repo context
+  -> codeward manifest init
+  -> reviewed .codeward/manifest.yaml
+
+PR branch diff
+  -> codeward manifest explain
+  -> codeward e2e draft
+  -> draft test file plus manifest repair path
+```
+
+For example, a repository can contain:
+
+```txt
+CONTEXT.md
+docs/adr/checkout-purchase.md
+AGENTS.md
+src/pages/checkout/index.tsx
+playwright.config.ts
+```
+
+If `docs/adr/checkout-purchase.md` says the checkout purchase flow must cover success, API failure, and visible confirmation evidence, `manifest init` can bootstrap a flow named `Checkout Purchase` with the route `/checkout`. When a later PR changes `src/pages/checkout/index.tsx`, CodeWard can connect the changed route to that manifest flow and preview:
+
+```txt
+Manifest Recommendations
+- Flow: Checkout Purchase
+- Entry route: /checkout
+- Evidence sources: route-file, adr-context
+- Required checks:
+  - Checkout Purchase uses deterministic success fixture data
+  - Checkout Purchase handles failed, empty, or unauthorized responses
+- If this is wrong: update .codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors
+
+Draft file
+- tests/e2e/checkout-purchase.spec.ts
+```
+
+That draft is intentionally concrete enough to edit, run, and promote:
+
+```ts
+import { expect, test } from "@playwright/test";
+
+test("Checkout Purchase", async ({ page }) => {
+  // Verification manifest evidence:
+  // Flow: Checkout Purchase
+  // .codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors
+
+  await test.step("Open route /checkout.", async () => {
+    await page.goto("/checkout");
+  });
+
+  await test.step("Fill Email with realistic data.", async () => {
+    await page.getByPlaceholder("Email").fill("codeward@example.com");
+  });
+
+  await test.step("Submit using Checkout Submit.", async () => {
+    await page.getByTestId("checkout-submit").click();
+  });
+
+  await expect(page.getByText("Order confirmed")).toBeVisible();
+});
+```
+
+The human still owns the final truth: fixture data, auth state, API mocks, and assertions must match the real product. The saving is that the repeated context work moves into repo-local manifest memory, and a wrong recommendation points to the manifest path to repair instead of asking a new AI prompt to re-learn the project.
+
 ## What CodeWard Reads
 
 ```txt

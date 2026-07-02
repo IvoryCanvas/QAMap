@@ -4121,6 +4121,131 @@ test("manifest init captures advisory instruction context", async () => {
   assert.ok(validation.issues.some((issue) => issue.path.includes("context.source")));
 });
 
+test("manifest bootstrap produces concrete PR E2E draft from repo QA memory", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
+  await mkdir(path.join(root, "docs/adr"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        dev: "vite --host 127.0.0.1",
+        "test:e2e": "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        next: "^15.0.0",
+        react: "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "playwright.config.ts"), "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await writeFile(
+    path.join(root, "CONTEXT.md"),
+    [
+      "# Product Context",
+      "",
+      "Checkout purchase is the customer payment flow and release-critical purchase evidence.",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "docs/adr/checkout-purchase.md"),
+    "# Checkout purchase\n\nThe checkout purchase flow must cover success, API failure, and visible confirmation evidence.\n",
+  );
+  await writeFile(
+    path.join(root, "AGENTS.md"),
+    [
+      "# Verification Rules",
+      "",
+      "- Run `pnpm test:e2e` before merge when checkout purchase behavior changes.",
+      "- Never publish or push during local smoke tests.",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  async function submitCheckout() {",
+      "    await fetch('/api/checkout', { method: 'POST' });",
+      "  }",
+      "  return <main>",
+      "    <label>Email<input placeholder=\"Email\" /></label>",
+      "    <button data-testid=\"checkout-submit\" onClick={submitCheckout}>Complete purchase</button>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+
+  const contextResult = await analyzeVerificationManifestContext(root);
+  const contextMarkdown = formatVerificationManifestContextResult(contextResult, "markdown");
+  const initResult = await writeVerificationManifestBaseline(root);
+  const manifest = await loadVerificationManifest(root);
+  const checkoutFlow = manifest.flows.find((flow) => flow.name === "Checkout Purchase");
+
+  assert.match(contextMarkdown, /docs\/adr\/checkout-purchase\.md/);
+  assert.ok(contextResult.roleSummary.some((item) => item.role === "domain-context"));
+  assert.equal(initResult.summary.contextSources >= 3, true);
+  assert.ok(checkoutFlow);
+  assert.equal(checkoutFlow.entry?.route, "/checkout");
+  assert.ok(checkoutFlow.source.from.includes("adr-context"));
+  assert.ok(checkoutFlow.checks.some((check) => check.title === "Checkout Purchase uses deterministic success fixture data"));
+  assert.ok(checkoutFlow.checks.some((check) => check.title === "Checkout Purchase handles failed, empty, or unauthorized responses"));
+
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "baseline checkout qa memory"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/checkout-confirmation"]);
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  async function submitCheckout() {",
+      "    await fetch('/api/checkout', { method: 'POST' });",
+      "  }",
+      "  return <main>",
+      "    <label>Email<input placeholder=\"Email\" /></label>",
+      "    <button data-testid=\"checkout-submit\" onClick={submitCheckout}>Complete purchase now</button>",
+      "    <p>Order confirmed</p>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "show checkout confirmation"]);
+
+  const explain = await explainVerificationManifest(root, { base: "main", head: "HEAD" });
+  const explainMarkdown = formatVerificationManifestExplainResult(explain, "markdown");
+  const draftPreview = await generateE2eDraft(root, { base: "main", head: "HEAD", dryRun: true, runner: "playwright" });
+  const draftMarkdown = formatMarkdownE2eDraft(draftPreview);
+  const writtenDraft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const draftFile = writtenDraft.files.find((file) => file.source === "verification-manifest" && file.flowTitle === "Checkout Purchase");
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+
+  assert.match(explainMarkdown, /Checkout Purchase/);
+  assert.match(explainMarkdown, /Evidence sources: route-file, adr-context/);
+  assert.match(explainMarkdown, /If this is wrong: update `\.codeward\/manifest\.yaml > flows\.checkout-checkout-purchase\.anchors`/);
+  assert.match(draftMarkdown, /Manifest Recommendations/);
+  assert.match(draftMarkdown, /Checkout Purchase/);
+  assert.match(draftMarkdown, /tests\/e2e\/checkout-purchase\.spec\.ts/);
+  assert.equal(draftFile.path, "tests/e2e/checkout-purchase.spec.ts");
+  assert.equal(draftFile.promotionStatus, "commit-candidate");
+  assert.match(spec, /Verification manifest evidence/);
+  assert.match(spec, /Flow: Checkout Purchase/);
+  assert.match(spec, /page\.goto\("\/checkout"\)/);
+  assert.match(spec, /page\.getByPlaceholder\("Email"\)/);
+  assert.match(spec, /page\.getByTestId\("checkout-submit"\)\.click\(\)/);
+  assert.match(spec, /Checkout Purchase uses deterministic success fixture data/);
+  assert.match(spec, /Checkout Purchase handles failed, empty, or unauthorized responses/);
+});
+
 test("manifest init keeps Expo app file domains specific", async () => {
   const root = await makeTempRepo();
   await mkdir(path.join(root, "app"), { recursive: true });

@@ -59,6 +59,16 @@ Preview PR-specific E2E drafts without writing files:
 pnpm exec codeward e2e draft . --base origin/main --head HEAD --dry-run
 ```
 
+For the strongest first result, create the manifest from the default branch, commit it, and let PR branches reuse that team QA memory:
+
+```sh
+git switch main
+pnpm exec codeward manifest context .
+pnpm exec codeward manifest init .
+git add .codeward/manifest.yaml
+git commit -m "Add CodeWard verification manifest"
+```
+
 Or run CodeWard once without adding a dependency:
 
 ```sh
@@ -108,10 +118,13 @@ Files: 0 created, 1 previewed, 0 skipped
 
 - preview: tests/e2e/checkout-purchase.spec.ts
   Flow: Checkout purchase
+  Source: verification-manifest
+  Evidence: .codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors
   Actor: Customer
   Trigger: Open route /checkout.
   Goal: Complete checkout with realistic form data.
   Success signal: confirmation state is visible after submit
+  If wrong: update .codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors
   Runnable status: near-runnable
 
 Required action items:
@@ -124,6 +137,10 @@ The generated draft reads like the user journey instead of a generic file checkl
 
 ```ts
 test("Checkout purchase", async ({ page }) => {
+  // Verification manifest evidence:
+  // Flow: Checkout Purchase
+  // .codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors
+
   await test.step("Open route /checkout.", async () => {
     await page.goto("/checkout");
   });
@@ -133,7 +150,7 @@ test("Checkout purchase", async ({ page }) => {
   });
 
   await test.step("Submit checkout.", async () => {
-    await page.getByRole("button", { name: "Complete purchase" }).click();
+    await page.getByTestId("checkout-submit").click();
   });
 
   await expect(page.getByText("Order confirmed")).toBeVisible();

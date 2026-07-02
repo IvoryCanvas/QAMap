@@ -47,6 +47,47 @@ CodeWard cannot know every team's product priorities from file paths alone. The 
 
 When a recommendation is wrong, edit the manifest path shown in CodeWard output. The next branch should get better recommendations without another explanation.
 
+## Concrete Bootstrap Example
+
+A first baseline can be useful before a human writes YAML by hand. Suppose the default branch has:
+
+```txt
+CONTEXT.md
+docs/adr/checkout-purchase.md
+AGENTS.md
+src/pages/checkout/index.tsx
+playwright.config.ts
+```
+
+If the ADR and context docs use the team phrase `Checkout purchase`, and the route file exposes `/checkout`, `codeward manifest init .` can create a manifest flow close to:
+
+```yaml
+flows:
+  - id: checkout-checkout-purchase
+    domain: checkout
+    name: Checkout Purchase
+    entry:
+      route: /checkout
+      source: inferred
+    runner: playwright
+    source:
+      kind: inferred
+      confidence: medium
+      from:
+        - route-file
+        - adr-context
+```
+
+When a later PR changes `src/pages/checkout/index.tsx`, `codeward manifest explain . --base origin/main --head HEAD` should name the same flow, show the manifest evidence, and print the repair path:
+
+```txt
+Flow: Checkout Purchase
+Evidence sources: route-file, adr-context
+If this is wrong: update `.codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors`
+```
+
+Then `codeward e2e draft . --base origin/main --head HEAD --dry-run` can preview a concrete draft such as `tests/e2e/checkout-purchase.spec.ts`, using the manifest route, detected selectors, and manifest checks before falling back to generic smoke-test heuristics.
+
 ## Schema
 
 Generated manifests include:

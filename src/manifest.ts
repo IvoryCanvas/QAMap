@@ -1409,7 +1409,12 @@ function buildBaselineFlows(
       continue;
     }
     const domain = bestDomainForFile(domains, file.path);
-    const subject = route ? titleCase(route.replace(/^\/+/, "").replace(/[:/]+/g, " ")) : component ?? "Changed UI";
+    const inferredSubject = route ? titleCase(route.replace(/^\/+/, "").replace(/[:/]+/g, " ")) : component ?? "Changed UI";
+    const subject = contextFlowSubjectForTerms(
+      context,
+      [inferredSubject, domain?.id, domain?.name].filter(Boolean) as string[],
+      inferredSubject,
+    );
     const id = slugify([domain?.id, subject].filter(Boolean).join(" "));
     const contextEvidence = contextEvidenceForTerms(context, [subject, domain?.name, domain?.id].filter(Boolean) as string[]);
     const anchors: VerificationManifestAnchor[] = [
@@ -1683,6 +1688,50 @@ function contextEvidenceForTerms(context: VerificationManifestContext | undefine
     })
     .map((file) => contextSourceLabel(file.kind));
   return uniqueStrings(evidence);
+}
+
+function contextFlowSubjectForTerms(
+  context: VerificationManifestContext | undefined,
+  terms: string[],
+  fallback: string,
+): string {
+  if (!context) {
+    return fallback;
+  }
+  const normalizedTerms = uniqueStrings(
+    terms
+      .flatMap((term) => [term, slugify(term), term.replace(/\s+/g, "-")])
+      .map((term) => term.toLowerCase())
+      .filter((term) => term.length >= 3),
+  );
+  if (normalizedTerms.length === 0) {
+    return fallback;
+  }
+
+  const candidates = context.instructionFiles
+    .filter((file) => file.roles.includes("domain-context") || file.roles.includes("verification-rubric"))
+    .map((file) => contextFlowSubjectCandidate(file.path, normalizedTerms))
+    .filter(Boolean) as string[];
+  const best = candidates
+    .filter((candidate) => slugify(candidate) !== slugify(fallback))
+    .sort((left, right) => right.length - left.length)[0];
+  return best ?? fallback;
+}
+
+function contextFlowSubjectCandidate(filePath: string, normalizedTerms: string[]): string | undefined {
+  const basename = path.basename(toPosixPath(filePath)).replace(/\.[^.]+$/, "");
+  const slug = slugify(basename);
+  if (!slug || !normalizedTerms.some((term) => slug.includes(term))) {
+    return undefined;
+  }
+  const cleanSlug = slug
+    .split("-")
+    .filter((part) => !["adr", "context", "decision", "doc", "docs", "goal", "note", "notes", "runbook", "spec"].includes(part))
+    .join("-");
+  if (!cleanSlug || cleanSlug.split("-").length < 2) {
+    return undefined;
+  }
+  return titleCase(cleanSlug);
 }
 
 function contextSourceLabel(kind: VerificationManifestInstructionKind): string {
