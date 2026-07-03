@@ -1,10 +1,6 @@
 # 30-Second Quick Start Demo
 
-This demo is the shortest way to show what QAMap does in a public README, blog post, or launch thread.
-
-![QAMap 30-second PR demo](assets/qamap-30s-demo.gif)
-
-The GIF shows a simulated local PR where a checkout form changed. QAMap does not report a real browser test pass during `--dry-run`. It reports the generated verification artifact: the affected flow, the planned Playwright draft path, static self-check status, and the remaining work before the draft can be trusted as PR evidence.
+This demo is the shortest way to show what QAMap does in a public README, blog post, or launch thread. It is text-first on purpose: record a GIF only from the current published package and current `.qamap/manifest.yaml` flow, so the public demo never drifts from the CLI.
 
 ## Story
 

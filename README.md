@@ -95,9 +95,7 @@ Preview the PR QA comment/checklist QAMap would generate for the current branch:
 pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
 
-![QAMap 30-second PR demo](docs/assets/qamap-30s-demo.gif)
-
-The GIF is a simulated walkthrough of that loop on a checkout form PR with a committed manifest. It does **not** claim browser QA has passed; run the command above on your own branch to see the real, longer first-run output, including the remaining work such as deterministic fixture data and a real `pnpm run test:e2e` execution.
+This section intentionally uses text output instead of an animated recording so the README reflects the current CLI behavior exactly. A new GIF should be recorded only from the published `@ivorycanvas/qamap` package and the current `.qamap/manifest.yaml` flow.
 
 QAMap reads the changed files and project signals:
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.1 - 2026-07-03
+
+### Fixed
+
+- Removed the stale animated README demo that still showed the previous project name and `.codeward/flows.yml` manifest path.
+- Kept the public demo text-first until a fresh recording can show the current `@ivorycanvas/qamap` package, `.qamap/manifest.yaml`, and real CLI output.
+
 ## 0.3.0 - 2026-07-03
 
 ### Added

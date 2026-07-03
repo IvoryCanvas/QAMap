@@ -171,21 +171,18 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 | Existing test evidence | `generateE2ePlan evaluates existing test suite coverage evidence`; `generateE2ePlan keeps generic test filenames from overmatching unrelated services` | Coverage evidence rows that distinguish covered, partial, and missing targets without matching unrelated generic test filenames. |
 | Evidence-only changes | `generateE2ePlan treats test-only changes as evidence verification, not product journeys`; `generateE2ePlan treats docs-only changes as documentation verification`; `generateE2ePlan treats generated-only changes as generated artifact verification` | Test-only, docs-only, and generated-output-only branches produce maintainer-oriented evidence checklists instead of product journeys inferred from filenames such as `admin-primary-journey.spec.ts` or generated API clients. |
 
-See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft snippets users should see from the `0.2.1` release.
+See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft snippets users should see from the current release.
 
 ## Latest PR Validation Snapshot
 
-Last verified on 2026-07-03 on PR #71 after adding the manifest-free `qamap qa` PR QA skill entrypoint, the packaged `qamap-pr-qa` skill template, README repositioning, agent handoff docs, repo-context manifest PoC path, ADR-derived flow naming, and manifest-backed selector/action draft shaping:
+Last verified on 2026-07-03 for the 0.3.1 README demo patch after removing the stale animated GIF from the README and npm tarball:
 
 | Check | Result |
 | --- | --- |
-| `pnpm test` | 90 tests passed. |
-| `pnpm scan` | 0 findings. |
+| `pnpm test` | 95 tests passed. |
 | `git diff --check` | Passed. |
-| `pnpm pack --dry-run` | Passed; tarball includes `dist`, `docs`, `docs/assets/qamap-30s-demo.gif`, `schema`, `skills/qamap-pr-qa/SKILL.md`, `README.md`, `CHANGELOG.md`, `LICENSE`, and `package.json`. |
-| Coverage threshold | Passed the 80% line, branch, and function gates; latest run reported 85.27% line, 81.59% branch, and 94.26% function coverage. |
-| `pnpm run release:check` | Passed as the single local release gate for this PR state, including `qamap qa` coverage, the packaged PR QA skill template, and `dist/qa.*` pack output. |
-| `npm publish --dry-run --access public` | Passed for `@ivorycanvas/qamap@0.3.0`; tarball includes 98 files, `schema/qamap-manifest.schema.json`, `docs/manifest.md`, `docs/quickstart-demo.md`, `skills/qamap-pr-qa/SKILL.md`, and the demo GIF. |
+| `pnpm pack --dry-run` | Passed; tarball includes 97 files and no committed demo GIF. |
+| `npm publish --dry-run --access public` | Passed for `@ivorycanvas/qamap@0.3.1`; package size is 289.1 kB and includes the manifest schema, quick-start docs, release docs, and `skills/qamap-pr-qa/SKILL.md`. |
 
 ## Real Repository Smoke Snapshot
 
