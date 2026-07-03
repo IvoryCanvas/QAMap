@@ -6,6 +6,7 @@ CodeWard should not publish a new minor version only because the CLI commands wo
 
 CodeWard is ready for `0.2.0` when the commands below produce useful, reviewable output for each representative repository type:
 
+- manifest-free `codeward qa` output that works as a PR comment/checklist draft
 - repository baseline generation with `.codeward/manifest.yaml`
 - manifest validation that catches stale or ambiguous team verification policy
 - branch-level manifest explanation with clear update paths
@@ -53,7 +54,10 @@ Run these against every representative target repository:
 ```sh
 node dist/cli.js e2e plan <target> --base <base> --head <head> --format markdown
 node dist/cli.js e2e plan <target> --base <base> --head <head> --format json
+node dist/cli.js qa <target> --base <base> --head <head> --format markdown
+node dist/cli.js qa <target> --base <base> --head <head> --format json
 node dist/cli.js e2e draft <target> --base <base> --head <head> --output <tmp-output-dir> --dry-run
+node dist/cli.js qa <target> --manifest <tmp-manifest-file> --base <base> --head <head> --format markdown
 node dist/cli.js e2e draft <target> --manifest <tmp-manifest-file> --base <base> --head <head> --dry-run
 node dist/cli.js e2e draft <target> --base <base> --head <head> --output <tmp-output-dir>
 node dist/cli.js e2e draft <target> --base <base> --head <head> --output <tmp-output-dir> --force --json
@@ -69,6 +73,7 @@ For monorepos, include:
 
 ```sh
 node dist/cli.js e2e plan <package> --workspace-root <repo-root> --base <base> --head <head> --format markdown
+node dist/cli.js qa <package> --workspace-root <repo-root> --base <base> --head <head> --format markdown
 node dist/cli.js e2e draft <package> --workspace-root <repo-root> --base <base> --head <head> --output <tmp-output-dir> --dry-run
 node dist/cli.js e2e draft <package> --workspace-root <repo-root> --base <base> --head <head> --output <tmp-output-dir>
 ```
@@ -103,6 +108,17 @@ The E2E draft should show:
 - `readinessSummary` with score, level, self-check counts, TODO counts, execution blocker counts, and top blockers
 - Playwright `test.step()` names that read like the product journey
 
+The QA draft should show:
+
+- no-write PR comment/checklist output from `codeward qa`
+- no cloud and no LLM token positioning in the output
+- affected flow language with changed files and reviewer question
+- suggested E2E or manual checklist path
+- runner recommendation inherited from the E2E planner
+- missing fixture, selector, assertion, runner, validation, or manifest evidence
+- PR checklist items that can be pasted into a pull request
+- optional manifest repair path when a manifest-backed recommendation is wrong
+
 The manifest commands should show:
 
 - generated `$schema` pointing at `schema/codeward-manifest.schema.json`
@@ -131,6 +147,7 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 
 | Target | Fixture-backed coverage | Expected output |
 | --- | --- | --- |
+| Manifest-free QA skill entrypoint | `qa command emits a PR comment draft without requiring a manifest` | `codeward qa` works without `.codeward/manifest.yaml`, emits a local-first PR QA draft, names affected flow, changed files, suggested E2E/checklist path, missing evidence, PR checklist, agent handoff, and says manifest is optional upgrade rather than a first-use gate. |
 | Verification manifest loop | `manifest init creates a baseline verification manifest`; `manifest init keeps Expo app file domains specific`; `manifest init captures advisory instruction context`; `manifest bootstrap produces concrete PR E2E draft from repo QA memory`; `e2e draft can use an external verification manifest for read-only adoption preview`; `manifest matches explain e2e and verify recommendations`; `manifest validate reports missing and stale manifest policy` | Generated `.codeward/manifest.yaml` includes `$schema`, domains, flows, anchors, checks, runner, source, and confidence; context preview reports repo-local instruction sources, role summaries, validation commands, safety rules, and diagnostics; validator reports missing/stale/duplicate policy; explain output maps branch changes to manifest domains/flows/checks; E2E drafts prefer `verification-manifest` sources with manifest evidence, route entry, detected input/action selectors, required checks, and manifest repair paths; external manifests can be passed with `--manifest` for read-only adoption smoke tests. |
 | Web app with Playwright routes | `generateE2ePlan matches committed core flow definitions`; `generateE2eDraft uses web selectors in Playwright specs`; `generateE2eDraft dry run previews files without writing drafts`; `generateE2eDraft asserts changed HTML success copy in Playwright specs`; `generateE2ePlan captures Playwright execution profile and self-check blockers`; `generateE2ePlan infers Playwright base URLs from dev scripts`; `generateE2eDraft supports Next app router route groups and concrete route hints`; `generateE2ePlan reads React Router object route paths`; `generateE2eDraft fills dynamic route params from concrete route hints`; `generateE2eDraft emits runnable Playwright role and input actions` | `Web` project profile, `playwright` runner, core-flow names such as `Checkout purchase`, route-aware Playwright drafts, dry-run preview status without filesystem writes, stable selector hints, changed HTML success copy assertions, execution profile, dev-script base URL hints, opt-in Playwright setup proposal, Next App Router route groups, React Router object paths, dynamic route params, draft self-check status, action items, and validation gaps. |
 | Expo / React Native mobile app | `generateE2ePlan recommends mobile flows for Expo changes`; `generateE2ePlan detects Maestro app ids from app config files`; `generateE2eDraft scopes entrypoint hints to each domain scenario`; `generateE2eDraft names changed component actions before generic primary journeys` | `Expo / React Native` project profile, `maestro` runner, app id and launch command hints from `app.json` or `app.config.*`, Maestro YAML drafts, `testID`/`accessibilityLabel` selector hints, action-specific scenario names such as `Offer Content URL Submit`, and mobile setup actions. |
@@ -148,16 +165,16 @@ See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft
 
 ## Latest PR Validation Snapshot
 
-Last verified on 2026-07-02 on PR #71 after adding the repo-context manifest PoC path, ADR-derived flow naming, manifest-backed selector/action draft shaping, and README/quick-start updates:
+Last verified on 2026-07-03 on PR #71 after adding the manifest-free `codeward qa` PR QA skill entrypoint, README repositioning, agent handoff docs, repo-context manifest PoC path, ADR-derived flow naming, and manifest-backed selector/action draft shaping:
 
 | Check | Result |
 | --- | --- |
-| `pnpm test` | 87 tests passed. |
+| `pnpm test` | 88 tests passed. |
 | `pnpm scan` | 0 findings. |
 | `git diff --check` | Passed. |
 | `pnpm pack --dry-run` | Passed; tarball includes `dist`, `docs`, `docs/assets/codeward-30s-demo.gif`, `schema`, `README.md`, `CHANGELOG.md`, `LICENSE`, and `package.json`. |
-| Coverage threshold | Passed the 80% line, branch, and function gates; latest run reported 85.24% line, 82.20% branch, and 94.13% function coverage. |
-| `pnpm run release:check` | Passed as the single local release gate for this PR state. |
+| Coverage threshold | Passed the 80% line, branch, and function gates; latest run reported 85.30% line, 81.98% branch, and 94.26% function coverage. |
+| `pnpm run release:check` | Passed as the single local release gate for this PR state, including `codeward qa` coverage and `dist/qa.*` pack output. |
 | `npm publish --dry-run --access public` | Passed for `@ivorycanvas/codeward@0.2.0`; tarball includes 93 files, `schema/codeward-manifest.schema.json`, `docs/manifest.md`, `docs/quickstart-demo.md`, and the demo GIF. |
 
 ## Real Repository Smoke Snapshot

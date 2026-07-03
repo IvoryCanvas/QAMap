@@ -21,6 +21,7 @@ import {
   formatMarkdownE2eDraft,
   formatMarkdownE2ePlan,
   formatMarkdownE2eSetup,
+  formatMarkdownQaDraft,
   formatMarkdownReviewReport,
   formatMarkdownTestPlan,
   formatMarkdownVerifyReport,
@@ -31,6 +32,7 @@ import {
   generateE2ePlan,
   generateDomainManifestSuggestion,
   generateFlowManifestSuggestion,
+  generateQaDraft,
   generateTestPlan,
   loadVerificationManifest,
   initializeLocalHistory,
@@ -4244,6 +4246,88 @@ test("manifest bootstrap produces concrete PR E2E draft from repo QA memory", as
   assert.match(spec, /page\.getByTestId\("checkout-submit"\)\.click\(\)/);
   assert.match(spec, /Checkout Purchase uses deterministic success fixture data/);
   assert.match(spec, /Checkout Purchase handles failed, empty, or unauthorized responses/);
+});
+
+test("qa command emits a PR comment draft without requiring a manifest", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        dev: "vite --host 127.0.0.1",
+        "test:e2e": "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        next: "^15.0.0",
+        react: "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "playwright.config.ts"), "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  return <main>",
+      "    <label>Email<input placeholder=\"Email\" /></label>",
+      "    <button data-testid=\"checkout-submit\">Complete purchase</button>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "baseline checkout"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/checkout-pr-qa"]);
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  return <main>",
+      "    <label>Email<input placeholder=\"Email\" /></label>",
+      "    <button data-testid=\"checkout-submit\">Complete purchase now</button>",
+      "    <p>Order confirmed</p>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "show checkout confirmation"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const markdown = formatMarkdownQaDraft(qa);
+
+  assert.equal(qa.noCloud, true);
+  assert.equal(qa.noLlmToken, true);
+  assert.equal(qa.manifestPath, undefined);
+  assert.equal(qa.flows.length > 0, true);
+  assert.ok(qa.flows.some((flow) => flow.changedFiles.includes("src/pages/checkout/index.tsx")));
+  assert.match(markdown, /CodeWard QA Draft/);
+  assert.match(markdown, /Local-first PR QA skill output/);
+  assert.match(markdown, /Manifest: not found; using repo signals and PR diff only/);
+  assert.match(markdown, /PR Comment Draft/);
+  assert.match(markdown, /Affected Flow/);
+  assert.match(markdown, /Suggested E2E \/ QA Draft/);
+  assert.match(markdown, /PR Checklist/);
+  assert.match(markdown, /No cloud\. No LLM token/);
+
+  const cliOutput = await execFileAsync(process.execPath, [
+    cliPath,
+    "qa",
+    root,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+    "--runner",
+    "playwright",
+  ]);
+  assert.match(cliOutput.stdout, /CodeWard QA Draft/);
+  assert.match(cliOutput.stdout, /PR Comment Draft/);
 });
 
 test("e2e draft can use an external verification manifest for read-only adoption preview", async () => {

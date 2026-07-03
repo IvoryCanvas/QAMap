@@ -267,6 +267,13 @@ export interface E2eDraftFile {
   runner: E2eRunnerName;
   status: "created" | "skipped" | "preview";
   source?: "verification-manifest" | "domain-language" | "core-flow" | "heuristic";
+  changedFiles?: string[];
+  draftSteps?: string[];
+  entrypointHints?: string[];
+  selectorHints?: string[];
+  setupHints?: string[];
+  coverageTargets?: string[];
+  manifestUpdatePath?: string;
   languageBrief?: E2eFlowLanguageBrief;
   actionItems?: E2eDraftActionItem[];
   promotionStatus?: E2eDraftPromotionStatus;
@@ -538,6 +545,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
     const actionItems = buildDraftActionItems(plan, flow, runner, validationSummary, promotionGuidance, selfCheck);
     const executionBlockers = draftExecutionBlockers(plan, flow, runner, validationSummary, selfCheck);
     const runnableStatus = draftRunnableStatus(plan, flow, runner, validationSummary, executionBlockers, selfCheck);
+    const fileDetails = draftFileDetails(flow);
     if (dryRun) {
       files.push({
         path: displayPath,
@@ -545,6 +553,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
         runner,
         status: "preview",
         source: draftFlowSource(flow),
+        ...fileDetails,
         languageBrief: flow.languageBrief,
         actionItems,
         promotionStatus: promotionGuidance.status,
@@ -575,6 +584,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
         runner,
         status: "skipped",
         source: draftFlowSource(flow),
+        ...fileDetails,
         languageBrief: flow.languageBrief,
         actionItems,
         promotionStatus: promotionGuidance.status,
@@ -604,6 +614,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
       runner,
       status: "created",
       source: draftFlowSource(flow),
+      ...fileDetails,
       languageBrief: flow.languageBrief,
       actionItems,
       promotionStatus: promotionGuidance.status,
@@ -1905,6 +1916,35 @@ function buildDraftActionItems(
   }
 
   return uniqueDraftActionItems(items).slice(0, 8);
+}
+
+function draftFileDetails(flow: DraftE2eFlow): Pick<
+  E2eDraftFile,
+  | "changedFiles"
+  | "draftSteps"
+  | "entrypointHints"
+  | "selectorHints"
+  | "setupHints"
+  | "coverageTargets"
+  | "manifestUpdatePath"
+> {
+  return {
+    changedFiles: flow.files.slice(0, maxFilesPerFlow),
+    draftSteps: flow.steps.slice(0, 8),
+    entrypointHints: flow.entrypoints.map(formatEntrypointHint).slice(0, 6),
+    selectorHints: flow.selectors.map(formatSelectorHint).slice(0, 8),
+    setupHints: flow.setupHints.map((hint) => `${hint.title}: ${hint.detail}`).slice(0, 6),
+    coverageTargets: flow.coverage.map((target) => `${target.priority}: ${target.title}`).slice(0, 7),
+    manifestUpdatePath: flow.manifestMatch?.updatePath,
+  };
+}
+
+function formatEntrypointHint(entrypoint: E2eEntrypoint): string {
+  return `${entrypoint.kind}: ${entrypoint.value} (${entrypoint.confidence})`;
+}
+
+function formatSelectorHint(selector: E2eSelector): string {
+  return `${selector.kind}: ${selector.value} (${selector.file})`;
 }
 
 function draftNeedsAssertionWork(selfCheck?: E2eDraftSelfCheck): boolean {

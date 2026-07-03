@@ -38,6 +38,7 @@ import {
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
+import { formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
 import { isAtLeastSeverity, isSeverity } from "./severity.js";
@@ -259,6 +260,23 @@ async function main(argv: string[]): Promise<number> {
     });
     const output = formatE2eDraftOutput(result, options.format ?? (options.json ? "json" : "markdown"));
     console.log(output.trimEnd());
+    return 0;
+  }
+
+  if (command === "qa") {
+    const options = parseOptions(rest);
+    const loadedConfig = await loadOptionsConfig(options);
+    const result = await generateQaDraft(options.path, {
+      base: options.base,
+      head: options.head,
+      workspaceRoot: options.workspaceRoot,
+      includeWorkingTree: options.includeWorkingTree,
+      validationCommands: loadedConfig.config.validationCommands,
+      runner: options.e2eRunner,
+      manifestPath: options.manifestPath,
+    });
+    const output = formatQaDraftOutput(result, options.format ?? (options.json ? "json" : "markdown"));
+    await printOrWrite(output, options.output);
     return 0;
   }
 
@@ -769,6 +787,16 @@ function formatE2eSetupOutput(result: Awaited<ReturnType<typeof setupE2eRunner>>
   return formatMarkdownE2eSetup(result);
 }
 
+function formatQaDraftOutput(result: Awaited<ReturnType<typeof generateQaDraft>>, format: OutputFormat): string {
+  if (format === "json") {
+    return `${JSON.stringify(result, null, 2)}\n`;
+  }
+  if (format !== "markdown" && format !== "text") {
+    throw new Error(`QA draft supports text, json, or markdown output, not ${format}`);
+  }
+  return formatMarkdownQaDraft(result);
+}
+
 function manifestSuggestionFormat(format: OutputFormat, command: "domains" | "flows"): "text" | "json" | "markdown" {
   if (format === "sarif") {
     throw new Error(`${command} suggest supports text, json, or markdown output, not sarif`);
@@ -846,7 +874,7 @@ function readValue(args: string[], index: number, flag: string): string {
 function printHelp(): void {
   console.log(`CodeWard ${VERSION}
 
-Guardrails for AI coding agents and the code they change.
+Local-first PR QA drafts and guardrails for AI-assisted changes.
 
 Usage:
   codeward scan [path] [--format <format>] [--fail-on <severity>] [--max-files <n>]
@@ -857,6 +885,7 @@ Usage:
   codeward eval [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--pr-body-file <file>] [--format <format>]
   codeward github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
   codeward test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
+  codeward qa [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--format <format>] [--output <file>]
   codeward e2e plan [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   codeward e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force]
   codeward e2e draft [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
@@ -889,6 +918,8 @@ Examples:
   codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md
   codeward github-action . --mode review --base origin/main --head HEAD --fail-on high
   codeward test-plan . --base origin/main --head HEAD
+  codeward qa . --base origin/main --head HEAD
+  codeward qa . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD --output CODEWARD_QA.md
   codeward e2e plan . --base origin/main --head HEAD
   codeward e2e plan . --base origin/main --head HEAD --record-history
   codeward e2e setup . --runner playwright

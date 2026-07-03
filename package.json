@@ -1,7 +1,7 @@
 {
   "name": "@ivorycanvas/codeward",
   "version": "0.2.0",
-  "description": "Local-first PR verification and E2E draft generation from git diffs, with no cloud or LLM token.",
+  "description": "Local-first QA skill that turns PR diffs into affected flows, missing evidence, and E2E drafts with no cloud or LLM token.",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
   "bin": {
@@ -29,6 +29,7 @@
     "ai",
     "agents",
     "coding-agents",
+    "agent-skill",
     "agent-readiness",
     "ai-security",
     "local-first",

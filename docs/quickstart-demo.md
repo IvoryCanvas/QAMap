@@ -27,10 +27,17 @@ The reviewer wants to know:
 Run CodeWard on the branch:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD --dry-run
+pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
 ```
 
-`--dry-run` is important for first contact. It lets maintainers preview the plan, draft path, readiness, and blockers without writing files.
+`qa` is important for first contact. It lets maintainers preview the PR comment draft, affected flow, draft path, readiness, and blockers without writing files.
+
+When the team wants actual draft files:
+
+```sh
+pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD --dry-run
+pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD
+```
 
 For a repository adopting CodeWard as team QA memory, start with the manifest loop:
 
@@ -45,7 +52,7 @@ For a read-only smoke test against a repository you do not want to modify, keep 
 
 ```sh
 pnpm dlx @ivorycanvas/codeward manifest init . --write /tmp/codeward-manifest.yaml
-pnpm dlx @ivorycanvas/codeward e2e draft . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD --dry-run
+pnpm dlx @ivorycanvas/codeward qa . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD
 ```
 
 The manifest is the durable part. It lets a team correct domains, flows, anchors, and checks once, then reuse that correction across future PRs without re-explaining the same QA context to an LLM.
@@ -135,6 +142,7 @@ Input
 
 ```txt
 Output
+- PR comment/checklist draft
 - changed domain language
 - candidate user flow
 - manifest evidence when a repo-local flow/check matches
@@ -152,31 +160,28 @@ The result should not stop at "selector needed" or "fixture needed." A useful Co
 ## Markdown Preview
 
 ```txt
-CodeWard E2E Draft
-Mode: dry run (no files were written)
-Project: Web
-Recommended runner: Playwright
-Files: 0 created, 1 previewed, 0 skipped
+# CodeWard QA Draft
 
-- preview: tests/e2e/checkout-purchase.spec.ts
-  Flow: Checkout purchase
-  Actor: Customer
-  Trigger: Open route /checkout.
-  Goal: Complete checkout with realistic form data.
-  Success signal: confirmation state is visible after submit
-  Reviewer question: Can a customer still complete checkout after this PR?
-  Runnable status: near-runnable
-  Promotion status: needs-review
+Summary
+- Project: Web
+- Recommended runner: Playwright
+- Manifest: .codeward/manifest.yaml
+- Readiness: near-runnable
 
-Required action items:
-- Add or confirm stable selectors for changed checkout controls.
-- Add deterministic payment/customer fixture data.
-- Review generated assertions against the real success and error states.
-- Run pnpm run test:e2e after reviewing the generated draft.
+PR Comment Draft
+- Affected flow: Checkout purchase
+- Suggested draft: tests/e2e/checkout-purchase.spec.ts
+- User journey: Customer -> Open route /checkout -> Complete checkout with realistic form data
+- Success signal: confirmation state is visible after submit
 
-Top blockers:
-- Playwright config was not detected.
-- Fixture or mock data was not found for the checkout submit path.
+Missing evidence before trusting this PR
+- [required] fixture: Add deterministic payment/customer fixture data.
+- [recommended] selector: Confirm stable selectors for changed checkout controls.
+
+PR checklist
+- [ ] Review tests/e2e/checkout-purchase.spec.ts.
+- [ ] Confirm success and failed-response assertions.
+- [ ] Run pnpm run test:e2e.
 ```
 
 ## Draft Shape
@@ -233,7 +238,7 @@ Use a tiny branch where a form, button, route, or API client changed. The record
 
 ```sh
 git diff --stat origin/main...HEAD
-pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD --dry-run
+pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
 pnpm dlx @ivorycanvas/codeward verify . --base origin/main --head HEAD --format markdown
 ```
 
@@ -248,10 +253,10 @@ The best GIF is not a long terminal scroll. Show:
 ## Launch Message
 
 ```txt
-CodeWard turns a PR diff into domain-aware verification flows and draft E2E tests.
+CodeWard turns a PR diff into affected flows, missing QA evidence, and draft E2E/checklist work.
 
 It runs locally, does not upload source code, and does not call an LLM API.
 
 Try it:
-pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD --dry-run
+pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
 ```

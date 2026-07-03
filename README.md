@@ -4,9 +4,9 @@
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/codeward.svg)](https://www.npmjs.com/package/@ivorycanvas/codeward)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Stop re-prompting AI for QA context. CodeWard turns repo-local QA memory into PR-specific E2E drafts. No cloud. No LLM token.**
+**A local-first QA skill for AI-generated PRs. CodeWard turns a PR diff into affected flows, missing evidence, and E2E drafts. No cloud. No LLM token.**
 
-CodeWard is a local-first CLI that builds and uses a repository-level verification manifest, maps git changes to product domains, flows, and checks, then turns a branch into reviewable verification guidance and draft E2E tests.
+CodeWard is a local-first CLI that reads git changes, project structure, runner signals, selectors, and optional repo QA memory, then returns a PR-ready QA draft: which user flow may be affected, which runner fits, what E2E or checklist should exist, and what evidence is still missing before merge.
 
 It is built for the moment when a reviewer asks: "This PR looks plausible, but which user flow could it break, and what should we test before merge?"
 
@@ -15,51 +15,50 @@ CodeWard does not call an LLM API, upload source code, or require a service acco
 The core loop is intentionally simple:
 
 ```txt
-Repo QA memory
-  -> .codeward/manifest.yaml
-
 PR diff
-  -> impacted domain / flow / check
+  -> codeward qa
 
 CodeWard output
-  -> explainable E2E draft + fixture, selector, and validation gaps
+  -> PR comment draft + E2E/checklist draft + missing evidence
+
+Optional team memory
+  -> .codeward/manifest.yaml
+  -> better future PR recommendations
 ```
 
 ## Install & Quick Start
 
 Requires Node.js 20 or newer.
 
-Install CodeWard in a repository:
+Run CodeWard once without adding a dependency:
+
+```sh
+pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
+```
+
+That first command is intentionally manifest-free. It previews a PR comment/checklist that names the affected flow, recommended runner, draft file, missing fixture/selector/assertion evidence, and validation command.
+
+Install CodeWard in a repository when you want a repeatable project command:
 
 ```sh
 pnpm add -D @ivorycanvas/codeward
+pnpm exec codeward qa . --base origin/main --head HEAD
 ```
 
-Run the first local scan:
+Generate a Markdown artifact that an agent or reviewer can paste into a PR:
 
 ```sh
-pnpm exec codeward scan .
+pnpm exec codeward qa . --base origin/main --head HEAD --output CODEWARD_QA.md
 ```
 
-Preview the repo-local QA context CodeWard can see:
-
-```sh
-pnpm exec codeward manifest context .
-```
-
-Create a reviewable verification manifest from the branch you want to treat as baseline:
-
-```sh
-pnpm exec codeward manifest init .
-```
-
-Preview PR-specific E2E drafts without writing files:
+When you are ready to create actual draft test files instead of a PR comment preview:
 
 ```sh
 pnpm exec codeward e2e draft . --base origin/main --head HEAD --dry-run
+pnpm exec codeward e2e draft . --base origin/main --head HEAD
 ```
 
-For the strongest first result, create the manifest from the default branch, commit it, and let PR branches reuse that team QA memory:
+Optional accuracy upgrade: create repo-local QA memory from the default branch, review it, then let future PRs reuse it:
 
 ```sh
 git switch main
@@ -73,26 +72,26 @@ Preview adoption without writing a manifest into the target repository:
 
 ```sh
 pnpm exec codeward manifest init . --write /tmp/codeward-manifest.yaml
-pnpm exec codeward e2e draft . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD --dry-run
+pnpm exec codeward qa . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD
 ```
 
-Or run CodeWard once without adding a dependency:
+Use the lower-level scanner when you want repository guardrail findings:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward --help
+pnpm exec codeward scan .
 ```
 
 ## 30-Second PR Demo
 
-Preview what CodeWard would generate for the current branch:
+Preview the PR QA comment/checklist CodeWard would generate for the current branch:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD --dry-run
+pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
 ```
 
 ![CodeWard 30-second PR demo](docs/assets/codeward-30s-demo.gif)
 
-In this demo, CodeWard maps a checkout form PR to the team-owned `Checkout purchase` flow, previews `tests/e2e/checkout-purchase.spec.ts`, and reports that the Playwright draft passes static self-checks. It does **not** claim browser QA has passed during `--dry-run`; it also names the remaining work, such as deterministic fixture data and a real `pnpm run test:e2e` execution.
+In this demo, CodeWard maps a checkout form PR to the `Checkout purchase` flow, previews `tests/e2e/checkout-purchase.spec.ts`, and names the missing evidence before that draft can be trusted. It does **not** claim browser QA has passed; it also names the remaining work, such as deterministic fixture data and a real `pnpm run test:e2e` execution.
 
 CodeWard reads the changed files and project signals:
 
@@ -107,6 +106,7 @@ Then it returns reviewable verification work:
 
 ```txt
 Output
+- PR comment/checklist draft for this branch
 - changed domain language and candidate user flows
 - recommended E2E runner or manual checklist
 - draft Playwright, Maestro, CLI, API, or manual test files
@@ -114,30 +114,32 @@ Output
 - blockers such as missing runner config, selectors, fixtures, or assertions
 ```
 
-Example dry-run output for a small Next.js checkout form change:
+Example `codeward qa` output for a small Next.js checkout form change:
 
 ```txt
-CodeWard E2E Draft
-Mode: dry run (no files were written)
-Project: Web
-Recommended runner: Playwright
-Files: 0 created, 1 previewed, 0 skipped
+# CodeWard QA Draft
 
-- preview: tests/e2e/checkout-purchase.spec.ts
-  Flow: Checkout purchase
-  Source: verification-manifest
-  Evidence: .codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors
-  Actor: Customer
-  Trigger: Open route /checkout.
-  Goal: Complete checkout with realistic form data.
-  Success signal: confirmation state is visible after submit
-  If wrong: update .codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors
-  Runnable status: near-runnable
+Summary
+- Project: Web
+- Recommended runner: Playwright
+- Manifest: .codeward/manifest.yaml
+- Readiness: near-runnable
 
-Required action items:
-- Add or confirm stable selectors for changed checkout controls.
-- Add deterministic payment/customer fixture data.
-- Run pnpm run test:e2e after reviewing the generated draft.
+PR Comment Draft
+- Affected flow: Checkout purchase
+- Suggested draft: tests/e2e/checkout-purchase.spec.ts
+- Changed files: src/app/checkout/page.tsx, src/features/checkout/CheckoutForm.tsx
+- Success signal: confirmation state is visible after submit
+- If wrong: update .codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors
+
+Missing evidence before trusting this PR
+- [required] fixture: Add deterministic payment/customer fixture data.
+- [recommended] selector: Confirm stable selectors for changed checkout controls.
+
+PR checklist
+- [ ] Review tests/e2e/checkout-purchase.spec.ts.
+- [ ] Confirm the checkout success and failed-response assertions.
+- [ ] Run pnpm run test:e2e.
 ```
 
 The generated draft reads like the user journey instead of a generic file checklist:
@@ -164,7 +166,7 @@ test("Checkout purchase", async ({ page }) => {
 });
 ```
 
-See [docs/quickstart-demo.md](docs/quickstart-demo.md) for a compact walkthrough, [docs/manifest.md](docs/manifest.md) for the verification manifest loop, and [docs/e2e-output-examples.md](docs/e2e-output-examples.md) for more output shapes.
+See [docs/quickstart-demo.md](docs/quickstart-demo.md) for a compact walkthrough, [docs/agent-skill.md](docs/agent-skill.md) for agent handoff usage, [docs/manifest.md](docs/manifest.md) for the verification manifest loop, and [docs/e2e-output-examples.md](docs/e2e-output-examples.md) for more output shapes.
 
 ## Why This Is Different
 
@@ -181,6 +183,8 @@ A good CodeWard result should answer:
 
 That is the product bet: one human correction to the repo-local manifest should improve future PR recommendations without another LLM prompt.
 
+You do not need a manifest to start. Without one, CodeWard uses the PR diff, package signals, routes, selectors, runner config, and existing tests. Add a manifest only when the team wants durable QA language that improves future recommendations.
+
 ## What CodeWard Is For
 
 CodeWard is intentionally small:
@@ -189,6 +193,7 @@ CodeWard is intentionally small:
 - static by default: it does not execute scanned project code
 - no-token by default: it does not call an LLM API
 - verification-focused: it tells reviewers what evidence is missing, not how to style code
+- PR QA skill output: `codeward qa` turns a branch into a PR-ready affected-flow summary, suggested E2E/checklist draft, missing evidence list, and copyable checklist
 - domain-aware E2E drafting: it turns branch changes into flow language, draft specs, readiness summaries, and action items
 - repo-local verification base: shared manifests can be committed, while generated run history stays ignored by default
 - context-aware baseline generation: manifest init can use repo-local context, ADRs, goals, agent instructions, harness files, skills, and runbooks as advisory bootstrap signals
@@ -204,17 +209,19 @@ For PR verification, CodeWard treats the repository itself as the working base: 
 <details>
 <summary>한국어 소개</summary>
 
-CodeWard는 AI 코딩 에이전트에게 레포지토리를 맡기기 전에 빠르게 실행하는 사전 점검 CLI입니다.
+CodeWard는 AI 코딩 에이전트가 만든 PR을 리뷰하기 전에 로컬에서 실행하는 QA 초안 CLI입니다.
 
-누락된 에이전트 지침, 위험한 MCP 설정, 커밋된 로컬 환경 파일, 위험한 자동화 스크립트, 과도한 GitHub Actions 권한, 약한 검증 신호를 찾아냅니다.
+PR diff와 repo 구조를 읽고 어떤 사용자 플로우가 영향받았는지, 어떤 E2E 또는 체크리스트가 필요한지, fixture/selector/assertion/runner/validation 근거 중 무엇이 부족한지 정리합니다. 클라우드나 LLM 토큰을 쓰지 않습니다.
 
-목표는 거대한 보안 플랫폼이 아니라, 유지보수자가 매번 에이전트에게 프로젝트 맥락과 안전한 검증 방법을 설명하느라 쓰는 시간을 줄여주는 작고 선명한 도구입니다. PR 변경사항을 팀의 도메인 언어, manifest 기반 핵심 플로우, 필요한 E2E/fixture/selector 작업으로 바꿔 검증의 빈 화면을 줄이는 것이 현재 릴리스의 중심입니다.
+목표는 거대한 QA 플랫폼이 아니라, 유지보수자가 매번 에이전트에게 프로젝트 맥락과 검증 방법을 다시 설명하느라 쓰는 시간을 줄여주는 작고 선명한 도구입니다. Manifest 없이 바로 시작하고, 반복해서 틀리는 추천은 `.codeward/manifest.yaml`에 팀의 QA 언어로 보정해 향후 PR 추천을 개선합니다.
 
 </details>
 
 ## Quick Commands
 
 ```sh
+pnpm exec codeward qa . --base origin/main --head HEAD
+pnpm exec codeward qa . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD --output CODEWARD_QA.md
 pnpm exec codeward scan .
 pnpm exec codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
 pnpm exec codeward manifest context .

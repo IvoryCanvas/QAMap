@@ -60,6 +60,7 @@ export {
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
+export { formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
 export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 export { scanProject } from "./scanner.js";
 export { collectTestSuiteInventory, evaluateFlowCoverageEvidence, summarizeTestSuiteInventory } from "./test-evidence.js";
@@ -178,3 +179,4 @@ export type { ChangedFile, ChangedRiskyFinding, ReviewOptions, ReviewResult } fr
 export type { TestPlanChangedFile, TestPlanItem, TestPlanOptions, TestPlanResult } from "./test-plan.js";
 export type { CodeWardConfig, Finding, ScanCounts, ScanOptions, ScanResult, Severity } from "./types.js";
 export type { VerifyOptions, VerifyResult } from "./verify.js";
+export type { QaDraftFlow, QaDraftMissingEvidence, QaDraftOptions, QaDraftResult } from "./qa.js";
