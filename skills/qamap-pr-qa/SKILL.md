@@ -15,7 +15,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
 2. Run QAMap from the repository root. Prefer the compact agent format — it carries the same decision content as the markdown report in a fraction of the tokens:
 
    ```sh
-   pnpm dlx qamap qa . --base <base> --head HEAD --format agent
+   pnpm dlx @ivorycanvas/qamap qa . --base <base> --head HEAD --format agent
    ```
 
    For an installed project, prefer:
@@ -29,7 +29,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
 3. If the repository is a monorepo and the changed files are clearly inside one package, run a scoped pass too:
 
    ```sh
-   pnpm dlx qamap qa <package-path> --workspace-root . --base <base> --head HEAD
+   pnpm dlx @ivorycanvas/qamap qa <package-path> --workspace-root . --base <base> --head HEAD
    ```
 
 4. If QAMap prints `First E2E Draft Bootstrap`, treat it as an instruction to create the starter draft before writing broad QA notes:

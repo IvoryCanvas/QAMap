@@ -55,7 +55,7 @@ export async function generateAgentContext(rootInput: string): Promise<string> {
   lines.push("");
   lines.push("## Pre-PR QA");
   lines.push("");
-  lines.push(`- Before opening a pull request, run \`${dlxPrefixFor(snapshot.packageManager)} qamap qa . --base origin/main --head HEAD --format agent\` and address the required evidence and bootstrap items it reports.`);
+  lines.push(`- Before opening a pull request, run \`${dlxCommandFor(snapshot.packageManager)} qa . --base origin/main --head HEAD --format agent\` and address the required evidence and bootstrap items it reports.`);
   lines.push("- Treat the output as QA planning evidence, not as proof that browser, device, or manual QA passed.");
   lines.push("- For UI-affecting changes, review the suggested E2E draft before handing the pull request to a human.");
   lines.push("");
@@ -113,18 +113,18 @@ async function detectPackageManager(root: string): Promise<string | undefined> {
   return undefined;
 }
 
-function dlxPrefixFor(packageManager: string | undefined): string {
+function dlxCommandFor(packageManager: string | undefined): string {
   const normalized = packageManager?.split("@")[0];
   if (normalized === "pnpm") {
-    return "pnpm dlx";
+    return "pnpm dlx @ivorycanvas/qamap";
   }
   if (normalized === "yarn") {
-    return "yarn dlx";
+    return "yarn dlx @ivorycanvas/qamap";
   }
   if (normalized === "bun") {
-    return "bunx";
+    return "bunx @ivorycanvas/qamap";
   }
-  return "npx";
+  return "npx @ivorycanvas/qamap";
 }
 
 function commandPrefixFor(packageManager: string | undefined): string {

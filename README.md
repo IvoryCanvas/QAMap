@@ -1,7 +1,7 @@
 # QAMap
 
 [![CI](https://github.com/IvoryCanvas/qamap/actions/workflows/ci.yml/badge.svg)](https://github.com/IvoryCanvas/qamap/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/qamap.svg)](https://www.npmjs.com/package/qamap)
+[![npm version](https://img.shields.io/npm/v/%40ivorycanvas%2Fqamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **A local-first QA skill for AI-generated PRs. QAMap turns a PR diff into affected flows, missing evidence, and E2E drafts. No cloud. No LLM token.**
@@ -33,7 +33,7 @@ Requires Node.js 20 or newer.
 Run QAMap once without adding a dependency:
 
 ```sh
-pnpm dlx qamap qa . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
 
 That first command is intentionally manifest-free. It previews a PR comment/checklist that names the affected flow, recommended runner, draft file, missing fixture/selector/assertion evidence, and validation command.
@@ -41,13 +41,13 @@ That first command is intentionally manifest-free. It previews a PR comment/chec
 Handing the result to a coding agent instead of a human? Use the compact agent format (see [For Coding Agents](#for-coding-agents)):
 
 ```sh
-pnpm dlx qamap qa . --base origin/main --head HEAD --format agent
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD --format agent
 ```
 
 Install QAMap in a repository when you want a repeatable project command:
 
 ```sh
-pnpm add -D qamap
+pnpm add -D @ivorycanvas/qamap
 pnpm exec qamap qa . --base origin/main --head HEAD
 ```
 
@@ -92,7 +92,7 @@ pnpm exec qamap scan .
 Preview the PR QA comment/checklist QAMap would generate for the current branch:
 
 ```sh
-pnpm dlx qamap qa . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
 
 ![QAMap 30-second PR demo](docs/assets/qamap-30s-demo.gif)
@@ -247,7 +247,7 @@ QAMap는 AI 코딩 에이전트가 만든 PR을 리뷰하기 전에 로컬에서
 PR diff와 repo 구조를 읽고 어떤 사용자 플로우가 영향받았는지, 어떤 E2E 또는 체크리스트가 필요한지, fixture/selector/assertion/runner/validation 근거 중 무엇이 부족한지 정리합니다. 클라우드나 LLM 토큰을 쓰지 않습니다.
 
 ```sh
-pnpm dlx qamap qa . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
 
 에이전트에게 넘길 때는 `--format agent`를 붙이면 같은 판단 내용을 약 2KB의 JSON으로 받을 수 있어, 매 세션 repo 탐색에 토큰을 쓰지 않아도 됩니다.
@@ -271,7 +271,7 @@ pnpm exec qamap manifest explain . --base origin/main --head HEAD
 pnpm exec qamap e2e draft . --base origin/main --head HEAD --dry-run
 ```
 
-Use `pnpm dlx qamap ...` for one-off runs without installing QAMap into the target repository.
+Use `pnpm dlx @ivorycanvas/qamap ...` for one-off runs without installing QAMap into the target repository.
 
 ## Repository Guardrails (Secondary Layer)
 

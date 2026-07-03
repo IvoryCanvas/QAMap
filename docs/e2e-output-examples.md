@@ -7,7 +7,7 @@ These examples show the shape of QAMap output that should be good enough for the
 First contact should work without a manifest:
 
 ```sh
-pnpm dlx qamap qa . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
 
 The output should be specific enough to paste into a PR comment:

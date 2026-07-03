@@ -27,7 +27,7 @@ The reviewer wants to know:
 Run QAMap on the branch:
 
 ```sh
-pnpm dlx qamap qa . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
 
 `qa` is important for first contact. It lets maintainers preview the PR comment draft, affected flow, draft path, readiness, and blockers without writing files.
@@ -35,24 +35,24 @@ pnpm dlx qamap qa . --base origin/main --head HEAD
 When the team wants actual draft files:
 
 ```sh
-pnpm dlx qamap e2e draft . --base origin/main --head HEAD --dry-run
-pnpm dlx qamap e2e draft . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap e2e draft . --base origin/main --head HEAD --dry-run
+pnpm dlx @ivorycanvas/qamap e2e draft . --base origin/main --head HEAD
 ```
 
 For a repository adopting QAMap as team QA memory, start with the manifest loop:
 
 ```sh
-pnpm dlx qamap manifest context .
-pnpm dlx qamap manifest init .
-pnpm dlx qamap manifest validate .
-pnpm dlx qamap manifest explain . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap manifest context .
+pnpm dlx @ivorycanvas/qamap manifest init .
+pnpm dlx @ivorycanvas/qamap manifest validate .
+pnpm dlx @ivorycanvas/qamap manifest explain . --base origin/main --head HEAD
 ```
 
 For a read-only smoke test against a repository you do not want to modify, keep the manifest outside the repo and pass it back into the PR commands:
 
 ```sh
-pnpm dlx qamap manifest init . --write /tmp/qamap-manifest.yaml
-pnpm dlx qamap qa . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap manifest init . --write /tmp/qamap-manifest.yaml
+pnpm dlx @ivorycanvas/qamap qa . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD
 ```
 
 The manifest is the durable part. It lets a team correct domains, flows, anchors, and checks once, then reuse that correction across future PRs without re-explaining the same QA context to an LLM.
@@ -244,8 +244,8 @@ Use a tiny branch where a form, button, route, or API client changed. The record
 
 ```sh
 git diff --stat origin/main...HEAD
-pnpm dlx qamap qa . --base origin/main --head HEAD
-pnpm dlx qamap verify . --base origin/main --head HEAD --format markdown
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap verify . --base origin/main --head HEAD --format markdown
 ```
 
 The best GIF is not a long terminal scroll. Show:
@@ -264,5 +264,5 @@ QAMap turns a PR diff into affected flows, missing QA evidence, and draft E2E/ch
 It runs locally, does not upload source code, and does not call an LLM API.
 
 Try it:
-pnpm dlx qamap qa . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```

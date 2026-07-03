@@ -4620,7 +4620,7 @@ test("package metadata includes the portable PR QA skill template", async () => 
 
   assert.ok(packageJson.files.includes("skills"));
   assert.match(skillText, /name: qamap-pr-qa/);
-  assert.match(skillText, /pnpm dlx qamap qa/);
+  assert.match(skillText, /pnpm dlx @ivorycanvas\/qamap qa/);
   assert.match(skillText, /Manifest Repair/);
 });
 
@@ -5619,7 +5619,7 @@ test("generateAgentContext reflects npm scripts and repository boundaries", asyn
   assert.match(context, /Never create or suggest branches with a `codex\/` prefix/);
   assert.match(context, /Use `feat\/`, `fix\/`, `refactor\/`, `style\/`, `hotfix\/`, `chore\/`, or `docs\/` branch prefixes/);
   assert.match(context, /## Pre-PR QA/);
-  assert.match(context, /npx qamap qa \. --base origin\/main --head HEAD --format agent/);
+  assert.match(context, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
   assert.match(context, /QA planning evidence, not as proof/);
 });
 

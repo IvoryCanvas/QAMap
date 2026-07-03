@@ -185,7 +185,7 @@ Last verified on 2026-07-03 on PR #71 after adding the manifest-free `qamap qa` 
 | `pnpm pack --dry-run` | Passed; tarball includes `dist`, `docs`, `docs/assets/qamap-30s-demo.gif`, `schema`, `skills/qamap-pr-qa/SKILL.md`, `README.md`, `CHANGELOG.md`, `LICENSE`, and `package.json`. |
 | Coverage threshold | Passed the 80% line, branch, and function gates; latest run reported 85.27% line, 81.59% branch, and 94.26% function coverage. |
 | `pnpm run release:check` | Passed as the single local release gate for this PR state, including `qamap qa` coverage, the packaged PR QA skill template, and `dist/qa.*` pack output. |
-| `npm publish --dry-run --access public` | Passed for `qamap@0.2.1`; tarball includes 98 files, `schema/qamap-manifest.schema.json`, `docs/manifest.md`, `docs/quickstart-demo.md`, `skills/qamap-pr-qa/SKILL.md`, and the demo GIF. |
+| `npm publish --dry-run --access public` | Passed for `@ivorycanvas/qamap@0.3.0`; tarball includes 98 files, `schema/qamap-manifest.schema.json`, `docs/manifest.md`, `docs/quickstart-demo.md`, `skills/qamap-pr-qa/SKILL.md`, and the demo GIF. |
 
 ## Real Repository Smoke Snapshot
 

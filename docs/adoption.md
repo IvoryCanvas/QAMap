@@ -7,26 +7,26 @@ QAMap works best when teams treat it as the local QA pass for AI-assisted PRs, n
 Start with the PR QA draft on a changed branch — no manifest, no config:
 
 ```sh
-pnpm dlx qamap qa . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
 
 For coding agents, request the compact machine-readable summary instead:
 
 ```sh
-pnpm dlx qamap qa . --base origin/main --head HEAD --format agent
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD --format agent
 ```
 
 When the qa output looks useful, preview and then write the draft E2E files:
 
 ```sh
-pnpm dlx qamap e2e draft . --base origin/main --head HEAD --dry-run
-pnpm dlx qamap e2e draft . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap e2e draft . --base origin/main --head HEAD --dry-run
+pnpm dlx @ivorycanvas/qamap e2e draft . --base origin/main --head HEAD
 ```
 
 For a combined PR verification report with readiness gates, add `verify`:
 
 ```sh
-pnpm dlx qamap verify . --base origin/main --head HEAD --pr-body-file pr-body.md
+pnpm dlx @ivorycanvas/qamap verify . --base origin/main --head HEAD --pr-body-file pr-body.md
 ```
 
 When developing QAMap itself from source:
