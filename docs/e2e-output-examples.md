@@ -2,6 +2,56 @@
 
 These examples show the shape of CodeWard output that should be good enough for the current public release. They are intentionally short snippets, not full generated files. The important property is that they are derived from repository structure, git changes, manifests, and test evidence without an LLM call.
 
+## PR QA Skill Preview
+
+First contact should work without a manifest:
+
+```sh
+pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
+```
+
+The output should be specific enough to paste into a PR comment:
+
+```txt
+# CodeWard QA Draft
+
+Summary
+- Project: Web
+- Recommended runner: Playwright
+- Manifest: not found; using repo signals and PR diff only
+- Readiness: near-runnable
+
+PR Comment Draft
+- Affected flow: Checkout UI smoke flow
+- User journey: Customer -> Open route /checkout -> Complete checkout with realistic form data
+- Success signal: confirmation state is visible after submit
+- Changed files: src/pages/checkout/index.tsx
+
+Suggested E2E / QA Draft
+- tests/e2e/checkout-ui-smoke-flow.spec.ts: near runnable
+- Open route /checkout.
+- Fill checkout email.
+- Submit checkout.
+- Assert confirmation state is visible after submit.
+
+Missing evidence before trusting this PR
+- [required] fixture: Add deterministic fixture or mock data.
+- [recommended] selector: Confirm stable selectors.
+
+PR checklist
+- [ ] Review the generated draft path.
+- [ ] Answer the reviewer question for the affected flow.
+- [ ] Run local validation: pnpm run test:e2e
+```
+
+If this recommendation is useful but slightly wrong, the next step is not another long AI prompt. Generate and correct repo-local QA memory:
+
+```sh
+pnpm exec codeward manifest init .
+```
+
+Then future `codeward qa` runs can use `.codeward/manifest.yaml` to produce more precise flow names, checks, anchors, and repair paths.
+
 ## Verification Manifest Feedback
 
 When a repository has `.codeward/manifest.yaml`, CodeWard should explain why a recommendation happened and how a maintainer can correct it:
@@ -13,11 +63,18 @@ Campaign Application Complete `campaign-application-complete`
 - Kind: flow
 - Confidence: high
 - Why this was recommended: Changed files match anchors for the Campaign Application Complete flow.
+- Evidence sources: product-qa
 - Manifest evidence: .codeward/manifest.yaml > flows.campaign-application-complete.anchors
 - If this is wrong: update .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+- Next actions:
+  - Draft or review E2E coverage for the Campaign Application Complete flow.
+  - Cover the declared checks: Submit content URL successfully; Show validation error for invalid content URL.
+- Repair hints:
+  - If these files do not belong to this flow, update .codeward/manifest.yaml > flows.campaign-application-complete.anchors.
+  - If the recommended assertions feel vague, rewrite .codeward/manifest.yaml > flows.campaign-application-complete.checks in team language.
 ```
 
-This is the feedback loop: static analysis proposes a baseline, humans correct durable manifest entries, and future E2E recommendations become more specific.
+This is the feedback loop: static analysis proposes a baseline, humans correct durable manifest entries, and future E2E recommendations become more specific without spending another LLM prompt on the same explanation.
 
 `codeward manifest validate .` checks whether that repo-local knowledge is usable:
 

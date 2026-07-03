@@ -7,9 +7,11 @@ import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
+  analyzeVerificationManifestContext,
   buildDoctorResult,
   explainVerificationManifest,
   evaluateChangeReadiness,
+  formatVerificationManifestContextResult,
   formatVerificationManifestExplainResult,
   formatVerificationManifestValidationResult,
   formatMarkdownEvalReport,
@@ -19,6 +21,7 @@ import {
   formatMarkdownE2eDraft,
   formatMarkdownE2ePlan,
   formatMarkdownE2eSetup,
+  formatMarkdownQaDraft,
   formatMarkdownReviewReport,
   formatMarkdownTestPlan,
   formatMarkdownVerifyReport,
@@ -29,6 +32,7 @@ import {
   generateE2ePlan,
   generateDomainManifestSuggestion,
   generateFlowManifestSuggestion,
+  generateQaDraft,
   generateTestPlan,
   loadVerificationManifest,
   initializeLocalHistory,
@@ -43,8 +47,10 @@ import {
   writeDefaultConfig,
   writeVerificationManifestBaseline,
 } from "../dist/index.js";
+import { VERSION } from "../dist/version.js";
 
 const cliPath = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
+const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const execFileAsync = promisify(execFile);
 
 test("scanProject reports common AI agent repository risks", async () => {
@@ -4011,6 +4017,426 @@ test("manifest init creates a baseline verification manifest", async () => {
   assert.match(cliOutput.stdout, /Review and commit this file/);
 });
 
+test("manifest init captures advisory instruction context", async () => {
+  const root = await makeTempRepo();
+  await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
+  await mkdir(path.join(root, ".agent-core/skills"), { recursive: true });
+  await mkdir(path.join(root, "docs/adr"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      dependencies: {
+        next: "^15.0.0",
+        react: "^19.0.0",
+      },
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "CONTEXT.md"),
+    [
+      "# Product Context",
+      "",
+      "Checkout is the customer purchase flow and should keep visible success and failure evidence.",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "AGENTS.md"),
+    [
+      "# Work Rules",
+      "",
+      "- Use the verification skill before changing checkout flows.",
+      "- Run `pnpm test` before merge.",
+      "- Never write generated E2E drafts into target repos during smoke tests; use /tmp outputs.",
+      "- Do not print TOKEN=abc123 values in reports.",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, ".agent-core/skills/verification-layer.md"),
+    [
+      "---",
+      "name: verification-layer",
+      "description: Capture QA evidence and review lifecycle decisions.",
+      "---",
+      "",
+      "# Verification Layer",
+      "",
+      "Use this skill to review the goal, inspect acceptance criteria, draft E2E assertions, and repeat the review loop until no finding remains.",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "docs/adr/checkout-flow.md"),
+    "# ADR\n\nCheckout success and failure states are release-critical.\n",
+  );
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    "export default function CheckoutPage() { return <button>Complete purchase</button>; }\n",
+  );
+
+  const result = await writeVerificationManifestBaseline(root);
+  const manifestText = await readFile(path.join(root, ".codeward/manifest.yaml"), "utf8");
+  const manifest = await loadVerificationManifest(root);
+  const validation = await validateVerificationManifest(root);
+  const contextResult = await analyzeVerificationManifestContext(root);
+  const contextMarkdown = formatVerificationManifestContextResult(contextResult, "markdown");
+  const cliContext = await execFileAsync(process.execPath, [cliPath, "manifest", "context", root, "--format", "markdown"]);
+  const checkoutDomain = manifest.domains.find((domain) => domain.id === "checkout");
+
+  assert.equal(result.summary.contextSources >= 2, true);
+  assert.ok(manifest.context);
+  assert.ok(manifest.context.instructionFiles.some((file) => file.path === "CONTEXT.md" && file.kind === "context"));
+  assert.ok(manifest.context.instructionFiles.some((file) => file.path === "AGENTS.md" && file.kind === "agent-instruction"));
+  assert.ok(manifest.context.instructionFiles.some((file) => file.path === "AGENTS.md" && file.roles.includes("safety-policy")));
+  assert.ok(manifest.context.instructionFiles.some((file) => file.path === "AGENTS.md" && file.roles.includes("test-runner")));
+  assert.ok(manifest.context.instructionFiles.some((file) => file.path === ".agent-core/skills/verification-layer.md" && file.roles.includes("agent-skill")));
+  assert.ok(manifest.context.instructionFiles.some((file) => file.path === ".agent-core/skills/verification-layer.md" && file.roles.includes("workflow-lifecycle")));
+  assert.ok(manifest.context.instructionFiles.some((file) => file.path === ".agent-core/skills/verification-layer.md" && file.roles.includes("verification-rubric")));
+  assert.ok(manifest.context?.source.from.includes("agent-skill-context"));
+  assert.ok(manifest.context?.source.from.includes("verification-rubric-context"));
+  assert.ok(manifest.context.instructionFiles.some((file) => file.path === "docs/adr/checkout-flow.md" && file.kind === "adr"));
+  assert.ok(manifest.context.validationCommands.includes("pnpm test"));
+  assert.ok(manifest.context.safetyRules.some((rule) => /Never write generated E2E drafts/.test(rule)));
+  assert.ok(manifest.context.safetyRules.some((rule) => /TOKEN=\[redacted\]/.test(rule)));
+  assert.ok(checkoutDomain?.source.from.includes("adr-context"));
+  assert.match(manifestText, /context:/);
+  assert.match(manifestText, /roles:/);
+  assert.match(manifestText, /agent-skill/);
+  assert.match(manifestText, /validationCommands:/);
+  assert.match(manifestText, /safetyRules:/);
+  assert.equal(contextResult.summary.contextSources >= 4, true);
+  assert.equal(contextResult.summary.validationCommands, 1);
+  assert.equal(contextResult.summary.safetyRules, 2);
+  assert.ok(
+    contextResult.roleSummary.some(
+      (item) => item.role === "agent-skill" && item.sources.includes(".agent-core/skills/verification-layer.md"),
+    ),
+  );
+  assert.ok(contextResult.roleSummary.some((item) => item.role === "verification-rubric"));
+  assert.match(contextMarkdown, /CodeWard Manifest Context/);
+  assert.match(contextMarkdown, /Role Summary/);
+  assert.match(contextMarkdown, /Context Sources/);
+  assert.match(contextMarkdown, /AGENTS\.md/);
+  assert.match(contextMarkdown, /Safety Rules/);
+  assert.match(contextMarkdown, /No context diagnostics/);
+  assert.match(cliContext.stdout, /CodeWard Manifest Context/);
+  assert.match(cliContext.stdout, /agent-skill/);
+  assert.ok(validation.issues.some((issue) => issue.path.includes("context.source")));
+});
+
+test("manifest bootstrap produces concrete PR E2E draft from repo QA memory", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
+  await mkdir(path.join(root, "docs/adr"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        dev: "vite --host 127.0.0.1",
+        "test:e2e": "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        next: "^15.0.0",
+        react: "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "playwright.config.ts"), "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await writeFile(
+    path.join(root, "CONTEXT.md"),
+    [
+      "# Product Context",
+      "",
+      "Checkout purchase is the customer payment flow and release-critical purchase evidence.",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "docs/adr/checkout-purchase.md"),
+    "# Checkout purchase\n\nThe checkout purchase flow must cover success, API failure, and visible confirmation evidence.\n",
+  );
+  await writeFile(
+    path.join(root, "AGENTS.md"),
+    [
+      "# Verification Rules",
+      "",
+      "- Run `pnpm test:e2e` before merge when checkout purchase behavior changes.",
+      "- Never publish or push during local smoke tests.",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  async function submitCheckout() {",
+      "    await fetch('/api/checkout', { method: 'POST' });",
+      "  }",
+      "  return <main>",
+      "    <label>Email<input placeholder=\"Email\" /></label>",
+      "    <button data-testid=\"checkout-submit\" onClick={submitCheckout}>Complete purchase</button>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+
+  const contextResult = await analyzeVerificationManifestContext(root);
+  const contextMarkdown = formatVerificationManifestContextResult(contextResult, "markdown");
+  const initResult = await writeVerificationManifestBaseline(root);
+  const manifest = await loadVerificationManifest(root);
+  const checkoutFlow = manifest.flows.find((flow) => flow.name === "Checkout Purchase");
+
+  assert.match(contextMarkdown, /docs\/adr\/checkout-purchase\.md/);
+  assert.ok(contextResult.roleSummary.some((item) => item.role === "domain-context"));
+  assert.equal(initResult.summary.contextSources >= 3, true);
+  assert.ok(checkoutFlow);
+  assert.equal(checkoutFlow.entry?.route, "/checkout");
+  assert.ok(checkoutFlow.source.from.includes("adr-context"));
+  assert.ok(checkoutFlow.checks.some((check) => check.title === "Checkout Purchase uses deterministic success fixture data"));
+  assert.ok(checkoutFlow.checks.some((check) => check.title === "Checkout Purchase handles failed, empty, or unauthorized responses"));
+
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "baseline checkout qa memory"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/checkout-confirmation"]);
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  async function submitCheckout() {",
+      "    await fetch('/api/checkout', { method: 'POST' });",
+      "  }",
+      "  return <main>",
+      "    <label>Email<input placeholder=\"Email\" /></label>",
+      "    <button data-testid=\"checkout-submit\" onClick={submitCheckout}>Complete purchase now</button>",
+      "    <p>Order confirmed</p>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "show checkout confirmation"]);
+
+  const explain = await explainVerificationManifest(root, { base: "main", head: "HEAD" });
+  const explainMarkdown = formatVerificationManifestExplainResult(explain, "markdown");
+  const draftPreview = await generateE2eDraft(root, { base: "main", head: "HEAD", dryRun: true, runner: "playwright" });
+  const draftMarkdown = formatMarkdownE2eDraft(draftPreview);
+  const writtenDraft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const draftFile = writtenDraft.files.find((file) => file.source === "verification-manifest" && file.flowTitle === "Checkout Purchase");
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+
+  assert.match(explainMarkdown, /Checkout Purchase/);
+  assert.match(explainMarkdown, /Evidence sources: route-file, adr-context/);
+  assert.match(explainMarkdown, /If this is wrong: update `\.codeward\/manifest\.yaml > flows\.checkout-checkout-purchase\.anchors`/);
+  assert.match(draftMarkdown, /Manifest Recommendations/);
+  assert.match(draftMarkdown, /Checkout Purchase/);
+  assert.match(draftMarkdown, /tests\/e2e\/checkout-purchase\.spec\.ts/);
+  assert.equal(draftFile.path, "tests/e2e/checkout-purchase.spec.ts");
+  assert.equal(draftFile.promotionStatus, "commit-candidate");
+  assert.match(spec, /Verification manifest evidence/);
+  assert.match(spec, /Flow: Checkout Purchase/);
+  assert.match(spec, /page\.goto\("\/checkout"\)/);
+  assert.match(spec, /page\.getByPlaceholder\("Email"\)/);
+  assert.match(spec, /page\.getByTestId\("checkout-submit"\)\.click\(\)/);
+  assert.match(spec, /Checkout Purchase uses deterministic success fixture data/);
+  assert.match(spec, /Checkout Purchase handles failed, empty, or unauthorized responses/);
+});
+
+test("qa command emits a PR comment draft without requiring a manifest", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        dev: "vite --host 127.0.0.1",
+        "test:e2e": "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        next: "^15.0.0",
+        react: "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "playwright.config.ts"), "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  return <main>",
+      "    <label>Email<input placeholder=\"Email\" /></label>",
+      "    <button data-testid=\"checkout-submit\">Complete purchase</button>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "baseline checkout"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/checkout-pr-qa"]);
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  return <main>",
+      "    <label>Email<input placeholder=\"Email\" /></label>",
+      "    <button data-testid=\"checkout-submit\">Complete purchase now</button>",
+      "    <p>Order confirmed</p>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "show checkout confirmation"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const markdown = formatMarkdownQaDraft(qa);
+
+  assert.equal(qa.noCloud, true);
+  assert.equal(qa.noLlmToken, true);
+  assert.equal(qa.manifestPath, undefined);
+  assert.equal(qa.flows.length > 0, true);
+  assert.ok(qa.flows.some((flow) => flow.changedFiles.includes("src/pages/checkout/index.tsx")));
+  assert.match(markdown, /CodeWard QA Draft/);
+  assert.match(markdown, /Local-first PR QA skill output/);
+  assert.match(markdown, /Manifest: not found; using repo signals and PR diff only/);
+  assert.match(markdown, /PR Comment Draft/);
+  assert.match(markdown, /Affected Flow/);
+  assert.match(markdown, /Suggested E2E \/ QA Draft/);
+  assert.match(markdown, /PR Checklist/);
+  assert.match(markdown, /No cloud\. No LLM token/);
+
+  const cliOutput = await execFileAsync(process.execPath, [
+    cliPath,
+    "qa",
+    root,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+    "--runner",
+    "playwright",
+  ]);
+  assert.match(cliOutput.stdout, /CodeWard QA Draft/);
+  assert.match(cliOutput.stdout, /PR Comment Draft/);
+});
+
+test("package metadata includes the portable PR QA skill template", async () => {
+  const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8"));
+  const skillText = await readFile(path.join(repositoryRoot, "skills/codeward-pr-qa/SKILL.md"), "utf8");
+
+  assert.ok(packageJson.files.includes("skills"));
+  assert.match(skillText, /name: codeward-pr-qa/);
+  assert.match(skillText, /pnpm dlx @ivorycanvas\/codeward qa/);
+  assert.match(skillText, /Manifest Repair/);
+});
+
+test("package version matches the CLI version constant", async () => {
+  const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8"));
+
+  assert.equal(VERSION, packageJson.version);
+});
+
+test("e2e draft can use an external verification manifest for read-only adoption preview", async () => {
+  const root = await makeTempRepo();
+  const manifestOutputRoot = await mkdtemp(path.join(tmpdir(), "codeward-external-manifest-"));
+  const manifestPath = path.join(manifestOutputRoot, "manifest.yaml");
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        dev: "vite --host 127.0.0.1",
+        "test:e2e": "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        next: "^15.0.0",
+        react: "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "playwright.config.ts"), "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  return <main>",
+      "    <label>Email<input placeholder=\"Email\" /></label>",
+      "    <button data-testid=\"checkout-submit\">Complete purchase</button>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+
+  await writeVerificationManifestBaseline(root, { write: manifestPath });
+  const loadedManifest = await loadVerificationManifest(root, { manifestPath });
+  assert.ok(loadedManifest.path?.endsWith("/manifest.yaml"));
+  assert.equal(loadedManifest.flows.some((flow) => flow.entry?.route === "/checkout"), true);
+
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "baseline checkout"]);
+  await git(root, ["branch", "-M", "main"]);
+  await git(root, ["switch", "-c", "feature/checkout-copy"]);
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  return <main>",
+      "    <label>Email<input placeholder=\"Email\" /></label>",
+      "    <button data-testid=\"checkout-submit\">Complete purchase now</button>",
+      "    <p>Order confirmed</p>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update checkout copy"]);
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    dryRun: true,
+    runner: "playwright",
+    manifestPath,
+  });
+  const manifestDraft = draft.files.find((file) => file.source === "verification-manifest");
+
+  assert.ok(manifestDraft);
+  assert.equal(manifestDraft.promotionStatus, "commit-candidate");
+  assert.match(formatMarkdownE2eDraft(draft), /Verification manifest/);
+  assert.match(formatMarkdownE2eDraft(draft), /manifest\.yaml/);
+
+  const cliDraftOutput = await execFileAsync(process.execPath, [
+    cliPath,
+    "e2e",
+    "draft",
+    root,
+    "--manifest",
+    manifestPath,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+    "--dry-run",
+    "--json",
+  ]);
+  const cliDraft = JSON.parse(cliDraftOutput.stdout);
+  assert.equal(cliDraft.files.some((file) => file.source === "verification-manifest"), true);
+});
+
 test("manifest init keeps Expo app file domains specific", async () => {
   const root = await makeTempRepo();
   await mkdir(path.join(root, "app"), { recursive: true });
@@ -4147,19 +4573,27 @@ test("manifest matches explain e2e and verify recommendations", async () => {
   assert.match(validationMarkdown, /CodeWard Manifest Validate/);
   assert.match(explainMarkdown, /CodeWard Manifest Explain/);
   assert.match(explainMarkdown, /Campaign Application Complete/);
+  assert.match(explainMarkdown, /Evidence sources: product-qa/);
+  assert.match(explainMarkdown, /Next actions/);
+  assert.match(explainMarkdown, /Repair hints/);
   assert.match(explainMarkdown, /If this is wrong: update `\.codeward\/manifest\.yaml > flows\.campaign-application-complete\.anchors`/);
   assert.match(planMarkdown, /## Manifest Recommendations/);
   assert.match(planMarkdown, /Why this was recommended/);
+  assert.match(planMarkdown, /Draft or review E2E coverage for the Campaign Application Complete flow/);
+  assert.match(planMarkdown, /rewrite \.codeward\/manifest\.yaml > flows\.campaign-application-complete\.checks in team language/);
   assert.match(planMarkdown, /If this is wrong: update `\.codeward\/manifest\.yaml > flows\.campaign-application-complete\.anchors`/);
   assert.ok(draft.files.some((file) => file.source === "verification-manifest"));
   assert.ok(draft.files.some((file) => file.flowTitle === "Campaign Application Complete"));
   assert.match(draftMarkdown, /## Manifest Recommendations/);
+  assert.match(draftMarkdown, /Evidence sources: product-qa/);
   assert.match(draftMarkdown, /commit-candidate/);
   assert.match(writtenDraftText, /Verification manifest evidence/);
   assert.match(writtenDraftText, /Submit content URL successfully/);
   assert.match(writtenDraftText, /Show validation error for invalid content URL/);
   assert.match(writtenDraftText, /page\.goto\("\/campaign\/official\/applicationComplete"\)/);
   assert.match(verifyMarkdown, /## Manifest Recommendations/);
+  assert.match(verifyMarkdown, /Next actions/);
+  assert.match(verifyMarkdown, /Repair hints/);
   assert.equal(verify.verificationManifestMatches.length > 0, true);
 
   const cliValidate = await execFileAsync(process.execPath, [cliPath, "manifest", "validate", root, "--format", "markdown"]);

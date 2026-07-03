@@ -85,6 +85,7 @@ Create a baseline repo-level verification manifest from the checkout you want to
 ```sh
 git switch main
 git pull
+codeward manifest context .
 codeward manifest init .
 codeward manifest init services/offer --workspace-root .
 codeward manifest validate .
@@ -95,10 +96,11 @@ codeward manifest explain . --base origin/main --head HEAD
 
 Use the manifest commands in this order when adopting a repository:
 
-1. `codeward manifest init .` creates a baseline that is useful but intentionally reviewable.
-2. `codeward manifest validate .` checks whether the baseline is parseable, anchored to real files, and specific enough to shape PR evidence.
-3. `codeward manifest explain . --base origin/main --head HEAD` shows which domains, flows, and checks match the current branch, plus the exact manifest path to edit when a recommendation is wrong.
-4. `codeward e2e draft . --base origin/main --head HEAD --dry-run` uses matched manifest flows as higher-confidence draft sources before falling back to domain-language or heuristic candidates.
+1. `codeward manifest context .` previews repo-local docs, role classifications, validation commands, safety rules, and context diagnostics without writing files.
+2. `codeward manifest init .` creates a baseline that is useful but intentionally reviewable.
+3. `codeward manifest validate .` checks whether the baseline is parseable, anchored to real files, and specific enough to shape PR evidence.
+4. `codeward manifest explain . --base origin/main --head HEAD` shows which domains, flows, and checks match the current branch, plus the exact manifest path to edit when a recommendation is wrong.
+5. `codeward e2e draft . --base origin/main --head HEAD --dry-run` uses matched manifest flows as higher-confidence draft sources before falling back to domain-language or heuristic candidates.
 
 ```yaml
 $schema: https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward-manifest.schema.json

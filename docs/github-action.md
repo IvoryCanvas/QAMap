@@ -40,7 +40,7 @@ jobs:
 ```
 
 Use `fetch-depth: 0` so CodeWard can compare the pull request branch with the base ref.
-For production workflows, pin to a version tag such as `IvoryCanvas/codeward@v0.2.0` after that tag is published. Use `@main` only when intentionally testing unreleased behavior.
+For production workflows, pin to a version tag such as `IvoryCanvas/codeward@v0.2.1` after that tag is published. Use `@main` only when intentionally testing unreleased behavior.
 
 ## Monorepo Package
 

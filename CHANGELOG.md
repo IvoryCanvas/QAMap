@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+## 0.2.1 - 2026-07-03
+
+### Added
+
+- Added advisory context capture to `codeward manifest init`, including `CONTEXT.md`, ADRs, goal documents, agent instruction files, and QA/test/release runbooks as manifest context sources.
+- Added inferred manifest `context.validationCommands` and `context.safetyRules` so teams can see which repo-local instructions shaped the baseline without treating them as product truth.
+- Added `codeward manifest context` as a read-only preview for repo-local context sources, role summaries, validation commands, safety rules, and context repair diagnostics.
+- Added next-action and repair-hint guidance to manifest recommendations so `verify`, `e2e plan`, `e2e draft`, and `manifest explain` show how to turn a recommendation into reusable repo policy.
+- Added role classification for repo-local harness, skill, instruction, and runbook files so manifest context can distinguish agent skills, harness config, workflow lifecycle, verification rubric, safety policy, release policy, and test runner hints.
+- Added a manifest bootstrap PoC path where repo-local context filenames such as ADRs can sharpen inferred flow names, then matched PR changes can produce concrete Playwright draft actions from detected input and submit selectors.
+- Added `--manifest <file>` support to manifest validation/explanation, `verify`, and E2E plan/draft commands so teams can preview an external generated manifest without writing it into the target repository.
+- Added `codeward qa` as a manifest-free local QA skill entrypoint that turns a PR diff into a PR comment/checklist draft with affected flow, recommended runner, suggested E2E/checklist path, missing evidence, and agent handoff guidance.
+- Added a packaged `skills/codeward-pr-qa/SKILL.md` template so local agent workflows can run CodeWard before PR handoff without requiring users to rewrite the workflow prompt.
+
+### Changed
+
+- Refined README, quick start, roadmap, and release validation docs around the sharper product thesis: repo-local QA manifest plus PR-to-E2E draft, rather than generic test generation.
+- Expanded manifest docs and quick-start examples to show the full default-branch manifest baseline, PR explanation, E2E draft, and manifest repair loop.
+- Documented a read-only adoption preview flow using `manifest init --write /tmp/codeward-manifest.yaml` plus `e2e draft --manifest /tmp/codeward-manifest.yaml`.
+- Repositioned README and quick-start docs so first use starts with `codeward qa`, while `.codeward/manifest.yaml` is presented as an optional accuracy upgrade rather than a setup gate.
+- Included `skills` in the npm package file list so the PR QA skill template ships with the CLI package.
+
 ## 0.2.0 - 2026-07-01
 
 ### Added

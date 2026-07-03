@@ -65,6 +65,7 @@ export type E2eSelectorKind =
 
 export interface E2ePlanOptions extends TestPlanOptions {
   runner?: E2eRunnerName;
+  manifestPath?: string;
 }
 
 export interface E2eDraftOptions extends E2ePlanOptions {
@@ -266,6 +267,13 @@ export interface E2eDraftFile {
   runner: E2eRunnerName;
   status: "created" | "skipped" | "preview";
   source?: "verification-manifest" | "domain-language" | "core-flow" | "heuristic";
+  changedFiles?: string[];
+  draftSteps?: string[];
+  entrypointHints?: string[];
+  selectorHints?: string[];
+  setupHints?: string[];
+  coverageTargets?: string[];
+  manifestUpdatePath?: string;
   languageBrief?: E2eFlowLanguageBrief;
   actionItems?: E2eDraftActionItem[];
   promotionStatus?: E2eDraftPromotionStatus;
@@ -428,7 +436,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const coreFlows = matchCoreFlows(coreFlowManifest, coreFlowChangedFiles);
   const domainManifest = await loadDomainManifest(coreFlowRoot);
   const domains = matchDomains(domainManifest, coreFlowChangedFiles);
-  const verificationManifest = await loadVerificationManifest(coreFlowRoot);
+  const verificationManifest = await loadVerificationManifest(coreFlowRoot, { manifestPath: options.manifestPath });
   const verificationManifestMatches = matchVerificationManifest(verificationManifest, coreFlowChangedFiles);
   const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows, domains);
   const workspaceTargets = await buildWorkspaceTargets(root, testPlan);
@@ -537,6 +545,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
     const actionItems = buildDraftActionItems(plan, flow, runner, validationSummary, promotionGuidance, selfCheck);
     const executionBlockers = draftExecutionBlockers(plan, flow, runner, validationSummary, selfCheck);
     const runnableStatus = draftRunnableStatus(plan, flow, runner, validationSummary, executionBlockers, selfCheck);
+    const fileDetails = draftFileDetails(flow);
     if (dryRun) {
       files.push({
         path: displayPath,
@@ -544,6 +553,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
         runner,
         status: "preview",
         source: draftFlowSource(flow),
+        ...fileDetails,
         languageBrief: flow.languageBrief,
         actionItems,
         promotionStatus: promotionGuidance.status,
@@ -574,6 +584,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
         runner,
         status: "skipped",
         source: draftFlowSource(flow),
+        ...fileDetails,
         languageBrief: flow.languageBrief,
         actionItems,
         promotionStatus: promotionGuidance.status,
@@ -603,6 +614,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
       runner,
       status: "created",
       source: draftFlowSource(flow),
+      ...fileDetails,
       languageBrief: flow.languageBrief,
       actionItems,
       promotionStatus: promotionGuidance.status,
@@ -1906,6 +1918,35 @@ function buildDraftActionItems(
   return uniqueDraftActionItems(items).slice(0, 8);
 }
 
+function draftFileDetails(flow: DraftE2eFlow): Pick<
+  E2eDraftFile,
+  | "changedFiles"
+  | "draftSteps"
+  | "entrypointHints"
+  | "selectorHints"
+  | "setupHints"
+  | "coverageTargets"
+  | "manifestUpdatePath"
+> {
+  return {
+    changedFiles: flow.files.slice(0, maxFilesPerFlow),
+    draftSteps: flow.steps.slice(0, 8),
+    entrypointHints: flow.entrypoints.map(formatEntrypointHint).slice(0, 6),
+    selectorHints: flow.selectors.map(formatSelectorHint).slice(0, 8),
+    setupHints: flow.setupHints.map((hint) => `${hint.title}: ${hint.detail}`).slice(0, 6),
+    coverageTargets: flow.coverage.map((target) => `${target.priority}: ${target.title}`).slice(0, 7),
+    manifestUpdatePath: flow.manifestMatch?.updatePath,
+  };
+}
+
+function formatEntrypointHint(entrypoint: E2eEntrypoint): string {
+  return `${entrypoint.kind}: ${entrypoint.value} (${entrypoint.confidence})`;
+}
+
+function formatSelectorHint(selector: E2eSelector): string {
+  return `${selector.kind}: ${selector.value} (${selector.file})`;
+}
+
 function draftNeedsAssertionWork(selfCheck?: E2eDraftSelfCheck): boolean {
   if (!selfCheck) {
     return true;
@@ -2744,8 +2785,23 @@ function appendVerificationManifestMatchesMarkdown(lines: string[], matches: Ver
     lines.push(`- Kind: ${match.kind}`);
     lines.push(`- Confidence: ${match.confidence}`);
     lines.push(`- Why this was recommended: ${escapeMarkdownInline(match.reason)}`);
+    if (match.evidenceSources.length > 0) {
+      lines.push(`- Evidence sources: ${match.evidenceSources.map(escapeMarkdownInline).join(", ")}`);
+    }
     lines.push(`- Manifest evidence: \`${escapeMarkdownInline(match.manifestPath)}\``);
     lines.push(`- If this is wrong: update \`${escapeMarkdownInline(match.updatePath)}\``);
+    if (match.nextActions.length > 0) {
+      lines.push("- Next actions:");
+      for (const action of match.nextActions.slice(0, 4)) {
+        lines.push(`  - ${escapeMarkdownInline(action)}`);
+      }
+    }
+    if (match.repairHints.length > 0) {
+      lines.push("- Repair hints:");
+      for (const hint of match.repairHints.slice(0, 4)) {
+        lines.push(`  - ${escapeMarkdownInline(hint)}`);
+      }
+    }
     if (match.matchedFiles.length > 0) {
       lines.push("- Matched files:");
       for (const file of match.matchedFiles.slice(0, maxFilesPerFlow)) {
@@ -4560,6 +4616,19 @@ function refineStepsForInferredSelectors(steps: string[], selectors: E2eSelector
   return uniqueStrings(refined);
 }
 
+function refineManifestStepsForInferredSelectors(steps: string[], selectors: E2eSelector[]): string[] {
+  const inputSelector = selectors.find(isInputSelector);
+  const actionSelector = selectors.find((selector) => selectorCanDriveInteraction(selector) && !isInputSelector(selector));
+  if (!inputSelector || !actionSelector || steps.some(isInputStep)) {
+    return steps;
+  }
+  return uniqueStrings([
+    `Fill ${selectorStepLabel(inputSelector)} with realistic data.`,
+    `${actionVerbForSelector(actionSelector)} using ${selectorStepLabel(actionSelector)}.`,
+    ...steps,
+  ]);
+}
+
 function exerciseStepSubject(step: string): string | undefined {
   const exerciseMatch = step.match(/^Exercise\s+(.+?)\s+with realistic data(?:\s+from[^.]*)?\.?$/i);
   if (exerciseMatch?.[1]) {
@@ -5995,7 +6064,7 @@ async function buildManifestDraftFlow(
   checkMatches: VerificationManifestMatch[],
   baseFlows: E2eFlow[],
 ): Promise<DraftE2eFlow> {
-  const relatedChecks = checkMatches.filter((check) => check.id.startsWith(`${match.id}:`));
+  const relatedChecks = checkMatches.filter((check) => check.id.startsWith(`${match.id}.`));
   const manifestFiles = normalizeScenarioFilesForRoot(plan, match.matchedFiles);
   const baseFlow = bestBaseFlowForManifestMatch(manifestFiles, baseFlows);
   const files = uniqueStrings(manifestFiles.length > 0 ? manifestFiles : (baseFlow?.files ?? [])).slice(0, 20);
@@ -6012,7 +6081,10 @@ async function buildManifestDraftFlow(
     ...filterSelectorsForFiles(baseFlows.flatMap((flow) => flow.selectors), files),
     ...(await inferFlowSelectors(plan.root, files, runner)),
   ]);
-  const refinedSteps = refineStepsForInferredSelectors(manifestSteps.length > 0 ? manifestSteps : (baseFlow?.steps ?? []), selectors);
+  const refinedSteps = refineManifestStepsForInferredSelectors(
+    refineStepsForInferredSelectors(manifestSteps.length > 0 ? manifestSteps : (baseFlow?.steps ?? []), selectors),
+    selectors,
+  );
   const setupHints = uniqueSetupHints([
     ...filterSetupHintsForFiles(baseFlows.flatMap((flow) => flow.setupHints), files),
     ...(await inferFlowSetupHints(plan.root, files, "domain")),

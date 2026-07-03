@@ -22,6 +22,9 @@
       },
       "default": []
     },
+    "context": {
+      "$ref": "#/$defs/context"
+    },
     "flows": {
       "type": "array",
       "description": "User, API, command, or artifact flows that should shape PR verification evidence.",
@@ -61,6 +64,14 @@
       "type": "string",
       "enum": ["contract", "edge", "failure", "success", "visual"]
     },
+    "instructionKind": {
+      "type": "string",
+      "enum": ["adr", "agent-instruction", "context", "goal", "qa-runbook", "release-runbook", "runbook", "test-runbook"]
+    },
+    "instructionRole": {
+      "type": "string",
+      "enum": ["agent-skill", "domain-context", "harness-config", "release-policy", "safety-policy", "test-runner", "verification-rubric", "workflow-lifecycle"]
+    },
     "source": {
       "type": "object",
       "additionalProperties": false,
@@ -79,6 +90,78 @@
             "minLength": 1
           },
           "uniqueItems": true
+        }
+      }
+    },
+    "instructionFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind", "confidence", "signals"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "$ref": "#/$defs/instructionKind"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "roles": {
+          "type": "array",
+          "description": "Advisory role classification for the context source, such as verification rubric, workflow lifecycle, harness config, or agent skill.",
+          "items": {
+            "$ref": "#/$defs/instructionRole"
+          },
+          "uniqueItems": true,
+          "default": []
+        },
+        "signals": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instructionFiles", "validationCommands", "safetyRules", "source"],
+      "properties": {
+        "instructionFiles": {
+          "type": "array",
+          "description": "Advisory context files used to bootstrap manifest quality, such as CONTEXT.md, ADRs, goals, agent instructions, and QA runbooks.",
+          "items": {
+            "$ref": "#/$defs/instructionFile"
+          },
+          "default": []
+        },
+        "validationCommands": {
+          "type": "array",
+          "description": "Validation commands inferred from context files. These are hints until reviewed.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": []
+        },
+        "safetyRules": {
+          "type": "array",
+          "description": "Safety or workflow rules inferred from context files. These are advisory and may not be product truth.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": []
+        },
+        "source": {
+          "$ref": "#/$defs/source"
         }
       }
     },
