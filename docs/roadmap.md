@@ -29,7 +29,7 @@ Before treating the next public release as ready, the golden demo must satisfy t
 ## Now
 
 - Keep the scanner fast, static, and easy to understand.
-- Keep the [`0.2.0` release validation checklist](release-validation.md), [manifest guide](manifest.md), and public [E2E output examples](e2e-output-examples.md) aligned with the current release bar.
+- Keep the [release validation checklist](release-validation.md), [manifest guide](manifest.md), and public [E2E output examples](e2e-output-examples.md) aligned with the current release bar.
 - Keep the [release runbook](releasing.md) ready for npm publishing and versioned GitHub Action follow-up.
 - Improve adoption docs and sample output so new maintainers understand the QA manifest plus PR-to-E2E draft loop quickly.
 - Stabilize the manifest feedback loop with `.codeward/manifest.yaml`, `manifest init`, `manifest validate`, `manifest explain`, JSON Schema, and manifest-driven E2E draft shaping.

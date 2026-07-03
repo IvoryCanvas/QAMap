@@ -279,7 +279,7 @@ pnpm build
 node dist/cli.js scan /path/to/repo
 ```
 
-CodeWard `0.2.0` is a local-first PR verification planner with a repository-level verification manifest loop, not a finished automatic QA bot. A good result is a clear answer to "what should this branch prove before merge?", plus manifest-backed E2E, fixture, selector, and validation work that a developer can turn into real regression coverage. Many first drafts will correctly report `review-only` or `near-runnable` until the project adds runner config, stable selectors, deterministic fixtures, or team-owned manifest entries.
+CodeWard `0.2.x` is a local-first PR verification planner with a repository-level verification manifest loop, not a finished automatic QA bot. A good result is a clear answer to "what should this branch prove before merge?", plus manifest-backed E2E, fixture, selector, and validation work that a developer can turn into real regression coverage. Many first drafts will correctly report `review-only` or `near-runnable` until the project adds runner config, stable selectors, deterministic fixtures, or team-owned manifest entries.
 
 ## What CodeWard Produces
 
@@ -574,7 +574,7 @@ CodeWard starts as a local CLI and should stay small enough that maintainers can
 
 Near-term priorities:
 
-- finish the [0.2.0 release validation](docs/release-validation.md) checklist across representative manifest, web, mobile, API/service, CLI, monorepo, and test-light repositories
+- keep the [release validation](docs/release-validation.md) checklist current across representative manifest, web, mobile, API/service, CLI, monorepo, and test-light repositories
 - keep the [release runbook](docs/releasing.md) aligned with the npm package and GitHub Action release process
 - publish a versioned GitHub Action release tag after the first public package is ready
 - improve branch-aware `review` changed-line locations

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.1 - 2026-07-03
+
 ### Added
 
 - Added advisory context capture to `codeward manifest init`, including `CONTEXT.md`, ADRs, goal documents, agent instruction files, and QA/test/release runbooks as manifest context sources.

@@ -47,6 +47,7 @@ import {
   writeDefaultConfig,
   writeVerificationManifestBaseline,
 } from "../dist/index.js";
+import { VERSION } from "../dist/version.js";
 
 const cliPath = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -4339,6 +4340,12 @@ test("package metadata includes the portable PR QA skill template", async () => 
   assert.match(skillText, /name: codeward-pr-qa/);
   assert.match(skillText, /pnpm dlx @ivorycanvas\/codeward qa/);
   assert.match(skillText, /Manifest Repair/);
+});
+
+test("package version matches the CLI version constant", async () => {
+  const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8"));
+
+  assert.equal(VERSION, packageJson.version);
 });
 
 test("e2e draft can use an external verification manifest for read-only adoption preview", async () => {

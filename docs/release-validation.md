@@ -1,10 +1,10 @@
-# 0.2.0 Release Validation
+# 0.2.1 Patch Release Validation
 
-CodeWard should not publish a new minor version only because the CLI commands work in fixtures. The `0.2.0` release should prove that the verification manifest loop is useful across representative repositories without requiring an LLM call.
+CodeWard should not publish a patch or minor version only because the CLI commands work in fixtures. The `0.2.1` release should prove that the manifest-backed QA skill flow is useful across representative repositories without requiring an LLM call.
 
 ## Release Bar
 
-CodeWard is ready for `0.2.0` when the commands below produce useful, reviewable output for each representative repository type:
+CodeWard is ready for `0.2.1` when the commands below produce useful, reviewable output for each representative repository type:
 
 - manifest-free `codeward qa` output that works as a PR comment/checklist draft
 - packaged `skills/codeward-pr-qa/SKILL.md` template included in the npm tarball
@@ -171,7 +171,7 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 | Existing test evidence | `generateE2ePlan evaluates existing test suite coverage evidence`; `generateE2ePlan keeps generic test filenames from overmatching unrelated services` | Coverage evidence rows that distinguish covered, partial, and missing targets without matching unrelated generic test filenames. |
 | Evidence-only changes | `generateE2ePlan treats test-only changes as evidence verification, not product journeys`; `generateE2ePlan treats docs-only changes as documentation verification`; `generateE2ePlan treats generated-only changes as generated artifact verification` | Test-only, docs-only, and generated-output-only branches produce maintainer-oriented evidence checklists instead of product journeys inferred from filenames such as `admin-primary-journey.spec.ts` or generated API clients. |
 
-See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft snippets users should see from the `0.2.0` release.
+See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft snippets users should see from the `0.2.1` release.
 
 ## Latest PR Validation Snapshot
 
@@ -179,13 +179,13 @@ Last verified on 2026-07-03 on PR #71 after adding the manifest-free `codeward q
 
 | Check | Result |
 | --- | --- |
-| `pnpm test` | 89 tests passed. |
+| `pnpm test` | 90 tests passed. |
 | `pnpm scan` | 0 findings. |
 | `git diff --check` | Passed. |
 | `pnpm pack --dry-run` | Passed; tarball includes `dist`, `docs`, `docs/assets/codeward-30s-demo.gif`, `schema`, `skills/codeward-pr-qa/SKILL.md`, `README.md`, `CHANGELOG.md`, `LICENSE`, and `package.json`. |
-| Coverage threshold | Passed the 80% line, branch, and function gates; latest run reported 85.26% line, 81.77% branch, and 94.26% function coverage. |
+| Coverage threshold | Passed the 80% line, branch, and function gates; latest run reported 85.27% line, 81.59% branch, and 94.26% function coverage. |
 | `pnpm run release:check` | Passed as the single local release gate for this PR state, including `codeward qa` coverage, the packaged PR QA skill template, and `dist/qa.*` pack output. |
-| `npm publish --dry-run --access public` | Passed for `@ivorycanvas/codeward@0.2.0`; tarball includes 98 files, `schema/codeward-manifest.schema.json`, `docs/manifest.md`, `docs/quickstart-demo.md`, `skills/codeward-pr-qa/SKILL.md`, and the demo GIF. |
+| `npm publish --dry-run --access public` | Passed for `@ivorycanvas/codeward@0.2.1`; tarball includes 98 files, `schema/codeward-manifest.schema.json`, `docs/manifest.md`, `docs/quickstart-demo.md`, `skills/codeward-pr-qa/SKILL.md`, and the demo GIF. |
 
 ## Real Repository Smoke Snapshot
 
@@ -197,7 +197,7 @@ The same follow-up also showed the next quality gap. External manifest previews 
 
 | Target shape | Base/head mode | Result | Follow-up signal |
 | --- | --- | --- | --- |
-| Expo / React Native manifest baseline | `manifest init` wrote only to `/tmp/codeward-mood-note-manifest.yaml` | Generated 9 domains, 8 flows, 8 anchors, and 16 checks without changing the target repo. Direct `app/*.tsx` screens now produce specific paths such as `app/EmotionChatPage.tsx`; `+not-found.tsx` is not promoted as a product domain. | Good 0.2.0 signal for baseline quality. Remaining work is richer screen/route semantics and selector-specific checks. |
+| Expo / React Native manifest baseline | `manifest init` wrote only to `/tmp/codeward-mood-note-manifest.yaml` | Generated 9 domains, 8 flows, 8 anchors, and 16 checks without changing the target repo. Direct `app/*.tsx` screens now produce specific paths such as `app/EmotionChatPage.tsx`; `+not-found.tsx` is not promoted as a product domain. | Good 0.2.x signal for baseline quality. Remaining work is richer screen/route semantics and selector-specific checks. |
 | Web monorepo package | Package scan with `--workspace-root`, feature branch compared with `main`, working tree included | Detected `web`, recommended Playwright, inferred a concrete route, produced changed-flow specs, and correctly blocked promotion because Playwright config, deterministic fixture/mock data, selector evidence, and validation evidence were missing. | Flow naming improved, but docs/design-only files can still create low-signal drafts that should be filtered or demoted. |
 | Expo / React Native app | Feature branch compared with `develop`, working tree included | Detected `expo-react-native`, recommended Maestro, found an existing Jest suite, produced multiple near-runnable YAML drafts, and gave useful blockers for missing Maestro directory plus missing stable mobile selectors. | Strongest current real-repo result; remaining gap is selector and app-specific setup quality. |
 | Nuxt / Vue web app with existing Playwright tests | `origin/develop` to `HEAD`, working tree included | Detected `web`, recommended Playwright, recognized existing test evidence, and blocked draft promotion because no Playwright config or runnable route/screen entrypoint was inferred. | Test-only or generated-test changes can still produce generic smoke draft names; CodeWard should better distinguish changed tests from changed product behavior. |
@@ -205,7 +205,7 @@ The same follow-up also showed the next quality gap. External manifest previews 
 | Design token repository | `main` to `HEAD`, working tree included | Detected `design-tokens`, selected manual output, avoided browser/device selector requirements, and produced review-only artifact validation output. | Docs-only or style-only changes may still surface content/theme wording instead of token artifact language. |
 | Taxonomy / data catalog repository | `main` to `HEAD`, working tree included | Detected `data-catalog`, selected manual output, avoided API mock requirements, and produced review-only checklist output with no TODOs. | Catalog-specific changes are handled, but docs/config-only changes should be labeled more explicitly as low-signal. |
 
-Interpretation: the `0.2.0` release should be described as a planner that removes blank-page verification work by combining static analysis with repo-local manifest memory. The smoke results are useful, but they also show that many real repositories will start at `review-only` or `near-runnable` until teams add runner config, selectors, fixtures, validation evidence, and durable manifests.
+Interpretation: the `0.2.1` release should be described as a planner that removes blank-page verification work by combining static analysis with repo-local manifest memory. The smoke results are useful, but they also show that many real repositories will start at `review-only` or `near-runnable` until teams add runner config, selectors, fixtures, validation evidence, and durable manifests.
 
 ## Ongoing Validation Notes
 
@@ -220,7 +220,7 @@ The release candidate has passed the fixture-backed suite, package dry-run, npm 
 
 ## Stop Conditions
 
-Do not publish `0.2.0` if any representative target shows one of these problems:
+Do not publish `0.2.1` if any representative target shows one of these problems:
 
 - generated flow names are dominated by generic folder names instead of product language
 - test-only or docs-only changes are presented as confident product journeys without low-signal wording
