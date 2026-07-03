@@ -30,13 +30,21 @@ Use CodeWard as a final local QA pass before presenting a pull request for human
    pnpm dlx @ivorycanvas/codeward qa <package-path> --workspace-root . --base <base> --head HEAD
    ```
 
-4. Read the `PR Comment Draft`, `Missing Evidence Before Trusting This PR`, and `PR Checklist` sections.
-5. Include the useful parts in the PR body, review note, or handoff summary.
+4. If CodeWard prints `First E2E Draft Bootstrap`, treat it as an instruction to create the starter draft before writing broad QA notes:
+
+   ```sh
+   pnpm exec codeward e2e setup . --runner <runner>
+   ```
+
+   Use the exact create command from the output when it differs.
+5. Read the `PR Comment Draft`, `Missing Evidence Before Trusting This PR`, and `PR Checklist` sections.
+6. Include the useful parts in the PR body, review note, or handoff summary.
 
 ## Output Rules
 
 - Treat CodeWard output as QA planning evidence, not proof that browser, device, API, or manual QA passed.
 - Preserve the affected flow, suggested E2E/checklist path, missing evidence, and validation command in the handoff.
+- Prefer creating the suggested starter E2E draft over only reporting that a draft is needed.
 - If CodeWard recommends Playwright, Maestro, or manual QA, do not force a different runner unless the repository already has stronger runner evidence.
 - If the output is `review only` or `near runnable`, explain what blocks it from becoming trusted regression evidence.
 - If `codeward qa` says no manifest was found, do not stop. The first run is allowed to be manifest-free.

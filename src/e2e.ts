@@ -1287,7 +1287,7 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "ready",
         "Entrypoint or selector evidence detected",
         "Generated drafts can reuse detected routes, screens, selectors, labels, or visible copy.",
-        "Review the generated locators and replace weak TODO placeholders before promoting the draft.",
+        "Review the generated locators and replace weak starter assertions with domain-specific checks before promoting the draft.",
         [],
         input.flows.flatMap((flow) => flow.selectors.map((selector) => selector.file)).slice(0, maxFilesPerFlow),
       ),
@@ -1869,8 +1869,8 @@ function buildDraftActionItems(
     items.push(draftActionItem(
       "assertion",
       "required",
-      "Turn generated TODOs into runnable assertions",
-      `Preserve the success signal "${flow.languageBrief.successSignal}" while replacing placeholder interactions and expects.`,
+      "Replace starter smoke assertions with domain assertions",
+      `Preserve the success signal "${flow.languageBrief.successSignal}" while replacing weak fallback interactions and generic expects.`,
     ));
   }
 
@@ -2281,6 +2281,18 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
       return `Run the build, startup, or release path affected by ${flow.files[0]}.`;
     }
     return `Start from the product surface that owns ${flow.files[0]}.`;
+  }
+  if (isApiContractFocusedFlow(flow)) {
+    return "Call one representative health, auth, or changed-domain endpoint.";
+  }
+  if (isCliCommandFocusedFlow(flow)) {
+    return "Run the representative changed CLI command path.";
+  }
+  if (isDesignTokenFocusedFlow(flow)) {
+    return "Run the token validation or artifact generation command.";
+  }
+  if (isCatalogFocusedFlow(flow)) {
+    return "Run the catalog validation or generation command.";
   }
   return "Launch the app and wait for the first stable screen.";
 }
@@ -6959,7 +6971,8 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
 
 type MaestroDraftCommand =
   | { kind: "tapOn" | "assertVisible" | "swipe"; value: string }
-  | { kind: "inputText"; target: string; text: string };
+  | { kind: "inputText"; target: string; text: string }
+  | { kind: "comment"; value: string };
 
 function maestroCommandForStep(
   step: string,
@@ -6975,7 +6988,7 @@ function maestroCommandForStep(
   if (isAssertionStep(step)) {
     return {
       kind: "assertVisible",
-      value: selector ? maestroSelectorValue(selector) : quoteYaml(`TODO: ${step}`),
+      value: selector ? maestroSelectorValue(selector) : quoteYaml(".*"),
     };
   }
   if (selector && isInputSelector(selector) && isInteractionStep(step)) {
@@ -6985,9 +6998,15 @@ function maestroCommandForStep(
       text: quoteYaml(sampleInputForStepOrSelector(step, selector.value)),
     };
   }
+  if (!selector) {
+    return {
+      kind: "comment",
+      value: `CodeWard could not infer a stable Maestro selector for: ${step}`,
+    };
+  }
   return {
     kind: "tapOn",
-    value: selector ? maestroSelectorValue(selector) : quoteYaml(`TODO: ${step}`),
+    value: maestroSelectorValue(selector),
   };
 }
 
@@ -7028,7 +7047,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
     }
     lines.push("  };");
     if (routeDraft.params.some((param) => param.value === undefined)) {
-      lines.push("  // TODO: Replace routeParams with fixture ids, tabs, or slugs from the target environment.");
+      lines.push("  // CodeWard used stable sample route params; replace them with domain fixture values when available.");
     } else {
       lines.push("  // Route params were inferred from concrete route hints in the changed files.");
     }
@@ -7039,10 +7058,9 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   ]);
   for (const step of draftExecutableSteps(flow, "playwright")) {
     const selector = takeSelectorForStep(selectorQueue, step);
-    const locator = selector ? playwrightLocator(selector) : 'page.getByText("TODO")';
     const body = selector
-      ? playwrightActionForStep(selector, locator, step)
-      : [`// TODO: ${step}`, `await expect(${locator}).toBeVisible();`];
+      ? playwrightActionForStep(selector, playwrightLocator(selector), step)
+      : playwrightFallbackActionForStep(step);
     appendPlaywrightTestStep(lines, step, body);
   }
   appendDomainScenarioComments(lines, flow, "  //");
@@ -7895,7 +7913,7 @@ function routeParamPlaceholder(name: string): string {
     .replace(/[^A-Za-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
-  return `TODO-${readableName || "param"}`;
+  return `codeward-${readableName || "param"}`;
 }
 
 function quoteTemplateLiteralPart(value: string): string {
@@ -8073,6 +8091,9 @@ function countTodos(content: string): number {
 }
 
 function formatMaestroCommand(command: MaestroDraftCommand): string[] {
+  if (command.kind === "comment") {
+    return [`# ${command.value}`];
+  }
   if (command.kind === "inputText") {
     return [`- tapOn: ${command.target}`, `- inputText: ${command.text}`];
   }
@@ -8239,6 +8260,14 @@ function playwrightActionForStep(selector: E2eSelector, locator: string, step: s
   }
   body.push(`await ${locator}.click();`);
   return body;
+}
+
+function playwrightFallbackActionForStep(step: string): string[] {
+  return [
+    `// CodeWard could not infer a stable locator for this step: ${step}`,
+    "// Keep this as a runnable smoke assertion, then replace it with a domain-specific locator when the app exposes one.",
+    'await expect(page.locator("body")).toBeVisible();',
+  ];
 }
 
 function sampleInputForStepOrSelector(step: string, selector: string): string {

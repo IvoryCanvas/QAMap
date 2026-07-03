@@ -319,19 +319,21 @@ The manual draft should name concrete command evidence:
 
 ## Test-Light Project
 
-When a project has little or no E2E setup, CodeWard should be honest about what must happen before a draft becomes regression coverage:
+When a project has little or no E2E setup, CodeWard should move the user toward a concrete starter draft, not just a task list:
 
 ```txt
-## No Test Setup Detected
+## First E2E Draft Bootstrap
 
-CodeWard did not find committed test files for this target. Treat this output as a first-test bootstrap plan, not as proof that QA passed.
+CodeWard did not find committed test files for this target. The next step is to create the first runnable starter draft, not to stop at a checklist.
 
 - Recommended first runner: Playwright
-- Setup command: `codeward e2e setup . --runner playwright`
-- First bootstrap steps:
-  - Create the first changed-flow E2E draft
-  - Add stable selectors for changed user actions
-  - Add deterministic fixture or mock responses
+- Create command: `codeward e2e setup . --runner playwright`
+- Install command: `pnpm add -D @playwright/test`
+- Draft files CodeWard can create:
+  - `playwright.config.ts`
+  - `tests/e2e/`
+  - `tests/e2e/checkout-primary-journey.spec.ts`
+- Files to update: `package.json`
 
 Bootstrap summary:
 4 required bootstrap steps must be resolved before generated E2E drafts should be treated as regression coverage.
@@ -349,10 +351,9 @@ Draft action items should make the next developer action explicit:
 Action summary:
 - readiness score: 64/100 (needs-work)
 - runnable status: near-runnable
-- self-check: warning or fail when placeholder locators remain
+- self-check: pass or warning based on generated starter code and execution profile
 - top blocker: No Playwright config file was detected.
 - required runner: Create `playwright.config.ts` with `testDir`, `use.baseURL`, and `webServer.command` when CodeWard inferred the dev URL from scripts.
-- required assertion: Turn generated TODOs into runnable assertions
 - required fixture: Add deterministic fixture or mock data
 - required validation: Resolve missing validation evidence
 - recommended manifest: Promote durable product language

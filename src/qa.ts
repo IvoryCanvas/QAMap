@@ -118,30 +118,30 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("");
 
   if (!result.testSuite.hasTestSuite) {
-    lines.push("## No Test Setup Detected");
+    lines.push("## First E2E Draft Bootstrap");
     lines.push("");
     lines.push(
-      `CodeWard did not find committed test files for this target. Treat this output as a first-test bootstrap plan, not as proof that QA passed.`,
+      `CodeWard did not find committed test files for this target. The next step is to create the first runnable starter draft, not to stop at a checklist.`,
     );
     lines.push("");
     lines.push(`- Recommended first runner: ${formatRunnerName(result.runner)}`);
-    if (result.runnerSetup.setupCommand) {
-      lines.push(`- Setup command: \`${escapeMarkdownInline(result.runnerSetup.setupCommand)}\``);
-    }
+    lines.push(`- Create command: \`${escapeMarkdownInline(firstDraftCreateCommand(result))}\``);
     const installCommand = result.runnerSetup.installCommands[0];
     if (installCommand) {
       lines.push(`- Install command: \`${escapeMarkdownInline(installCommand)}\``);
     }
-    const requiredSteps = result.bootstrap.steps.filter((step) => step.status === "required").slice(0, 5);
-    if (requiredSteps.length > 0) {
-      lines.push("- First bootstrap steps:");
-      for (const step of requiredSteps) {
-        lines.push(`  - ${escapeMarkdownInline(step.title)}: ${escapeMarkdownInline(step.action)}`);
-        if (step.commands.length > 0) {
-          lines.push(`    - Command: \`${escapeMarkdownInline(step.commands[0])}\``);
-        }
+    const filesToCreate = uniqueStrings([...result.runnerSetup.filesToCreate, ...result.flows.map((flow) => flow.draftPath)]);
+    if (filesToCreate.length > 0) {
+      lines.push("- Draft files CodeWard can create:");
+      for (const file of filesToCreate.slice(0, 6)) {
+        lines.push(`  - \`${escapeMarkdownInline(file)}\``);
       }
     }
+    const filesToUpdate = result.runnerSetup.filesToUpdate;
+    if (filesToUpdate.length > 0) {
+      lines.push(`- Files to update: ${filesToUpdate.map((file) => `\`${escapeMarkdownInline(file)}\``).join(", ")}`);
+    }
+    lines.push("- Generated drafts are starter E2E code; keep them review-only until the changed flow has real assertions, fixtures, and selectors.");
     lines.push("");
   }
 
@@ -216,6 +216,13 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("");
 
   return lines.join("\n");
+}
+
+function firstDraftCreateCommand(result: QaDraftResult): string {
+  if (result.runnerSetup.setupCommand) {
+    return result.runnerSetup.setupCommand;
+  }
+  return `codeward e2e draft . --base ${result.base} --head ${result.head}`;
 }
 
 function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {

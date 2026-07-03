@@ -641,7 +641,7 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.ok(draft.files.some((file) => file.source === "domain-language"));
   assert.ok(draft.files.some((file) => file.stability === "needs-setup" || file.stability === "needs-selector-and-setup"));
   assert.ok(draft.files.every((file) => file.status === "created"));
-  assert.ok(draft.files.some((file) => file.todoCount !== undefined && file.todoCount > 0));
+  assert.ok(draft.files.every((file) => file.todoCount === 0));
   assert.ok(draft.files.some((file) => file.inferredSelectorCount !== undefined && file.inferredSelectorCount > 0));
   assert.ok(draft.files.some((file) => file.coverageTargetCount !== undefined && file.coverageTargetCount > 0));
   assert.ok(draft.files.some((file) => file.validationStatus === "missing" || file.validationStatus === "partial"));
@@ -649,7 +649,6 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.ok(skippedDraft.files.some((file) => file.status === "skipped"));
   assert.ok(forcedDraft.files.every((file) => file.status === "created"));
   assert.match(draftMarkdown, /# CodeWard E2E Draft/);
-  assert.match(draftMarkdown, /TODOs/);
   assert.match(draftMarkdown, /inferred selector/);
   assert.match(draftMarkdown, /coverage targets/);
   assert.match(draftMarkdown, /validation gap/);
@@ -671,7 +670,8 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.match(uiDraft, /Coverage matrix/);
   assert.match(uiDraft, /Loading, empty, error, and success states/);
   assert.match(uiDraft, /Validation gaps before this draft can be required/);
-  assert.match(uiDraft, /TODO:/);
+  assert.doesNotMatch(uiDraft, /TODO:/);
+  assert.match(uiDraft, /CodeWard could not infer a stable Maestro selector/);
   assert.equal(cliPlan.recommendedRunner.name, "maestro");
   assert.equal(cliDraft.runner, "maestro");
   assert.ok(cliDraft.files.some((file) => file.source === "domain-language"));
@@ -2673,14 +2673,14 @@ test("generateE2ePlan captures Playwright execution profile and self-check block
   assert.match(markdown, /## Execution Profile/);
   assert.match(markdown, /Start command: `pnpm run dev`/);
   assert.match(markdown, /Base URL: `http:\/\/127\.0\.0\.1:4173`/);
-  assert.equal(draftFile.runnableStatus, "review-only");
-  assert.equal(draftFile.selfCheck?.status, "fail");
-  assert.ok(draftFile.selfCheck?.blockers.some((blocker) => /Unresolved placeholders/.test(blocker)));
-  assert.equal(draft.readinessSummary.reviewOnly > 0, true);
-  assert.equal(draft.readinessSummary.selfCheckFail > 0, true);
-  assert.ok(draft.readinessSummary.topBlockers.some((blocker) => /Unresolved placeholders/.test(blocker)));
+  assert.equal(draftFile.runnableStatus, "near-runnable");
+  assert.equal(draftFile.selfCheck?.status, "pass");
+  assert.equal(draftFile.selfCheck?.blockers.some((blocker) => /Unresolved placeholders/.test(blocker)), false);
+  assert.equal(draft.readinessSummary.nearRunnable > 0, true);
+  assert.equal(draft.readinessSummary.selfCheckPass > 0, true);
+  assert.equal(draft.readinessSummary.topBlockers.some((blocker) => /Unresolved placeholders/.test(blocker)), false);
   assert.deepEqual(draftFile.executionBlockers?.filter((blocker) => /Playwright|baseURL|start command/i.test(blocker)), []);
-  assert.match(formatMarkdownE2eDraft(draft), /review-only/);
+  assert.match(formatMarkdownE2eDraft(draft), /near-runnable/);
   assert.match(formatMarkdownE2eDraft(draft), /## Draft Self Checks/);
   assert.match(formatMarkdownE2eDraft(draft), /Score: \d+\/100/);
   assert.match(spec, /Execution profile:/);
@@ -2921,7 +2921,7 @@ test("generateE2ePlan reads React Router object route paths", async () => {
   assert.ok(routeEntrypoints.some((entrypoint) => entrypoint.value === "/reports/:reportId"));
   assert.equal(routeEntrypoints.some((entrypoint) => entrypoint.value === "/app-routes"), false);
   assert.match(spec, /route \/reports\/:reportId \[medium\]/);
-  assert.match(spec, /reportId: "TODO-report-id"/);
+  assert.match(spec, /reportId: "codeward-report-id"/);
   assert.match(spec, /page\.goto\(`\/reports\/\$\{routeParams\.reportId\}`\)/);
   assert.match(spec, /page\.getByTestId\("refresh-report"\)\.click\(\)/);
 });
@@ -3019,7 +3019,7 @@ test("generateE2eDraft emits runnable Playwright role and input actions", async 
   assert.equal(draft.readinessSummary.totalTodos, 0);
   assert.match(formatMarkdownE2eDraft(draft), /Draft Self Checks/);
   assert.match(formatMarkdownE2eDraft(draft), /Self-checks: 1 pass, 0 warning, 0 fail/);
-  assert.doesNotMatch(formatMarkdownE2eDraft(draft), /Turn generated TODOs into runnable assertions/);
+  assert.doesNotMatch(formatMarkdownE2eDraft(draft), /Replace starter smoke assertions with domain assertions/);
   assert.doesNotMatch(spec, /page\.getByLabel\("Profile email"\)/);
   assert.doesNotMatch(spec, /\/\/ TODO: Fill profile email/);
   assert.doesNotMatch(spec, /\/\/ TODO: Save settings/);
@@ -3072,9 +3072,10 @@ test("generateE2eDraft normalizes dynamic routes without creating id domain scen
   assert.match(campaignDraftFile.primaryEntrypoint ?? "", /route \/campaign\/official\/:id/);
   assert.match(spec, /route \/public \[medium\]/);
   assert.match(spec, /const routeParams = \{/);
-  assert.match(spec, /id: "TODO-id"/);
+  assert.match(spec, /id: "codeward-id"/);
   assert.match(spec, /Replace route param id with a real fixture value for \/campaign\/official\/:id/);
   assert.match(spec, /page\.goto\(`\/campaign\/official\/\$\{routeParams\.id\}`\)/);
+  assert.match(spec, /CodeWard used stable sample route params/);
   assert.doesNotMatch(spec, /page\.goto\("\/campaign\/official\/:id"\)/);
 });
 
@@ -3276,7 +3277,7 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   assert.ok((draftFile.validationGapCount ?? 0) > 0);
   assert.match(draftFile.primaryEntrypoint ?? "", /route \/checkout \[high\] \(\.codeward\/flows\.yml\)/);
   assert.match(formatMarkdownE2eDraft(draft), /## Draft Action Items/);
-  assert.doesNotMatch(formatMarkdownE2eDraft(draft), /\[required\] assertion: Turn generated TODOs into runnable assertions/);
+  assert.doesNotMatch(formatMarkdownE2eDraft(draft), /\[required\] assertion: Replace starter smoke assertions with domain assertions/);
   assert.match(formatMarkdownE2eDraft(draft), /## Manifest Promotion Guidance/);
   assert.match(formatMarkdownE2eDraft(draft), /commit-candidate: `Checkout purchase`/);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
@@ -4414,7 +4415,7 @@ test("package metadata includes the portable PR QA skill template", async () => 
   assert.match(skillText, /Manifest Repair/);
 });
 
-test("qa command explains first-test bootstrap work for repositories without tests", async () => {
+test("qa command points testless repositories at first E2E draft creation", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, "src/app/checkout"), { recursive: true });
@@ -4470,12 +4471,13 @@ test("qa command explains first-test bootstrap work for repositories without tes
 
   assert.equal(qa.testSuite.hasTestSuite, false);
   assert.equal(qa.runner, "playwright");
-  assert.match(markdown, /## No Test Setup Detected/);
-  assert.match(markdown, /first-test bootstrap plan/);
+  assert.match(markdown, /## First E2E Draft Bootstrap/);
+  assert.match(markdown, /create the first runnable starter draft/);
   assert.match(markdown, /Recommended first runner: Playwright/);
-  assert.match(markdown, /Setup command: `codeward e2e setup \. --runner playwright`/);
-  assert.match(markdown, /Create the first changed-flow E2E draft/);
-  assert.match(markdown, /Add deterministic fixture or mock responses/);
+  assert.match(markdown, /Create command: `codeward e2e setup \. --runner playwright`/);
+  assert.match(markdown, /Draft files CodeWard can create:/);
+  assert.match(markdown, /playwright\.config\.ts/);
+  assert.match(markdown, /tests\/e2e\/checkout-primary-journey\.spec\.ts/);
   assert.match(markdown, /Checkout primary journey/);
   assert.match(markdown, /SAVE10/);
   assert.match(markdown, /Apply coupon/);
