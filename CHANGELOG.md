@@ -13,7 +13,7 @@
 
 ### Changed
 
-- Renamed the project, package, CLI binary, config files, manifest directory, schema files, rule ids, and docs from the previous project name to QAMap (`qamap` on npm, `qamap.config.json`, `.qamap/`, `QM###` rule ids) to avoid a naming collision with an unrelated existing product.
+- Renamed the project, npm package, CLI binary, config files, manifest directory, schema files, rule ids, and docs from the previous project name to QAMap (`@ivorycanvas/qamap` on npm, `qamap` as the CLI binary, `qamap.config.json`, `.qamap/`, `QM###` rule ids) to avoid a naming collision with an unrelated existing product.
 - Generated draft files are excluded from test-suite evidence, so readiness scores no longer rise just because the tool wrote its own unexecuted drafts into the repository.
 
 ## 0.2.1 - 2026-07-03
