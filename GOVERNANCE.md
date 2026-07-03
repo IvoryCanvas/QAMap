@@ -1,6 +1,6 @@
 # Governance
 
-CodeWard is maintained by IvoryCanvas.
+QAMap is maintained by IvoryCanvas.
 
 ## Roles
 

@@ -1078,10 +1078,10 @@ interface E2eBootstrapPlanInput {
 function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
   const steps: E2eBootstrapStep[] = [];
   const runnerGap = input.missingTestability.find((gap) => /No \.maestro|No Playwright config/i.test(gap));
-  const draftCommand = `codeward e2e draft . --base ${input.base} --head ${input.head}`;
-  const planHistoryCommand = `codeward e2e plan . --base ${input.base} --head ${input.head} --record-history`;
-  const domainsSuggestCommand = `codeward domains suggest . --base ${input.base} --head ${input.head}`;
-  const flowsSuggestCommand = `codeward flows suggest . --base ${input.base} --head ${input.head}`;
+  const draftCommand = `qamap e2e draft . --base ${input.base} --head ${input.head}`;
+  const planHistoryCommand = `qamap e2e plan . --base ${input.base} --head ${input.head} --record-history`;
+  const domainsSuggestCommand = `qamap domains suggest . --base ${input.base} --head ${input.head}`;
+  const flowsSuggestCommand = `qamap flows suggest . --base ${input.base} --head ${input.head}`;
   const executionProfileBlockers = remainingExecutionProfileBlockers(input.executionProfile.blockers, runnerGap);
 
   if (input.workspaceTargets.length > 0) {
@@ -1126,8 +1126,8 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         `Configure ${formatRunnerName(input.recommendedRunner.name)} before making drafts required`,
         runnerGap,
         input.recommendedRunner.name === "playwright"
-          ? `${playwrightConfigGuidance(input.executionProfile)} Review the setup proposal, then run \`${input.runnerSetup.setupCommand ?? "codeward e2e setup . --runner playwright"}\` if the team accepts Playwright for this repo.`
-          : `Review the setup proposal, then run \`${input.runnerSetup.setupCommand ?? "codeward e2e setup . --runner maestro"}\` if the team accepts Maestro for this repo.`,
+          ? `${playwrightConfigGuidance(input.executionProfile)} Review the setup proposal, then run \`${input.runnerSetup.setupCommand ?? "qamap e2e setup . --runner playwright"}\` if the team accepts Playwright for this repo.`
+          : `Review the setup proposal, then run \`${input.runnerSetup.setupCommand ?? "qamap e2e setup . --runner maestro"}\` if the team accepts Maestro for this repo.`,
         setupCommands,
         [],
       ),
@@ -1138,7 +1138,7 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "runner",
         "ready",
         `${formatRunnerName(input.recommendedRunner.name)} setup signal detected`,
-        "CodeWard found enough runner setup evidence to generate runnable drafts.",
+        "QAMap found enough runner setup evidence to generate runnable drafts.",
         "Keep runner setup documented and linked from PR validation notes.",
         [],
         [],
@@ -1166,7 +1166,7 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "draft",
         "required",
         "Create the first changed-flow E2E draft",
-        "No existing test files were detected, so this branch needs a concrete first draft before CodeWard can compare coverage evidence.",
+        "No existing test files were detected, so this branch needs a concrete first draft before QAMap can compare coverage evidence.",
         "Generate the first draft, replace TODO selectors and setup values, then decide which paths should become required regression coverage.",
         [draftCommand],
         input.flows.flatMap((flow) => flow.files).slice(0, maxFilesPerFlow),
@@ -1192,9 +1192,9 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "domain-language",
         "recommended",
         "Promote repeated product words into a domain manifest",
-        `CodeWard inferred ${input.domainLanguage.terms.length} domain term${input.domainLanguage.terms.length === 1 ? "" : "s"} from changed files, but no shared domain manifest was found.`,
+        `QAMap inferred ${input.domainLanguage.terms.length} domain term${input.domainLanguage.terms.length === 1 ? "" : "s"} from changed files, but no shared domain manifest was found.`,
         "Generate a suggested domain manifest from this branch, review names and routes with the team, then commit only the terms that match team language.",
-        [domainsSuggestCommand, `${domainsSuggestCommand} --write .codeward/domains.yml`],
+        [domainsSuggestCommand, `${domainsSuggestCommand} --write .qamap/domains.yml`],
         input.domainLanguage.terms.flatMap((term) => term.files).slice(0, maxFilesPerFlow),
       ),
     );
@@ -1220,9 +1220,9 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "core-flow",
         input.flows.length > 0 ? "recommended" : "required",
         "Capture the first durable core flows",
-        "No .codeward/flows.yml manifest was found, so CodeWard can infer changed-flow candidates but cannot distinguish team-critical journeys yet.",
+        "No .qamap/flows.yml manifest was found, so QAMap can infer changed-flow candidates but cannot distinguish team-critical journeys yet.",
         "Generate suggested flow entries from this branch, keep only the journeys humans agree are durable, then commit them as team policy.",
-        [flowsSuggestCommand, `${flowsSuggestCommand} --write .codeward/flows.yml`],
+        [flowsSuggestCommand, `${flowsSuggestCommand} --write .qamap/flows.yml`],
         input.flows.flatMap((flow) => flow.files).slice(0, maxFilesPerFlow),
       ),
     );
@@ -1355,7 +1355,7 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "recommended",
         "Expose at least one validation command",
         "No test, typecheck, lint, build, or E2E command was discovered for this project.",
-        "Add a project script or CodeWard validation command so PR evidence can include repeatable checks.",
+        "Add a project script or QAMap validation command so PR evidence can include repeatable checks.",
         [],
         [],
       ),
@@ -1393,18 +1393,18 @@ function manualBootstrapTitle(projectType: E2eProjectType): string {
 
 function manualBootstrapReason(projectType: E2eProjectType): string {
   if (projectType === "api-service") {
-    return "CodeWard detected an API or backend service, so generated output should start as a contract checklist before assuming a browser or device runner.";
+    return "QAMap detected an API or backend service, so generated output should start as a contract checklist before assuming a browser or device runner.";
   }
   if (projectType === "design-tokens") {
-    return "CodeWard detected design token artifacts, so generated output should verify schema, generated outputs, and consumer samples before assuming a browser journey.";
+    return "QAMap detected design token artifacts, so generated output should verify schema, generated outputs, and consumer samples before assuming a browser journey.";
   }
   if (projectType === "data-catalog") {
-    return "CodeWard detected taxonomy or catalog artifacts, so generated output should verify schema, generated outputs, and downstream consumers before assuming a browser journey.";
+    return "QAMap detected taxonomy or catalog artifacts, so generated output should verify schema, generated outputs, and downstream consumers before assuming a browser journey.";
   }
   if (projectType === "cli") {
-    return "CodeWard detected package executable commands, so generated output should verify command behavior, arguments, output, and exit codes before assuming a browser or device journey.";
+    return "QAMap detected package executable commands, so generated output should verify command behavior, arguments, output, and exit codes before assuming a browser or device journey.";
   }
-  return "CodeWard could not detect a web, Expo, React Native, or API service surface, so generated output should start as a manual checklist.";
+  return "QAMap could not detect a web, Expo, React Native, or API service surface, so generated output should start as a manual checklist.";
 }
 
 function manualBootstrapAction(projectType: E2eProjectType): string {
@@ -1722,7 +1722,7 @@ function buildDraftPromotionGuidance(flow: E2eFlow): E2eDraftPromotionGuidance {
     return {
       status: "needs-review",
       reason: "Verification manifest matched the change, but runnable entrypoint, selectors, or checks still need confirmation.",
-      action: "Refine `.codeward/manifest.yaml` anchors, route, and checks so the next draft is closer to runnable coverage.",
+      action: "Refine `.qamap/manifest.yaml` anchors, route, and checks so the next draft is closer to runnable coverage.",
     };
   }
 
@@ -1761,7 +1761,7 @@ function buildDraftPromotionGuidance(flow: E2eFlow): E2eDraftPromotionGuidance {
       return {
         status: "needs-review",
         reason: "The scenario came from changed code or UI copy, so a human should confirm the product wording.",
-        action: "Review the scenario name with the team, then commit it to `.codeward/domains.yml` or `.codeward/flows.yml` if it is durable.",
+        action: "Review the scenario name with the team, then commit it to `.qamap/domains.yml` or `.qamap/flows.yml` if it is durable.",
       };
     }
     return {
@@ -2466,7 +2466,7 @@ function lowercaseFirst(value: string): string {
 
 export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard E2E Plan");
+  lines.push("# QAMap E2E Plan");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   if (result.workspaceRoot) {
@@ -2787,7 +2787,7 @@ function appendVerificationManifestMatchesMarkdown(lines: string[], matches: Ver
   lines.push("## Manifest Recommendations");
   lines.push("");
   lines.push(
-    "These recommendations come from `.codeward/manifest.yaml`. If they are wrong, update the manifest path shown below so the next PR gets better suggestions.",
+    "These recommendations come from `.qamap/manifest.yaml`. If they are wrong, update the manifest path shown below so the next PR gets better suggestions.",
   );
   lines.push("");
 
@@ -2826,7 +2826,7 @@ function appendVerificationManifestMatchesMarkdown(lines: string[], matches: Ver
 
 export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard E2E Draft");
+  lines.push("# QAMap E2E Draft");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   lines.push(`- Runner: ${formatRunnerName(result.runner)}`);
@@ -2952,7 +2952,7 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
 
 export function formatMarkdownE2eSetup(result: E2eSetupResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard E2E Setup");
+  lines.push("# QAMap E2E Setup");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   lines.push(`- Runner: ${formatRunnerName(result.runner)}`);
@@ -3375,8 +3375,8 @@ async function buildRunnerSetupProposal(
 ): Promise<E2eRunnerSetupProposal> {
   const packageJson = await readPackageJson(root);
   const packageManager = await detectPackageManager(root, packageJson?.packageManager, workspaceRoot);
-  const setupCommand = `codeward e2e setup . --runner ${runner}`;
-  const draftCommand = `codeward e2e draft . --base ${base} --head ${head}`;
+  const setupCommand = `qamap e2e setup . --runner ${runner}`;
+  const draftCommand = `qamap e2e draft . --base ${base} --head ${head}`;
 
   if (runner === "manual") {
     return {
@@ -3512,7 +3512,7 @@ function setupNextCommands(commands: string[], draftResult: E2eDraftResult | und
   if (!draftResult || draftResult.files.length === 0) {
     return commands;
   }
-  return commands.filter((command) => !/^codeward e2e draft\b/.test(command));
+  return commands.filter((command) => !/^qamap e2e draft\b/.test(command));
 }
 
 async function applyPlaywrightSetup(
@@ -3630,7 +3630,7 @@ function maestroReadmeTemplate(profile: E2eExecutionProfile): string {
   const lines = [
     "# Maestro E2E Setup",
     "",
-    "This directory is prepared for CodeWard-generated Maestro flows.",
+    "This directory is prepared for QAMap-generated Maestro flows.",
     "",
     "## Run",
     "",
@@ -4174,7 +4174,7 @@ function workspaceTargetReason(packagePath: string, project: E2eProjectProfile, 
 
 function workspaceTargetCommand(packagePath: string, testPlan: TestPlanResult): string {
   const args = [
-    "codeward",
+    "qamap",
     "e2e",
     "plan",
     packagePath,
@@ -4482,7 +4482,7 @@ function buildFlowCandidates(
     candidates.push({
       kind: "changed-file",
       title: `${summarizeFlowSubject(candidateFiles, "Changed-file", domainLanguage)} smoke ${runner === "manual" ? "checklist" : "flow"}`,
-      reason: "Changed files did not match a specialized E2E pattern, so CodeWard generated a conservative smoke path tied only to the changed files.",
+      reason: "Changed files did not match a specialized E2E pattern, so QAMap generated a conservative smoke path tied only to the changed files.",
       files: candidateFiles,
       steps: [
         "Run or open the nearest workflow that imports the changed files.",
@@ -4514,7 +4514,7 @@ function buildLowSignalChangeCandidate(files: string[]): FlowCandidate | undefin
       kind: "test-evidence",
       title: "Changed test evidence verification checklist",
       reason:
-        "Only test files changed, so CodeWard should verify the test evidence and its protected behavior instead of inventing a product journey from test filenames.",
+        "Only test files changed, so QAMap should verify the test evidence and its protected behavior instead of inventing a product journey from test filenames.",
       files: changedFiles,
       steps: [
         "Run the changed test file or the nearest package test command.",
@@ -4562,7 +4562,7 @@ function buildLowSignalChangeCandidate(files: string[]): FlowCandidate | undefin
       kind: "test-evidence",
       title: "Changed evidence verification checklist",
       reason:
-        "The branch only changed verification evidence such as tests, docs, or generated output, so CodeWard should ask for proof that the evidence maps to real behavior before proposing a product E2E journey.",
+        "The branch only changed verification evidence such as tests, docs, or generated output, so QAMap should ask for proof that the evidence maps to real behavior before proposing a product E2E journey.",
       files: changedFiles,
       steps: [
         "Classify each changed file as test evidence, documentation, or generated output.",
@@ -6289,7 +6289,7 @@ function manifestEntrypoints(
     {
       kind: "route",
       value: route,
-      file: plan.verificationManifestPath ?? ".codeward/manifest.yaml",
+      file: plan.verificationManifestPath ?? ".qamap/manifest.yaml",
       confidence: match.confidence === "high" ? "high" : "medium",
     },
   ];
@@ -6482,7 +6482,7 @@ function coreFlowEntrypoints(
   if (!coreFlow || runner === "maestro") {
     return [];
   }
-  const manifestPath = plan.coreFlowManifestPath ?? ".codeward/flows.yml";
+  const manifestPath = plan.coreFlowManifestPath ?? ".qamap/flows.yml";
   return coreFlow.routes
     .map((route) => normalizeEntrypointRoute(route))
     .filter((route): route is string => Boolean(route))
@@ -6845,7 +6845,7 @@ function fallbackFlowDefinition(projectType: E2eProjectType): {
     return {
       title: "API contract smoke flow",
       reason:
-        "No changed endpoint-specific files were detected, so CodeWard generated a service contract smoke checklist instead of an app-launch journey.",
+        "No changed endpoint-specific files were detected, so QAMap generated a service contract smoke checklist instead of an app-launch journey.",
       steps: [
         "Start the service with the documented local command.",
         "Call one representative health, auth, or changed-domain endpoint.",
@@ -6865,7 +6865,7 @@ function fallbackFlowDefinition(projectType: E2eProjectType): {
     return {
       title: "CLI command smoke flow",
       reason:
-        "No changed command-specific files were detected, so CodeWard generated a command contract smoke checklist.",
+        "No changed command-specific files were detected, so QAMap generated a command contract smoke checklist.",
       steps: [
         "Run the documented help or version command.",
         "Run one valid command invocation with a small fixture input.",
@@ -6882,7 +6882,7 @@ function fallbackFlowDefinition(projectType: E2eProjectType): {
     return {
       title: "Design token artifact smoke flow",
       reason:
-        "No changed token-specific files were detected, so CodeWard generated an artifact validation checklist.",
+        "No changed token-specific files were detected, so QAMap generated an artifact validation checklist.",
       steps: [
         "Run the token validation or build command.",
         "Regenerate published token artifacts.",
@@ -6899,7 +6899,7 @@ function fallbackFlowDefinition(projectType: E2eProjectType): {
     return {
       title: "Catalog artifact smoke flow",
       reason:
-        "No changed catalog-specific files were detected, so CodeWard generated a catalog validation checklist.",
+        "No changed catalog-specific files were detected, so QAMap generated a catalog validation checklist.",
       steps: [
         "Run the catalog schema or generation command.",
         "Verify the generated export or documentation artifact.",
@@ -6915,7 +6915,7 @@ function fallbackFlowDefinition(projectType: E2eProjectType): {
   return {
     title: "App launch smoke flow",
     reason:
-      "No changed user-facing files were detected, so CodeWard generated a minimal smoke draft for the detected app surface.",
+      "No changed user-facing files were detected, so QAMap generated a minimal smoke draft for the detected app surface.",
     steps: [
       "Launch the app.",
       "Verify the first screen renders.",
@@ -6973,7 +6973,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   const lines: string[] = [];
   const selectorQueue = [...flow.selectors];
   const scenario = domainScenarioForFlow(flow);
-  lines.push(`# Generated by CodeWard ${VERSION}`);
+  lines.push(`# Generated by QAMap ${VERSION}`);
   lines.push(`# Flow: ${flow.title}`);
   if (scenario) {
     lines.push(`# Domain scenario: ${scenario.title}`);
@@ -7059,7 +7059,7 @@ function maestroCommandForStep(
   if (!selector) {
     return {
       kind: "comment",
-      value: `CodeWard could not infer a stable Maestro selector for: ${step}`,
+      value: `QAMap could not infer a stable Maestro selector for: ${step}`,
     };
   }
   return {
@@ -7073,7 +7073,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   const selectorQueue = [...flow.selectors];
   const scenario = domainScenarioForFlow(flow);
   const lines: string[] = [];
-  lines.push(`// Generated by CodeWard ${VERSION}`);
+  lines.push(`// Generated by QAMap ${VERSION}`);
   lines.push(`// Base: ${plan.base}`);
   lines.push(`// Head: ${plan.head}`);
   lines.push(`// Flow: ${flow.title}`);
@@ -7105,7 +7105,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
     }
     lines.push("  };");
     if (routeDraft.params.some((param) => param.value === undefined)) {
-      lines.push("  // CodeWard used stable sample route params; replace them with domain fixture values when available.");
+      lines.push("  // QAMap used stable sample route params; replace them with domain fixture values when available.");
     } else {
       lines.push("  // Route params were inferred from concrete route hints in the changed files.");
     }
@@ -7187,7 +7187,7 @@ function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   const lines: string[] = [];
   lines.push(`# ${flow.title}`);
   lines.push("");
-  lines.push(`Generated by CodeWard ${VERSION}.`);
+  lines.push(`Generated by QAMap ${VERSION}.`);
   if (scenario) {
     lines.push("");
     lines.push(`Domain scenario: ${scenario.title}`);
@@ -7795,7 +7795,7 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
     lines.push("      status: 200,");
     lines.push("      body: {");
     lines.push('        ok: true,');
-    lines.push('        source: "codeward-draft",');
+    lines.push('        source: "qamap-draft",');
     lines.push("      },");
     lines.push("    },");
   }
@@ -8015,7 +8015,7 @@ function routeParamPlaceholder(name: string): string {
     .replace(/[^A-Za-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
-  return `codeward-${readableName || "param"}`;
+  return `qamap-${readableName || "param"}`;
 }
 
 function quoteTemplateLiteralPart(value: string): string {
@@ -8519,7 +8519,7 @@ function normalizeManifestStepKey(value: string): string {
 
 function playwrightFallbackActionForStep(step: string): string[] {
   return [
-    `// CodeWard could not infer a stable locator for this step: ${step}`,
+    `// QAMap could not infer a stable locator for this step: ${step}`,
     "// Keep this as a runnable smoke assertion, then replace it with a domain-specific locator when the app exposes one.",
     'await expect(page.locator("body")).toBeVisible();',
   ];
@@ -8531,18 +8531,18 @@ function sampleInputForStepOrSelector(step: string, selector: string): string {
 
 function playwrightSampleInput(label: string): string {
   if (/\b(?:email|e-mail|메일)\b/i.test(label)) {
-    return "codeward@example.com";
+    return "qamap@example.com";
   }
   if (/\b(?:url|link|링크|주소)\b/i.test(label)) {
-    return "https://example.com/codeward";
+    return "https://example.com/qamap";
   }
   if (/\b(?:code|otp|pin|코드|인증)\b/i.test(label)) {
     return "123456";
   }
   if (/\b(?:name|이름)\b/i.test(label)) {
-    return "CodeWard Test";
+    return "QAMap Test";
   }
-  return "CodeWard sample value";
+  return "QAMap sample value";
 }
 
 function isGestureStep(step: string): boolean {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward.schema.json",
-  "title": "CodeWard configuration",
+  "$id": "https://raw.githubusercontent.com/IvoryCanvas/qamap/main/schema/qamap.schema.json",
+  "title": "QAMap configuration",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -22,7 +22,7 @@
     },
     "maxFiles": {
       "type": "integer",
-      "description": "Maximum number of repository files CodeWard will inspect.",
+      "description": "Maximum number of repository files QAMap will inspect.",
       "minimum": 1
     },
     "severity": {

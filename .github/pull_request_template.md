@@ -10,7 +10,7 @@
 
 - [ ] `pnpm test`
 - [ ] `pnpm scan` <!-- Required for scanner, security rule, or repository policy changes. -->
-- [ ] Relevant `codeward verify`, `codeward test-plan`, or `codeward e2e plan/draft` output reviewed.
+- [ ] Relevant `qamap verify`, `qamap test-plan`, or `qamap e2e plan/draft` output reviewed.
 
 ## E2E / Manual Coverage
 

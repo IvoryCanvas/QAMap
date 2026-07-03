@@ -1,10 +1,10 @@
 # 30-Second Quick Start Demo
 
-This demo is the shortest way to show what CodeWard does in a public README, blog post, or launch thread.
+This demo is the shortest way to show what QAMap does in a public README, blog post, or launch thread.
 
-![CodeWard 30-second PR demo](assets/codeward-30s-demo.gif)
+![QAMap 30-second PR demo](assets/qamap-30s-demo.gif)
 
-The GIF shows a simulated local PR where a checkout form changed. CodeWard does not report a real browser test pass during `--dry-run`. It reports the generated verification artifact: the affected flow, the planned Playwright draft path, static self-check status, and the remaining work before the draft can be trusted as PR evidence.
+The GIF shows a simulated local PR where a checkout form changed. QAMap does not report a real browser test pass during `--dry-run`. It reports the generated verification artifact: the affected flow, the planned Playwright draft path, static self-check status, and the remaining work before the draft can be trusted as PR evidence.
 
 ## Story
 
@@ -24,10 +24,10 @@ The reviewer wants to know:
 
 ## Command
 
-Run CodeWard on the branch:
+Run QAMap on the branch:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
+pnpm dlx qamap qa . --base origin/main --head HEAD
 ```
 
 `qa` is important for first contact. It lets maintainers preview the PR comment draft, affected flow, draft path, readiness, and blockers without writing files.
@@ -35,24 +35,24 @@ pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
 When the team wants actual draft files:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD --dry-run
-pnpm dlx @ivorycanvas/codeward e2e draft . --base origin/main --head HEAD
+pnpm dlx qamap e2e draft . --base origin/main --head HEAD --dry-run
+pnpm dlx qamap e2e draft . --base origin/main --head HEAD
 ```
 
-For a repository adopting CodeWard as team QA memory, start with the manifest loop:
+For a repository adopting QAMap as team QA memory, start with the manifest loop:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward manifest context .
-pnpm dlx @ivorycanvas/codeward manifest init .
-pnpm dlx @ivorycanvas/codeward manifest validate .
-pnpm dlx @ivorycanvas/codeward manifest explain . --base origin/main --head HEAD
+pnpm dlx qamap manifest context .
+pnpm dlx qamap manifest init .
+pnpm dlx qamap manifest validate .
+pnpm dlx qamap manifest explain . --base origin/main --head HEAD
 ```
 
 For a read-only smoke test against a repository you do not want to modify, keep the manifest outside the repo and pass it back into the PR commands:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward manifest init . --write /tmp/codeward-manifest.yaml
-pnpm dlx @ivorycanvas/codeward qa . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD
+pnpm dlx qamap manifest init . --write /tmp/qamap-manifest.yaml
+pnpm dlx qamap qa . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD
 ```
 
 The manifest is the durable part. It lets a team correct domains, flows, anchors, and checks once, then reuse that correction across future PRs without re-explaining the same QA context to an LLM.
@@ -60,21 +60,21 @@ The manifest is the durable part. It lets a team correct domains, flows, anchors
 If your coding agent supports reusable local instructions, use the packaged skill template as the PR handoff workflow:
 
 ```txt
-skills/codeward-pr-qa/SKILL.md
+skills/qamap-pr-qa/SKILL.md
 ```
 
 ## Manifest-Backed PoC Path
 
-The practical PoC is not "CodeWard reads every project perfectly." The useful loop is:
+The practical PoC is not "QAMap reads every project perfectly." The useful loop is:
 
 ```txt
 default branch repo context
-  -> codeward manifest init
-  -> reviewed .codeward/manifest.yaml
+  -> qamap manifest init
+  -> reviewed .qamap/manifest.yaml
 
 PR branch diff
-  -> codeward manifest explain
-  -> codeward e2e draft
+  -> qamap manifest explain
+  -> qamap e2e draft
   -> draft test file plus manifest repair path
 ```
 
@@ -88,7 +88,7 @@ src/pages/checkout/index.tsx
 playwright.config.ts
 ```
 
-If `docs/adr/checkout-purchase.md` says the checkout purchase flow must cover success, API failure, and visible confirmation evidence, `manifest init` can bootstrap a flow named `Checkout Purchase` with the route `/checkout`. When a later PR changes `src/pages/checkout/index.tsx`, CodeWard can connect the changed route to that manifest flow and preview:
+If `docs/adr/checkout-purchase.md` says the checkout purchase flow must cover success, API failure, and visible confirmation evidence, `manifest init` can bootstrap a flow named `Checkout Purchase` with the route `/checkout`. When a later PR changes `src/pages/checkout/index.tsx`, QAMap can connect the changed route to that manifest flow and preview:
 
 ```txt
 Manifest Recommendations
@@ -98,7 +98,7 @@ Manifest Recommendations
 - Required checks:
   - Checkout Purchase uses deterministic success fixture data
   - Checkout Purchase handles failed, empty, or unauthorized responses
-- If this is wrong: update .codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors
+- If this is wrong: update .qamap/manifest.yaml > flows.checkout-checkout-purchase.anchors
 
 Draft file
 - tests/e2e/checkout-purchase.spec.ts
@@ -112,14 +112,14 @@ import { expect, test } from "@playwright/test";
 test("Checkout Purchase", async ({ page }) => {
   // Verification manifest evidence:
   // Flow: Checkout Purchase
-  // .codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors
+  // .qamap/manifest.yaml > flows.checkout-checkout-purchase.anchors
 
   await test.step("Open route /checkout.", async () => {
     await page.goto("/checkout");
   });
 
   await test.step("Fill Email with realistic data.", async () => {
-    await page.getByPlaceholder("Email").fill("codeward@example.com");
+    await page.getByPlaceholder("Email").fill("qamap@example.com");
   });
 
   await test.step("Submit using Checkout Submit.", async () => {
@@ -132,7 +132,7 @@ test("Checkout Purchase", async ({ page }) => {
 
 The human still owns the final truth: fixture data, auth state, API mocks, and assertions must match the real product. The saving is that the repeated context work moves into repo-local manifest memory, and a wrong recommendation points to the manifest path to repair instead of asking a new AI prompt to re-learn the project.
 
-## What CodeWard Reads
+## What QAMap Reads
 
 ```txt
 Input
@@ -141,10 +141,10 @@ Input
 - framework and route files
 - existing E2E runner config
 - stable selectors such as data-testid, aria-label, role text, placeholder text, and testID
-- optional team-owned context in .codeward/manifest.yaml, CONTEXT.md, ADRs, goals, QA runbooks, and agent instructions
+- optional team-owned context in .qamap/manifest.yaml, CONTEXT.md, ADRs, goals, QA runbooks, and agent instructions
 ```
 
-## What CodeWard Returns
+## What QAMap Returns
 
 ```txt
 Output
@@ -161,17 +161,17 @@ Output
 - blockers that explain why a draft is not ready yet
 ```
 
-The result should not stop at "selector needed" or "fixture needed." A useful CodeWard draft should say which flow changed, which test file would be generated, which checks it covers, why those checks were selected, and where to update the manifest if the recommendation is wrong.
+The result should not stop at "selector needed" or "fixture needed." A useful QAMap draft should say which flow changed, which test file would be generated, which checks it covers, why those checks were selected, and where to update the manifest if the recommendation is wrong.
 
 ## Markdown Preview
 
 ```txt
-# CodeWard QA Draft
+# QAMap QA Draft
 
 Summary
 - Project: Web
 - Recommended runner: Playwright
-- Manifest: .codeward/manifest.yaml
+- Manifest: .qamap/manifest.yaml
 - Readiness: near-runnable
 
 PR Comment Draft
@@ -244,8 +244,8 @@ Use a tiny branch where a form, button, route, or API client changed. The record
 
 ```sh
 git diff --stat origin/main...HEAD
-pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
-pnpm dlx @ivorycanvas/codeward verify . --base origin/main --head HEAD --format markdown
+pnpm dlx qamap qa . --base origin/main --head HEAD
+pnpm dlx qamap verify . --base origin/main --head HEAD --format markdown
 ```
 
 The best GIF is not a long terminal scroll. Show:
@@ -259,10 +259,10 @@ The best GIF is not a long terminal scroll. Show:
 ## Launch Message
 
 ```txt
-CodeWard turns a PR diff into affected flows, missing QA evidence, and draft E2E/checklist work.
+QAMap turns a PR diff into affected flows, missing QA evidence, and draft E2E/checklist work.
 
 It runs locally, does not upload source code, and does not call an LLM API.
 
 Try it:
-pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
+pnpm dlx qamap qa . --base origin/main --head HEAD
 ```

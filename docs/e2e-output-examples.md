@@ -1,19 +1,19 @@
 # E2E Output Examples
 
-These examples show the shape of CodeWard output that should be good enough for the current public release. They are intentionally short snippets, not full generated files. The important property is that they are derived from repository structure, git changes, manifests, and test evidence without an LLM call.
+These examples show the shape of QAMap output that should be good enough for the current public release. They are intentionally short snippets, not full generated files. The important property is that they are derived from repository structure, git changes, manifests, and test evidence without an LLM call.
 
 ## PR QA Skill Preview
 
 First contact should work without a manifest:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward qa . --base origin/main --head HEAD
+pnpm dlx qamap qa . --base origin/main --head HEAD
 ```
 
 The output should be specific enough to paste into a PR comment:
 
 ```txt
-# CodeWard QA Draft
+# QAMap QA Draft
 
 Summary
 - Project: Web
@@ -47,14 +47,14 @@ PR checklist
 If this recommendation is useful but slightly wrong, the next step is not another long AI prompt. Generate and correct repo-local QA memory:
 
 ```sh
-pnpm exec codeward manifest init .
+pnpm exec qamap manifest init .
 ```
 
-Then future `codeward qa` runs can use `.codeward/manifest.yaml` to produce more precise flow names, checks, anchors, and repair paths.
+Then future `qamap qa` runs can use `.qamap/manifest.yaml` to produce more precise flow names, checks, anchors, and repair paths.
 
 ## Verification Manifest Feedback
 
-When a repository has `.codeward/manifest.yaml`, CodeWard should explain why a recommendation happened and how a maintainer can correct it:
+When a repository has `.qamap/manifest.yaml`, QAMap should explain why a recommendation happened and how a maintainer can correct it:
 
 ```txt
 Manifest recommendations: 3
@@ -64,43 +64,43 @@ Campaign Application Complete `campaign-application-complete`
 - Confidence: high
 - Why this was recommended: Changed files match anchors for the Campaign Application Complete flow.
 - Evidence sources: product-qa
-- Manifest evidence: .codeward/manifest.yaml > flows.campaign-application-complete.anchors
-- If this is wrong: update .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+- Manifest evidence: .qamap/manifest.yaml > flows.campaign-application-complete.anchors
+- If this is wrong: update .qamap/manifest.yaml > flows.campaign-application-complete.anchors
 - Next actions:
   - Draft or review E2E coverage for the Campaign Application Complete flow.
   - Cover the declared checks: Submit content URL successfully; Show validation error for invalid content URL.
 - Repair hints:
-  - If these files do not belong to this flow, update .codeward/manifest.yaml > flows.campaign-application-complete.anchors.
-  - If the recommended assertions feel vague, rewrite .codeward/manifest.yaml > flows.campaign-application-complete.checks in team language.
+  - If these files do not belong to this flow, update .qamap/manifest.yaml > flows.campaign-application-complete.anchors.
+  - If the recommended assertions feel vague, rewrite .qamap/manifest.yaml > flows.campaign-application-complete.checks in team language.
 ```
 
 This is the feedback loop: static analysis proposes a baseline, humans correct durable manifest entries, and future E2E recommendations become more specific without spending another LLM prompt on the same explanation.
 
-`codeward manifest validate .` checks whether that repo-local knowledge is usable:
+`qamap manifest validate .` checks whether that repo-local knowledge is usable:
 
 ```txt
-CodeWard Manifest Validate
+QAMap Manifest Validate
 Status: valid
-Manifest: .codeward/manifest.yaml
+Manifest: .qamap/manifest.yaml
 Issues: 0 errors, 0 warnings, 0 info
 ```
 
-`codeward manifest explain . --base origin/main --head HEAD` makes a single branch debuggable:
+`qamap manifest explain . --base origin/main --head HEAD` makes a single branch debuggable:
 
 ```txt
-CodeWard Manifest Explain
+QAMap Manifest Explain
 Changed files: 1
 Matches: 3
 
 Matches:
 - Campaign Application Complete (flow, high)
   Why: Changed files match anchors for the Campaign Application Complete flow.
-  Evidence: .codeward/manifest.yaml > flows.campaign-application-complete.anchors
-  If wrong: update .codeward/manifest.yaml > flows.campaign-application-complete.anchors
+  Evidence: .qamap/manifest.yaml > flows.campaign-application-complete.anchors
+  If wrong: update .qamap/manifest.yaml > flows.campaign-application-complete.anchors
   Checks: Submit content URL successfully; Show validation error for invalid content URL
 ```
 
-When that flow includes an entry route and checks, `codeward e2e draft` promotes it ahead of heuristic drafts:
+When that flow includes an entry route and checks, `qamap e2e draft` promotes it ahead of heuristic drafts:
 
 ```ts
 // Verification manifest evidence:
@@ -135,7 +135,7 @@ flows:
       - Verify declined payment recovery.
 ```
 
-`codeward e2e plan` should prefer the team-approved name:
+`qamap e2e plan` should prefer the team-approved name:
 
 ```txt
 Project: Web
@@ -166,12 +166,12 @@ test("Checkout purchase", async ({ page }) => {
 });
 ```
 
-When CodeWard can infer durable browser controls, the draft should prefer executable Playwright locators over placeholder text:
+When QAMap can infer durable browser controls, the draft should prefer executable Playwright locators over placeholder text:
 
 ```ts
 await test.step("Fill profile email.", async () => {
   // Step intent: Fill profile email.
-  await page.getByPlaceholder("Profile email").fill("codeward@example.com");
+  await page.getByPlaceholder("Profile email").fill("qamap@example.com");
 });
 
 await test.step("Save settings.", async () => {
@@ -200,7 +200,7 @@ Files: 0 created, 1 previewed, 0 skipped
   - self-check: pass
 ```
 
-For framework-native routing, CodeWard should preserve the route a user can actually open rather than framework-only folder syntax. A Next App Router file such as `src/app/(shop)/products/[productId]/page.tsx` should become `/products/:productId`, and a concrete link such as `/products/demo-product` can seed the generated route params:
+For framework-native routing, QAMap should preserve the route a user can actually open rather than framework-only folder syntax. A Next App Router file such as `src/app/(shop)/products/[productId]/page.tsx` should become `/products/:productId`, and a concrete link such as `/products/demo-product` can seed the generated route params:
 
 ```ts
 const routeParams = {
@@ -220,7 +220,7 @@ createBrowserRouter([
 
 ## Expo / React Native Flow
 
-For an Expo or React Native change, CodeWard should recommend Maestro and carry mobile selectors into the draft:
+For an Expo or React Native change, QAMap should recommend Maestro and carry mobile selectors into the draft:
 
 ```txt
 Project: Expo / React Native
@@ -265,7 +265,7 @@ appId: ${APP_ID}
 
 ## API / Service Contract
 
-For backend changes such as `src/v1/offer/utils.ts`, CodeWard should not invent a browser journey. It should infer the domain word and stay contract-focused:
+For backend changes such as `src/v1/offer/utils.ts`, QAMap should not invent a browser journey. It should infer the domain word and stay contract-focused:
 
 ```txt
 Project: API / service
@@ -292,7 +292,7 @@ The manual draft should stay actionable:
 
 ## CLI Command Verification
 
-For an npm package that exposes `package.json` bin entries, CodeWard should not invent a UI journey. It should stay focused on the command contract users run in terminals, scripts, and CI:
+For an npm package that exposes `package.json` bin entries, QAMap should not invent a UI journey. It should stay focused on the command contract users run in terminals, scripts, and CI:
 
 ```txt
 Project: CLI
@@ -319,17 +319,17 @@ The manual draft should name concrete command evidence:
 
 ## Test-Light Project
 
-When a project has little or no E2E setup, CodeWard should move the user toward a concrete starter draft, not just a task list:
+When a project has little or no E2E setup, QAMap should move the user toward a concrete starter draft, not just a task list:
 
 ```txt
 ## First E2E Draft Bootstrap
 
-CodeWard did not find committed test files for this target. The next step is to create the first runnable starter draft, not to stop at a checklist.
+QAMap did not find committed test files for this target. The next step is to create the first runnable starter draft, not to stop at a checklist.
 
 - Recommended first runner: Playwright
-- Create command: `codeward e2e setup . --runner playwright`
+- Create command: `qamap e2e setup . --runner playwright`
 - Install command: `pnpm add -D @playwright/test`
-- Draft files CodeWard can create:
+- Draft files QAMap can create:
   - `playwright.config.ts`
   - `tests/e2e/`
   - `tests/e2e/checkout-primary-journey.spec.ts`
@@ -353,7 +353,7 @@ Action summary:
 - runnable status: near-runnable
 - self-check: pass or warning based on generated starter code and execution profile
 - top blocker: No Playwright config file was detected.
-- required runner: Create `playwright.config.ts` with `testDir`, `use.baseURL`, and `webServer.command` when CodeWard inferred the dev URL from scripts.
+- required runner: Create `playwright.config.ts` with `testDir`, `use.baseURL`, and `webServer.command` when QAMap inferred the dev URL from scripts.
 - required fixture: Add deterministic fixture or mock data
 - required validation: Resolve missing validation evidence
 - recommended manifest: Promote durable product language
@@ -361,7 +361,7 @@ Action summary:
 
 ## API-Dependent Client Flow
 
-When a client-side change calls an API path but the branch does not include backend or fixture evidence, CodeWard should name that as a readiness gap and still give the tester a concrete mock slot:
+When a client-side change calls an API path but the branch does not include backend or fixture evidence, QAMap should name that as a readiness gap and still give the tester a concrete mock slot:
 
 If reusable repo-local evidence already exists, the PR QA output should point at it instead of only saying "add a fixture":
 
@@ -376,7 +376,7 @@ const mockApiResponses = {
     status: 200,
     body: {
       ok: true,
-      source: "codeward-draft",
+      source: "qamap-draft",
     },
   },
 };
@@ -395,7 +395,7 @@ for (const [urlPattern, response] of Object.entries(mockApiResponses)) {
 
 This is useful for PRs where the UI can be built against mockdata before the server implementation is available. The generated file should still report fixture readiness as missing or partial until a reviewer replaces the sample response with domain-correct success, empty, unauthorized, timeout, or server-error fixtures.
 
-When the PR changes the endpoint implementation itself, CodeWard should not hide that contract behind a synthetic response. In that case the Playwright draft records the endpoint as an observed API pattern instead of adding a response mock:
+When the PR changes the endpoint implementation itself, QAMap should not hide that contract behind a synthetic response. In that case the Playwright draft records the endpoint as an observed API pattern instead of adding a response mock:
 
 ```ts
 const changedApiEndpointPatterns = [
@@ -411,10 +411,10 @@ page.on("response", (response) => {
 
 ## Monorepo Package
 
-When run at the workspace root, CodeWard should identify changed package targets before asking the maintainer to choose a final runner:
+When run at the workspace root, QAMap should identify changed package targets before asking the maintainer to choose a final runner:
 
 ```sh
-codeward e2e plan . --base main --head HEAD
+qamap e2e plan . --base main --head HEAD
 ```
 
 Expected root-level behavior:
@@ -423,14 +423,14 @@ Expected root-level behavior:
 Changed App/Package Targets
 
 | Target | Package | Project | Runner | Scoped Command |
-| services/offer | offer | Web | Playwright | codeward e2e plan services/offer --workspace-root . --base main --head HEAD |
-| apps/mobile | @acme/mobile | Expo / React Native | Maestro | codeward e2e plan apps/mobile --workspace-root . --base main --head HEAD |
+| services/offer | offer | Web | Playwright | qamap e2e plan services/offer --workspace-root . --base main --head HEAD |
+| apps/mobile | @acme/mobile | Expo / React Native | Maestro | qamap e2e plan apps/mobile --workspace-root . --base main --head HEAD |
 ```
 
-For package scans, CodeWard should use workspace policy without leaking workspace-root paths into package-local drafts:
+For package scans, QAMap should use workspace policy without leaking workspace-root paths into package-local drafts:
 
 ```sh
-codeward e2e plan services/offer --workspace-root . --base main --head HEAD
+qamap e2e plan services/offer --workspace-root . --base main --head HEAD
 ```
 
 Expected behavior:
@@ -453,7 +453,7 @@ Related Changed Files
 
 ## What Good Output Feels Like
 
-Good CodeWard output should answer these questions quickly:
+Good QAMap output should answer these questions quickly:
 
 - What behavior did this branch probably change?
 - What does the team call that behavior?

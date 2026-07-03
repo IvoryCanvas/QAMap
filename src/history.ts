@@ -4,16 +4,16 @@ import { pathExists, toPosixPath } from "./fs.js";
 import type { E2ePlanResult } from "./e2e.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
-export const codewardDirectoryName = ".codeward";
-export const localHistoryDirectory = ".codeward/runs";
-export const localCacheDirectory = ".codeward/cache";
-export const localTmpDirectory = ".codeward/tmp";
+export const qamapDirectoryName = ".qamap";
+export const localHistoryDirectory = ".qamap/runs";
+export const localCacheDirectory = ".qamap/cache";
+export const localTmpDirectory = ".qamap/tmp";
 
 export const localHistoryGitignorePatterns = [
   `${localHistoryDirectory}/`,
   `${localCacheDirectory}/`,
   `${localTmpDirectory}/`,
-  ".codeward/*.local.json",
+  ".qamap/*.local.json",
 ];
 
 export interface LocalHistoryReference {
@@ -186,7 +186,7 @@ export interface E2ePlanHistorySnapshot {
 export async function initializeLocalHistory(rootInput: string): Promise<LocalHistoryInitResult> {
   const root = path.resolve(rootInput);
   const createdDirectories: string[] = [];
-  for (const directory of [codewardDirectoryName, localHistoryDirectory, localCacheDirectory, localTmpDirectory]) {
+  for (const directory of [qamapDirectoryName, localHistoryDirectory, localCacheDirectory, localTmpDirectory]) {
     const absolutePath = path.join(root, directory);
     if (!(await pathExists(absolutePath))) {
       await fs.mkdir(absolutePath, { recursive: true });
@@ -205,7 +205,7 @@ export async function initializeLocalHistory(rootInput: string): Promise<LocalHi
 
 export function formatLocalHistoryInitResult(result: LocalHistoryInitResult): string {
   const lines: string[] = [];
-  lines.push("CodeWard Local History");
+  lines.push("QAMap Local History");
   lines.push(`Root: ${result.root}`);
   lines.push(
     `Directories: ${result.createdDirectories.length > 0 ? result.createdDirectories.join(", ") : "already present"}`,
@@ -401,7 +401,7 @@ async function ensureLocalHistoryIgnored(root: string): Promise<{
   const prefix = raw.length > 0 && !raw.endsWith("\n") ? "\n" : "";
   const separator = raw.trim().length > 0 ? "\n" : "";
   const block = [
-    "# CodeWard local analysis history",
+    "# QAMap local analysis history",
     ...addedGitignorePatterns,
   ].join("\n");
   await fs.writeFile(gitignorePath, `${raw}${prefix}${separator}${block}\n`, "utf8");
@@ -422,7 +422,7 @@ async function nextHistoryPath(root: string, recordedAt: string, kind: string): 
       return displayPath;
     }
   }
-  throw new Error("Could not allocate a CodeWard local history file name");
+  throw new Error("Could not allocate a QAMap local history file name");
 }
 
 function toDisplayScope(base: string, target: string): string {

@@ -101,7 +101,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
 
 export function formatMarkdownQaDraft(result: QaDraftResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard QA Draft");
+  lines.push("# QAMap QA Draft");
   lines.push("");
   lines.push("> Local-first PR QA skill output. No cloud. No LLM token. Manifest is optional, not required for first use.");
   lines.push("");
@@ -121,7 +121,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
     lines.push("## First E2E Draft Bootstrap");
     lines.push("");
     lines.push(
-      `CodeWard did not find committed test files for this target. The next step is to create the first runnable starter draft, not to stop at a checklist.`,
+      `QAMap did not find committed test files for this target. The next step is to create the first runnable starter draft, not to stop at a checklist.`,
     );
     lines.push("");
     lines.push(`- Recommended first runner: ${formatRunnerName(result.runner)}`);
@@ -132,7 +132,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
     }
     const filesToCreate = uniqueStrings([...result.runnerSetup.filesToCreate, ...result.flows.map((flow) => flow.draftPath)]);
     if (filesToCreate.length > 0) {
-      lines.push("- Draft files CodeWard can create:");
+      lines.push("- Draft files QAMap can create:");
       for (const file of filesToCreate.slice(0, 6)) {
         lines.push(`  - \`${escapeMarkdownInline(file)}\``);
       }
@@ -222,7 +222,7 @@ function firstDraftCreateCommand(result: QaDraftResult): string {
   if (result.runnerSetup.setupCommand) {
     return result.runnerSetup.setupCommand;
   }
-  return `codeward e2e draft . --base ${result.base} --head ${result.head}`;
+  return `qamap e2e draft . --base ${result.base} --head ${result.head}`;
 }
 
 function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
@@ -302,7 +302,7 @@ function buildPrChecklist(
   const checklist = [
     flows.length > 0
       ? `Review the generated draft path: ${flows.map((flow) => flow.draftPath).slice(0, 3).join(", ")}.`
-      : "Run CodeWard again after adding branch or working tree changes.",
+      : "Run QAMap again after adding branch or working tree changes.",
     flows[0]?.userJourney?.reviewQuestion
       ? `Answer the reviewer question: ${flows[0].userJourney.reviewQuestion}`
       : "Name the user-visible behavior or contract this PR can break.",
@@ -320,7 +320,7 @@ function buildPrChecklist(
   }
 
   if (!draft.plan.verificationManifestPath) {
-    checklist.push("If this recommendation is useful, run `codeward manifest init .` later and review the generated manifest as team QA memory.");
+    checklist.push("If this recommendation is useful, run `qamap manifest init .` later and review the generated manifest as team QA memory.");
   }
 
   return uniqueStrings(checklist).slice(0, 8);

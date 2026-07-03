@@ -83,7 +83,7 @@ export async function generateTestPlan(rootInput: string, options: TestPlanOptio
 
 export function formatMarkdownTestPlan(result: TestPlanResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard Test Plan");
+  lines.push("# QAMap Test Plan");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   if (result.workspaceRoot) {

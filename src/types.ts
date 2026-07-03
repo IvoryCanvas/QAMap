@@ -53,7 +53,7 @@ export interface ProjectFile {
   text?: string;
 }
 
-export interface CodeWardConfig {
+export interface QAMapConfig {
   $schema?: string;
   failOn?: Severity;
   ignoreRules?: string[];
@@ -62,7 +62,7 @@ export interface CodeWardConfig {
   validationCommands?: string[];
 }
 
-export interface ResolvedCodeWardConfig {
+export interface ResolvedQAMapConfig {
   path?: string;
-  config: CodeWardConfig;
+  config: QAMapConfig;
 }

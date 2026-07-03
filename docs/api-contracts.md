@@ -2,16 +2,16 @@
 
 Frontend and backend teams often coordinate through API documents. That works best when the document is generated from a single contract source, not hand-maintained separately from code and client types.
 
-CodeWard looks for a narrow drift signal:
+QAMap looks for a narrow drift signal:
 
 - Markdown or text docs that list HTTP endpoints in a method-plus-path form
 - No machine-readable API contract source in the repository
 
-When both are true, CodeWard reports `CW013`.
+When both are true, QAMap reports `QM013`.
 
 ## Accepted Contract Sources
 
-CodeWard currently treats these as machine-readable contract sources:
+QAMap currently treats these as machine-readable contract sources:
 
 - OpenAPI or Swagger: `openapi.yaml`, `openapi.yml`, `openapi.json`, `swagger.yaml`, `swagger.yml`, `swagger.json`
 - AsyncAPI: `asyncapi.yaml`, `asyncapi.yml`, `asyncapi.json`

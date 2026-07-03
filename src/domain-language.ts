@@ -88,7 +88,7 @@ export async function buildDomainLanguageSummary(
     scenarios,
     guidance: [
       "Prefer these product words in generated test names, PR notes, and reviewer checklists.",
-      "Promote durable product terms into `.codeward/domains.yml`, then promote end-to-end journeys into `.codeward/flows.yml`.",
+      "Promote durable product terms into `.qamap/domains.yml`, then promote end-to-end journeys into `.qamap/flows.yml`.",
       "Use the suggested scenarios as starting points, then replace generic actor or outcome wording with the team's domain language.",
     ],
   };

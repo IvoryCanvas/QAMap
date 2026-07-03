@@ -401,7 +401,7 @@ function flowPromotionReason(flow: CoreFlowDefinition, status: ManifestPromotion
 
 function domainPromotionAction(status: ManifestPromotionStatus): string {
   if (status === "commit-candidate") {
-    return "Review the name with the team, remove the suggested tag if accepted, then commit it to .codeward/domains.yml.";
+    return "Review the name with the team, remove the suggested tag if accepted, then commit it to .qamap/domains.yml.";
   }
   if (status === "needs-review") {
     return "Add aliases, routes, or better scenario checks before committing this domain.";
@@ -411,7 +411,7 @@ function domainPromotionAction(status: ManifestPromotionStatus): string {
 
 function flowPromotionAction(status: ManifestPromotionStatus): string {
   if (status === "commit-candidate") {
-    return "Confirm this is a durable journey, adjust priority if needed, then commit it to .codeward/flows.yml.";
+    return "Confirm this is a durable journey, adjust priority if needed, then commit it to .qamap/flows.yml.";
   }
   if (status === "needs-review") {
     return "Confirm owner, route, priority, and failure-path checks before committing this flow.";
@@ -476,7 +476,7 @@ function manifestSuggestionHeader(
   result: DomainManifestSuggestionResult | FlowManifestSuggestionResult,
 ): string[] {
   const lines: string[] = [];
-  lines.push(`# CodeWard ${title}`);
+  lines.push(`# QAMap ${title}`);
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   if (result.workspaceRoot) {
@@ -495,8 +495,8 @@ function manifestSuggestionHeader(
 
 function formatSuggestedDomainManifestYaml(domains: DomainDefinition[]): string {
   return [
-    "# Suggested by CodeWard. Review names, routes, and checks before committing.",
-    "# Commit this file as .codeward/domains.yml only when these words match team language.",
+    "# Suggested by QAMap. Review names, routes, and checks before committing.",
+    "# Commit this file as .qamap/domains.yml only when these words match team language.",
     YAML.stringify({ domains }, { lineWidth: 0 }).trimEnd(),
     "",
   ].join("\n");
@@ -504,8 +504,8 @@ function formatSuggestedDomainManifestYaml(domains: DomainDefinition[]): string 
 
 function formatSuggestedFlowManifestYaml(flows: CoreFlowDefinition[]): string {
   return [
-    "# Suggested by CodeWard. Review priorities, routes, and checks before committing.",
-    "# Commit this file as .codeward/flows.yml only when these journeys are team-approved.",
+    "# Suggested by QAMap. Review priorities, routes, and checks before committing.",
+    "# Commit this file as .qamap/flows.yml only when these journeys are team-approved.",
     YAML.stringify({ flows }, { lineWidth: 0 }).trimEnd(),
     "",
   ].join("\n");
@@ -753,7 +753,7 @@ function isBehaviorFile(file: string): boolean {
     !/(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file) &&
     !/(?:^|\/)(?:docs?|\.github)\//i.test(file) &&
     !/(?:^|\/)(?:README|CHANGELOG|LICENSE|CONTRIBUTING|CODE_OF_CONDUCT|SECURITY)\.md$/i.test(file) &&
-    !/(?:^|\/)(?:package|tsconfig|codeward\.config)\.json$/i.test(file)
+    !/(?:^|\/)(?:package|tsconfig|qamap\.config)\.json$/i.test(file)
   );
 }
 

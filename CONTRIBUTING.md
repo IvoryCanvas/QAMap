@@ -1,6 +1,6 @@
-# Contributing to CodeWard
+# Contributing to QAMap
 
-Thanks for helping improve CodeWard.
+Thanks for helping improve QAMap.
 
 ## Development
 

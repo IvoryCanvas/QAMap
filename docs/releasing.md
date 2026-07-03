@@ -1,6 +1,6 @@
 # Release Runbook
 
-This runbook defines the release process for `@ivorycanvas/codeward`. It is intentionally conservative: the package should be published only when the local release gate, documentation, and representative repository validation all agree.
+This runbook defines the release process for `qamap`. It is intentionally conservative: the package should be published only when the local release gate, documentation, and representative repository validation all agree.
 
 ## Release Owner Checklist
 
@@ -11,7 +11,7 @@ Before publishing, confirm:
 - `README.md`, [adoption](adoption.md), [E2E examples](e2e-output-examples.md), and [release validation](release-validation.md) describe the current CLI behavior.
 - `pnpm run release:check` passes from a clean checkout.
 - Representative repository smoke notes in [release validation](release-validation.md) do not hit any stop condition.
-- npm login is available for a maintainer with publish permission for the `@ivorycanvas` scope.
+- npm login is available for a maintainer with publish permission for the `qamap` package.
 
 ## Local Release Gate
 
@@ -65,9 +65,9 @@ npm publish --access public
 After publish, verify the public package can be executed without a source checkout:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward@0.2.1 scan .
-pnpm dlx @ivorycanvas/codeward@0.2.1 manifest validate .
-pnpm dlx @ivorycanvas/codeward@0.2.1 e2e draft . --base origin/main --head HEAD --dry-run
+pnpm dlx qamap@0.2.1 scan .
+pnpm dlx qamap@0.2.1 manifest validate .
+pnpm dlx qamap@0.2.1 e2e draft . --base origin/main --head HEAD --dry-run
 ```
 
 Use a fresh shell or temporary directory for the smoke check when possible.
@@ -93,10 +93,10 @@ Create a GitHub Release for the tag with:
 After the tag and GitHub Release are visible, run:
 
 ```sh
-pnpm dlx @ivorycanvas/codeward@0.2.1 --version
-pnpm dlx @ivorycanvas/codeward@0.2.1 scan .
-pnpm dlx @ivorycanvas/codeward@0.2.1 manifest explain . --base origin/main --head HEAD
-pnpm dlx @ivorycanvas/codeward@0.2.1 verify . --base origin/main --head HEAD
+pnpm dlx qamap@0.2.1 --version
+pnpm dlx qamap@0.2.1 scan .
+pnpm dlx qamap@0.2.1 manifest explain . --base origin/main --head HEAD
+pnpm dlx qamap@0.2.1 verify . --base origin/main --head HEAD
 ```
 
 Then update any public setup examples that should pin to `v0.2.1`.

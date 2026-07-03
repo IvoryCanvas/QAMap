@@ -91,12 +91,12 @@ test("scanProject reports common AI agent repository risks", async () => {
   const result = await scanProject(root);
   const ids = result.findings.map((finding) => finding.id);
 
-  assert.ok(ids.includes("CW003"));
-  assert.ok(ids.includes("CW004"));
-  assert.ok(ids.includes("CW005"));
-  assert.ok(ids.includes("CW006"));
-  assert.ok(ids.includes("CW008"));
-  assert.ok(ids.includes("CW009"));
+  assert.ok(ids.includes("QM003"));
+  assert.ok(ids.includes("QM004"));
+  assert.ok(ids.includes("QM005"));
+  assert.ok(ids.includes("QM006"));
+  assert.ok(ids.includes("QM008"));
+  assert.ok(ids.includes("QM009"));
 });
 
 test("scanProject stays quiet for a guarded repository", async () => {
@@ -144,19 +144,19 @@ test("scanProject uses workspace root guardrails for package scans", async () =>
 
   const packageOnly = await scanProject(packageRoot);
   const packageOnlyIds = packageOnly.findings.map((finding) => finding.id);
-  assert.ok(packageOnlyIds.includes("CW001"));
-  assert.ok(packageOnlyIds.includes("CW007"));
-  assert.ok(packageOnlyIds.includes("CW011"));
+  assert.ok(packageOnlyIds.includes("QM001"));
+  assert.ok(packageOnlyIds.includes("QM007"));
+  assert.ok(packageOnlyIds.includes("QM011"));
 
   const withWorkspaceRoot = await scanProject(packageRoot, { workspaceRoot });
   const ids = withWorkspaceRoot.findings.map((finding) => finding.id);
 
   assert.equal(withWorkspaceRoot.workspaceRoot, workspaceRoot);
-  assert.equal(ids.includes("CW001"), false);
-  assert.equal(ids.includes("CW007"), false);
-  assert.equal(ids.includes("CW011"), false);
-  assert.ok(ids.includes("CW006"));
-  assert.ok(ids.includes("CW008"));
+  assert.equal(ids.includes("QM001"), false);
+  assert.equal(ids.includes("QM007"), false);
+  assert.equal(ids.includes("QM011"), false);
+  assert.ok(ids.includes("QM006"));
+  assert.ok(ids.includes("QM008"));
 });
 
 test("scanProject recognizes modern agent instruction surfaces", async () => {
@@ -188,7 +188,7 @@ test("scanProject recognizes modern agent instruction surfaces", async () => {
   const result = await scanProject(root);
   const ids = result.findings.map((finding) => finding.id);
 
-  assert.equal(ids.includes("CW001"), false);
+  assert.equal(ids.includes("QM001"), false);
 });
 
 test("scanProject reports risky agent settings hooks and MCP servers", async () => {
@@ -247,11 +247,11 @@ test("scanProject reports risky agent settings hooks and MCP servers", async () 
 
   const result = await scanProject(root);
   const ids = result.findings.map((finding) => finding.id);
-  const hookFinding = result.findings.find((finding) => finding.id === "CW012" && finding.title.includes("hook"));
+  const hookFinding = result.findings.find((finding) => finding.id === "QM012" && finding.title.includes("hook"));
   const benignPermissionFinding = result.findings.find((finding) => finding.evidence?.includes("pnpm test"));
 
-  assert.ok(ids.includes("CW004"));
-  assert.ok(ids.includes("CW012"));
+  assert.ok(ids.includes("QM004"));
+  assert.ok(ids.includes("QM012"));
   assert.equal(hookFinding?.severity, "high");
   assert.equal(benignPermissionFinding, undefined);
 });
@@ -289,7 +289,7 @@ test("scanProject reports documentation-only API contracts", async () => {
   );
 
   const result = await scanProject(root);
-  const finding = result.findings.find((item) => item.id === "CW013");
+  const finding = result.findings.find((item) => item.id === "QM013");
   const doctor = buildDoctorResult(result);
 
   assert.equal(finding?.severity, "low");
@@ -337,7 +337,7 @@ test("scanProject accepts machine-readable API contract sources", async () => {
   const result = await scanProject(root);
   const ids = result.findings.map((item) => item.id);
 
-  assert.equal(ids.includes("CW013"), false);
+  assert.equal(ids.includes("QM013"), false);
 });
 
 test("generateTestPlan suggests domain-focused checks from changed files", async () => {
@@ -377,7 +377,7 @@ test("generateTestPlan suggests domain-focused checks from changed files", async
   assert.ok(titles.includes("API contract and failure handling"));
   assert.ok(titles.includes("Domain configuration and variants"));
   assert.deepEqual(plan.suggestedCommands, ["pnpm test", "pnpm run typecheck"]);
-  assert.match(markdown, /# CodeWard Test Plan/);
+  assert.match(markdown, /# QAMap Test Plan/);
   assert.match(markdown, /Verify loading, empty, error, and success states/);
 });
 
@@ -505,12 +505,12 @@ test("generateE2ePlan surfaces package-scoped targets for monorepo root changes"
   assert.equal(mobileTarget.packageName, "@fixture/mobile");
   assert.equal(mobileTarget.project.type, "expo-react-native");
   assert.equal(mobileTarget.recommendedRunner.name, "maestro");
-  assert.match(mobileTarget.suggestedCommand, /codeward e2e plan apps\/mobile --workspace-root \. --base main --head HEAD/);
+  assert.match(mobileTarget.suggestedCommand, /qamap e2e plan apps\/mobile --workspace-root \. --base main --head HEAD/);
   assert.ok(offerTarget);
   assert.equal(offerTarget.packageName, "@fixture/offer");
   assert.equal(offerTarget.project.type, "web");
   assert.equal(offerTarget.recommendedRunner.name, "playwright");
-  assert.match(offerTarget.suggestedCommand, /codeward e2e plan services\/offer --workspace-root \. --base main --head HEAD/);
+  assert.match(offerTarget.suggestedCommand, /qamap e2e plan services\/offer --workspace-root \. --base main --head HEAD/);
   assert.ok(plan.bootstrap.steps.some((step) => step.title === "Run package-scoped E2E plans for changed targets"));
   assert.match(markdown, /Changed App\/Package Targets/);
   assert.match(markdown, /services\/offer/);
@@ -632,7 +632,7 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.ok(plan.flows.some((flow) => flow.selectors.some((selector) => selector.value === "record-mode-ink")));
   assert.ok(plan.missingTestability.some((gap) => /\.maestro/.test(gap)));
   assert.deepEqual(plan.suggestedCommands, ["pnpm run lint"]);
-  assert.match(markdown, /# CodeWard E2E Plan/);
+  assert.match(markdown, /# QAMap E2E Plan/);
   assert.match(markdown, /Recommended runner: Maestro/);
   assert.match(markdown, /## Execution Profile/);
   assert.match(markdown, /App id: `Fixture`/);
@@ -648,7 +648,7 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.ok(draft.files.some((file) => file.validationGapCount !== undefined && file.validationGapCount > 0));
   assert.ok(skippedDraft.files.some((file) => file.status === "skipped"));
   assert.ok(forcedDraft.files.every((file) => file.status === "created"));
-  assert.match(draftMarkdown, /# CodeWard E2E Draft/);
+  assert.match(draftMarkdown, /# QAMap E2E Draft/);
   assert.match(draftMarkdown, /inferred selector/);
   assert.match(draftMarkdown, /coverage targets/);
   assert.match(draftMarkdown, /validation gap/);
@@ -671,7 +671,7 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.match(uiDraft, /Loading, empty, error, and success states/);
   assert.match(uiDraft, /Validation gaps before this draft can be required/);
   assert.doesNotMatch(uiDraft, /TODO:/);
-  assert.match(uiDraft, /CodeWard could not infer a stable Maestro selector/);
+  assert.match(uiDraft, /QAMap could not infer a stable Maestro selector/);
   assert.equal(cliPlan.recommendedRunner.name, "maestro");
   assert.equal(cliDraft.runner, "maestro");
   assert.ok(cliDraft.files.some((file) => file.source === "domain-language"));
@@ -1573,10 +1573,10 @@ test("generateE2ePlan names versioned API service paths with domain language", a
 test("generateE2ePlan uses matched core flow names for API service contracts", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, ".qamap"), { recursive: true });
   await mkdir(path.join(root, "src/v1/offer"), { recursive: true });
   await writeFile(
-    path.join(root, ".codeward/flows.yml"),
+    path.join(root, ".qamap/flows.yml"),
     [
       "flows:",
       "  - id: offer-token-fallback",
@@ -1870,7 +1870,7 @@ test("generateE2eDraft names changed component actions before generic primary jo
   assert.match(draftText, /Content URL Submit/);
   assert.match(draftText, /src\/features\/offer\/components\/ContentUrlSubmitModal\.tsx/);
   assert.match(draftText, /tapOn: \{ id: "offer-content-url" \}/);
-  assert.match(draftText, /inputText: "https:\/\/example\.com\/codeward"/);
+  assert.match(draftText, /inputText: "https:\/\/example\.com\/qamap"/);
   assert.match(draftText, /offer-content-url-submit/);
 });
 
@@ -1924,7 +1924,7 @@ test("generateE2eDraft fills inferred web input selectors before submitting acti
   assert.ok(draftFile);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
 
-  assert.match(spec, /await page\.getByTestId\("offer-content-url"\)\.fill\("https:\/\/example\.com\/codeward"\)/);
+  assert.match(spec, /await page\.getByTestId\("offer-content-url"\)\.fill\("https:\/\/example\.com\/qamap"\)/);
   assert.match(spec, /await page\.getByTestId\("offer-content-url-submit"\)\.click\(\)/);
   assert.doesNotMatch(spec, /page\.getByTestId\("offer-content-url"\)\.click\(\)/);
 });
@@ -2355,7 +2355,7 @@ test("generateE2ePlan builds a bootstrap plan for projects without tests", async
   assert.equal(plan.testSuite.hasTestSuite, false);
   assert.equal(plan.recommendedRunner.name, "playwright");
   assert.equal(plan.runnerSetup.status, "proposed");
-  assert.equal(plan.runnerSetup.setupCommand, "codeward e2e setup . --runner playwright");
+  assert.equal(plan.runnerSetup.setupCommand, "qamap e2e setup . --runner playwright");
   assert.ok(plan.runnerSetup.installCommands.some((command) => /@playwright\/test/.test(command)));
   assert.ok(plan.bootstrap.counts.required >= 4);
   assert.ok(plan.bootstrap.steps.some((step) => step.category === "runner" && step.status === "required"));
@@ -2364,22 +2364,22 @@ test("generateE2ePlan builds a bootstrap plan for projects without tests", async
   assert.ok(plan.bootstrap.steps.some((step) => step.category === "testability" && step.status === "required"));
   assert.ok(plan.bootstrap.steps.some((step) => step.category === "domain-language" && step.status === "recommended"));
   assert.ok(plan.bootstrap.steps.some((step) => step.category === "core-flow" && step.status === "recommended"));
-  assert.ok(plan.bootstrap.steps.some((step) => step.commands.includes("codeward domains suggest . --base main --head HEAD")));
-  assert.ok(plan.bootstrap.steps.some((step) => step.commands.includes("codeward flows suggest . --base main --head HEAD")));
+  assert.ok(plan.bootstrap.steps.some((step) => step.commands.includes("qamap domains suggest . --base main --head HEAD")));
+  assert.ok(plan.bootstrap.steps.some((step) => step.commands.includes("qamap flows suggest . --base main --head HEAD")));
   assert.match(plan.bootstrap.summary, /required bootstrap step/);
   assert.match(markdown, /## Bootstrap Plan/);
   assert.match(markdown, /## Runner Setup Proposal/);
-  assert.match(markdown, /Accept setup with: `codeward e2e setup \. --runner playwright`/);
+  assert.match(markdown, /Accept setup with: `qamap e2e setup \. --runner playwright`/);
   assert.match(markdown, /Create the first changed-flow E2E draft/);
   assert.match(markdown, /Add deterministic fixture or mock responses/);
-  assert.match(markdown, /codeward e2e draft \. --base main --head HEAD/);
+  assert.match(markdown, /qamap e2e draft \. --base main --head HEAD/);
   const draftMarkdown = formatMarkdownE2eDraft(draft);
   assert.match(draftMarkdown, /Resolve required bootstrap steps/);
   const draftFile = draft.files[0];
   assert.ok(draftFile);
   const generatedSpec = await readFile(path.join(root, draftFile.path), "utf8");
   assert.match(generatedSpec, /Runner setup proposal:/);
-  assert.match(generatedSpec, /Accept with: codeward e2e setup \. --runner playwright/);
+  assert.match(generatedSpec, /Accept with: qamap e2e setup \. --runner playwright/);
 });
 
 test("generateE2eDraft dry run previews files without writing drafts", async () => {
@@ -2540,7 +2540,7 @@ test("generateE2eDraft uses web selectors in Playwright specs", async () => {
 test("generateE2eDraft asserts changed HTML success copy in Playwright specs", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, ".qamap"), { recursive: true });
   await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
@@ -2558,7 +2558,7 @@ test("generateE2eDraft asserts changed HTML success copy in Playwright specs", a
   );
   await writeFile(path.join(root, "playwright.config.ts"), "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
   await writeFile(
-    path.join(root, ".codeward/flows.yml"),
+    path.join(root, ".qamap/flows.yml"),
     [
       "flows:",
       "  - id: checkout-completion",
@@ -2737,7 +2737,7 @@ test("generateE2ePlan infers Playwright base URLs from dev scripts", async () =>
   assert.equal(plan.executionProfile.testCommand, "npx playwright test");
   assert.equal(plan.executionProfile.baseUrl, "http://localhost:3004");
   assert.equal(plan.runnerSetup.status, "proposed");
-  assert.equal(plan.runnerSetup.setupCommand, "codeward e2e setup . --runner playwright");
+  assert.equal(plan.runnerSetup.setupCommand, "qamap e2e setup . --runner playwright");
   assert.deepEqual(plan.runnerSetup.installCommands, ["pnpm add -D @playwright/test"]);
   assert.ok(plan.runnerSetup.filesToCreate.includes("playwright.config.ts"));
   assert.ok(plan.executionProfile.blockers.some((blocker) => /Playwright config/.test(blocker)));
@@ -2747,13 +2747,13 @@ test("generateE2ePlan infers Playwright base URLs from dev scripts", async () =>
   assert.match(runnerStep.action, /webServer\.command "pnpm run dev"/);
   assert.match(runnerStep.action, /use\.baseURL "http:\/\/localhost:3004"/);
   assert.ok(runnerStep.commands.includes("pnpm add -D @playwright/test"));
-  assert.ok(runnerStep.commands.includes("codeward e2e setup . --runner playwright"));
+  assert.ok(runnerStep.commands.includes("qamap e2e setup . --runner playwright"));
   assert.ok(runnerStep.commands.includes("pnpm run dev"));
   assert.ok(runnerStep.commands.includes("npx playwright test"));
   assert.ok(runnerAction);
   assert.match(runnerAction.detail, /playwright\.config\.ts/);
   assert.match(runnerAction.detail, /http:\/\/localhost:3004/);
-  assert.match(runnerAction.detail, /codeward e2e setup \. --runner playwright/);
+  assert.match(runnerAction.detail, /qamap e2e setup \. --runner playwright/);
 
   const setup = await setupE2eRunner(root, { base: "main", head: "HEAD", runner: "playwright" });
   const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
@@ -2771,7 +2771,7 @@ test("generateE2ePlan infers Playwright base URLs from dev scripts", async () =>
   assert.equal(setup.draftFiles.length, 1);
   assert.equal(setupDraftFile.status, "created");
   assert.match(setupDraftFile.path, /^tests\/e2e\/settings-primary-journey\.spec\.ts$/);
-  assert.equal(setup.nextCommands.some((command) => /^codeward e2e draft\b/.test(command)), false);
+  assert.equal(setup.nextCommands.some((command) => /^qamap e2e draft\b/.test(command)), false);
   assert.equal(packageJson.scripts["test:e2e"], "playwright test");
   assert.match(configText, /testDir: "\.\/tests\/e2e"/);
   assert.match(configText, /http:\/\/localhost:3004/);
@@ -2921,7 +2921,7 @@ test("generateE2ePlan reads React Router object route paths", async () => {
   assert.ok(routeEntrypoints.some((entrypoint) => entrypoint.value === "/reports/:reportId"));
   assert.equal(routeEntrypoints.some((entrypoint) => entrypoint.value === "/app-routes"), false);
   assert.match(spec, /route \/reports\/:reportId \[medium\]/);
-  assert.match(spec, /reportId: "codeward-report-id"/);
+  assert.match(spec, /reportId: "qamap-report-id"/);
   assert.match(spec, /page\.goto\(`\/reports\/\$\{routeParams\.reportId\}`\)/);
   assert.match(spec, /page\.getByTestId\("refresh-report"\)\.click\(\)/);
 });
@@ -2929,7 +2929,7 @@ test("generateE2ePlan reads React Router object route paths", async () => {
 test("generateE2eDraft emits runnable Playwright role and input actions", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, ".qamap"), { recursive: true });
   await mkdir(path.join(root, "src/pages/settings"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
@@ -2951,7 +2951,7 @@ test("generateE2eDraft emits runnable Playwright role and input actions", async 
     "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n",
   );
   await writeFile(
-    path.join(root, ".codeward/flows.yml"),
+    path.join(root, ".qamap/flows.yml"),
     [
       "flows:",
       "  - id: settings-profile",
@@ -3007,7 +3007,7 @@ test("generateE2eDraft emits runnable Playwright role and input actions", async 
   assert.ok(draftFile);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
 
-  assert.match(spec, /page\.getByPlaceholder\("Profile email"\)\.fill\("codeward@example.com"\)/);
+  assert.match(spec, /page\.getByPlaceholder\("Profile email"\)\.fill\("qamap@example.com"\)/);
   assert.match(spec, /page\.getByRole\("button", \{ name: "Save settings" \}\)\.click\(\)/);
   assert.match(spec, /expect\(page\.getByText\("Saved settings"\)\)\.toBeVisible\(\)/);
   assert.match(spec, /role-button: Save settings/);
@@ -3072,10 +3072,10 @@ test("generateE2eDraft normalizes dynamic routes without creating id domain scen
   assert.match(campaignDraftFile.primaryEntrypoint ?? "", /route \/campaign\/official\/:id/);
   assert.match(spec, /route \/public \[medium\]/);
   assert.match(spec, /const routeParams = \{/);
-  assert.match(spec, /id: "codeward-id"/);
+  assert.match(spec, /id: "qamap-id"/);
   assert.match(spec, /Replace route param id with a real fixture value for \/campaign\/official\/:id/);
   assert.match(spec, /page\.goto\(`\/campaign\/official\/\$\{routeParams\.id\}`\)/);
-  assert.match(spec, /CodeWard used stable sample route params/);
+  assert.match(spec, /QAMap used stable sample route params/);
   assert.doesNotMatch(spec, /page\.goto\("\/campaign\/official\/:id"\)/);
 });
 
@@ -3188,7 +3188,7 @@ test("generateE2eDraft fills dynamic route params from concrete route hints", as
 test("generateE2ePlan matches committed core flow definitions", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, ".qamap"), { recursive: true });
   await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
@@ -3203,7 +3203,7 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
     }),
   );
   await writeFile(
-    path.join(root, ".codeward/flows.yml"),
+    path.join(root, ".qamap/flows.yml"),
     [
       "flows:",
       "  - id: checkout-purchase",
@@ -3239,7 +3239,7 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const markdown = formatMarkdownE2ePlan(plan);
 
-  assert.equal(plan.coreFlowManifestPath, ".codeward/flows.yml");
+  assert.equal(plan.coreFlowManifestPath, ".qamap/flows.yml");
   assert.equal(plan.coreFlows.length, 1);
   assert.equal(plan.coreFlows[0].id, "checkout-purchase");
   assert.equal(plan.coreFlows[0].priority, "critical");
@@ -3275,7 +3275,7 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   assert.equal(draft.actionSummary.required > 0, true);
   assert.ok(draft.actionSummary.byKind.some((item) => item.kind === "validation" && item.required > 0));
   assert.ok((draftFile.validationGapCount ?? 0) > 0);
-  assert.match(draftFile.primaryEntrypoint ?? "", /route \/checkout \[high\] \(\.codeward\/flows\.yml\)/);
+  assert.match(draftFile.primaryEntrypoint ?? "", /route \/checkout \[high\] \(\.qamap\/flows\.yml\)/);
   assert.match(formatMarkdownE2eDraft(draft), /## Draft Action Items/);
   assert.doesNotMatch(formatMarkdownE2eDraft(draft), /\[required\] assertion: Replace starter smoke assertions with domain assertions/);
   assert.match(formatMarkdownE2eDraft(draft), /## Manifest Promotion Guidance/);
@@ -3283,7 +3283,7 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
   assert.match(spec, /Core flow: checkout-purchase \[critical\]/);
   assert.match(spec, /Keep manifest checks required: Complete checkout with a valid payment method and Verify declined payment recovery\./);
-  assert.match(spec, /route \/checkout \[high\] \(\.codeward\/flows\.yml\)/);
+  assert.match(spec, /route \/checkout \[high\] \(\.qamap\/flows\.yml\)/);
   assert.match(spec, /Validation gaps before this draft can be required/);
   assert.match(spec, /Flow language brief/);
   assert.match(spec, /Actor: Customer/);
@@ -3302,7 +3302,7 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
 test("generateE2ePlan uses committed domain manifests for language and draft routes", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, ".qamap"), { recursive: true });
   await mkdir(path.join(root, "src/features/subscription"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
@@ -3316,7 +3316,7 @@ test("generateE2ePlan uses committed domain manifests for language and draft rou
     }),
   );
   await writeFile(
-    path.join(root, ".codeward/domains.yml"),
+    path.join(root, ".qamap/domains.yml"),
     [
       "domains:",
       "  - id: membership",
@@ -3353,7 +3353,7 @@ test("generateE2ePlan uses committed domain manifests for language and draft rou
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const markdown = formatMarkdownE2ePlan(plan);
 
-  assert.equal(plan.domainManifestPath, ".codeward/domains.yml");
+  assert.equal(plan.domainManifestPath, ".qamap/domains.yml");
   assert.equal(plan.domains.length, 1);
   assert.equal(plan.domains[0].id, "membership");
   assert.ok(plan.domains[0].matchedFiles.includes("src/features/subscription/RenewalPage.tsx"));
@@ -3364,7 +3364,7 @@ test("generateE2ePlan uses committed domain manifests for language and draft rou
     ),
   );
   assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Membership renewal"));
-  assert.match(markdown, /Domain manifest: `\.codeward\/domains\.yml`/);
+  assert.match(markdown, /Domain manifest: `\.qamap\/domains\.yml`/);
   assert.match(markdown, /## Matched Domains/);
   assert.match(markdown, /Membership renewal/);
   assert.match(markdown, /Flow language brief:/);
@@ -3382,10 +3382,10 @@ test("generateE2ePlan uses committed domain manifests for language and draft rou
   assert.equal(draftFile.source, "domain-language");
   assert.equal(draftFile.promotionStatus, "commit-candidate");
   assert.match(draftFile.promotionReason, /Committed domain scenario matched/);
-  assert.match(draftFile.primaryEntrypoint ?? "", /route \/membership\/renewal \[high\] \(\.codeward\/domains\.yml\)/);
+  assert.match(draftFile.primaryEntrypoint ?? "", /route \/membership\/renewal \[high\] \(\.qamap\/domains\.yml\)/);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
   assert.match(spec, /Domain scenario: Membership renewal/);
-  assert.match(spec, /route \/membership\/renewal \[high\] \(\.codeward\/domains\.yml\)/);
+  assert.match(spec, /route \/membership\/renewal \[high\] \(\.qamap\/domains\.yml\)/);
   assert.match(spec, /Flow language brief/);
   assert.match(spec, /Actor: Customer/);
   assert.match(spec, /Manifest promotion guidance/);
@@ -3523,10 +3523,10 @@ test("generateE2ePlan matches workspace core flows for package scans", async () 
   const workspaceRoot = await makeTempRepo();
   const packageRoot = path.join(workspaceRoot, "services/offer");
   await initGitRepo(workspaceRoot);
-  await mkdir(path.join(workspaceRoot, ".codeward"), { recursive: true });
+  await mkdir(path.join(workspaceRoot, ".qamap"), { recursive: true });
   await mkdir(path.join(packageRoot, "src/features/offer"), { recursive: true });
   await writeFile(
-    path.join(workspaceRoot, ".codeward/flows.yml"),
+    path.join(workspaceRoot, ".qamap/flows.yml"),
     [
       "flows:",
       "  - id: offer-submit",
@@ -3558,7 +3558,7 @@ test("generateE2ePlan matches workspace core flows for package scans", async () 
 
   const plan = await generateE2ePlan(packageRoot, { base: "main", head: "HEAD", workspaceRoot });
 
-  assert.equal(plan.coreFlowManifestPath, ".codeward/flows.yml");
+  assert.equal(plan.coreFlowManifestPath, ".qamap/flows.yml");
   assert.equal(plan.coreFlows.length, 1);
   assert.equal(plan.coreFlows[0].id, "offer-submit");
   assert.ok(plan.coreFlows[0].matchedFiles.includes("services/offer/src/features/offer/submit.ts"));
@@ -3629,7 +3629,7 @@ test("generateTestPlan suggests validation commands for common non-JavaScript pr
           path.join(root, "pyproject.toml"),
           [
             "[project]",
-            'name = "codeward-python-fixture"',
+            'name = "qamap-python-fixture"',
             "",
             "[tool.pytest.ini_options]",
             'testpaths = ["tests"]',
@@ -3654,7 +3654,7 @@ test("generateTestPlan suggests validation commands for common non-JavaScript pr
       expectedCommands: ["go test ./...", "go vet ./...", "golangci-lint run"],
       setup: async (root) => {
         await mkdir(path.join(root, "internal/offer"), { recursive: true });
-        await writeFile(path.join(root, "go.mod"), "module example.com/codeward-fixture\n\ngo 1.22\n");
+        await writeFile(path.join(root, "go.mod"), "module example.com/qamap-fixture\n\ngo 1.22\n");
         await writeFile(path.join(root, ".golangci.yml"), "run:\n  timeout: 2m\n");
         await writeFile(path.join(root, "internal/offer/service.go"), "package offer\n\nfunc Price() int { return 1 }\n");
       },
@@ -3669,7 +3669,7 @@ test("generateTestPlan suggests validation commands for common non-JavaScript pr
         await mkdir(path.join(root, "src"), { recursive: true });
         await writeFile(
           path.join(root, "Cargo.toml"),
-          ['[package]', 'name = "codeward-rust-fixture"', 'version = "0.1.0"', 'edition = "2021"'].join("\n"),
+          ['[package]', 'name = "qamap-rust-fixture"', 'version = "0.1.0"', 'edition = "2021"'].join("\n"),
         );
         await writeFile(path.join(root, "src/lib.rs"), "pub fn price() -> u32 { 1 }\n");
       },
@@ -3688,7 +3688,7 @@ test("generateTestPlan suggests validation commands for common non-JavaScript pr
             '<project xmlns="http://maven.apache.org/POM/4.0.0">',
             "  <modelVersion>4.0.0</modelVersion>",
             "  <groupId>com.example</groupId>",
-            "  <artifactId>codeward-java-fixture</artifactId>",
+            "  <artifactId>qamap-java-fixture</artifactId>",
             "  <version>1.0.0</version>",
             "</project>",
           ].join("\n"),
@@ -3727,7 +3727,7 @@ test("evaluateChangeReadiness recognizes non-JavaScript test files", async () =>
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, "internal/offer"), { recursive: true });
-  await writeFile(path.join(root, "go.mod"), "module example.com/codeward-fixture\n\ngo 1.22\n");
+  await writeFile(path.join(root, "go.mod"), "module example.com/qamap-fixture\n\ngo 1.22\n");
   await writeFile(path.join(root, ".golangci.yml"), "run:\n  timeout: 2m\n");
   await writeFile(path.join(root, "internal/offer/service.go"), "package offer\n\nfunc Price() int { return 1 }\n");
   await git(root, ["add", "."]);
@@ -3800,7 +3800,7 @@ test("evaluateChangeReadiness scores intent, risk, and verification evidence", a
   assert.equal(result.score, result.maxScore);
   assert.equal(result.checks.find((check) => check.id === "intent-capture")?.status, "pass");
   assert.equal(result.checks.find((check) => check.id === "risk-explanation")?.status, "pass");
-  assert.match(markdown, /# CodeWard Eval/);
+  assert.match(markdown, /# QAMap Eval/);
   assert.match(markdown, /Verification Gates/);
 });
 
@@ -3869,7 +3869,7 @@ test("verifyChange combines review findings, readiness, and domain tests", async
 
   assert.equal(result.evaluation.rating, "strong");
   assert.equal(result.review.newFindings.length, 0);
-  assert.match(markdown, /# CodeWard Verify/);
+  assert.match(markdown, /# QAMap Verify/);
   assert.match(markdown, /Campaign workflow regression/);
   assert.match(markdown, /Verification Gates/);
 });
@@ -3879,23 +3879,23 @@ test("formatMarkdownReport includes a useful summary", async () => {
   const result = await scanProject(root);
   const markdown = formatMarkdownReport(result);
 
-  assert.match(markdown, /# CodeWard Report/);
+  assert.match(markdown, /# QAMap Report/);
   assert.match(markdown, /## Summary/);
-  assert.match(markdown, /CW001/);
+  assert.match(markdown, /QM001/);
 });
 
 test("scanProject can ignore rules and override severity", async () => {
   const root = await makeTempRepo();
   const result = await scanProject(root, {
-    ignoreRules: ["CW001"],
+    ignoreRules: ["QM001"],
     severityOverrides: {
-      CW007: "high",
+      QM007: "high",
     },
   });
   const ids = result.findings.map((finding) => finding.id);
-  const ciFinding = result.findings.find((finding) => finding.id === "CW007");
+  const ciFinding = result.findings.find((finding) => finding.id === "QM007");
 
-  assert.equal(ids.includes("CW001"), false);
+  assert.equal(ids.includes("QM001"), false);
   assert.equal(ciFinding?.severity, "high");
   assert.equal(ciFinding?.originalSeverity, "low");
 });
@@ -3903,26 +3903,26 @@ test("scanProject can ignore rules and override severity", async () => {
 test("loadConfig reads repository policy", async () => {
   const root = await makeTempRepo();
   await writeFile(
-    path.join(root, "codeward.config.json"),
+    path.join(root, "qamap.config.json"),
     JSON.stringify({
       failOn: "medium",
-      ignoreRules: ["cw011"],
+      ignoreRules: ["qm011"],
       maxFiles: 10,
       validationCommands: [" make test ", "make test", "make lint"],
       severity: {
-        cw007: "info",
+        qm007: "info",
       },
     }),
   );
 
   const loaded = await loadConfig(root);
 
-  assert.equal(path.basename(loaded.path), "codeward.config.json");
+  assert.equal(path.basename(loaded.path), "qamap.config.json");
   assert.equal(loaded.config.failOn, "medium");
-  assert.deepEqual(loaded.config.ignoreRules, ["CW011"]);
+  assert.deepEqual(loaded.config.ignoreRules, ["QM011"]);
   assert.equal(loaded.config.maxFiles, 10);
   assert.deepEqual(loaded.config.validationCommands, ["make test", "make lint"]);
-  assert.deepEqual(loaded.config.severity, { CW007: "info" });
+  assert.deepEqual(loaded.config.severity, { QM007: "info" });
 });
 
 test("writeDefaultConfig creates a starter config", async () => {
@@ -3930,7 +3930,7 @@ test("writeDefaultConfig creates a starter config", async () => {
   const outputPath = await writeDefaultConfig(root);
   const loaded = await loadConfig(root);
 
-  assert.equal(outputPath, path.join(root, "codeward.config.json"));
+  assert.equal(outputPath, path.join(root, "qamap.config.json"));
   assert.equal(loaded.config.failOn, "high");
   assert.deepEqual(loaded.config.ignoreRules, []);
   assert.deepEqual(loaded.config.validationCommands, []);
@@ -3944,7 +3944,7 @@ test("initializeLocalHistory protects local runs with gitignore entries", async 
   const gitignore = await readFile(path.join(root, ".gitignore"), "utf8");
   const secondResult = await initializeLocalHistory(root);
 
-  assert.deepEqual(result.createdDirectories, [".codeward", ".codeward/runs", ".codeward/cache", ".codeward/tmp"]);
+  assert.deepEqual(result.createdDirectories, [".qamap", ".qamap/runs", ".qamap/cache", ".qamap/tmp"]);
   assert.equal(result.gitignoreUpdated, true);
   assert.deepEqual(result.addedGitignorePatterns, localHistoryGitignorePatterns);
   for (const directory of result.createdDirectories) {
@@ -4007,7 +4007,7 @@ test("e2e plan can record compact local history without breaking JSON output", a
   const gitignore = await readFile(path.join(root, ".gitignore"), "utf8");
 
   assert.equal(plan.localHistory.gitignoreUpdated, true);
-  assert.match(plan.localHistory.path, /^\.codeward\/runs\/.+\.e2e-plan\.json$/);
+  assert.match(plan.localHistory.path, /^\.qamap\/runs\/.+\.e2e-plan\.json$/);
   assert.equal(snapshot.kind, "e2e-plan");
   assert.equal(snapshot.plan.scope, ".");
   assert.equal(snapshot.plan.recommendedRunner, "playwright");
@@ -4029,7 +4029,7 @@ test("e2e plan can record compact local history without breaking JSON output", a
 test("flows init creates a commit-friendly core flow manifest", async () => {
   const root = await makeTempRepo();
   const cliOutput = await execFileAsync(process.execPath, [cliPath, "flows", "init", root]);
-  const manifest = await readFile(path.join(root, ".codeward/flows.yml"), "utf8");
+  const manifest = await readFile(path.join(root, ".qamap/flows.yml"), "utf8");
 
   assert.match(cliOutput.stdout, /Wrote /);
   assert.match(cliOutput.stdout, /team policy/);
@@ -4040,7 +4040,7 @@ test("flows init creates a commit-friendly core flow manifest", async () => {
 test("domains init creates a commit-friendly domain manifest", async () => {
   const root = await makeTempRepo();
   const cliOutput = await execFileAsync(process.execPath, [cliPath, "domains", "init", root]);
-  const manifest = await readFile(path.join(root, ".codeward/domains.yml"), "utf8");
+  const manifest = await readFile(path.join(root, ".qamap/domains.yml"), "utf8");
 
   assert.match(cliOutput.stdout, /Wrote /);
   assert.match(cliOutput.stdout, /team policy/);
@@ -4074,13 +4074,13 @@ test("manifest init creates a baseline verification manifest", async () => {
   );
 
   const result = await writeVerificationManifestBaseline(root);
-  const manifestText = await readFile(path.join(root, ".codeward/manifest.yaml"), "utf8");
+  const manifestText = await readFile(path.join(root, ".qamap/manifest.yaml"), "utf8");
   const manifest = await loadVerificationManifest(root);
 
   assert.equal(result.summary.domains > 0, true);
   assert.equal(result.summary.flows > 0, true);
   assert.equal(manifest.$schema, verificationManifestSchemaUrl);
-  assert.match(manifestText, /\$schema: https:\/\/raw\.githubusercontent\.com\/IvoryCanvas\/codeward\/main\/schema\/codeward-manifest\.schema\.json/);
+  assert.match(manifestText, /\$schema: https:\/\/raw\.githubusercontent\.com\/IvoryCanvas\/qamap\/main\/schema\/qamap-manifest\.schema\.json/);
   assert.match(manifestText, /version: 1/);
   assert.match(manifestText, /src\/app\/\(shop\)\/products\/\[productId\]\/page\.tsx/);
   assert.ok(manifest.flows.some((flow) => flow.entry?.route === "/products/:productId"));
@@ -4149,7 +4149,7 @@ test("manifest init captures advisory instruction context", async () => {
   );
 
   const result = await writeVerificationManifestBaseline(root);
-  const manifestText = await readFile(path.join(root, ".codeward/manifest.yaml"), "utf8");
+  const manifestText = await readFile(path.join(root, ".qamap/manifest.yaml"), "utf8");
   const manifest = await loadVerificationManifest(root);
   const validation = await validateVerificationManifest(root);
   const contextResult = await analyzeVerificationManifestContext(root);
@@ -4187,13 +4187,13 @@ test("manifest init captures advisory instruction context", async () => {
     ),
   );
   assert.ok(contextResult.roleSummary.some((item) => item.role === "verification-rubric"));
-  assert.match(contextMarkdown, /CodeWard Manifest Context/);
+  assert.match(contextMarkdown, /QAMap Manifest Context/);
   assert.match(contextMarkdown, /Role Summary/);
   assert.match(contextMarkdown, /Context Sources/);
   assert.match(contextMarkdown, /AGENTS\.md/);
   assert.match(contextMarkdown, /Safety Rules/);
   assert.match(contextMarkdown, /No context diagnostics/);
-  assert.match(cliContext.stdout, /CodeWard Manifest Context/);
+  assert.match(cliContext.stdout, /QAMap Manifest Context/);
   assert.match(cliContext.stdout, /agent-skill/);
   assert.ok(validation.issues.some((issue) => issue.path.includes("context.source")));
 });
@@ -4308,7 +4308,7 @@ test("manifest bootstrap produces concrete PR E2E draft from repo QA memory", as
 
   assert.match(explainMarkdown, /Checkout Purchase/);
   assert.match(explainMarkdown, /Evidence sources: route-file, adr-context/);
-  assert.match(explainMarkdown, /If this is wrong: update `\.codeward\/manifest\.yaml > flows\.checkout-checkout-purchase\.anchors`/);
+  assert.match(explainMarkdown, /If this is wrong: update `\.qamap\/manifest\.yaml > flows\.checkout-checkout-purchase\.anchors`/);
   assert.match(draftMarkdown, /Manifest Recommendations/);
   assert.match(draftMarkdown, /Checkout Purchase/);
   assert.match(draftMarkdown, /tests\/e2e\/checkout-purchase\.spec\.ts/);
@@ -4326,7 +4326,7 @@ test("manifest bootstrap produces concrete PR E2E draft from repo QA memory", as
 test("manifest check hints bind selectors values and changed API observation in Playwright drafts", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, ".qamap"), { recursive: true });
   await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
   await mkdir(path.join(root, "src/app/api/checkout"), { recursive: true });
   await writeFile(
@@ -4345,7 +4345,7 @@ test("manifest check hints bind selectors values and changed API observation in 
   );
   await writeFile(path.join(root, "playwright.config.ts"), "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
   await writeFile(
-    path.join(root, ".codeward/manifest.yaml"),
+    path.join(root, ".qamap/manifest.yaml"),
     [
       "version: 1",
       "domains:",
@@ -4515,7 +4515,7 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.equal(qa.manifestPath, undefined);
   assert.equal(qa.flows.length > 0, true);
   assert.ok(qa.flows.some((flow) => flow.changedFiles.includes("src/pages/checkout/index.tsx")));
-  assert.match(markdown, /CodeWard QA Draft/);
+  assert.match(markdown, /QAMap QA Draft/);
   assert.match(markdown, /Local-first PR QA skill output/);
   assert.match(markdown, /Manifest: not found; using repo signals and PR diff only/);
   assert.match(markdown, /PR Comment Draft/);
@@ -4535,17 +4535,17 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
     "--runner",
     "playwright",
   ]);
-  assert.match(cliOutput.stdout, /CodeWard QA Draft/);
+  assert.match(cliOutput.stdout, /QAMap QA Draft/);
   assert.match(cliOutput.stdout, /PR Comment Draft/);
 });
 
 test("package metadata includes the portable PR QA skill template", async () => {
   const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8"));
-  const skillText = await readFile(path.join(repositoryRoot, "skills/codeward-pr-qa/SKILL.md"), "utf8");
+  const skillText = await readFile(path.join(repositoryRoot, "skills/qamap-pr-qa/SKILL.md"), "utf8");
 
   assert.ok(packageJson.files.includes("skills"));
-  assert.match(skillText, /name: codeward-pr-qa/);
-  assert.match(skillText, /pnpm dlx @ivorycanvas\/codeward qa/);
+  assert.match(skillText, /name: qamap-pr-qa/);
+  assert.match(skillText, /pnpm dlx qamap qa/);
   assert.match(skillText, /Manifest Repair/);
 });
 
@@ -4608,8 +4608,8 @@ test("qa command points testless repositories at first E2E draft creation", asyn
   assert.match(markdown, /## First E2E Draft Bootstrap/);
   assert.match(markdown, /create the first runnable starter draft/);
   assert.match(markdown, /Recommended first runner: Playwright/);
-  assert.match(markdown, /Create command: `codeward e2e setup \. --runner playwright`/);
-  assert.match(markdown, /Draft files CodeWard can create:/);
+  assert.match(markdown, /Create command: `qamap e2e setup \. --runner playwright`/);
+  assert.match(markdown, /Draft files QAMap can create:/);
   assert.match(markdown, /playwright\.config\.ts/);
   assert.match(markdown, /tests\/e2e\/checkout-primary-journey\.spec\.ts/);
   assert.match(markdown, /Checkout primary journey/);
@@ -4661,7 +4661,7 @@ test("package version matches the CLI version constant", async () => {
 
 test("e2e draft can use an external verification manifest for read-only adoption preview", async () => {
   const root = await makeTempRepo();
-  const manifestOutputRoot = await mkdtemp(path.join(tmpdir(), "codeward-external-manifest-"));
+  const manifestOutputRoot = await mkdtemp(path.join(tmpdir(), "qamap-external-manifest-"));
   const manifestPath = path.join(manifestOutputRoot, "manifest.yaml");
   await initGitRepo(root);
   await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
@@ -4785,7 +4785,7 @@ test("manifest init keeps Expo app file domains specific", async () => {
 test("manifest matches explain e2e and verify recommendations", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, ".qamap"), { recursive: true });
   await mkdir(path.join(root, "src/pages/campaign/official"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
@@ -4801,7 +4801,7 @@ test("manifest matches explain e2e and verify recommendations", async () => {
     }),
   );
   await writeFile(
-    path.join(root, ".codeward/manifest.yaml"),
+    path.join(root, ".qamap/manifest.yaml"),
     [
       "version: 1",
       "domains:",
@@ -4877,22 +4877,22 @@ test("manifest matches explain e2e and verify recommendations", async () => {
   const verify = await verifyChange(root, { base: "main", head: "HEAD" });
   const verifyMarkdown = formatMarkdownVerifyReport(verify);
 
-  assert.equal(plan.verificationManifestPath, ".codeward/manifest.yaml");
+  assert.equal(plan.verificationManifestPath, ".qamap/manifest.yaml");
   assert.ok(plan.verificationManifestMatches.some((match) => match.kind === "flow"));
   assert.ok(plan.verificationManifestMatches.some((match) => match.kind === "check"));
   assert.equal(validation.status, "valid");
-  assert.match(validationMarkdown, /CodeWard Manifest Validate/);
-  assert.match(explainMarkdown, /CodeWard Manifest Explain/);
+  assert.match(validationMarkdown, /QAMap Manifest Validate/);
+  assert.match(explainMarkdown, /QAMap Manifest Explain/);
   assert.match(explainMarkdown, /Campaign Application Complete/);
   assert.match(explainMarkdown, /Evidence sources: product-qa/);
   assert.match(explainMarkdown, /Next actions/);
   assert.match(explainMarkdown, /Repair hints/);
-  assert.match(explainMarkdown, /If this is wrong: update `\.codeward\/manifest\.yaml > flows\.campaign-application-complete\.anchors`/);
+  assert.match(explainMarkdown, /If this is wrong: update `\.qamap\/manifest\.yaml > flows\.campaign-application-complete\.anchors`/);
   assert.match(planMarkdown, /## Manifest Recommendations/);
   assert.match(planMarkdown, /Why this was recommended/);
   assert.match(planMarkdown, /Draft or review E2E coverage for the Campaign Application Complete flow/);
-  assert.match(planMarkdown, /rewrite \.codeward\/manifest\.yaml > flows\.campaign-application-complete\.checks in team language/);
-  assert.match(planMarkdown, /If this is wrong: update `\.codeward\/manifest\.yaml > flows\.campaign-application-complete\.anchors`/);
+  assert.match(planMarkdown, /rewrite \.qamap\/manifest\.yaml > flows\.campaign-application-complete\.checks in team language/);
+  assert.match(planMarkdown, /If this is wrong: update `\.qamap\/manifest\.yaml > flows\.campaign-application-complete\.anchors`/);
   assert.ok(draft.files.some((file) => file.source === "verification-manifest"));
   assert.ok(draft.files.some((file) => file.flowTitle === "Campaign Application Complete"));
   assert.match(draftMarkdown, /## Manifest Recommendations/);
@@ -4908,7 +4908,7 @@ test("manifest matches explain e2e and verify recommendations", async () => {
   assert.equal(verify.verificationManifestMatches.length > 0, true);
 
   const cliValidate = await execFileAsync(process.execPath, [cliPath, "manifest", "validate", root, "--format", "markdown"]);
-  assert.match(cliValidate.stdout, /CodeWard Manifest Validate/);
+  assert.match(cliValidate.stdout, /QAMap Manifest Validate/);
   const cliExplain = await execFileAsync(process.execPath, [
     cliPath,
     "manifest",
@@ -4921,7 +4921,7 @@ test("manifest matches explain e2e and verify recommendations", async () => {
     "--format",
     "markdown",
   ]);
-  assert.match(cliExplain.stdout, /CodeWard Manifest Explain/);
+  assert.match(cliExplain.stdout, /QAMap Manifest Explain/);
   assert.match(cliExplain.stdout, /Campaign Application Complete/);
 });
 
@@ -4932,9 +4932,9 @@ test("manifest validate reports missing and stale manifest policy", async () => 
   assert.equal(missing.summary.errors, 1);
 
   const root = await makeTempRepo();
-  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, ".qamap"), { recursive: true });
   await writeFile(
-    path.join(root, ".codeward/manifest.yaml"),
+    path.join(root, ".qamap/manifest.yaml"),
     [
       "version: 1",
       "domains:",
@@ -5075,9 +5075,9 @@ test("domains and flows suggest changed-file manifests for package scopes", asyn
     "--head",
     "HEAD",
     "--write",
-    ".codeward/domains.suggested.yml",
+    ".qamap/domains.suggested.yml",
   ]);
-  const writtenManifest = await readFile(path.join(workspaceRoot, ".codeward/domains.suggested.yml"), "utf8");
+  const writtenManifest = await readFile(path.join(workspaceRoot, ".qamap/domains.suggested.yml"), "utf8");
   const domainSuggestion = await generateDomainManifestSuggestion(packageRoot, {
     workspaceRoot,
     base: "main",
@@ -5107,11 +5107,11 @@ test("domains and flows suggest changed-file manifests for package scopes", asyn
   assert.equal(domainSuggestion.promotionPlan.counts.commitCandidate, 1);
   assert.equal(domainSuggestion.promotionPlan.candidates[0].status, "commit-candidate");
   assert.equal(domainSuggestion.promotionPlan.candidates[0].id, "offer");
-  assert.match(domainSuggestion.promotionPlan.candidates[0].action, /\.codeward\/domains\.yml/);
+  assert.match(domainSuggestion.promotionPlan.candidates[0].action, /\.qamap\/domains\.yml/);
   assert.equal(flowSuggestion.promotionPlan.counts.commitCandidate, 1);
   assert.equal(flowSuggestion.promotionPlan.candidates[0].status, "commit-candidate");
   assert.equal(flowSuggestion.promotionPlan.candidates[0].id, "offer-primary-journey");
-  assert.match(flowSuggestion.promotionPlan.candidates[0].action, /\.codeward\/flows\.yml/);
+  assert.match(flowSuggestion.promotionPlan.candidates[0].action, /\.qamap\/flows\.yml/);
 });
 
 test("configured validation commands feed test-plan and eval outputs", async () => {
@@ -5119,7 +5119,7 @@ test("configured validation commands feed test-plan and eval outputs", async () 
   await initGitRepo(root);
   await mkdir(path.join(root, "src"), { recursive: true });
   await writeFile(
-    path.join(root, "codeward.config.json"),
+    path.join(root, "qamap.config.json"),
     JSON.stringify({
       validationCommands: ["make test", "make lint"],
     }),
@@ -5150,7 +5150,7 @@ test("configured validation commands feed test-plan and eval outputs", async () 
     head: "HEAD",
     validationCommands: ["make test", "make lint"],
     prBody: [
-      "문제: custom stack validation is declared in CodeWard config.",
+      "문제: custom stack validation is declared in QAMap config.",
       "이유: this repository does not expose standard language project files.",
       "Risk: validation remains explicit and reviewable.",
       "Rollback: remove the custom validation command config.",
@@ -5168,8 +5168,8 @@ test("formatSarifReport emits SARIF 2.1.0", async () => {
   const sarif = JSON.parse(formatSarifReport(result));
 
   assert.equal(sarif.version, "2.1.0");
-  assert.equal(sarif.runs[0].tool.driver.name, "CodeWard");
-  assert.equal(sarif.runs[0].results[0].ruleId, "CW001");
+  assert.equal(sarif.runs[0].tool.driver.name, "QAMap");
+  assert.equal(sarif.runs[0].results[0].ruleId, "QM001");
 });
 
 test("doctor summarizes a complex risky repository by guardrail area", async () => {
@@ -5244,11 +5244,11 @@ test("doctor summarizes a complex risky repository by guardrail area", async () 
   assert.equal(doctor.areas.find((area) => area.name === "MCP and agent settings")?.status, "review");
   assert.equal(doctor.areas.find((area) => area.name === "Repository automation")?.status, "review");
   assert.ok(doctor.topPriorities.length <= 5);
-  assert.match(formatted, /CodeWard Doctor/);
+  assert.match(formatted, /QAMap Doctor/);
   assert.match(formatted, /Agent readiness: High risk/);
   assert.match(formatted, /\[review\] MCP and agent settings/);
   assert.match(formatted, /Top priorities:/);
-  assert.match(markdown, /# CodeWard Doctor/);
+  assert.match(markdown, /# QAMap Doctor/);
   assert.match(markdown, /## Guardrail Areas/);
 });
 
@@ -5307,16 +5307,16 @@ test("reviewProject reports findings introduced by a branch", async () => {
   const markdown = formatMarkdownReviewReport(review);
   const ids = review.newFindings.map((finding) => finding.id);
 
-  assert.ok(ids.includes("CW004"));
-  assert.ok(ids.includes("CW006"));
-  assert.ok(ids.includes("CW008"));
-  assert.ok(ids.includes("CW009"));
-  assert.match(formatted, /CodeWard Review/);
+  assert.ok(ids.includes("QM004"));
+  assert.ok(ids.includes("QM006"));
+  assert.ok(ids.includes("QM008"));
+  assert.ok(ids.includes("QM009"));
+  assert.match(formatted, /QAMap Review/);
   assert.match(formatted, /New findings: 4/);
   assert.match(formatted, /package.json/);
-  assert.match(markdown, /# CodeWard Review/);
+  assert.match(markdown, /# QAMap Review/);
   assert.match(markdown, /## Findings/);
-  assert.match(markdown, /`CW009`/);
+  assert.match(markdown, /`QM009`/);
 });
 
 test("reviewProject reports risky files changed by a branch", async () => {
@@ -5356,13 +5356,13 @@ test("reviewProject reports risky files changed by a branch", async () => {
   assert.equal(review.newFindings.length, 0);
   assert.equal(review.changedRiskyFindings.length, 1);
   assert.equal(review.changedRiskyCounts.high, 1);
-  assert.equal(review.changedRiskyFindings[0].id, "CW008");
+  assert.equal(review.changedRiskyFindings[0].id, "QM008");
   assert.equal(review.changedRiskyFindings[0].file, ".env");
   assert.equal(review.changedRiskyFindings[0].status, "M");
   assert.match(formatted, /Changed risky files: 1/);
   assert.match(formatted, /Existing finding on base/);
   assert.match(markdown, /## Changed Risky Files/);
-  assert.match(markdown, /`CW008`/);
+  assert.match(markdown, /`QM008`/);
   await assert.rejects(
     () =>
       execFileAsync(process.execPath, [
@@ -5410,11 +5410,11 @@ test("github-action command writes PR artifacts before failing", async () => {
   await git(root, ["add", ".env"]);
   await git(root, ["commit", "-m", "change env"]);
 
-  const reportFile = path.join(root, "codeward-report.md");
-  const commentFile = path.join(root, "codeward-pr-comment.md");
-  const testPlanFile = path.join(root, "codeward-test-plan.md");
-  const evalFile = path.join(root, "codeward-eval.md");
-  const summaryFile = path.join(root, "codeward-step-summary.md");
+  const reportFile = path.join(root, "qamap-report.md");
+  const commentFile = path.join(root, "qamap-pr-comment.md");
+  const testPlanFile = path.join(root, "qamap-test-plan.md");
+  const evalFile = path.join(root, "qamap-eval.md");
+  const summaryFile = path.join(root, "qamap-step-summary.md");
 
   await assert.rejects(
     () =>
@@ -5459,17 +5459,17 @@ test("github-action command writes PR artifacts before failing", async () => {
   const evaluation = await readFile(evalFile, "utf8");
   const summary = await readFile(summaryFile, "utf8");
 
-  assert.match(report, /# CodeWard Review/);
+  assert.match(report, /# QAMap Review/);
   assert.match(report, /## Changed Risky Files/);
-  assert.match(report, /# CodeWard Test Plan/);
-  assert.match(report, /# CodeWard Eval/);
-  assert.match(comment, /<!-- codeward-pr-comment -->/);
-  assert.match(comment, /Generated by CodeWard/);
-  assert.match(comment, /# CodeWard Test Plan/);
-  assert.match(comment, /# CodeWard Eval/);
-  assert.match(testPlan, /# CodeWard Test Plan/);
-  assert.match(evaluation, /# CodeWard Eval/);
-  assert.match(summary, /# CodeWard Review/);
+  assert.match(report, /# QAMap Test Plan/);
+  assert.match(report, /# QAMap Eval/);
+  assert.match(comment, /<!-- qamap-pr-comment -->/);
+  assert.match(comment, /Generated by QAMap/);
+  assert.match(comment, /# QAMap Test Plan/);
+  assert.match(comment, /# QAMap Eval/);
+  assert.match(testPlan, /# QAMap Test Plan/);
+  assert.match(evaluation, /# QAMap Eval/);
+  assert.match(summary, /# QAMap Review/);
 });
 
 test("reviewProject uses workspace root guardrails for package branches", async () => {
@@ -5513,11 +5513,11 @@ test("reviewProject uses workspace root guardrails for package branches", async 
   });
   const ids = review.newFindings.map((finding) => finding.id);
 
-  assert.ok(ids.includes("CW006"));
-  assert.ok(ids.includes("CW008"));
-  assert.equal(ids.includes("CW001"), false);
-  assert.equal(ids.includes("CW007"), false);
-  assert.equal(ids.includes("CW011"), false);
+  assert.ok(ids.includes("QM006"));
+  assert.ok(ids.includes("QM008"));
+  assert.equal(ids.includes("QM001"), false);
+  assert.equal(ids.includes("QM007"), false);
+  assert.equal(ids.includes("QM011"), false);
   assert.deepEqual(
     review.changedFiles.map((file) => file.path).sort(),
     [".env.local", "package.json"],
@@ -5546,13 +5546,13 @@ test("generateAgentContext reflects npm scripts and repository boundaries", asyn
 });
 
 async function makeTempRepo() {
-  return mkdtemp(path.join(tmpdir(), "codeward-test-"));
+  return mkdtemp(path.join(tmpdir(), "qamap-test-"));
 }
 
 async function initGitRepo(root) {
   await git(root, ["init"]);
-  await git(root, ["config", "user.email", "codeward@example.invalid"]);
-  await git(root, ["config", "user.name", "CodeWard Test"]);
+  await git(root, ["config", "user.email", "qamap@example.invalid"]);
+  await git(root, ["config", "user.name", "QAMap Test"]);
 }
 
 async function writeWorkspaceGuardrails(root) {

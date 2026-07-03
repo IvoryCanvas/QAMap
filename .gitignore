@@ -3,8 +3,8 @@ dist/
 coverage/
 .DS_Store
 *.log
-CODEWARD_REPORT.md
-codeward.sarif
+QAMAP_REPORT.md
+qamap.sarif
 *.sarif
 .env
 .env.*
