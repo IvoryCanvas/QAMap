@@ -173,7 +173,7 @@ Last verified on 2026-07-03 on PR #71 after adding the manifest-free `codeward q
 | `pnpm scan` | 0 findings. |
 | `git diff --check` | Passed. |
 | `pnpm pack --dry-run` | Passed; tarball includes `dist`, `docs`, `docs/assets/codeward-30s-demo.gif`, `schema`, `README.md`, `CHANGELOG.md`, `LICENSE`, and `package.json`. |
-| Coverage threshold | Passed the 80% line, branch, and function gates; latest run reported 85.30% line, 81.98% branch, and 94.26% function coverage. |
+| Coverage threshold | Passed the 80% line, branch, and function gates; latest run reported 85.27% line, 81.59% branch, and 94.26% function coverage. |
 | `pnpm run release:check` | Passed as the single local release gate for this PR state, including `codeward qa` coverage and `dist/qa.*` pack output. |
 | `npm publish --dry-run --access public` | Passed for `@ivorycanvas/codeward@0.2.0`; tarball includes 93 files, `schema/codeward-manifest.schema.json`, `docs/manifest.md`, `docs/quickstart-demo.md`, and the demo GIF. |
 
