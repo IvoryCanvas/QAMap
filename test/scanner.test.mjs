@@ -4323,6 +4323,140 @@ test("manifest bootstrap produces concrete PR E2E draft from repo QA memory", as
   assert.match(spec, /Checkout Purchase handles failed, empty, or unauthorized responses/);
 });
 
+test("manifest check hints bind selectors values and changed API observation in Playwright drafts", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, ".codeward"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/checkout"), { recursive: true });
+  await mkdir(path.join(root, "src/app/api/checkout"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        dev: "vite --host 127.0.0.1",
+        "test:e2e": "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        vite: "^7.0.0",
+        react: "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "playwright.config.ts"), "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await writeFile(
+    path.join(root, ".codeward/manifest.yaml"),
+    [
+      "version: 1",
+      "domains:",
+      "  - id: checkout",
+      "    name: Checkout",
+      "    paths:",
+      "      - src/pages/checkout/**",
+      "      - src/app/api/checkout/**",
+      "    criticality: high",
+      "    source:",
+      "      kind: declared",
+      "      confidence: high",
+      "      from:",
+      "        - product-qa",
+      "flows:",
+      "  - id: checkout-coupon",
+      "    domain: checkout",
+      "    name: Checkout Coupon",
+      "    entry:",
+      "      route: /checkout",
+      "      source: declared",
+      "    runner: playwright",
+      "    anchors:",
+      "      - kind: route",
+      "        path: src/pages/checkout/index.tsx",
+      "        route: /checkout",
+      "        source: declared",
+      "        confidence: high",
+      "      - kind: api",
+      "        path: src/app/api/checkout/route.ts",
+      "        route: /api/checkout",
+      "        source: declared",
+      "        confidence: high",
+      "    checks:",
+      "      - id: enter-coupon",
+      "        title: Fill [data-testid=coupon-input] with WELCOME10",
+      "        type: success",
+      "        selector: \"[data-testid=coupon-input]\"",
+      "        value: WELCOME10",
+      "      - id: apply-coupon",
+      "        title: Click [data-testid=apply-coupon]",
+      "        type: success",
+      "      - id: coupon-error",
+      "        title: Show [data-testid=coupon-error] is visible",
+      "        type: failure",
+      "    source:",
+      "      kind: declared",
+      "      confidence: high",
+      "      from:",
+      "        - product-qa",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  async function applyCoupon() {",
+      "    await fetch('/api/checkout', { method: 'POST' });",
+      "  }",
+      "  return <main>",
+      "    <input data-testid=\"coupon-input\" aria-label=\"Coupon code\" />",
+      "    <button data-testid=\"apply-coupon\" onClick={applyCoupon}>Apply coupon</button>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, "src/app/api/checkout/route.ts"), "export async function POST() { return Response.json({ ok: true }); }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base checkout coupon"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/coupon-error"]);
+  await writeFile(
+    path.join(root, "src/pages/checkout/index.tsx"),
+    [
+      "export default function CheckoutPage() {",
+      "  async function applyCoupon() {",
+      "    await fetch('/api/checkout', { method: 'POST' });",
+      "  }",
+      "  return <main>",
+      "    <input data-testid=\"coupon-input\" aria-label=\"Coupon code\" />",
+      "    <button data-testid=\"apply-coupon\" onClick={applyCoupon}>Apply coupon</button>",
+      "    <p data-testid=\"coupon-error\">Coupon expired</p>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, "src/app/api/checkout/route.ts"), "export async function POST() { return Response.json({ ok: false }, { status: 422 }); }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add coupon failure path"]);
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const draftFile = draft.files.find((file) => file.flowTitle === "Checkout Coupon");
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+
+  assert.match(spec, /page\.getByTestId\("coupon-input"\)\.fill\("WELCOME10"\)/);
+  assert.match(spec, /page\.getByTestId\("apply-coupon"\)\.click\(\)/);
+  assert.match(spec, /expect\(page\.getByTestId\("coupon-error"\)\)\.toBeVisible\(\)/);
+  assert.match(spec, /changedApiEndpointPatterns/);
+  assert.match(spec, /"\*\*\/api\/checkout"/);
+  assert.doesNotMatch(spec, /123456/);
+  assert.doesNotMatch(spec, /route\.fulfill/);
+  assert.doesNotMatch(spec, /mockApiResponses/);
+});
+
 test("qa command emits a PR comment draft without requiring a manifest", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);

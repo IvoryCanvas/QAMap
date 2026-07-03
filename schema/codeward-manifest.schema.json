@@ -256,6 +256,26 @@
         },
         "type": {
           "$ref": "#/$defs/checkType"
+        },
+        "selector": {
+          "type": "string",
+          "description": "Optional stable selector hint used when CodeWard turns this check into a draft step, such as [data-testid=coupon-input] or role=button:Apply.",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string",
+          "description": "Optional sample value for input-like checks, such as WELCOME10 or qa@example.com.",
+          "minLength": 1
+        },
+        "steps": {
+          "type": "array",
+          "description": "Optional concrete human-readable steps for this check. CodeWard uses them before falling back to title parsing.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": []
         }
       }
     },

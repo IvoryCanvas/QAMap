@@ -395,6 +395,20 @@ for (const [urlPattern, response] of Object.entries(mockApiResponses)) {
 
 This is useful for PRs where the UI can be built against mockdata before the server implementation is available. The generated file should still report fixture readiness as missing or partial until a reviewer replaces the sample response with domain-correct success, empty, unauthorized, timeout, or server-error fixtures.
 
+When the PR changes the endpoint implementation itself, CodeWard should not hide that contract behind a synthetic response. In that case the Playwright draft records the endpoint as an observed API pattern instead of adding a response mock:
+
+```ts
+const changedApiEndpointPatterns = [
+  "**/api/checkout",
+];
+const observedChangedApiResponses: Array<{ url: string; status: number }> = [];
+page.on("response", (response) => {
+  if (changedApiEndpointPatterns.some((pattern) => response.url().includes(pattern.replace(/^\*\*/, "")))) {
+    observedChangedApiResponses.push({ url: response.url(), status: response.status() });
+  }
+});
+```
+
 ## Monorepo Package
 
 When run at the workspace root, CodeWard should identify changed package targets before asking the maintainer to choose a final runner:

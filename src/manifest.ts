@@ -69,6 +69,9 @@ export interface VerificationManifestCheck {
   id: string;
   title: string;
   type: VerificationManifestCheckType;
+  selector?: string;
+  value?: string;
+  steps?: string[];
 }
 
 export interface VerificationManifestFlow {
@@ -159,6 +162,9 @@ export interface VerificationManifestMatch {
   entryRoute?: string;
   checks?: string[];
   checkType?: VerificationManifestCheckType;
+  checkSelector?: string;
+  checkValue?: string;
+  checkSteps?: string[];
 }
 
 export type VerificationManifestValidationSeverity = "info" | "warning" | "error";
@@ -368,6 +374,9 @@ export function matchVerificationManifest(
         entryRoute: flow.entry?.route,
         checks: [check.title],
         checkType: check.type,
+        checkSelector: check.selector,
+        checkValue: check.value,
+        checkSteps: check.steps,
       });
     }
   }
@@ -2037,6 +2046,9 @@ function normalizeCheck(
     id: readRequiredString(record, "id", manifestPath, checkIndex),
     title: readOptionalString(record, "title") ?? readRequiredString(record, "id", manifestPath, checkIndex),
     type: readCheckType(readOptionalString(record, "type") ?? "success", manifestPath, checkIndex),
+    selector: readOptionalString(record, "selector"),
+    value: readOptionalString(record, "value"),
+    steps: readStringArray(record, "steps"),
   };
 }
 

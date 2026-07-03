@@ -4247,6 +4247,7 @@ type DraftE2eFlow = E2eFlow & {
   domainScenario?: DomainScenarioSuggestion;
   coreFlow?: MatchedCoreFlow;
   manifestMatch?: VerificationManifestMatch;
+  manifestCheckMatches?: VerificationManifestMatch[];
 };
 
 async function buildFlows(
@@ -4876,7 +4877,10 @@ async function inferFlowFixtureReadiness(
   }
 
   const apiSignals = await findApiDependencySignals(root, files, kind, setupHints);
-  const apiEndpoints = await findApiEndpointHints(root, uniqueStrings([...files, ...apiSignals]));
+  const apiEndpoints = uniqueStrings([
+    ...(await findApiEndpointHints(root, uniqueStrings([...files, ...apiSignals]))),
+    ...context.changedBackendFiles.flatMap(apiEndpointFromBackendFile),
+  ]).slice(0, maxFilesPerFlow);
   const requiresMock = apiSignals.length > 0 || setupHints.some((hint) => hint.kind === "network" || hint.kind === "payment");
   if (!requiresMock) {
     return {
@@ -5032,6 +5036,34 @@ function normalizeApiEndpointHint(value: string | undefined): string | undefined
     return undefined;
   }
   return endpoint;
+}
+
+function apiEndpointFromBackendFile(file: string): string[] {
+  const normalized = toPosixPath(file).replace(/\.(?:[cm]?[jt]sx?|py|go|rs|kt|java|rb|php)$/i, "");
+  const segments = normalized.split("/").filter(Boolean);
+  const appIndex = segments.findIndex((segment) => segment === "app");
+  if (appIndex >= 0 && segments[appIndex + 1] === "api") {
+    return [`/api/${routeSegmentsFromFileParts(segments.slice(appIndex + 2)).join("/")}`.replace(/\/+$/g, "") || "/api"];
+  }
+  const pagesIndex = segments.findIndex((segment) => segment === "pages");
+  if (pagesIndex >= 0 && segments[pagesIndex + 1] === "api") {
+    return [`/api/${routeSegmentsFromFileParts(segments.slice(pagesIndex + 2)).join("/")}`.replace(/\/+$/g, "") || "/api"];
+  }
+  const apiIndex = segments.findIndex((segment) => segment === "api" || segment === "apis");
+  if (apiIndex >= 0) {
+    const routeSegments = routeSegmentsFromFileParts(segments.slice(apiIndex + 1));
+    if (routeSegments.length > 0) {
+      return [`/api/${routeSegments.join("/")}`];
+    }
+  }
+  return [];
+}
+
+function routeSegmentsFromFileParts(parts: string[]): string[] {
+  return parts
+    .filter((segment) => !/^(?:route|handler|controller|index)$/.test(segment))
+    .map((segment) => segment.replace(/^\[(\.\.\.)?(.+)\]$/, ":$2"))
+    .filter(Boolean);
 }
 
 function isBackendImplementationFile(file: string): boolean {
@@ -6059,6 +6091,10 @@ function mergeDraftFlows(left: DraftE2eFlow, right: DraftE2eFlow): DraftE2eFlow 
     missingTestability: uniqueStrings([...left.missingTestability, ...right.missingTestability]),
     draftSource: preferredDraftSource(left.draftSource, right.draftSource),
     manifestMatch: left.manifestMatch ?? right.manifestMatch,
+    manifestCheckMatches: uniqueManifestCheckMatches([
+      ...(left.manifestCheckMatches ?? []),
+      ...(right.manifestCheckMatches ?? []),
+    ]),
     domainScenario: left.domainScenario ?? right.domainScenario,
     coreFlow: left.coreFlow ?? right.coreFlow,
   };
@@ -6066,6 +6102,20 @@ function mergeDraftFlows(left: DraftE2eFlow, right: DraftE2eFlow): DraftE2eFlow 
     ...mergedFlow,
     languageBrief: buildFlowLanguageBrief(mergedFlow),
   };
+}
+
+function uniqueManifestCheckMatches(matches: VerificationManifestMatch[]): VerificationManifestMatch[] {
+  const seen = new Set<string>();
+  const unique: VerificationManifestMatch[] = [];
+  for (const match of matches) {
+    const key = `${match.id}:${match.name}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(match);
+  }
+  return unique;
 }
 
 function preferredDraftSource(left: DraftFlowSource | undefined, right: DraftFlowSource | undefined): DraftFlowSource | undefined {
@@ -6142,6 +6192,7 @@ async function buildManifestDraftFlow(
     missingTestability: await findFlowTestabilityGaps(plan.root, files, runner),
     draftSource: "verification-manifest",
     manifestMatch: match,
+    manifestCheckMatches: relatedChecks,
     coreFlow: coreFlowForManifestMatch(plan, match),
   };
   return {
@@ -6175,7 +6226,14 @@ function manifestStepsForMatch(
     name: checkTitle,
     checks: [checkTitle],
   }));
-  return uniqueStrings(checks.map(manifestStepForCheckMatch));
+  return uniqueStrings(checks.flatMap(manifestStepsForCheckMatch));
+}
+
+function manifestStepsForCheckMatch(match: VerificationManifestMatch): string[] {
+  if (match.checkSteps && match.checkSteps.length > 0) {
+    return match.checkSteps.map((step) => withTerminalPeriod(step.trim())).filter(Boolean);
+  }
+  return [manifestStepForCheckMatch(match)];
 }
 
 function manifestStepForCheckMatch(match: VerificationManifestMatch): string {
@@ -7057,10 +7115,13 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
     `await page.goto(${routeDraft.expression});`,
   ]);
   for (const step of draftExecutableSteps(flow, "playwright")) {
-    const selector = takeSelectorForStep(selectorQueue, step);
-    const body = selector
-      ? playwrightActionForStep(selector, playwrightLocator(selector), step)
-      : playwrightFallbackActionForStep(step);
+    const manifestCheck = manifestCheckForDraftStep(flow, step);
+    const manifestBody = manifestCheck ? playwrightActionForManifestCheck(manifestCheck, step) : undefined;
+    const selector = manifestBody ? undefined : takeSelectorForStep(selectorQueue, step);
+    const body = manifestBody ??
+      (selector
+        ? playwrightActionForStep(selector, playwrightLocator(selector), step)
+        : playwrightFallbackActionForStep(step));
     appendPlaywrightTestStep(lines, step, body);
   }
   appendDomainScenarioComments(lines, flow, "  //");
@@ -7712,9 +7773,24 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
   if (flow.fixtureReadiness.status === "not-needed" || flow.fixtureReadiness.apiEndpoints.length === 0) {
     return;
   }
+  const changedEndpointHints = uniqueStrings(flow.fixtureReadiness.backendSignals.flatMap(apiEndpointFromBackendFile));
+  const observedEndpoints = changedEndpointHints.length > 0
+    ? changedEndpointHints
+    : flow.fixtureReadiness.backendSignals.length > 0
+    ? flow.fixtureReadiness.apiEndpoints
+    : [];
+  if (observedEndpoints.length > 0) {
+    appendPlaywrightApiObservationScaffold(lines, observedEndpoints);
+  }
+  const mockableEndpoints = flow.fixtureReadiness.backendSignals.length > 0
+    ? flow.fixtureReadiness.apiEndpoints.filter((endpoint) => !endpointMatchesAny(endpoint, observedEndpoints))
+    : flow.fixtureReadiness.apiEndpoints;
+  if (mockableEndpoints.length === 0) {
+    return;
+  }
   lines.push("");
   lines.push("  const mockApiResponses = {");
-  for (const endpoint of flow.fixtureReadiness.apiEndpoints.slice(0, maxFilesPerFlow)) {
+  for (const endpoint of mockableEndpoints.slice(0, maxFilesPerFlow)) {
     lines.push(`    "${quoteJs(playwrightMockRoutePattern(endpoint))}": {`);
     lines.push("      status: 200,");
     lines.push("      body: {");
@@ -7734,6 +7810,32 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
   lines.push("      });");
   lines.push("    });");
   lines.push("  }");
+}
+
+function appendPlaywrightApiObservationScaffold(lines: string[], endpoints: string[]): void {
+  lines.push("");
+  lines.push("  const changedApiEndpointPatterns = [");
+  for (const endpoint of endpoints.slice(0, maxFilesPerFlow)) {
+    lines.push(`    "${quoteJs(playwrightMockRoutePattern(endpoint))}",`);
+  }
+  lines.push("  ];");
+  lines.push("  const observedChangedApiResponses: Array<{ url: string; status: number }> = [];");
+  lines.push("  page.on(\"response\", (response) => {");
+  lines.push("    if (changedApiEndpointPatterns.some((pattern) => response.url().includes(pattern.replace(/^\\*\\*/, \"\")))) {");
+  lines.push("      observedChangedApiResponses.push({ url: response.url(), status: response.status() });");
+  lines.push("    }");
+  lines.push("  });");
+  lines.push("  // Changed API endpoints are observed, not intercepted with synthetic responses, so the draft does not hide the contract under test.");
+}
+
+function endpointMatchesAny(endpoint: string, candidates: string[]): boolean {
+  const normalizedEndpoint = endpoint.replace(/^\*\*/, "");
+  return candidates.some((candidate) => {
+    const normalizedCandidate = candidate.replace(/^\*\*/, "");
+    return normalizedEndpoint === normalizedCandidate ||
+      normalizedEndpoint.endsWith(normalizedCandidate) ||
+      normalizedCandidate.endsWith(normalizedEndpoint);
+  });
 }
 
 function playwrightMockRoutePattern(endpoint: string): string {
@@ -8260,6 +8362,159 @@ function playwrightActionForStep(selector: E2eSelector, locator: string, step: s
   }
   body.push(`await ${locator}.click();`);
   return body;
+}
+
+interface ManifestSelectorHint {
+  locator: string;
+  selectorText: string;
+}
+
+function manifestCheckForDraftStep(flow: E2eFlow, step: string): VerificationManifestMatch | undefined {
+  const checks = (flow as DraftE2eFlow).manifestCheckMatches ?? [];
+  const stepKey = normalizeManifestStepKey(step);
+  return checks.find((check) =>
+    manifestStepsForCheckMatch(check).some((candidate) => normalizeManifestStepKey(candidate) === stepKey) ||
+    normalizeManifestStepKey(check.name) === stepKey ||
+    stepKey.includes(normalizeManifestStepKey(check.name)),
+  );
+}
+
+function playwrightActionForManifestCheck(match: VerificationManifestMatch, step: string): string[] | undefined {
+  const instruction = manifestDraftInstruction(match, step);
+  const body = [`// Step intent: ${step}`];
+  if (instruction.route && isEntrypointPreparationStep(step)) {
+    body.push(`await page.goto("${quoteJs(instruction.route)}");`);
+    return body;
+  }
+  if (!instruction.selector) {
+    return undefined;
+  }
+  if (instruction.action === "fill") {
+    body.push(`await ${instruction.selector.locator}.fill("${quoteJs(instruction.value ?? sampleInputForStepOrSelector(step, instruction.selector.selectorText))}");`);
+    return body;
+  }
+  if (instruction.action === "assert") {
+    body.push(`await expect(${instruction.selector.locator}).toBeVisible();`);
+    return body;
+  }
+  if (instruction.action === "click") {
+    body.push(`await ${instruction.selector.locator}.click();`);
+    return body;
+  }
+  return undefined;
+}
+
+function manifestDraftInstruction(
+  match: VerificationManifestMatch,
+  step: string,
+): {
+  action?: "assert" | "click" | "fill";
+  route?: string;
+  selector?: ManifestSelectorHint;
+  value?: string;
+} {
+  const text = [step, match.name, ...(match.checks ?? [])].join(" ");
+  const selector = selectorHintFromManifestText(match.checkSelector) ?? selectorHintFromManifestText(text);
+  const value = match.checkValue ?? sampleValueFromManifestText(text);
+  const route = routeFromManifestText(text);
+  const action = manifestActionForStep(step, match, selector, value);
+  return { action, route, selector, value };
+}
+
+function manifestActionForStep(
+  step: string,
+  match: VerificationManifestMatch,
+  selector: ManifestSelectorHint | undefined,
+  value: string | undefined,
+): "assert" | "click" | "fill" | undefined {
+  if (!selector) {
+    return undefined;
+  }
+  if (value || isInputStep(step)) {
+    return "fill";
+  }
+  if (
+    isAssertionStep(step) ||
+    match.checkType === "failure" ||
+    match.checkType === "visual" ||
+    /^(?:show|display|render|verify|assert|confirm)\b/i.test(stripTerminalPunctuation(step))
+  ) {
+    return "assert";
+  }
+  if (isInteractionStep(step) || canUsePrimarySelector(step)) {
+    return "click";
+  }
+  return undefined;
+}
+
+function selectorHintFromManifestText(value: string | undefined): ManifestSelectorHint | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const text = value.trim();
+  const attribute = text.match(/\[\s*(data-testid|data-test|testid|testID|aria-label|placeholder)\s*=\s*["']?([^"'\]]+)["']?\s*\]/i) ??
+    text.match(/\b(data-testid|data-test|testid|testID|aria-label|placeholder)\s*[:=]\s*["']?([^"',\]\s]+(?: [^"',\]]+)*)["']?/i);
+  if (attribute) {
+    return selectorHintFromAttribute(attribute[1], attribute[2]);
+  }
+  const role = text.match(/\brole\s*[:=]\s*(button|link)\s*[:=]\s*["']?([^"',\]\s]+(?: [^"',\]]+)*)["']?/i);
+  if (role) {
+    const roleName = role[1].toLowerCase();
+    const label = stripTerminalPunctuation(role[2].trim());
+    return {
+      locator: `page.getByRole("${quoteJs(roleName)}", { name: "${quoteJs(label)}" })`,
+      selectorText: label,
+    };
+  }
+  return undefined;
+}
+
+function selectorHintFromAttribute(attributeName: string | undefined, rawValue: string | undefined): ManifestSelectorHint | undefined {
+  const value = stripTerminalPunctuation(rawValue?.trim() ?? "");
+  if (!value) {
+    return undefined;
+  }
+  const normalizedName = attributeName?.toLowerCase();
+  if (normalizedName === "data-testid" || normalizedName === "data-test" || normalizedName === "testid") {
+    return { locator: `page.getByTestId("${quoteJs(value)}")`, selectorText: value };
+  }
+  if (normalizedName === "aria-label") {
+    return { locator: `page.getByLabel("${quoteJs(value)}")`, selectorText: value };
+  }
+  if (normalizedName === "placeholder") {
+    return { locator: `page.getByPlaceholder("${quoteJs(value)}")`, selectorText: value };
+  }
+  return undefined;
+}
+
+function sampleValueFromManifestText(value: string): string | undefined {
+  const text = value.replace(/\[[^\]]+\]/g, " ");
+  const url = text.match(/\bhttps?:\/\/[^\s"'`)]+/i)?.[0];
+  if (url) {
+    return stripTerminalPunctuation(url);
+  }
+  const quoted = text.match(/\b(?:with|to|as|value|enter|input|fill|type)\s+(["'`])([^"'`]+)\1/i);
+  if (quoted?.[2]) {
+    return quoted[2].trim();
+  }
+  const bare = text.match(/\b(?:with|to|as|value|enter|input|fill|type)\s+([A-Z0-9][A-Z0-9_-]{2,})\b/);
+  return bare?.[1];
+}
+
+function routeFromManifestText(value: string): string | undefined {
+  const text = value.replace(/\bhttps?:\/\/\S+/gi, " ");
+  const route = text.match(/(?:^|[\s(])((?!\/\/)\/[A-Za-z0-9._~:/?#[\]@!$&'()*+,;=%-]+)/)?.[1];
+  if (!route) {
+    return undefined;
+  }
+  return normalizeEntrypointRoute(stripTerminalPunctuation(route));
+}
+
+function normalizeManifestStepKey(value: string): string {
+  return stripTerminalPunctuation(value)
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function playwrightFallbackActionForStep(step: string): string[] {

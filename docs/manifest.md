@@ -237,9 +237,11 @@ flows:
       - id: happy-path
         title: Submit content URL successfully
         type: success
+        selector: "[data-testid=content-url-submit]"
       - id: invalid-input
         title: Show validation error for invalid content URL
         type: failure
+        selector: "[data-testid=content-url-error]"
     source:
       kind: declared
       confidence: high
@@ -261,6 +263,9 @@ flows:
 | `flows[].runner` | Preferred verification runner: `playwright`, `maestro`, or `manual`. |
 | `flows[].anchors` | Matchable route, component, file, API, or test anchors. |
 | `flows[].checks` | Required verification points that should shape E2E drafts. |
+| `flows[].checks[].selector` | Optional stable selector hint for this check, such as `[data-testid=coupon-input]`. |
+| `flows[].checks[].value` | Optional input value for this check, such as `WELCOME10` or `qa@example.com`. |
+| `flows[].checks[].steps` | Optional concrete steps for this check. These are used before the title parser. |
 | `context.instructionFiles` | Advisory repo-local context sources used while bootstrapping the manifest. |
 | `context.instructionFiles[].roles` | Advisory role classification for a context source, such as `verification-rubric`, `workflow-lifecycle`, `agent-skill`, or `harness-config`. |
 | `context.validationCommands` | Validation commands inferred from context documents. |
@@ -318,6 +323,7 @@ When a matched manifest flow has an entry route and checks, `codeward e2e draft`
 - `source: verification-manifest` in JSON output
 - the manifest route as a Playwright entrypoint when supported
 - manifest checks as draft steps and coverage notes
+- check-level selector/value/steps hints as concrete draft actions when available
 - manifest evidence comments inside generated files
 - promotion guidance that treats strong manifest matches as commit candidates
 
