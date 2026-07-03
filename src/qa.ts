@@ -99,6 +99,49 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   };
 }
 
+const agentListLimit = 6;
+
+function truncateForAgent(value: string, maxLength = 140): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
+}
+
+export function formatAgentQaDraft(result: QaDraftResult): string {
+  const requiredEvidence = result.missingEvidence
+    .filter((item) => item.priority === "required")
+    .slice(0, 8)
+    .map((item) => ({ flow: truncateForAgent(item.flowTitle, 80), kind: item.kind, title: truncateForAgent(item.title) }));
+  const requiredBootstrap = result.bootstrap.steps
+    .filter((step) => step.status === "required")
+    .slice(0, 3)
+    .map((step) => ({ title: truncateForAgent(step.title, 80), action: truncateForAgent(step.action) }));
+  const summary = {
+    schema: { name: "qamap.qa", version: 1 },
+    base: result.base,
+    head: result.head,
+    project: result.project,
+    runner: result.runner,
+    manifest: result.manifestPath ?? null,
+    readiness: { score: result.readiness.score, level: result.readiness.level },
+    testSuite: { present: result.testSuite.hasTestSuite, files: result.testSuite.testFileCount },
+    firstDraftCommand: result.testSuite.hasTestSuite ? undefined : firstDraftCreateCommand(result),
+    flows: result.flows.slice(0, agentListLimit).map((flow) => ({
+      title: truncateForAgent(flow.title, 80),
+      source: flow.source,
+      draft: flow.draftPath,
+      runnable: flow.runnableStatus,
+      entry: flow.entrypointHints[0],
+      steps: flow.draftSteps.slice(0, agentListLimit).map((step) => truncateForAgent(step)),
+      selectors: flow.selectorHints.slice(0, 5).map((selector) => truncateForAgent(selector, 100)),
+    })),
+    requiredEvidence,
+    recommendedEvidenceCount: result.missingEvidence.filter((item) => item.priority === "recommended").length,
+    requiredBootstrap,
+    prChecklist: result.prChecklist.slice(0, agentListLimit).map((item) => truncateForAgent(item)),
+    commands: result.suggestedCommands.slice(0, 4),
+  };
+  return `${JSON.stringify(summary)}\n`;
+}
+
 export function formatMarkdownQaDraft(result: QaDraftResult): string {
   const lines: string[] = [];
   lines.push("# QAMap QA Draft");

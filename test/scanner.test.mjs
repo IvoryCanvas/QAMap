@@ -21,6 +21,7 @@ import {
   formatMarkdownE2eDraft,
   formatMarkdownE2ePlan,
   formatMarkdownE2eSetup,
+  formatAgentQaDraft,
   formatMarkdownQaDraft,
   formatMarkdownReviewReport,
   formatMarkdownTestPlan,
@@ -4537,6 +4538,33 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   ]);
   assert.match(cliOutput.stdout, /QAMap QA Draft/);
   assert.match(cliOutput.stdout, /PR Comment Draft/);
+
+  const agentOutput = formatAgentQaDraft(qa);
+  const agentSummary = JSON.parse(agentOutput);
+  assert.deepEqual(agentSummary.schema, { name: "qamap.qa", version: 1 });
+  assert.equal(agentSummary.manifest, null);
+  assert.equal(agentSummary.flows.length > 0, true);
+  assert.equal(typeof agentSummary.readiness.score, "number");
+  assert.equal(Array.isArray(agentSummary.requiredEvidence), true);
+  assert.equal(Array.isArray(agentSummary.prChecklist), true);
+  assert.equal(agentOutput.trim().includes("\n"), false);
+  assert.equal(agentOutput.length < 4096, true);
+
+  const agentCliOutput = await execFileAsync(process.execPath, [
+    cliPath,
+    "qa",
+    root,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+    "--runner",
+    "playwright",
+    "--format",
+    "agent",
+  ]);
+  const agentCliSummary = JSON.parse(agentCliOutput.stdout);
+  assert.equal(agentCliSummary.schema.name, "qamap.qa");
 });
 
 test("package metadata includes the portable PR QA skill template", async () => {

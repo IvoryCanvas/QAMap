@@ -38,7 +38,7 @@ import {
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
-import { formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+import { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
 import { isAtLeastSeverity, isSeverity } from "./severity.js";
@@ -50,7 +50,7 @@ import { VERSION } from "./version.js";
 import type { E2eRunnerName } from "./e2e.js";
 import type { GitHubActionMode } from "./github.js";
 
-type OutputFormat = "text" | "json" | "markdown" | "sarif";
+type OutputFormat = "text" | "json" | "markdown" | "sarif" | "agent";
 
 interface ParsedOptions {
   path: string;
@@ -718,6 +718,9 @@ function formatOutput(result: Awaited<ReturnType<typeof scanProject>>, format: O
   if (format === "sarif") {
     return formatSarifReport(result);
   }
+  if (format !== "text") {
+    throw new Error(`Scan supports text, json, markdown, or sarif output, not ${format}`);
+  }
   return formatTextReport(result);
 }
 
@@ -791,22 +794,25 @@ function formatQaDraftOutput(result: Awaited<ReturnType<typeof generateQaDraft>>
   if (format === "json") {
     return `${JSON.stringify(result, null, 2)}\n`;
   }
+  if (format === "agent") {
+    return formatAgentQaDraft(result);
+  }
   if (format !== "markdown" && format !== "text") {
-    throw new Error(`QA draft supports text, json, or markdown output, not ${format}`);
+    throw new Error(`QA draft supports text, json, markdown, or agent output, not ${format}`);
   }
   return formatMarkdownQaDraft(result);
 }
 
 function manifestSuggestionFormat(format: OutputFormat, command: "domains" | "flows"): "text" | "json" | "markdown" {
-  if (format === "sarif") {
-    throw new Error(`${command} suggest supports text, json, or markdown output, not sarif`);
+  if (format === "sarif" || format === "agent") {
+    throw new Error(`${command} suggest supports text, json, or markdown output, not ${format}`);
   }
   return format;
 }
 
 function manifestCommandFormat(format: OutputFormat): "text" | "json" | "markdown" {
-  if (format === "sarif") {
-    throw new Error("manifest supports text, json, or markdown output, not sarif");
+  if (format === "sarif" || format === "agent") {
+    throw new Error(`manifest supports text, json, or markdown output, not ${format}`);
   }
   return format;
 }
@@ -852,7 +858,7 @@ async function printOrWrite(output: string, outputPath?: string): Promise<void> 
 }
 
 function isOutputFormat(value: string): value is OutputFormat {
-  return value === "text" || value === "json" || value === "markdown" || value === "sarif";
+  return value === "text" || value === "json" || value === "markdown" || value === "sarif" || value === "agent";
 }
 
 function isGitHubActionMode(value: string): value is GitHubActionMode {
@@ -905,6 +911,7 @@ Severities:
 
 Formats:
   text, json, markdown, sarif
+  agent (qa only: compact machine-readable summary for coding agents)
 
 Examples:
   qamap scan .

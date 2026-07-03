@@ -12,17 +12,19 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
 1. Detect the comparison base.
    - Prefer the target PR base branch when known.
    - Otherwise use `origin/main`, then `origin/master`, then the repository default branch.
-2. Run QAMap from the repository root:
+2. Run QAMap from the repository root. Prefer the compact agent format — it carries the same decision content as the markdown report in a fraction of the tokens:
 
    ```sh
-   pnpm dlx qamap qa . --base <base> --head HEAD
+   pnpm dlx qamap qa . --base <base> --head HEAD --format agent
    ```
 
    For an installed project, prefer:
 
    ```sh
-   pnpm exec qamap qa . --base <base> --head HEAD
+   pnpm exec qamap qa . --base <base> --head HEAD --format agent
    ```
+
+   Drop `--format agent` when a human will read the output directly; the default markdown report is written for people.
 
 3. If the repository is a monorepo and the changed files are clearly inside one package, run a scoped pass too:
 
@@ -37,7 +39,13 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
    ```
 
    Use the exact create command from the output when it differs.
-5. Read the `PR Comment Draft`, `Missing Evidence Before Trusting This PR`, and `PR Checklist` sections.
+5. Read the output. In agent format (single minified JSON object, `schema.name` = `qamap.qa`):
+   - `flows[]` — affected flows with `draft` path, `runnable` status, `entry` route, capped `steps` and `selectors`.
+   - `requiredEvidence[]` — evidence that must exist before the PR can be trusted; `recommendedEvidenceCount` for the rest.
+   - `requiredBootstrap[]` — setup steps that block trusting generated drafts.
+   - `firstDraftCommand` — present only when the repo has no test suite; run it to create the first starter draft.
+   - `prChecklist[]` and `commands[]` — checklist lines and validation commands for the handoff.
+   In markdown format, read the `PR Comment Draft`, `Missing Evidence Before Trusting This PR`, and `PR Checklist` sections.
 6. Include the useful parts in the PR body, review note, or handoff summary.
 
 ## Output Rules

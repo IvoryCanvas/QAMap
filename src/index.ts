@@ -60,7 +60,7 @@ export {
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
-export { formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+export { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
 export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 export { scanProject } from "./scanner.js";
 export { collectTestSuiteInventory, evaluateFlowCoverageEvidence, summarizeTestSuiteInventory } from "./test-evidence.js";
