@@ -28,6 +28,9 @@ export interface QaDraftResult {
   manifestPath?: string;
   noCloud: true;
   noLlmToken: true;
+  testSuite: E2eDraftResult["plan"]["testSuite"];
+  bootstrap: E2eDraftResult["plan"]["bootstrap"];
+  runnerSetup: E2eDraftResult["plan"]["runnerSetup"];
   readiness: E2eDraftReadinessSummary;
   flows: QaDraftFlow[];
   missingEvidence: QaDraftMissingEvidence[];
@@ -84,6 +87,9 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     manifestPath: draft.plan.verificationManifestPath,
     noCloud: true,
     noLlmToken: true,
+    testSuite: draft.plan.testSuite,
+    bootstrap: draft.plan.bootstrap,
+    runnerSetup: draft.plan.runnerSetup,
     readiness: draft.readinessSummary,
     flows,
     missingEvidence,
@@ -93,9 +99,52 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   };
 }
 
+const agentListLimit = 6;
+
+function truncateForAgent(value: string, maxLength = 140): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
+}
+
+export function formatAgentQaDraft(result: QaDraftResult): string {
+  const requiredEvidence = result.missingEvidence
+    .filter((item) => item.priority === "required")
+    .slice(0, 8)
+    .map((item) => ({ flow: truncateForAgent(item.flowTitle, 80), kind: item.kind, title: truncateForAgent(item.title) }));
+  const requiredBootstrap = result.bootstrap.steps
+    .filter((step) => step.status === "required")
+    .slice(0, 3)
+    .map((step) => ({ title: truncateForAgent(step.title, 80), action: truncateForAgent(step.action) }));
+  const summary = {
+    schema: { name: "qamap.qa", version: 1 },
+    base: result.base,
+    head: result.head,
+    project: result.project,
+    runner: result.runner,
+    manifest: result.manifestPath ?? null,
+    readiness: { score: result.readiness.score, level: result.readiness.level },
+    testSuite: { present: result.testSuite.hasTestSuite, files: result.testSuite.testFileCount },
+    firstDraftCommand: result.testSuite.hasTestSuite ? undefined : firstDraftCreateCommand(result),
+    flows: result.flows.slice(0, agentListLimit).map((flow) => ({
+      title: truncateForAgent(flow.title, 80),
+      source: flow.source,
+      draft: flow.draftPath,
+      runnable: flow.runnableStatus,
+      entry: flow.entrypointHints[0],
+      steps: flow.draftSteps.slice(0, agentListLimit).map((step) => truncateForAgent(step)),
+      selectors: flow.selectorHints.slice(0, 5).map((selector) => truncateForAgent(selector, 100)),
+    })),
+    requiredEvidence,
+    recommendedEvidenceCount: result.missingEvidence.filter((item) => item.priority === "recommended").length,
+    requiredBootstrap,
+    prChecklist: result.prChecklist.slice(0, agentListLimit).map((item) => truncateForAgent(item)),
+    commands: result.suggestedCommands.slice(0, 4),
+  };
+  return `${JSON.stringify(summary)}\n`;
+}
+
 export function formatMarkdownQaDraft(result: QaDraftResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard QA Draft");
+  lines.push("# QAMap QA Draft");
   lines.push("");
   lines.push("> Local-first PR QA skill output. No cloud. No LLM token. Manifest is optional, not required for first use.");
   lines.push("");
@@ -110,6 +159,34 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push(`- Readiness: ${result.readiness.level} (${result.readiness.score}/100)`);
   lines.push(`- Draft flows: ${result.flows.length}`);
   lines.push("");
+
+  if (!result.testSuite.hasTestSuite) {
+    lines.push("## First E2E Draft Bootstrap");
+    lines.push("");
+    lines.push(
+      `QAMap did not find committed test files for this target. The next step is to create the first runnable starter draft, not to stop at a checklist.`,
+    );
+    lines.push("");
+    lines.push(`- Recommended first runner: ${formatRunnerName(result.runner)}`);
+    lines.push(`- Create command: \`${escapeMarkdownInline(firstDraftCreateCommand(result))}\``);
+    const installCommand = result.runnerSetup.installCommands[0];
+    if (installCommand) {
+      lines.push(`- Install command: \`${escapeMarkdownInline(installCommand)}\``);
+    }
+    const filesToCreate = uniqueStrings([...result.runnerSetup.filesToCreate, ...result.flows.map((flow) => flow.draftPath)]);
+    if (filesToCreate.length > 0) {
+      lines.push("- Draft files QAMap can create:");
+      for (const file of filesToCreate.slice(0, 6)) {
+        lines.push(`  - \`${escapeMarkdownInline(file)}\``);
+      }
+    }
+    const filesToUpdate = result.runnerSetup.filesToUpdate;
+    if (filesToUpdate.length > 0) {
+      lines.push(`- Files to update: ${filesToUpdate.map((file) => `\`${escapeMarkdownInline(file)}\``).join(", ")}`);
+    }
+    lines.push("- Generated drafts are starter E2E code; keep them review-only until the changed flow has real assertions, fixtures, and selectors.");
+    lines.push("");
+  }
 
   lines.push("## PR Comment Draft");
   lines.push("");
@@ -182,6 +259,13 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("");
 
   return lines.join("\n");
+}
+
+function firstDraftCreateCommand(result: QaDraftResult): string {
+  if (result.runnerSetup.setupCommand) {
+    return result.runnerSetup.setupCommand;
+  }
+  return `qamap e2e draft . --base ${result.base} --head ${result.head}`;
 }
 
 function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
@@ -261,7 +345,7 @@ function buildPrChecklist(
   const checklist = [
     flows.length > 0
       ? `Review the generated draft path: ${flows.map((flow) => flow.draftPath).slice(0, 3).join(", ")}.`
-      : "Run CodeWard again after adding branch or working tree changes.",
+      : "Run QAMap again after adding branch or working tree changes.",
     flows[0]?.userJourney?.reviewQuestion
       ? `Answer the reviewer question: ${flows[0].userJourney.reviewQuestion}`
       : "Name the user-visible behavior or contract this PR can break.",
@@ -279,7 +363,7 @@ function buildPrChecklist(
   }
 
   if (!draft.plan.verificationManifestPath) {
-    checklist.push("If this recommendation is useful, run `codeward manifest init .` later and review the generated manifest as team QA memory.");
+    checklist.push("If this recommendation is useful, run `qamap manifest init .` later and review the generated manifest as team QA memory.");
   }
 
   return uniqueStrings(checklist).slice(0, 8);

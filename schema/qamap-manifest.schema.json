@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward-manifest.schema.json",
-  "title": "CodeWard verification manifest",
-  "description": "Repository-local verification knowledge used by CodeWard to map branch changes to domains, flows, anchors, checks, and E2E draft requirements.",
+  "$id": "https://raw.githubusercontent.com/IvoryCanvas/qamap/main/schema/qamap-manifest.schema.json",
+  "title": "QAMap verification manifest",
+  "description": "Repository-local verification knowledge used by QAMap to map branch changes to domains, flows, anchors, checks, and E2E draft requirements.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "domains", "flows"],
@@ -256,6 +256,26 @@
         },
         "type": {
           "$ref": "#/$defs/checkType"
+        },
+        "selector": {
+          "type": "string",
+          "description": "Optional stable selector hint used when QAMap turns this check into a draft step, such as [data-testid=coupon-input] or role=button:Apply.",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string",
+          "description": "Optional sample value for input-like checks, such as WELCOME10 or qa@example.com.",
+          "minLength": 1
+        },
+        "steps": {
+          "type": "array",
+          "description": "Optional concrete human-readable steps for this check. QAMap uses them before falling back to title parsing.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": []
         }
       }
     },

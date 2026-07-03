@@ -1,4 +1,4 @@
-# CodeWard Agent Instructions
+# QAMap Agent Instructions
 
 These instructions apply to the whole repository.
 

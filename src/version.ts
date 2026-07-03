@@ -1,2 +1,2 @@
-export const TOOL_NAME = "CodeWard";
-export const VERSION = "0.2.1";
+export const TOOL_NAME = "QAMap";
+export const VERSION = "0.3.0";

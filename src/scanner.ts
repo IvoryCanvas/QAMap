@@ -39,18 +39,18 @@ export async function scanProject(rootInput: string, options: ScanOptions = {}):
   const root = path.resolve(rootInput);
   const stat = await fs.stat(root);
   if (!stat.isDirectory()) {
-    throw new Error(`CodeWard expected a directory: ${root}`);
+    throw new Error(`QAMap expected a directory: ${root}`);
   }
 
   const workspaceRoot = options.workspaceRoot ? path.resolve(options.workspaceRoot) : undefined;
   if (workspaceRoot) {
     const workspaceStat = await fs.stat(workspaceRoot);
     if (!workspaceStat.isDirectory()) {
-      throw new Error(`CodeWard expected a workspace root directory: ${workspaceRoot}`);
+      throw new Error(`QAMap expected a workspace root directory: ${workspaceRoot}`);
     }
     const relativeRoot = path.relative(workspaceRoot, root);
     if (relativeRoot.startsWith("..") || path.isAbsolute(relativeRoot)) {
-      throw new Error(`CodeWard scan path must be inside workspace root: ${root}`);
+      throw new Error(`QAMap scan path must be inside workspace root: ${root}`);
     }
   }
 
@@ -266,7 +266,7 @@ function checkAgentInstructions(files: ProjectFile[]): Finding[] {
 
   return [
     finding({
-      id: "CW001",
+      id: "QM001",
       title: "Missing agent instructions",
       severity: "medium",
       message: "No AGENTS.md, Claude, Cursor, Copilot, or Gemini instruction file was found.",
@@ -324,7 +324,7 @@ function checkInstructionConflicts(files: ProjectFile[]): Finding[] {
 
   return [
     finding({
-      id: "CW002",
+      id: "QM002",
       title: "Conflicting agent instructions",
       severity: "medium",
       message: conflicts.join(" "),
@@ -384,7 +384,7 @@ function checkSuspiciousInstructionText(files: ProjectFile[]): Finding[] {
 
       findings.push(
         finding({
-          id: "CW003",
+          id: "QM003",
           title: "Suspicious agent instruction text",
           severity: "high",
           file: file.path,
@@ -414,7 +414,7 @@ function checkMcpConfig(files: ProjectFile[]): Finding[] {
       }
       findings.push(
         finding({
-          id: "CW004",
+          id: "QM004",
           title: "Unreadable MCP configuration",
           severity: "medium",
           file: config.path,
@@ -449,7 +449,7 @@ function checkAgentSettings(files: ProjectFile[]): Finding[] {
     } catch {
       findings.push(
         finding({
-          id: "CW012",
+          id: "QM012",
           title: "Unreadable agent settings",
           severity: "medium",
           file: settingsFile.path,
@@ -484,7 +484,7 @@ function inspectMcpValue(value: unknown, file: string, location: string, finding
     if (commandRisk) {
       findings.push(
         finding({
-          id: "CW004",
+          id: "QM004",
           title: "Risky MCP command",
           severity: commandRisk.severity,
           file,
@@ -505,7 +505,7 @@ function inspectMcpValue(value: unknown, file: string, location: string, finding
 
       findings.push(
         finding({
-          id: "CW005",
+          id: "QM005",
           title: "Secret-like value in MCP config",
           severity: "high",
           file,
@@ -547,7 +547,7 @@ function inspectHookValue(value: unknown, file: string, location: string, findin
     if (risk) {
       findings.push(
         finding({
-          id: "CW012",
+          id: "QM012",
           title: "Risky agent hook command",
           severity: risk.severity,
           file,
@@ -583,7 +583,7 @@ function inspectAgentPermissions(value: unknown, file: string, findings: Finding
 
     findings.push(
       finding({
-        id: "CW012",
+        id: "QM012",
         title: risk.title,
         severity: risk.severity,
         file,
@@ -664,7 +664,7 @@ function checkPackageScripts(files: ProjectFile[]): Finding[] {
   } catch {
     return [
       finding({
-        id: "CW006",
+        id: "QM006",
         title: "Unreadable package.json",
         severity: "medium",
         file: "package.json",
@@ -679,7 +679,7 @@ function checkPackageScripts(files: ProjectFile[]): Finding[] {
   if (!testScript || /no test specified|exit\s+1/i.test(testScript)) {
     findings.push(
       finding({
-        id: "CW006",
+        id: "QM006",
         title: "Missing test script",
         severity: "medium",
         file: "package.json",
@@ -698,7 +698,7 @@ function checkPackageScripts(files: ProjectFile[]): Finding[] {
 
     findings.push(
       finding({
-        id: "CW009",
+        id: "QM009",
         title: "Risky package script",
         severity: risk.severity,
         file: "package.json",
@@ -802,7 +802,7 @@ function checkApiContractSource(files: ProjectFile[]): Finding[] {
 
   return [
     finding({
-      id: "CW013",
+      id: "QM013",
       title: "Documentation-only API contract",
       severity: "low",
       file: proseApiDocs[0].path,
@@ -857,7 +857,7 @@ function checkGitHubActions(files: ProjectFile[]): Finding[] {
   if (workflowFiles.length === 0) {
     return [
       finding({
-        id: "CW007",
+        id: "QM007",
         title: "Missing CI workflow",
         severity: "low",
         message: "No GitHub Actions workflow was found.",
@@ -872,7 +872,7 @@ function checkGitHubActions(files: ProjectFile[]): Finding[] {
     if (/permissions:\s*write-all/i.test(text)) {
       findings.push(
         finding({
-          id: "CW010",
+          id: "QM010",
           title: "Broad workflow permissions",
           severity: "medium",
           file: workflow.path,
@@ -886,7 +886,7 @@ function checkGitHubActions(files: ProjectFile[]): Finding[] {
     if (/contents:\s*write/i.test(text) && !/release|publish/i.test(workflow.path)) {
       findings.push(
         finding({
-          id: "CW010",
+          id: "QM010",
           title: "Broad workflow permissions",
           severity: "medium",
           file: workflow.path,
@@ -900,7 +900,7 @@ function checkGitHubActions(files: ProjectFile[]): Finding[] {
     if (/pull_request_target:/i.test(text) && /actions\/checkout/i.test(text)) {
       findings.push(
         finding({
-          id: "CW010",
+          id: "QM010",
           title: "Risky pull_request_target workflow",
           severity: "medium",
           file: workflow.path,
@@ -923,7 +923,7 @@ function checkCommittedEnvFiles(files: ProjectFile[]): Finding[] {
     })
     .map((file) =>
       finding({
-        id: "CW008",
+        id: "QM008",
         title: "Committed environment file",
         severity: "high",
         file: file.path,
@@ -944,7 +944,7 @@ function checkCommunityHealth(files: ProjectFile[]): Finding[] {
 
   return [
     finding({
-      id: "CW011",
+      id: "QM011",
       title: "Missing community health files",
       severity: "low",
       message: `Missing ${missing.join(", ")}.`,

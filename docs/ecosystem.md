@@ -1,10 +1,10 @@
 # Agent Ecosystem Coverage
 
-AI coding agents now read repository instructions, connect to MCP servers, run tool hooks, and prepare pull requests. CodeWard tracks the repository files that shape those behaviors without executing project code.
+AI coding agents now read repository instructions, connect to MCP servers, run tool hooks, and prepare pull requests. QAMap tracks the repository files that shape those behaviors without executing project code.
 
 ## Instruction Surfaces
 
-CodeWard treats these files as agent instruction surfaces:
+QAMap treats these files as agent instruction surfaces:
 
 | Ecosystem | Files |
 | --- | --- |
@@ -18,7 +18,7 @@ These files are scanned for missing guidance, conflicting guidance, and suspicio
 
 ## Tool And Settings Surfaces
 
-CodeWard statically inspects committed MCP and agent settings files:
+QAMap statically inspects committed MCP and agent settings files:
 
 | Surface | Files | Checks |
 | --- | --- | --- |
@@ -38,4 +38,4 @@ These references guide the current coverage:
 - [Gemini CLI configuration](https://google-gemini.github.io/gemini-cli/docs/get-started/configuration.html) and [Gemini MCP servers](https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html).
 - [Model Context Protocol security best practices](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices).
 
-CodeWard should keep this list practical rather than exhaustive: add a surface when it is common enough that maintainers would reasonably expect a repo preflight check to notice it.
+QAMap should keep this list practical rather than exhaustive: add a surface when it is common enough that maintainers would reasonably expect a repo preflight check to notice it.

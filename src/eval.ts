@@ -120,7 +120,7 @@ export function formatEvalReport(result: EvalResult): string {
 
 export function formatMarkdownEvalReport(result: EvalResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard Eval");
+  lines.push("# QAMap Eval");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   if (result.workspaceRoot) {
@@ -422,7 +422,7 @@ function scoreDomainTestPlan(files: TestPlanChangedFile[], items: TestPlanItem[]
     0,
     "No test plan could be inferred.",
     [],
-    "Add enough change context for CodeWard to suggest a domain verification path.",
+    "Add enough change context for QAMap to suggest a domain verification path.",
   );
 }
 

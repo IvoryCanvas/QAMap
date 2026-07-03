@@ -4,7 +4,7 @@ import YAML from "yaml";
 import { pathExists, toPosixPath } from "./fs.js";
 import type { TestPlanChangedFile } from "./test-plan.js";
 
-export const defaultDomainManifestPath = ".codeward/domains.yml";
+export const defaultDomainManifestPath = ".qamap/domains.yml";
 
 export interface DomainScenarioDefinition {
   title: string;
@@ -39,9 +39,9 @@ export interface MatchedDomain {
 }
 
 const domainManifestCandidates = [
-  ".codeward/domains.yml",
-  ".codeward/domains.yaml",
-  ".codeward/domains.json",
+  ".qamap/domains.yml",
+  ".qamap/domains.yaml",
+  ".qamap/domains.json",
 ];
 
 export async function loadDomainManifest(rootInput: string): Promise<DomainManifest> {
@@ -148,21 +148,21 @@ function parseDomainManifest(raw: string, manifestPath: string): unknown {
     return YAML.parse(raw);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Could not parse CodeWard domain manifest at ${manifestPath}: ${message}`);
+    throw new Error(`Could not parse QAMap domain manifest at ${manifestPath}: ${message}`);
   }
 }
 
 function normalizeDomains(value: unknown, manifestPath: string): DomainDefinition[] {
-  const record = asRecord(value, `CodeWard domain manifest must be an object: ${manifestPath}`);
+  const record = asRecord(value, `QAMap domain manifest must be an object: ${manifestPath}`);
   const rawDomains = record.domains;
   if (!Array.isArray(rawDomains)) {
-    throw new Error(`CodeWard domain manifest domains must be an array: ${manifestPath}`);
+    throw new Error(`QAMap domain manifest domains must be an array: ${manifestPath}`);
   }
   return rawDomains.map((domain, index) => normalizeDomain(domain, manifestPath, index));
 }
 
 function normalizeDomain(value: unknown, manifestPath: string, index: number): DomainDefinition {
-  const record = asRecord(value, `CodeWard domain manifest domain at index ${index} must be an object: ${manifestPath}`);
+  const record = asRecord(value, `QAMap domain manifest domain at index ${index} must be an object: ${manifestPath}`);
   const id = readRequiredString(record, "id", manifestPath, index);
   const name = readOptionalString(record, "name") ?? readOptionalString(record, "title") ?? id;
   const aliases = readStringArray(record, "aliases");
@@ -173,7 +173,7 @@ function normalizeDomain(value: unknown, manifestPath: string, index: number): D
 
   if (files.length + aliases.length + routes.length + tags.length === 0) {
     throw new Error(
-      `CodeWard domain manifest domain ${id} must include at least one of aliases, files, routes, or tags: ${manifestPath}`,
+      `QAMap domain manifest domain ${id} must include at least one of aliases, files, routes, or tags: ${manifestPath}`,
     );
   }
 
@@ -229,12 +229,12 @@ function normalizeScenario(
   }
   const record = asRecord(
     value,
-    `CodeWard domain manifest scenario at domain ${domainIndex}, index ${scenarioIndex} must be a string or object: ${manifestPath}`,
+    `QAMap domain manifest scenario at domain ${domainIndex}, index ${scenarioIndex} must be a string or object: ${manifestPath}`,
   );
   const title = readOptionalString(record, "title") ?? readOptionalString(record, "name");
   if (!title) {
     throw new Error(
-      `CodeWard domain manifest scenario at domain ${domainIndex}, index ${scenarioIndex} is missing title: ${manifestPath}`,
+      `QAMap domain manifest scenario at domain ${domainIndex}, index ${scenarioIndex} is missing title: ${manifestPath}`,
     );
   }
   return {
@@ -296,7 +296,7 @@ function asRecord(value: unknown, message: string): Record<string, unknown> {
 function readRequiredString(record: Record<string, unknown>, key: string, manifestPath: string, index: number): string {
   const value = readOptionalString(record, key);
   if (!value) {
-    throw new Error(`CodeWard domain manifest domain at index ${index} is missing ${key}: ${manifestPath}`);
+    throw new Error(`QAMap domain manifest domain at index ${index} is missing ${key}: ${manifestPath}`);
   }
   return value;
 }
@@ -322,7 +322,7 @@ function readStringArray(record: Record<string, unknown>, key: string): string[]
 
 function defaultDomainManifestText(): string {
   return [
-    "# Commit this file when your team wants CodeWard to know product/domain language.",
+    "# Commit this file when your team wants QAMap to know product/domain language.",
     "domains:",
     "  - id: billing",
     "    name: Billing",

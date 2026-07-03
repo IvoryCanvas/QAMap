@@ -38,19 +38,19 @@ import {
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
-import { formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+import { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
 import { isAtLeastSeverity, isSeverity } from "./severity.js";
 import { formatMarkdownTestPlan, generateTestPlan } from "./test-plan.js";
 import { formatMarkdownVerifyReport, formatVerifyReport, verifyChange } from "./verify.js";
-import type { CodeWardConfig } from "./types.js";
+import type { QAMapConfig } from "./types.js";
 import type { Severity } from "./types.js";
 import { VERSION } from "./version.js";
 import type { E2eRunnerName } from "./e2e.js";
 import type { GitHubActionMode } from "./github.js";
 
-type OutputFormat = "text" | "json" | "markdown" | "sarif";
+type OutputFormat = "text" | "json" | "markdown" | "sarif" | "agent";
 
 interface ParsedOptions {
   path: string;
@@ -479,7 +479,7 @@ async function main(argv: string[]): Promise<number> {
 
   if (command === "init") {
     const options = parseOptions(rest);
-    const outputPath = await writeDefaultConfig(options.path, options.write ?? "codeward.config.json", options.force);
+    const outputPath = await writeDefaultConfig(options.path, options.write ?? "qamap.config.json", options.force);
     console.log(`Wrote ${outputPath}`);
     return 0;
   }
@@ -687,7 +687,7 @@ function parseOptions(args: string[]): ParsedOptions {
 
 function buildScanOptions(
   options: ParsedOptions,
-  loadedConfig: { path?: string; config: CodeWardConfig },
+  loadedConfig: { path?: string; config: QAMapConfig },
 ): {
   configPath?: string;
   ignoreRules?: string[];
@@ -704,7 +704,7 @@ function buildScanOptions(
   };
 }
 
-async function loadOptionsConfig(options: ParsedOptions): Promise<{ path?: string; config: CodeWardConfig }> {
+async function loadOptionsConfig(options: ParsedOptions): Promise<{ path?: string; config: QAMapConfig }> {
   return loadConfig(options.workspaceRoot ?? options.path, options.config);
 }
 
@@ -717,6 +717,9 @@ function formatOutput(result: Awaited<ReturnType<typeof scanProject>>, format: O
   }
   if (format === "sarif") {
     return formatSarifReport(result);
+  }
+  if (format !== "text") {
+    throw new Error(`Scan supports text, json, markdown, or sarif output, not ${format}`);
   }
   return formatTextReport(result);
 }
@@ -791,22 +794,25 @@ function formatQaDraftOutput(result: Awaited<ReturnType<typeof generateQaDraft>>
   if (format === "json") {
     return `${JSON.stringify(result, null, 2)}\n`;
   }
+  if (format === "agent") {
+    return formatAgentQaDraft(result);
+  }
   if (format !== "markdown" && format !== "text") {
-    throw new Error(`QA draft supports text, json, or markdown output, not ${format}`);
+    throw new Error(`QA draft supports text, json, markdown, or agent output, not ${format}`);
   }
   return formatMarkdownQaDraft(result);
 }
 
 function manifestSuggestionFormat(format: OutputFormat, command: "domains" | "flows"): "text" | "json" | "markdown" {
-  if (format === "sarif") {
-    throw new Error(`${command} suggest supports text, json, or markdown output, not sarif`);
+  if (format === "sarif" || format === "agent") {
+    throw new Error(`${command} suggest supports text, json, or markdown output, not ${format}`);
   }
   return format;
 }
 
 function manifestCommandFormat(format: OutputFormat): "text" | "json" | "markdown" {
-  if (format === "sarif") {
-    throw new Error("manifest supports text, json, or markdown output, not sarif");
+  if (format === "sarif" || format === "agent") {
+    throw new Error(`manifest supports text, json, or markdown output, not ${format}`);
   }
   return format;
 }
@@ -852,7 +858,7 @@ async function printOrWrite(output: string, outputPath?: string): Promise<void> 
 }
 
 function isOutputFormat(value: string): value is OutputFormat {
-  return value === "text" || value === "json" || value === "markdown" || value === "sarif";
+  return value === "text" || value === "json" || value === "markdown" || value === "sarif" || value === "agent";
 }
 
 function isGitHubActionMode(value: string): value is GitHubActionMode {
@@ -872,157 +878,158 @@ function readValue(args: string[], index: number, flag: string): string {
 }
 
 function printHelp(): void {
-  console.log(`CodeWard ${VERSION}
+  console.log(`QAMap ${VERSION}
 
 Local-first PR QA drafts and guardrails for AI-assisted changes.
 
 Usage:
-  codeward scan [path] [--format <format>] [--fail-on <severity>] [--max-files <n>]
-  codeward report [path] [--format <format>] [--output <file>] [--fail-on <severity>]
-  codeward doctor [path] [--format <format>] [--output <file>] [--fail-on <severity>]
-  codeward review [path] [--base <ref>] [--head <ref>] [--format <format>] [--fail-on <severity>]
-  codeward verify [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--pr-body-file <file>] [--fail-on <severity>]
-  codeward eval [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--pr-body-file <file>] [--format <format>]
-  codeward github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
-  codeward test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
-  codeward qa [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--format <format>] [--output <file>]
-  codeward e2e plan [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
-  codeward e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force]
-  codeward e2e draft [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
-  codeward manifest init [path] [--workspace-root <path>] [--write <file>] [--max-files <n>] [--force]
-  codeward manifest validate [path] [--workspace-root <path>] [--manifest <file>] [--format <format>]
-  codeward manifest explain [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>]
-  codeward flows init [path] [--write <file>] [--force]
-  codeward flows suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>] [--write <file>] [--force]
-  codeward domains init [path] [--write <file>] [--force]
-  codeward domains suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>] [--write <file>] [--force]
-  codeward history init [path]
-  codeward context [path] [--write [file]] [--force]
-  codeward init [path] [--write <file>] [--force]
+  qamap scan [path] [--format <format>] [--fail-on <severity>] [--max-files <n>]
+  qamap report [path] [--format <format>] [--output <file>] [--fail-on <severity>]
+  qamap doctor [path] [--format <format>] [--output <file>] [--fail-on <severity>]
+  qamap review [path] [--base <ref>] [--head <ref>] [--format <format>] [--fail-on <severity>]
+  qamap verify [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--pr-body-file <file>] [--fail-on <severity>]
+  qamap eval [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--pr-body-file <file>] [--format <format>]
+  qamap github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
+  qamap test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
+  qamap qa [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--format <format>] [--output <file>]
+  qamap e2e plan [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
+  qamap e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force]
+  qamap e2e draft [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
+  qamap manifest init [path] [--workspace-root <path>] [--write <file>] [--max-files <n>] [--force]
+  qamap manifest validate [path] [--workspace-root <path>] [--manifest <file>] [--format <format>]
+  qamap manifest explain [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>]
+  qamap flows init [path] [--write <file>] [--force]
+  qamap flows suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>] [--write <file>] [--force]
+  qamap domains init [path] [--write <file>] [--force]
+  qamap domains suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>] [--write <file>] [--force]
+  qamap history init [path]
+  qamap context [path] [--write [file]] [--force]
+  qamap init [path] [--write <file>] [--force]
 
 Severities:
   info, low, medium, high
 
 Formats:
   text, json, markdown, sarif
+  agent (qa only: compact machine-readable summary for coding agents)
 
 Examples:
-  codeward scan .
-  codeward scan services/offer --workspace-root .
-  codeward scan . --format sarif --output codeward.sarif
-  codeward scan . --fail-on medium
-  codeward report . --output CODEWARD_REPORT.md
-  codeward doctor .
-  codeward review . --base origin/main --head HEAD
-  codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
-  codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md
-  codeward github-action . --mode review --base origin/main --head HEAD --fail-on high
-  codeward test-plan . --base origin/main --head HEAD
-  codeward qa . --base origin/main --head HEAD
-  codeward qa . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD --output CODEWARD_QA.md
-  codeward e2e plan . --base origin/main --head HEAD
-  codeward e2e plan . --base origin/main --head HEAD --record-history
-  codeward e2e setup . --runner playwright
-  codeward e2e draft . --base origin/main --head HEAD --dry-run
-  codeward e2e draft . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD --dry-run
-  codeward manifest init .
-  codeward manifest explain . --base origin/main --head HEAD
-  codeward flows init .
-  codeward flows suggest . --base origin/main --head HEAD
-  codeward domains init .
-  codeward domains suggest . --base origin/main --head HEAD
-  codeward history init .
-  codeward test-plan services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
-  codeward context . --write AGENTS.md
-  codeward init .
+  qamap scan .
+  qamap scan services/offer --workspace-root .
+  qamap scan . --format sarif --output qamap.sarif
+  qamap scan . --fail-on medium
+  qamap report . --output QAMAP_REPORT.md
+  qamap doctor .
+  qamap review . --base origin/main --head HEAD
+  qamap verify . --base origin/main --head HEAD --pr-body-file pr-body.md
+  qamap eval . --base origin/main --head HEAD --pr-body-file pr-body.md
+  qamap github-action . --mode review --base origin/main --head HEAD --fail-on high
+  qamap test-plan . --base origin/main --head HEAD
+  qamap qa . --base origin/main --head HEAD
+  qamap qa . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD --output QAMAP_QA.md
+  qamap e2e plan . --base origin/main --head HEAD
+  qamap e2e plan . --base origin/main --head HEAD --record-history
+  qamap e2e setup . --runner playwright
+  qamap e2e draft . --base origin/main --head HEAD --dry-run
+  qamap e2e draft . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD --dry-run
+  qamap manifest init .
+  qamap manifest explain . --base origin/main --head HEAD
+  qamap flows init .
+  qamap flows suggest . --base origin/main --head HEAD
+  qamap domains init .
+  qamap domains suggest . --base origin/main --head HEAD
+  qamap history init .
+  qamap test-plan services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
+  qamap context . --write AGENTS.md
+  qamap init .
 `);
 }
 
 function printManifestHelp(): void {
-  console.log(`CodeWard ${VERSION}
+  console.log(`QAMap ${VERSION}
 
 Repository-level verification manifest.
 
 Usage:
-  codeward manifest init [path] [--workspace-root <path>] [--write <file>] [--max-files <n>] [--force] [--format json] [--output <file>]
-  codeward manifest validate [path] [--workspace-root <path>] [--manifest <file>] [--format text|json|markdown] [--output <file>]
-  codeward manifest context [path] [--workspace-root <path>] [--max-files <n>] [--format text|json|markdown] [--output <file>]
-  codeward manifest explain [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format text|json|markdown] [--output <file>]
+  qamap manifest init [path] [--workspace-root <path>] [--write <file>] [--max-files <n>] [--force] [--format json] [--output <file>]
+  qamap manifest validate [path] [--workspace-root <path>] [--manifest <file>] [--format text|json|markdown] [--output <file>]
+  qamap manifest context [path] [--workspace-root <path>] [--max-files <n>] [--format text|json|markdown] [--output <file>]
+  qamap manifest explain [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format text|json|markdown] [--output <file>]
 
 Examples:
-  codeward manifest init .
-  codeward manifest init services/offer --workspace-root .
-  codeward manifest init . --write .codeward/manifest.yaml --force
-  codeward manifest init . --write /tmp/codeward-manifest.yaml
-  codeward manifest validate .
-  codeward manifest validate . --manifest /tmp/codeward-manifest.yaml
-  codeward manifest context .
-  codeward manifest explain . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD
+  qamap manifest init .
+  qamap manifest init services/offer --workspace-root .
+  qamap manifest init . --write .qamap/manifest.yaml --force
+  qamap manifest init . --write /tmp/qamap-manifest.yaml
+  qamap manifest validate .
+  qamap manifest validate . --manifest /tmp/qamap-manifest.yaml
+  qamap manifest context .
+  qamap manifest explain . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD
 `);
 }
 
 function printE2eHelp(): void {
-  console.log(`CodeWard ${VERSION}
+  console.log(`QAMap ${VERSION}
 
 E2E planning for AI-assisted changes.
 
 Usage:
-  codeward e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>] [--output <file>]
-  codeward e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force] [--format <format>] [--output <file>]
-  codeward e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
+  qamap e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>] [--output <file>]
+  qamap e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force] [--format <format>] [--output <file>]
+  qamap e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
 
 Examples:
-  codeward e2e plan . --base origin/main --head HEAD
-  codeward e2e plan . --base origin/main --head HEAD --record-history
-  codeward e2e setup . --runner playwright
-  codeward e2e setup apps/mobile --workspace-root . --runner maestro
-  codeward e2e draft . --base origin/main --head HEAD --dry-run
-  codeward e2e plan apps/mobile --workspace-root . --include-working-tree
+  qamap e2e plan . --base origin/main --head HEAD
+  qamap e2e plan . --base origin/main --head HEAD --record-history
+  qamap e2e setup . --runner playwright
+  qamap e2e setup apps/mobile --workspace-root . --runner maestro
+  qamap e2e draft . --base origin/main --head HEAD --dry-run
+  qamap e2e plan apps/mobile --workspace-root . --include-working-tree
 `);
 }
 
 function printHistoryHelp(): void {
-  console.log(`CodeWard ${VERSION}
+  console.log(`QAMap ${VERSION}
 
-Local history for CodeWard analysis runs.
+Local history for QAMap analysis runs.
 
 Usage:
-  codeward history init [path] [--json] [--output <file>]
+  qamap history init [path] [--json] [--output <file>]
 
 Examples:
-  codeward history init .
+  qamap history init .
 `);
 }
 
 function printFlowsHelp(): void {
-  console.log(`CodeWard ${VERSION}
+  console.log(`QAMap ${VERSION}
 
 Core flow definitions for project-specific E2E planning.
 
 Usage:
-  codeward flows init [path] [--write <file>] [--force]
-  codeward flows suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format text|json|markdown] [--output <file>] [--write <file>] [--force]
+  qamap flows init [path] [--write <file>] [--force]
+  qamap flows suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format text|json|markdown] [--output <file>] [--write <file>] [--force]
 
 Examples:
-  codeward flows init .
-  codeward flows suggest . --base origin/main --head HEAD
-  codeward flows suggest services/offer --workspace-root . --include-working-tree
+  qamap flows init .
+  qamap flows suggest . --base origin/main --head HEAD
+  qamap flows suggest services/offer --workspace-root . --include-working-tree
 `);
 }
 
 function printDomainsHelp(): void {
-  console.log(`CodeWard ${VERSION}
+  console.log(`QAMap ${VERSION}
 
 Domain definitions for project-specific E2E naming and route hints.
 
 Usage:
-  codeward domains init [path] [--write <file>] [--force]
-  codeward domains suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format text|json|markdown] [--output <file>] [--write <file>] [--force]
+  qamap domains init [path] [--write <file>] [--force]
+  qamap domains suggest [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format text|json|markdown] [--output <file>] [--write <file>] [--force]
 
 Examples:
-  codeward domains init .
-  codeward domains suggest . --base origin/main --head HEAD
-  codeward domains suggest services/offer --workspace-root . --include-working-tree
+  qamap domains init .
+  qamap domains suggest . --base origin/main --head HEAD
+  qamap domains suggest services/offer --workspace-root . --include-working-tree
 `);
 }
 
@@ -1032,6 +1039,6 @@ main(process.argv.slice(2))
   })
   .catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`CodeWard error: ${message}`);
+    console.error(`QAMap error: ${message}`);
     process.exitCode = 1;
   });

@@ -1,6 +1,6 @@
 # GitHub Action
 
-CodeWard ships a composite GitHub Action that can run `scan` or branch-aware `review` inside pull request workflows.
+QAMap ships a composite GitHub Action that can run `scan` or branch-aware `review` inside pull request workflows.
 
 The action writes:
 
@@ -14,7 +14,7 @@ The action writes:
 ## Pull Request Review
 
 ```yaml
-name: CodeWard
+name: QAMap
 
 on:
   pull_request:
@@ -24,13 +24,13 @@ permissions:
   pull-requests: write
 
 jobs:
-  codeward:
+  qamap:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: IvoryCanvas/codeward@main
+      - uses: IvoryCanvas/qamap@main
         with:
           mode: review
           base: ${{ github.event.pull_request.base.sha }}
@@ -39,13 +39,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-Use `fetch-depth: 0` so CodeWard can compare the pull request branch with the base ref.
-For production workflows, pin to a version tag such as `IvoryCanvas/codeward@v0.2.1` after that tag is published. Use `@main` only when intentionally testing unreleased behavior.
+Use `fetch-depth: 0` so QAMap can compare the pull request branch with the base ref.
+For production workflows, pin to a version tag such as `IvoryCanvas/qamap@v0.3.0` after that tag is published. Use `@main` only when intentionally testing unreleased behavior.
 
 ## Monorepo Package
 
 ```yaml
-- uses: IvoryCanvas/codeward@main
+- uses: IvoryCanvas/qamap@main
   with:
     mode: review
     path: services/offer
@@ -65,15 +65,15 @@ For production workflows, pin to a version tag such as `IvoryCanvas/codeward@v0.
 | `workspace-root` | | Optional monorepo workspace root. |
 | `base` | | Base ref or SHA for review mode. |
 | `head` | `HEAD` | Head ref or SHA for review mode. |
-| `config` | | Optional CodeWard config path. |
+| `config` | | Optional QAMap config path. |
 | `max-files` | | Optional maximum file count. |
 | `fail-on` | `high` | Severity threshold that fails the action. |
-| `report-file` | `codeward-report.md` | Markdown report output path. |
-| `comment-file` | `codeward-pr-comment.md` | PR comment body output path. |
+| `report-file` | `qamap-report.md` | Markdown report output path. |
+| `comment-file` | `qamap-pr-comment.md` | PR comment body output path. |
 | `test-plan` | `true` | Append suggested domain tests for changed files. |
-| `test-plan-file` | `codeward-test-plan.md` | Markdown test plan output path. |
+| `test-plan-file` | `qamap-test-plan.md` | Markdown test plan output path. |
 | `eval` | `true` | Append a verification readiness evaluation. |
-| `eval-file` | `codeward-eval.md` | Markdown evaluation output path. |
+| `eval-file` | `qamap-eval.md` | Markdown evaluation output path. |
 | `annotations` | `true` | Emit GitHub workflow annotations. |
 | `step-summary` | `true` | Append the report to the GitHub step summary. |
 | `comment` | `true` | Create or update a sticky pull request comment. |
@@ -83,7 +83,7 @@ For production workflows, pin to a version tag such as `IvoryCanvas/codeward@v0.
 
 - Set `pull-requests: write` only when PR comments are enabled.
 - Set `comment: false` for advisory runs that should only use annotations and step summaries.
-- Set `test-plan: false` when the PR comment should contain only CodeWard findings.
+- Set `test-plan: false` when the PR comment should contain only QAMap findings.
 - Set `eval: false` when the PR comment should not include readiness scoring.
 - Pass `github-token: ${{ secrets.GITHUB_TOKEN }}` when `comment` is enabled.
-- CodeWard still does not execute scanned project code; the action only installs and builds CodeWard itself before scanning the checked-out repository.
+- QAMap still does not execute scanned project code; the action only installs and builds QAMap itself before scanning the checked-out repository.

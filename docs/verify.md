@@ -1,13 +1,13 @@
-# CodeWard Verify
+# QAMap Verify
 
-`codeward verify` is the PR-facing entry point for CodeWard.
+`qamap verify` is the PR-facing entry point for QAMap.
 
 It combines:
 
-- `review`: new CodeWard findings and changed risky files introduced by a branch
+- `review`: new QAMap findings and changed risky files introduced by a branch
 - `eval`: verification-readiness gates for intent, risk, tests, and review size
 - `test-plan`: domain-oriented scenarios inferred from changed files
-- verification manifest matches from `.codeward/manifest.yaml` when the repository has team-owned domains, flows, anchors, and checks
+- verification manifest matches from `.qamap/manifest.yaml` when the repository has team-owned domains, flows, anchors, and checks
 
 Suggested commands are discovered statically from common project files:
 
@@ -17,17 +17,17 @@ Suggested commands are discovered statically from common project files:
 - Rust: `cargo test`, `cargo clippy`, and `cargo build` when `Cargo.toml` exists
 - JVM: Gradle wrapper, Gradle build files, or Maven `pom.xml`
 
-For custom stacks or team-specific flows, add `validationCommands` to `codeward.config.json`. Configured commands are shown before automatically discovered commands.
+For custom stacks or team-specific flows, add `validationCommands` to `qamap.config.json`. Configured commands are shown before automatically discovered commands.
 
 ## Usage
 
 ```sh
-codeward verify . --base origin/main --head HEAD --format markdown
-codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
-codeward verify services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
+qamap verify . --base origin/main --head HEAD --format markdown
+qamap verify . --base origin/main --head HEAD --pr-body-file pr-body.md
+qamap verify services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
 ```
 
-Use `--fail-on high` or `--fail-on medium` to fail on CodeWard review findings at or above a severity threshold. Readiness and manifest recommendations stay advisory until the team decides to make them required PR evidence.
+Use `--fail-on high` or `--fail-on medium` to fail on QAMap review findings at or above a severity threshold. Readiness and manifest recommendations stay advisory until the team decides to make them required PR evidence.
 
 ## Output
 

@@ -1,5 +1,5 @@
 name: Rule request
-description: Suggest a new CodeWard scanner rule.
+description: Suggest a new QAMap scanner rule.
 title: "[Rule]: "
 labels: ["enhancement", "rule"]
 body:
@@ -7,7 +7,7 @@ body:
     id: problem
     attributes:
       label: Problem
-      description: What repo-level AI agent risk should CodeWard catch?
+      description: What repo-level AI agent risk should QAMap catch?
     validations:
       required: true
   - type: textarea

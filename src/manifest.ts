@@ -7,9 +7,9 @@ import { TOOL_NAME, VERSION } from "./version.js";
 import type { TestPlanChangedFile, TestPlanOptions } from "./test-plan.js";
 import type { ProjectFile } from "./types.js";
 
-export const defaultVerificationManifestPath = ".codeward/manifest.yaml";
+export const defaultVerificationManifestPath = ".qamap/manifest.yaml";
 export const verificationManifestSchemaUrl =
-  "https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward-manifest.schema.json";
+  "https://raw.githubusercontent.com/IvoryCanvas/qamap/main/schema/qamap-manifest.schema.json";
 
 export type VerificationManifestCriticality = "low" | "medium" | "high";
 export type VerificationManifestConfidence = "low" | "medium" | "high";
@@ -69,6 +69,9 @@ export interface VerificationManifestCheck {
   id: string;
   title: string;
   type: VerificationManifestCheckType;
+  selector?: string;
+  value?: string;
+  steps?: string[];
 }
 
 export interface VerificationManifestFlow {
@@ -159,6 +162,9 @@ export interface VerificationManifestMatch {
   entryRoute?: string;
   checks?: string[];
   checkType?: VerificationManifestCheckType;
+  checkSelector?: string;
+  checkValue?: string;
+  checkSteps?: string[];
 }
 
 export type VerificationManifestValidationSeverity = "info" | "warning" | "error";
@@ -242,9 +248,9 @@ export interface VerificationManifestContextResult {
 }
 
 const manifestCandidates = [
-  ".codeward/manifest.yaml",
-  ".codeward/manifest.yml",
-  ".codeward/manifest.json",
+  ".qamap/manifest.yaml",
+  ".qamap/manifest.yml",
+  ".qamap/manifest.json",
 ];
 
 const defaultMaxManifestFiles = 2500;
@@ -368,6 +374,9 @@ export function matchVerificationManifest(
         entryRoute: flow.entry?.route,
         checks: [check.title],
         checkType: check.type,
+        checkSelector: check.selector,
+        checkValue: check.value,
+        checkSteps: check.steps,
       });
     }
   }
@@ -419,12 +428,12 @@ export async function validateVerificationManifest(
     manifest = await loadVerificationManifest(manifestRoot, { manifestPath: manifestPathInput });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    issues.push(issue("error", defaultVerificationManifestPath, message, "Fix the manifest syntax or schema, then run `codeward manifest validate` again."));
+    issues.push(issue("error", defaultVerificationManifestPath, message, "Fix the manifest syntax or schema, then run `qamap manifest validate` again."));
     return validationResult(root, workspaceRootInput ? manifestRoot : undefined, undefined, "invalid", issues);
   }
 
   if (!manifest.path) {
-    issues.push(issue("error", defaultVerificationManifestPath, "No verification manifest was found.", "Run `codeward manifest init .` to create a baseline."));
+    issues.push(issue("error", defaultVerificationManifestPath, "No verification manifest was found.", "Run `qamap manifest init .` to create a baseline."));
     return validationResult(root, workspaceRootInput ? manifestRoot : undefined, undefined, "missing", issues);
   }
 
@@ -511,7 +520,7 @@ export function formatVerificationManifestValidationResult(
   }
   const lines: string[] = [];
   if (format === "markdown") {
-    lines.push("# CodeWard Manifest Validate", "");
+    lines.push("# QAMap Manifest Validate", "");
     lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
     if (result.workspaceRoot) {
       lines.push(`- Workspace root: \`${escapeMarkdownInline(result.workspaceRoot)}\``);
@@ -531,7 +540,7 @@ export function formatVerificationManifestValidationResult(
     return lines.join("\n");
   }
 
-  lines.push("CodeWard Manifest Validate");
+  lines.push("QAMap Manifest Validate");
   lines.push(`Root: ${result.root}`);
   if (result.workspaceRoot) {
     lines.push(`Workspace root: ${result.workspaceRoot}`);
@@ -555,7 +564,7 @@ export function formatVerificationManifestExplainResult(
   }
   const lines: string[] = [];
   if (format === "markdown") {
-    lines.push("# CodeWard Manifest Explain", "");
+    lines.push("# QAMap Manifest Explain", "");
     lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
     if (result.workspaceRoot) {
       lines.push(`- Workspace root: \`${escapeMarkdownInline(result.workspaceRoot)}\``);
@@ -570,7 +579,7 @@ export function formatVerificationManifestExplainResult(
     return lines.join("\n");
   }
 
-  lines.push("CodeWard Manifest Explain");
+  lines.push("QAMap Manifest Explain");
   lines.push(`Root: ${result.root}`);
   if (result.workspaceRoot) {
     lines.push(`Workspace root: ${result.workspaceRoot}`);
@@ -595,7 +604,7 @@ export function formatVerificationManifestContextResult(
   const context = result.context;
   const lines: string[] = [];
   if (format === "markdown") {
-    lines.push("# CodeWard Manifest Context", "");
+    lines.push("# QAMap Manifest Context", "");
     lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
     if (result.workspaceRoot) {
       lines.push(`- Workspace root: \`${escapeMarkdownInline(result.workspaceRoot)}\``);
@@ -623,7 +632,7 @@ export function formatVerificationManifestContextResult(
     return lines.join("\n");
   }
 
-  lines.push("CodeWard Manifest Context");
+  lines.push("QAMap Manifest Context");
   lines.push(`Root: ${result.root}`);
   if (result.workspaceRoot) {
     lines.push(`Workspace root: ${result.workspaceRoot}`);
@@ -685,17 +694,17 @@ function validateManifestMetadata(
   issues: VerificationManifestValidationIssue[],
 ): void {
   if (!manifest.$schema) {
-    issues.push(issue("info", `${manifest.path} > $schema`, "Manifest does not declare the CodeWard manifest JSON schema.", "Add the `$schema` field generated by `codeward manifest init .` for editor validation."));
+    issues.push(issue("info", `${manifest.path} > $schema`, "Manifest does not declare the QAMap manifest JSON schema.", "Add the `$schema` field generated by `qamap manifest init .` for editor validation."));
     return;
   }
-  if (!/schema\/codeward-manifest\.schema\.json$/i.test(manifest.$schema)) {
-    issues.push(issue("warning", `${manifest.path} > $schema`, "Manifest points at an unknown schema URL.", "Use the official CodeWard manifest schema URL or remove the field if the team intentionally manages validation elsewhere."));
+  if (!/schema\/qamap-manifest\.schema\.json$/i.test(manifest.$schema)) {
+    issues.push(issue("warning", `${manifest.path} > $schema`, "Manifest points at an unknown schema URL.", "Use the official QAMap manifest schema URL or remove the field if the team intentionally manages validation elsewhere."));
   }
 }
 
 function validateDomainDefinitions(manifest: LoadedVerificationManifest, issues: VerificationManifestValidationIssue[]): void {
   if (manifest.domains.length === 0) {
-    issues.push(issue("warning", `${manifest.path} > domains`, "No domains are declared.", "Run `codeward manifest init .` or add product domains manually."));
+    issues.push(issue("warning", `${manifest.path} > domains`, "No domains are declared.", "Run `qamap manifest init .` or add product domains manually."));
   }
   const ids = new Set<string>();
   for (const domain of manifest.domains) {
@@ -1170,7 +1179,7 @@ async function buildContextDiagnostics(
         "warning",
         `${manifestPath} > context`,
         "No repo-local context sources were found.",
-        "Add CONTEXT.md, ADRs, QA runbooks, or local agent instruction docs, then run `codeward manifest init .` from the default branch.",
+        "Add CONTEXT.md, ADRs, QA runbooks, or local agent instruction docs, then run `qamap manifest init .` from the default branch.",
       ),
     );
     return issues;
@@ -1182,7 +1191,7 @@ async function buildContextDiagnostics(
         "info",
         defaultVerificationManifestPath,
         "No verification manifest was found; this context report is a read-only preview.",
-        "Run `codeward manifest init .` from the default branch when this baseline should become team verification policy.",
+        "Run `qamap manifest init .` from the default branch when this baseline should become team verification policy.",
       ),
     );
   }
@@ -1912,10 +1921,10 @@ function isBehaviorFile(file: string): boolean {
 }
 
 function normalizeVerificationManifest(value: unknown, manifestPath: string): VerificationManifest {
-  const record = asRecord(value, `CodeWard manifest must be an object: ${manifestPath}`);
+  const record = asRecord(value, `QAMap manifest must be an object: ${manifestPath}`);
   const version = record.version;
   if (version !== 1) {
-    throw new Error(`CodeWard manifest version must be 1: ${manifestPath}`);
+    throw new Error(`QAMap manifest version must be 1: ${manifestPath}`);
   }
   const schema = readOptionalString(record, "$schema");
   const domains = Array.isArray(record.domains)
@@ -1951,7 +1960,7 @@ function normalizeInstructionFile(
   manifestPath: string,
   index: number,
 ): VerificationManifestInstructionFile {
-  const record = asRecord(value, `CodeWard manifest context file at index ${index} must be an object: ${manifestPath}`);
+  const record = asRecord(value, `QAMap manifest context file at index ${index} must be an object: ${manifestPath}`);
   return {
     path: readRequiredString(record, "path", manifestPath, index),
     kind: readInstructionKind(readOptionalString(record, "kind") ?? "agent-instruction", manifestPath, index),
@@ -1962,7 +1971,7 @@ function normalizeInstructionFile(
 }
 
 function normalizeDomain(value: unknown, manifestPath: string, index: number): VerificationManifestDomain {
-  const record = asRecord(value, `CodeWard manifest domain at index ${index} must be an object: ${manifestPath}`);
+  const record = asRecord(value, `QAMap manifest domain at index ${index} must be an object: ${manifestPath}`);
   const id = readRequiredString(record, "id", manifestPath, index);
   return {
     id,
@@ -1974,7 +1983,7 @@ function normalizeDomain(value: unknown, manifestPath: string, index: number): V
 }
 
 function normalizeFlow(value: unknown, manifestPath: string, index: number): VerificationManifestFlow {
-  const record = asRecord(value, `CodeWard manifest flow at index ${index} must be an object: ${manifestPath}`);
+  const record = asRecord(value, `QAMap manifest flow at index ${index} must be an object: ${manifestPath}`);
   const id = readRequiredString(record, "id", manifestPath, index);
   return {
     id,
@@ -2011,7 +2020,7 @@ function normalizeAnchor(
 ): VerificationManifestAnchor {
   const record = asRecord(
     value,
-    `CodeWard manifest anchor at flow ${flowIndex}, index ${anchorIndex} must be an object: ${manifestPath}`,
+    `QAMap manifest anchor at flow ${flowIndex}, index ${anchorIndex} must be an object: ${manifestPath}`,
   );
   return {
     kind: readAnchorKind(readOptionalString(record, "kind") ?? "file", manifestPath, anchorIndex),
@@ -2031,12 +2040,15 @@ function normalizeCheck(
 ): VerificationManifestCheck {
   const record = asRecord(
     value,
-    `CodeWard manifest check at flow ${flowIndex}, index ${checkIndex} must be an object: ${manifestPath}`,
+    `QAMap manifest check at flow ${flowIndex}, index ${checkIndex} must be an object: ${manifestPath}`,
   );
   return {
     id: readRequiredString(record, "id", manifestPath, checkIndex),
     title: readOptionalString(record, "title") ?? readRequiredString(record, "id", manifestPath, checkIndex),
     type: readCheckType(readOptionalString(record, "type") ?? "success", manifestPath, checkIndex),
+    selector: readOptionalString(record, "selector"),
+    value: readOptionalString(record, "value"),
+    steps: readStringArray(record, "steps"),
   };
 }
 
@@ -2082,7 +2094,7 @@ function parseVerificationManifest(raw: string, manifestPath: string): unknown {
     return YAML.parse(raw);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Could not parse CodeWard manifest at ${manifestPath}: ${message}`);
+    throw new Error(`Could not parse QAMap manifest at ${manifestPath}: ${message}`);
   }
 }
 
@@ -2164,7 +2176,7 @@ function asRecord(value: unknown, message: string): Record<string, unknown> {
 function readRequiredString(record: Record<string, unknown>, key: string, manifestPath: string, index: number): string {
   const value = readOptionalString(record, key);
   if (!value) {
-    throw new Error(`CodeWard manifest entry at index ${index} is missing ${key}: ${manifestPath}`);
+    throw new Error(`QAMap manifest entry at index ${index} is missing ${key}: ${manifestPath}`);
   }
   return value;
 }
@@ -2186,14 +2198,14 @@ function readCriticality(value: string, manifestPath: string, index: number): Ve
   if (value === "low" || value === "medium" || value === "high") {
     return value;
   }
-  throw new Error(`CodeWard manifest criticality at index ${index} must be low, medium, or high: ${manifestPath}`);
+  throw new Error(`QAMap manifest criticality at index ${index} must be low, medium, or high: ${manifestPath}`);
 }
 
 function readConfidence(value: string, manifestPath: string, index: number): VerificationManifestConfidence {
   if (value === "low" || value === "medium" || value === "high") {
     return value;
   }
-  throw new Error(`CodeWard manifest confidence at index ${index} must be low, medium, or high: ${manifestPath}`);
+  throw new Error(`QAMap manifest confidence at index ${index} must be low, medium, or high: ${manifestPath}`);
 }
 
 function readSourceKind(value: string): VerificationManifestSourceKind {
@@ -2211,14 +2223,14 @@ function readAnchorKind(value: string, manifestPath: string, index: number): Ver
   if (value === "api" || value === "component" || value === "file" || value === "route" || value === "test") {
     return value;
   }
-  throw new Error(`CodeWard manifest anchor kind at index ${index} is invalid: ${manifestPath}`);
+  throw new Error(`QAMap manifest anchor kind at index ${index} is invalid: ${manifestPath}`);
 }
 
 function readCheckType(value: string, manifestPath: string, index: number): VerificationManifestCheckType {
   if (value === "contract" || value === "edge" || value === "failure" || value === "success" || value === "visual") {
     return value;
   }
-  throw new Error(`CodeWard manifest check type at index ${index} is invalid: ${manifestPath}`);
+  throw new Error(`QAMap manifest check type at index ${index} is invalid: ${manifestPath}`);
 }
 
 function readInstructionKind(value: string, manifestPath: string, index: number): VerificationManifestInstructionKind {
@@ -2234,7 +2246,7 @@ function readInstructionKind(value: string, manifestPath: string, index: number)
   ) {
     return value;
   }
-  throw new Error(`CodeWard manifest context kind at index ${index} is invalid: ${manifestPath}`);
+  throw new Error(`QAMap manifest context kind at index ${index} is invalid: ${manifestPath}`);
 }
 
 function readInstructionRole(value: string, manifestPath: string, index: number): VerificationManifestInstructionRole {
@@ -2250,5 +2262,5 @@ function readInstructionRole(value: string, manifestPath: string, index: number)
   ) {
     return value;
   }
-  throw new Error(`CodeWard manifest context role at index ${index} is invalid: ${manifestPath}`);
+  throw new Error(`QAMap manifest context role at index ${index} is invalid: ${manifestPath}`);
 }

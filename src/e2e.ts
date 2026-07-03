@@ -1078,10 +1078,10 @@ interface E2eBootstrapPlanInput {
 function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
   const steps: E2eBootstrapStep[] = [];
   const runnerGap = input.missingTestability.find((gap) => /No \.maestro|No Playwright config/i.test(gap));
-  const draftCommand = `codeward e2e draft . --base ${input.base} --head ${input.head}`;
-  const planHistoryCommand = `codeward e2e plan . --base ${input.base} --head ${input.head} --record-history`;
-  const domainsSuggestCommand = `codeward domains suggest . --base ${input.base} --head ${input.head}`;
-  const flowsSuggestCommand = `codeward flows suggest . --base ${input.base} --head ${input.head}`;
+  const draftCommand = `qamap e2e draft . --base ${input.base} --head ${input.head}`;
+  const planHistoryCommand = `qamap e2e plan . --base ${input.base} --head ${input.head} --record-history`;
+  const domainsSuggestCommand = `qamap domains suggest . --base ${input.base} --head ${input.head}`;
+  const flowsSuggestCommand = `qamap flows suggest . --base ${input.base} --head ${input.head}`;
   const executionProfileBlockers = remainingExecutionProfileBlockers(input.executionProfile.blockers, runnerGap);
 
   if (input.workspaceTargets.length > 0) {
@@ -1126,8 +1126,8 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         `Configure ${formatRunnerName(input.recommendedRunner.name)} before making drafts required`,
         runnerGap,
         input.recommendedRunner.name === "playwright"
-          ? `${playwrightConfigGuidance(input.executionProfile)} Review the setup proposal, then run \`${input.runnerSetup.setupCommand ?? "codeward e2e setup . --runner playwright"}\` if the team accepts Playwright for this repo.`
-          : `Review the setup proposal, then run \`${input.runnerSetup.setupCommand ?? "codeward e2e setup . --runner maestro"}\` if the team accepts Maestro for this repo.`,
+          ? `${playwrightConfigGuidance(input.executionProfile)} Review the setup proposal, then run \`${input.runnerSetup.setupCommand ?? "qamap e2e setup . --runner playwright"}\` if the team accepts Playwright for this repo.`
+          : `Review the setup proposal, then run \`${input.runnerSetup.setupCommand ?? "qamap e2e setup . --runner maestro"}\` if the team accepts Maestro for this repo.`,
         setupCommands,
         [],
       ),
@@ -1138,7 +1138,7 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "runner",
         "ready",
         `${formatRunnerName(input.recommendedRunner.name)} setup signal detected`,
-        "CodeWard found enough runner setup evidence to generate runnable drafts.",
+        "QAMap found enough runner setup evidence to generate runnable drafts.",
         "Keep runner setup documented and linked from PR validation notes.",
         [],
         [],
@@ -1166,7 +1166,7 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "draft",
         "required",
         "Create the first changed-flow E2E draft",
-        "No existing test files were detected, so this branch needs a concrete first draft before CodeWard can compare coverage evidence.",
+        "No existing test files were detected, so this branch needs a concrete first draft before QAMap can compare coverage evidence.",
         "Generate the first draft, replace TODO selectors and setup values, then decide which paths should become required regression coverage.",
         [draftCommand],
         input.flows.flatMap((flow) => flow.files).slice(0, maxFilesPerFlow),
@@ -1192,9 +1192,9 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "domain-language",
         "recommended",
         "Promote repeated product words into a domain manifest",
-        `CodeWard inferred ${input.domainLanguage.terms.length} domain term${input.domainLanguage.terms.length === 1 ? "" : "s"} from changed files, but no shared domain manifest was found.`,
+        `QAMap inferred ${input.domainLanguage.terms.length} domain term${input.domainLanguage.terms.length === 1 ? "" : "s"} from changed files, but no shared domain manifest was found.`,
         "Generate a suggested domain manifest from this branch, review names and routes with the team, then commit only the terms that match team language.",
-        [domainsSuggestCommand, `${domainsSuggestCommand} --write .codeward/domains.yml`],
+        [domainsSuggestCommand, `${domainsSuggestCommand} --write .qamap/domains.yml`],
         input.domainLanguage.terms.flatMap((term) => term.files).slice(0, maxFilesPerFlow),
       ),
     );
@@ -1220,9 +1220,9 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "core-flow",
         input.flows.length > 0 ? "recommended" : "required",
         "Capture the first durable core flows",
-        "No .codeward/flows.yml manifest was found, so CodeWard can infer changed-flow candidates but cannot distinguish team-critical journeys yet.",
+        "No .qamap/flows.yml manifest was found, so QAMap can infer changed-flow candidates but cannot distinguish team-critical journeys yet.",
         "Generate suggested flow entries from this branch, keep only the journeys humans agree are durable, then commit them as team policy.",
-        [flowsSuggestCommand, `${flowsSuggestCommand} --write .codeward/flows.yml`],
+        [flowsSuggestCommand, `${flowsSuggestCommand} --write .qamap/flows.yml`],
         input.flows.flatMap((flow) => flow.files).slice(0, maxFilesPerFlow),
       ),
     );
@@ -1287,7 +1287,7 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "ready",
         "Entrypoint or selector evidence detected",
         "Generated drafts can reuse detected routes, screens, selectors, labels, or visible copy.",
-        "Review the generated locators and replace weak TODO placeholders before promoting the draft.",
+        "Review the generated locators and replace weak starter assertions with domain-specific checks before promoting the draft.",
         [],
         input.flows.flatMap((flow) => flow.selectors.map((selector) => selector.file)).slice(0, maxFilesPerFlow),
       ),
@@ -1355,7 +1355,7 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
         "recommended",
         "Expose at least one validation command",
         "No test, typecheck, lint, build, or E2E command was discovered for this project.",
-        "Add a project script or CodeWard validation command so PR evidence can include repeatable checks.",
+        "Add a project script or QAMap validation command so PR evidence can include repeatable checks.",
         [],
         [],
       ),
@@ -1393,18 +1393,18 @@ function manualBootstrapTitle(projectType: E2eProjectType): string {
 
 function manualBootstrapReason(projectType: E2eProjectType): string {
   if (projectType === "api-service") {
-    return "CodeWard detected an API or backend service, so generated output should start as a contract checklist before assuming a browser or device runner.";
+    return "QAMap detected an API or backend service, so generated output should start as a contract checklist before assuming a browser or device runner.";
   }
   if (projectType === "design-tokens") {
-    return "CodeWard detected design token artifacts, so generated output should verify schema, generated outputs, and consumer samples before assuming a browser journey.";
+    return "QAMap detected design token artifacts, so generated output should verify schema, generated outputs, and consumer samples before assuming a browser journey.";
   }
   if (projectType === "data-catalog") {
-    return "CodeWard detected taxonomy or catalog artifacts, so generated output should verify schema, generated outputs, and downstream consumers before assuming a browser journey.";
+    return "QAMap detected taxonomy or catalog artifacts, so generated output should verify schema, generated outputs, and downstream consumers before assuming a browser journey.";
   }
   if (projectType === "cli") {
-    return "CodeWard detected package executable commands, so generated output should verify command behavior, arguments, output, and exit codes before assuming a browser or device journey.";
+    return "QAMap detected package executable commands, so generated output should verify command behavior, arguments, output, and exit codes before assuming a browser or device journey.";
   }
-  return "CodeWard could not detect a web, Expo, React Native, or API service surface, so generated output should start as a manual checklist.";
+  return "QAMap could not detect a web, Expo, React Native, or API service surface, so generated output should start as a manual checklist.";
 }
 
 function manualBootstrapAction(projectType: E2eProjectType): string {
@@ -1722,7 +1722,7 @@ function buildDraftPromotionGuidance(flow: E2eFlow): E2eDraftPromotionGuidance {
     return {
       status: "needs-review",
       reason: "Verification manifest matched the change, but runnable entrypoint, selectors, or checks still need confirmation.",
-      action: "Refine `.codeward/manifest.yaml` anchors, route, and checks so the next draft is closer to runnable coverage.",
+      action: "Refine `.qamap/manifest.yaml` anchors, route, and checks so the next draft is closer to runnable coverage.",
     };
   }
 
@@ -1761,7 +1761,7 @@ function buildDraftPromotionGuidance(flow: E2eFlow): E2eDraftPromotionGuidance {
       return {
         status: "needs-review",
         reason: "The scenario came from changed code or UI copy, so a human should confirm the product wording.",
-        action: "Review the scenario name with the team, then commit it to `.codeward/domains.yml` or `.codeward/flows.yml` if it is durable.",
+        action: "Review the scenario name with the team, then commit it to `.qamap/domains.yml` or `.qamap/flows.yml` if it is durable.",
       };
     }
     return {
@@ -1869,8 +1869,8 @@ function buildDraftActionItems(
     items.push(draftActionItem(
       "assertion",
       "required",
-      "Turn generated TODOs into runnable assertions",
-      `Preserve the success signal "${flow.languageBrief.successSignal}" while replacing placeholder interactions and expects.`,
+      "Replace starter smoke assertions with domain assertions",
+      `Preserve the success signal "${flow.languageBrief.successSignal}" while replacing weak fallback interactions and generic expects.`,
     ));
   }
 
@@ -2282,6 +2282,18 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
     }
     return `Start from the product surface that owns ${flow.files[0]}.`;
   }
+  if (isApiContractFocusedFlow(flow)) {
+    return "Call one representative health, auth, or changed-domain endpoint.";
+  }
+  if (isCliCommandFocusedFlow(flow)) {
+    return "Run the representative changed CLI command path.";
+  }
+  if (isDesignTokenFocusedFlow(flow)) {
+    return "Run the token validation or artifact generation command.";
+  }
+  if (isCatalogFocusedFlow(flow)) {
+    return "Run the catalog validation or generation command.";
+  }
   return "Launch the app and wait for the first stable screen.";
 }
 
@@ -2454,7 +2466,7 @@ function lowercaseFirst(value: string): string {
 
 export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard E2E Plan");
+  lines.push("# QAMap E2E Plan");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   if (result.workspaceRoot) {
@@ -2775,7 +2787,7 @@ function appendVerificationManifestMatchesMarkdown(lines: string[], matches: Ver
   lines.push("## Manifest Recommendations");
   lines.push("");
   lines.push(
-    "These recommendations come from `.codeward/manifest.yaml`. If they are wrong, update the manifest path shown below so the next PR gets better suggestions.",
+    "These recommendations come from `.qamap/manifest.yaml`. If they are wrong, update the manifest path shown below so the next PR gets better suggestions.",
   );
   lines.push("");
 
@@ -2814,7 +2826,7 @@ function appendVerificationManifestMatchesMarkdown(lines: string[], matches: Ver
 
 export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard E2E Draft");
+  lines.push("# QAMap E2E Draft");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   lines.push(`- Runner: ${formatRunnerName(result.runner)}`);
@@ -2940,7 +2952,7 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
 
 export function formatMarkdownE2eSetup(result: E2eSetupResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard E2E Setup");
+  lines.push("# QAMap E2E Setup");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   lines.push(`- Runner: ${formatRunnerName(result.runner)}`);
@@ -3363,8 +3375,8 @@ async function buildRunnerSetupProposal(
 ): Promise<E2eRunnerSetupProposal> {
   const packageJson = await readPackageJson(root);
   const packageManager = await detectPackageManager(root, packageJson?.packageManager, workspaceRoot);
-  const setupCommand = `codeward e2e setup . --runner ${runner}`;
-  const draftCommand = `codeward e2e draft . --base ${base} --head ${head}`;
+  const setupCommand = `qamap e2e setup . --runner ${runner}`;
+  const draftCommand = `qamap e2e draft . --base ${base} --head ${head}`;
 
   if (runner === "manual") {
     return {
@@ -3500,7 +3512,7 @@ function setupNextCommands(commands: string[], draftResult: E2eDraftResult | und
   if (!draftResult || draftResult.files.length === 0) {
     return commands;
   }
-  return commands.filter((command) => !/^codeward e2e draft\b/.test(command));
+  return commands.filter((command) => !/^qamap e2e draft\b/.test(command));
 }
 
 async function applyPlaywrightSetup(
@@ -3618,7 +3630,7 @@ function maestroReadmeTemplate(profile: E2eExecutionProfile): string {
   const lines = [
     "# Maestro E2E Setup",
     "",
-    "This directory is prepared for CodeWard-generated Maestro flows.",
+    "This directory is prepared for QAMap-generated Maestro flows.",
     "",
     "## Run",
     "",
@@ -4162,7 +4174,7 @@ function workspaceTargetReason(packagePath: string, project: E2eProjectProfile, 
 
 function workspaceTargetCommand(packagePath: string, testPlan: TestPlanResult): string {
   const args = [
-    "codeward",
+    "qamap",
     "e2e",
     "plan",
     packagePath,
@@ -4235,6 +4247,7 @@ type DraftE2eFlow = E2eFlow & {
   domainScenario?: DomainScenarioSuggestion;
   coreFlow?: MatchedCoreFlow;
   manifestMatch?: VerificationManifestMatch;
+  manifestCheckMatches?: VerificationManifestMatch[];
 };
 
 async function buildFlows(
@@ -4469,7 +4482,7 @@ function buildFlowCandidates(
     candidates.push({
       kind: "changed-file",
       title: `${summarizeFlowSubject(candidateFiles, "Changed-file", domainLanguage)} smoke ${runner === "manual" ? "checklist" : "flow"}`,
-      reason: "Changed files did not match a specialized E2E pattern, so CodeWard generated a conservative smoke path tied only to the changed files.",
+      reason: "Changed files did not match a specialized E2E pattern, so QAMap generated a conservative smoke path tied only to the changed files.",
       files: candidateFiles,
       steps: [
         "Run or open the nearest workflow that imports the changed files.",
@@ -4501,7 +4514,7 @@ function buildLowSignalChangeCandidate(files: string[]): FlowCandidate | undefin
       kind: "test-evidence",
       title: "Changed test evidence verification checklist",
       reason:
-        "Only test files changed, so CodeWard should verify the test evidence and its protected behavior instead of inventing a product journey from test filenames.",
+        "Only test files changed, so QAMap should verify the test evidence and its protected behavior instead of inventing a product journey from test filenames.",
       files: changedFiles,
       steps: [
         "Run the changed test file or the nearest package test command.",
@@ -4549,7 +4562,7 @@ function buildLowSignalChangeCandidate(files: string[]): FlowCandidate | undefin
       kind: "test-evidence",
       title: "Changed evidence verification checklist",
       reason:
-        "The branch only changed verification evidence such as tests, docs, or generated output, so CodeWard should ask for proof that the evidence maps to real behavior before proposing a product E2E journey.",
+        "The branch only changed verification evidence such as tests, docs, or generated output, so QAMap should ask for proof that the evidence maps to real behavior before proposing a product E2E journey.",
       files: changedFiles,
       steps: [
         "Classify each changed file as test evidence, documentation, or generated output.",
@@ -4864,7 +4877,10 @@ async function inferFlowFixtureReadiness(
   }
 
   const apiSignals = await findApiDependencySignals(root, files, kind, setupHints);
-  const apiEndpoints = await findApiEndpointHints(root, uniqueStrings([...files, ...apiSignals]));
+  const apiEndpoints = uniqueStrings([
+    ...(await findApiEndpointHints(root, uniqueStrings([...files, ...apiSignals]))),
+    ...context.changedBackendFiles.flatMap(apiEndpointFromBackendFile),
+  ]).slice(0, maxFilesPerFlow);
   const requiresMock = apiSignals.length > 0 || setupHints.some((hint) => hint.kind === "network" || hint.kind === "payment");
   if (!requiresMock) {
     return {
@@ -4893,12 +4909,14 @@ async function inferFlowFixtureReadiness(
       backendSignals,
       mockSignals,
       nextActions: [
+        `Keep changed fixture/mock evidence aligned with this flow: ${formatFileSummary(changedMockSignals)}.`,
         "Keep deterministic success, empty, unauthorized, and failure fixture cases aligned with the changed flow.",
       ],
     };
   }
 
   if (context.projectMockFiles.length > 0) {
+    const reusableMockSignals = mockSignals.length > 0 ? mockSignals : context.projectMockFiles;
     return {
       status: "partial",
       reason: "Mock or fixture infrastructure exists, but this branch does not add flow-specific fixture evidence.",
@@ -4907,7 +4925,7 @@ async function inferFlowFixtureReadiness(
       backendSignals,
       mockSignals,
       nextActions: [
-        "Add or update the fixture/mock response for this changed flow before making the draft required.",
+        `Reuse or extend existing fixture/mock evidence for this flow: ${formatFileSummary(reusableMockSignals)}.`,
         "Cover the primary success response and one empty, rejected, or server-error response.",
       ],
     };
@@ -5020,6 +5038,34 @@ function normalizeApiEndpointHint(value: string | undefined): string | undefined
   return endpoint;
 }
 
+function apiEndpointFromBackendFile(file: string): string[] {
+  const normalized = toPosixPath(file).replace(/\.(?:[cm]?[jt]sx?|py|go|rs|kt|java|rb|php)$/i, "");
+  const segments = normalized.split("/").filter(Boolean);
+  const appIndex = segments.findIndex((segment) => segment === "app");
+  if (appIndex >= 0 && segments[appIndex + 1] === "api") {
+    return [`/api/${routeSegmentsFromFileParts(segments.slice(appIndex + 2)).join("/")}`.replace(/\/+$/g, "") || "/api"];
+  }
+  const pagesIndex = segments.findIndex((segment) => segment === "pages");
+  if (pagesIndex >= 0 && segments[pagesIndex + 1] === "api") {
+    return [`/api/${routeSegmentsFromFileParts(segments.slice(pagesIndex + 2)).join("/")}`.replace(/\/+$/g, "") || "/api"];
+  }
+  const apiIndex = segments.findIndex((segment) => segment === "api" || segment === "apis");
+  if (apiIndex >= 0) {
+    const routeSegments = routeSegmentsFromFileParts(segments.slice(apiIndex + 1));
+    if (routeSegments.length > 0) {
+      return [`/api/${routeSegments.join("/")}`];
+    }
+  }
+  return [];
+}
+
+function routeSegmentsFromFileParts(parts: string[]): string[] {
+  return parts
+    .filter((segment) => !/^(?:route|handler|controller|index)$/.test(segment))
+    .map((segment) => segment.replace(/^\[(\.\.\.)?(.+)\]$/, ":$2"))
+    .filter(Boolean);
+}
+
 function isBackendImplementationFile(file: string): boolean {
   return /(?:^|\/)(?:server|servers|backend|api|apis|routes|controllers?|handlers?|resolvers?|endpoints?)\//i.test(file) ||
     /(?:openapi|swagger|schema|controller|handler|resolver|route)\.(?:json|ya?ml|[cm]?[jt]sx?|py|go|rs|kt|java|rb|php)$/i.test(file) ||
@@ -5027,9 +5073,34 @@ function isBackendImplementationFile(file: string): boolean {
 }
 
 function isMockOrFixtureFile(file: string): boolean {
+  if (isFixtureEvidenceIgnoredPath(file)) {
+    return false;
+  }
+  const basename = path.basename(file);
+  const stem = basename.replace(/\.[^.]+$/g, "");
+  const extension = path.extname(basename).toLowerCase();
+  const canUseBroadFilenameMatch = fixtureEvidenceSourceExtensions.has(extension);
   return /(?:^|\/)(?:__mocks__|mocks?|fixtures?|factories|seeds?|test-data|testData|msw|mirage)\//i.test(file) ||
-    /(?:mock|fixture|factory|seed|handler|msw)\.[cm]?[jt]sx?$/i.test(file);
+    /(?:mock|fixture|factory|seed|handler|msw)\.[cm]?[jt]sx?$/i.test(basename) ||
+    (canUseBroadFilenameMatch && /(?:mock|fixture|factory|seed|msw|mirage)/i.test(stem));
 }
+
+function isFixtureEvidenceIgnoredPath(file: string): boolean {
+  return /(?:^|\/)(?:node_modules|vendor|vendors|Pods|build|dist|coverage|\.next|\.nuxt|\.expo|\.turbo|\.yarn\/cache)\//i.test(file);
+}
+
+const fixtureEvidenceSourceExtensions = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".py",
+]);
 
 function isRelatedEvidenceFile(evidenceFile: string, flowFiles: string[]): boolean {
   if (flowFiles.length === 0) {
@@ -6020,6 +6091,10 @@ function mergeDraftFlows(left: DraftE2eFlow, right: DraftE2eFlow): DraftE2eFlow 
     missingTestability: uniqueStrings([...left.missingTestability, ...right.missingTestability]),
     draftSource: preferredDraftSource(left.draftSource, right.draftSource),
     manifestMatch: left.manifestMatch ?? right.manifestMatch,
+    manifestCheckMatches: uniqueManifestCheckMatches([
+      ...(left.manifestCheckMatches ?? []),
+      ...(right.manifestCheckMatches ?? []),
+    ]),
     domainScenario: left.domainScenario ?? right.domainScenario,
     coreFlow: left.coreFlow ?? right.coreFlow,
   };
@@ -6027,6 +6102,20 @@ function mergeDraftFlows(left: DraftE2eFlow, right: DraftE2eFlow): DraftE2eFlow 
     ...mergedFlow,
     languageBrief: buildFlowLanguageBrief(mergedFlow),
   };
+}
+
+function uniqueManifestCheckMatches(matches: VerificationManifestMatch[]): VerificationManifestMatch[] {
+  const seen = new Set<string>();
+  const unique: VerificationManifestMatch[] = [];
+  for (const match of matches) {
+    const key = `${match.id}:${match.name}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(match);
+  }
+  return unique;
 }
 
 function preferredDraftSource(left: DraftFlowSource | undefined, right: DraftFlowSource | undefined): DraftFlowSource | undefined {
@@ -6103,6 +6192,7 @@ async function buildManifestDraftFlow(
     missingTestability: await findFlowTestabilityGaps(plan.root, files, runner),
     draftSource: "verification-manifest",
     manifestMatch: match,
+    manifestCheckMatches: relatedChecks,
     coreFlow: coreFlowForManifestMatch(plan, match),
   };
   return {
@@ -6136,7 +6226,14 @@ function manifestStepsForMatch(
     name: checkTitle,
     checks: [checkTitle],
   }));
-  return uniqueStrings(checks.map(manifestStepForCheckMatch));
+  return uniqueStrings(checks.flatMap(manifestStepsForCheckMatch));
+}
+
+function manifestStepsForCheckMatch(match: VerificationManifestMatch): string[] {
+  if (match.checkSteps && match.checkSteps.length > 0) {
+    return match.checkSteps.map((step) => withTerminalPeriod(step.trim())).filter(Boolean);
+  }
+  return [manifestStepForCheckMatch(match)];
 }
 
 function manifestStepForCheckMatch(match: VerificationManifestMatch): string {
@@ -6192,7 +6289,7 @@ function manifestEntrypoints(
     {
       kind: "route",
       value: route,
-      file: plan.verificationManifestPath ?? ".codeward/manifest.yaml",
+      file: plan.verificationManifestPath ?? ".qamap/manifest.yaml",
       confidence: match.confidence === "high" ? "high" : "medium",
     },
   ];
@@ -6385,7 +6482,7 @@ function coreFlowEntrypoints(
   if (!coreFlow || runner === "maestro") {
     return [];
   }
-  const manifestPath = plan.coreFlowManifestPath ?? ".codeward/flows.yml";
+  const manifestPath = plan.coreFlowManifestPath ?? ".qamap/flows.yml";
   return coreFlow.routes
     .map((route) => normalizeEntrypointRoute(route))
     .filter((route): route is string => Boolean(route))
@@ -6700,21 +6797,16 @@ function draftSelfCheckSummary(checks: E2eDraftSelfCheckItem[], runnerName: stri
 }
 
 function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
-  const coverage = buildCoverageTargets("changed-file", [], plan.recommendedRunner.name);
+  const fallback = fallbackFlowDefinition(plan.project.type);
+  const coverage = buildCoverageTargets(fallback.kind, [], plan.recommendedRunner.name);
   const flow: Omit<E2eFlow, "languageBrief"> = {
-    title: "App launch smoke flow",
-    reason:
-      "No changed user-facing files were detected, so CodeWard generated a minimal smoke draft for the detected app surface.",
+    title: fallback.title,
+    reason: fallback.reason,
     files: [],
-    steps: [
-      "Launch the app.",
-      "Verify the first screen renders.",
-      "Exercise the primary visible action if one is present.",
-      "Verify the app remains usable after the action.",
-    ],
+    steps: fallback.steps,
     coverage,
     coverageEvidence: evaluateFlowCoverageEvidence(
-      { title: "App launch smoke flow", files: [], coverage },
+      { title: fallback.title, files: [], coverage },
       {
         ...plan.testSuite,
         files: [],
@@ -6723,13 +6815,13 @@ function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
     entrypoints: [],
     setupHints: [],
     fixtureReadiness: {
-      status: "not-needed",
-      reason: "No API, network, payment, or external-response dependency was detected for this fallback flow.",
+      status: fallback.fixtureStatus,
+      reason: fallback.fixtureReason,
       apiSignals: [],
       apiEndpoints: [],
       backendSignals: [],
       mockSignals: [],
-      nextActions: [],
+      nextActions: fallback.fixtureActions,
     },
     selectors: [],
     missingTestability: plan.missingTestability,
@@ -6737,6 +6829,103 @@ function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
   return {
     ...flow,
     languageBrief: buildFlowLanguageBrief(flow),
+  };
+}
+
+function fallbackFlowDefinition(projectType: E2eProjectType): {
+  title: string;
+  reason: string;
+  steps: string[];
+  kind: E2eFlowKind;
+  fixtureStatus: E2eFixtureReadinessStatus;
+  fixtureReason: string;
+  fixtureActions: string[];
+} {
+  if (projectType === "api-service") {
+    return {
+      title: "API contract smoke flow",
+      reason:
+        "No changed endpoint-specific files were detected, so QAMap generated a service contract smoke checklist instead of an app-launch journey.",
+      steps: [
+        "Start the service with the documented local command.",
+        "Call one representative health, auth, or changed-domain endpoint.",
+        "Verify response status, response shape, auth behavior, and error handling.",
+        "Record the request example and response fixture as PR evidence.",
+      ],
+      kind: "api",
+      fixtureStatus: "missing",
+      fixtureReason: "API service smoke coverage needs at least one deterministic request and response fixture before it can be trusted.",
+      fixtureActions: [
+        "Add a success response fixture plus one unauthorized, validation, timeout, or server-error response.",
+        "Document the local base URL, auth header, and request payload used for the contract check.",
+      ],
+    };
+  }
+  if (projectType === "cli") {
+    return {
+      title: "CLI command smoke flow",
+      reason:
+        "No changed command-specific files were detected, so QAMap generated a command contract smoke checklist.",
+      steps: [
+        "Run the documented help or version command.",
+        "Run one valid command invocation with a small fixture input.",
+        "Verify stdout, stderr, exit code, and generated files.",
+        "Run one invalid argument path and verify the failure message.",
+      ],
+      kind: "command",
+      fixtureStatus: "not-needed",
+      fixtureReason: "CLI fallback coverage starts with command arguments, output, exit code, and fixture files rather than API response data.",
+      fixtureActions: [],
+    };
+  }
+  if (projectType === "design-tokens") {
+    return {
+      title: "Design token artifact smoke flow",
+      reason:
+        "No changed token-specific files were detected, so QAMap generated an artifact validation checklist.",
+      steps: [
+        "Run the token validation or build command.",
+        "Regenerate published token artifacts.",
+        "Verify one representative consumer, visual sample, or theme fixture.",
+        "Record any renamed, removed, or newly-required token fields.",
+      ],
+      kind: "artifact",
+      fixtureStatus: "not-needed",
+      fixtureReason: "Design token fallback coverage needs generated artifacts and consumer samples rather than API response fixtures.",
+      fixtureActions: [],
+    };
+  }
+  if (projectType === "data-catalog") {
+    return {
+      title: "Catalog artifact smoke flow",
+      reason:
+        "No changed catalog-specific files were detected, so QAMap generated a catalog validation checklist.",
+      steps: [
+        "Run the catalog schema or generation command.",
+        "Verify the generated export or documentation artifact.",
+        "Run one downstream consumer, ingestion, or migration fixture if available.",
+        "Record renamed, removed, deprecated, or newly-required fields.",
+      ],
+      kind: "catalog",
+      fixtureStatus: "not-needed",
+      fixtureReason: "Catalog fallback coverage needs schema, generated output, and consumer fixtures rather than API response data.",
+      fixtureActions: [],
+    };
+  }
+  return {
+    title: "App launch smoke flow",
+    reason:
+      "No changed user-facing files were detected, so QAMap generated a minimal smoke draft for the detected app surface.",
+    steps: [
+      "Launch the app.",
+      "Verify the first screen renders.",
+      "Exercise the primary visible action if one is present.",
+      "Verify the app remains usable after the action.",
+    ],
+    kind: "changed-file",
+    fixtureStatus: "not-needed",
+    fixtureReason: "No API, network, payment, or external-response dependency was detected for this fallback flow.",
+    fixtureActions: [],
   };
 }
 
@@ -6784,7 +6973,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   const lines: string[] = [];
   const selectorQueue = [...flow.selectors];
   const scenario = domainScenarioForFlow(flow);
-  lines.push(`# Generated by CodeWard ${VERSION}`);
+  lines.push(`# Generated by QAMap ${VERSION}`);
   lines.push(`# Flow: ${flow.title}`);
   if (scenario) {
     lines.push(`# Domain scenario: ${scenario.title}`);
@@ -6840,7 +7029,8 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
 
 type MaestroDraftCommand =
   | { kind: "tapOn" | "assertVisible" | "swipe"; value: string }
-  | { kind: "inputText"; target: string; text: string };
+  | { kind: "inputText"; target: string; text: string }
+  | { kind: "comment"; value: string };
 
 function maestroCommandForStep(
   step: string,
@@ -6856,7 +7046,7 @@ function maestroCommandForStep(
   if (isAssertionStep(step)) {
     return {
       kind: "assertVisible",
-      value: selector ? maestroSelectorValue(selector) : quoteYaml(`TODO: ${step}`),
+      value: selector ? maestroSelectorValue(selector) : quoteYaml(".*"),
     };
   }
   if (selector && isInputSelector(selector) && isInteractionStep(step)) {
@@ -6866,9 +7056,15 @@ function maestroCommandForStep(
       text: quoteYaml(sampleInputForStepOrSelector(step, selector.value)),
     };
   }
+  if (!selector) {
+    return {
+      kind: "comment",
+      value: `QAMap could not infer a stable Maestro selector for: ${step}`,
+    };
+  }
   return {
     kind: "tapOn",
-    value: selector ? maestroSelectorValue(selector) : quoteYaml(`TODO: ${step}`),
+    value: maestroSelectorValue(selector),
   };
 }
 
@@ -6877,7 +7073,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   const selectorQueue = [...flow.selectors];
   const scenario = domainScenarioForFlow(flow);
   const lines: string[] = [];
-  lines.push(`// Generated by CodeWard ${VERSION}`);
+  lines.push(`// Generated by QAMap ${VERSION}`);
   lines.push(`// Base: ${plan.base}`);
   lines.push(`// Head: ${plan.head}`);
   lines.push(`// Flow: ${flow.title}`);
@@ -6909,7 +7105,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
     }
     lines.push("  };");
     if (routeDraft.params.some((param) => param.value === undefined)) {
-      lines.push("  // TODO: Replace routeParams with fixture ids, tabs, or slugs from the target environment.");
+      lines.push("  // QAMap used stable sample route params; replace them with domain fixture values when available.");
     } else {
       lines.push("  // Route params were inferred from concrete route hints in the changed files.");
     }
@@ -6919,11 +7115,13 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
     `await page.goto(${routeDraft.expression});`,
   ]);
   for (const step of draftExecutableSteps(flow, "playwright")) {
-    const selector = takeSelectorForStep(selectorQueue, step);
-    const locator = selector ? playwrightLocator(selector) : 'page.getByText("TODO")';
-    const body = selector
-      ? playwrightActionForStep(selector, locator, step)
-      : [`// TODO: ${step}`, `await expect(${locator}).toBeVisible();`];
+    const manifestCheck = manifestCheckForDraftStep(flow, step);
+    const manifestBody = manifestCheck ? playwrightActionForManifestCheck(manifestCheck, step) : undefined;
+    const selector = manifestBody ? undefined : takeSelectorForStep(selectorQueue, step);
+    const body = manifestBody ??
+      (selector
+        ? playwrightActionForStep(selector, playwrightLocator(selector), step)
+        : playwrightFallbackActionForStep(step));
     appendPlaywrightTestStep(lines, step, body);
   }
   appendDomainScenarioComments(lines, flow, "  //");
@@ -6989,7 +7187,7 @@ function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   const lines: string[] = [];
   lines.push(`# ${flow.title}`);
   lines.push("");
-  lines.push(`Generated by CodeWard ${VERSION}.`);
+  lines.push(`Generated by QAMap ${VERSION}.`);
   if (scenario) {
     lines.push("");
     lines.push(`Domain scenario: ${scenario.title}`);
@@ -7575,14 +7773,29 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
   if (flow.fixtureReadiness.status === "not-needed" || flow.fixtureReadiness.apiEndpoints.length === 0) {
     return;
   }
+  const changedEndpointHints = uniqueStrings(flow.fixtureReadiness.backendSignals.flatMap(apiEndpointFromBackendFile));
+  const observedEndpoints = changedEndpointHints.length > 0
+    ? changedEndpointHints
+    : flow.fixtureReadiness.backendSignals.length > 0
+    ? flow.fixtureReadiness.apiEndpoints
+    : [];
+  if (observedEndpoints.length > 0) {
+    appendPlaywrightApiObservationScaffold(lines, observedEndpoints);
+  }
+  const mockableEndpoints = flow.fixtureReadiness.backendSignals.length > 0
+    ? flow.fixtureReadiness.apiEndpoints.filter((endpoint) => !endpointMatchesAny(endpoint, observedEndpoints))
+    : flow.fixtureReadiness.apiEndpoints;
+  if (mockableEndpoints.length === 0) {
+    return;
+  }
   lines.push("");
   lines.push("  const mockApiResponses = {");
-  for (const endpoint of flow.fixtureReadiness.apiEndpoints.slice(0, maxFilesPerFlow)) {
+  for (const endpoint of mockableEndpoints.slice(0, maxFilesPerFlow)) {
     lines.push(`    "${quoteJs(playwrightMockRoutePattern(endpoint))}": {`);
     lines.push("      status: 200,");
     lines.push("      body: {");
     lines.push('        ok: true,');
-    lines.push('        source: "codeward-draft",');
+    lines.push('        source: "qamap-draft",');
     lines.push("      },");
     lines.push("    },");
   }
@@ -7597,6 +7810,32 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
   lines.push("      });");
   lines.push("    });");
   lines.push("  }");
+}
+
+function appendPlaywrightApiObservationScaffold(lines: string[], endpoints: string[]): void {
+  lines.push("");
+  lines.push("  const changedApiEndpointPatterns = [");
+  for (const endpoint of endpoints.slice(0, maxFilesPerFlow)) {
+    lines.push(`    "${quoteJs(playwrightMockRoutePattern(endpoint))}",`);
+  }
+  lines.push("  ];");
+  lines.push("  const observedChangedApiResponses: Array<{ url: string; status: number }> = [];");
+  lines.push("  page.on(\"response\", (response) => {");
+  lines.push("    if (changedApiEndpointPatterns.some((pattern) => response.url().includes(pattern.replace(/^\\*\\*/, \"\")))) {");
+  lines.push("      observedChangedApiResponses.push({ url: response.url(), status: response.status() });");
+  lines.push("    }");
+  lines.push("  });");
+  lines.push("  // Changed API endpoints are observed, not intercepted with synthetic responses, so the draft does not hide the contract under test.");
+}
+
+function endpointMatchesAny(endpoint: string, candidates: string[]): boolean {
+  const normalizedEndpoint = endpoint.replace(/^\*\*/, "");
+  return candidates.some((candidate) => {
+    const normalizedCandidate = candidate.replace(/^\*\*/, "");
+    return normalizedEndpoint === normalizedCandidate ||
+      normalizedEndpoint.endsWith(normalizedCandidate) ||
+      normalizedCandidate.endsWith(normalizedEndpoint);
+  });
 }
 
 function playwrightMockRoutePattern(endpoint: string): string {
@@ -7776,7 +8015,7 @@ function routeParamPlaceholder(name: string): string {
     .replace(/[^A-Za-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
-  return `TODO-${readableName || "param"}`;
+  return `qamap-${readableName || "param"}`;
 }
 
 function quoteTemplateLiteralPart(value: string): string {
@@ -7865,7 +8104,7 @@ function buildDraftNextSteps(plan: E2ePlanResult, runner: E2eRunnerName): string
 
 function manualDraftNextStep(projectType: E2eProjectType): string {
   if (projectType === "api-service") {
-    return "Document the API contract start command, request examples, auth fixture, and failure cases before treating the checklist as PR evidence.";
+    return "Document the API contract start command, request examples, response status, response shape, auth behavior, and error handling fixtures before treating the checklist as PR evidence.";
   }
   if (projectType === "design-tokens") {
     return "Document the token validation command, artifact generation command, and representative consumer fixture before treating the checklist as PR evidence.";
@@ -7954,6 +8193,9 @@ function countTodos(content: string): number {
 }
 
 function formatMaestroCommand(command: MaestroDraftCommand): string[] {
+  if (command.kind === "comment") {
+    return [`# ${command.value}`];
+  }
   if (command.kind === "inputText") {
     return [`- tapOn: ${command.target}`, `- inputText: ${command.text}`];
   }
@@ -8122,24 +8364,185 @@ function playwrightActionForStep(selector: E2eSelector, locator: string, step: s
   return body;
 }
 
+interface ManifestSelectorHint {
+  locator: string;
+  selectorText: string;
+}
+
+function manifestCheckForDraftStep(flow: E2eFlow, step: string): VerificationManifestMatch | undefined {
+  const checks = (flow as DraftE2eFlow).manifestCheckMatches ?? [];
+  const stepKey = normalizeManifestStepKey(step);
+  return checks.find((check) =>
+    manifestStepsForCheckMatch(check).some((candidate) => normalizeManifestStepKey(candidate) === stepKey) ||
+    normalizeManifestStepKey(check.name) === stepKey ||
+    stepKey.includes(normalizeManifestStepKey(check.name)),
+  );
+}
+
+function playwrightActionForManifestCheck(match: VerificationManifestMatch, step: string): string[] | undefined {
+  const instruction = manifestDraftInstruction(match, step);
+  const body = [`// Step intent: ${step}`];
+  if (instruction.route && isEntrypointPreparationStep(step)) {
+    body.push(`await page.goto("${quoteJs(instruction.route)}");`);
+    return body;
+  }
+  if (!instruction.selector) {
+    return undefined;
+  }
+  if (instruction.action === "fill") {
+    body.push(`await ${instruction.selector.locator}.fill("${quoteJs(instruction.value ?? sampleInputForStepOrSelector(step, instruction.selector.selectorText))}");`);
+    return body;
+  }
+  if (instruction.action === "assert") {
+    body.push(`await expect(${instruction.selector.locator}).toBeVisible();`);
+    return body;
+  }
+  if (instruction.action === "click") {
+    body.push(`await ${instruction.selector.locator}.click();`);
+    return body;
+  }
+  return undefined;
+}
+
+function manifestDraftInstruction(
+  match: VerificationManifestMatch,
+  step: string,
+): {
+  action?: "assert" | "click" | "fill";
+  route?: string;
+  selector?: ManifestSelectorHint;
+  value?: string;
+} {
+  const text = [step, match.name, ...(match.checks ?? [])].join(" ");
+  const selector = selectorHintFromManifestText(match.checkSelector) ?? selectorHintFromManifestText(text);
+  const value = match.checkValue ?? sampleValueFromManifestText(text);
+  const route = routeFromManifestText(text);
+  const action = manifestActionForStep(step, match, selector, value);
+  return { action, route, selector, value };
+}
+
+function manifestActionForStep(
+  step: string,
+  match: VerificationManifestMatch,
+  selector: ManifestSelectorHint | undefined,
+  value: string | undefined,
+): "assert" | "click" | "fill" | undefined {
+  if (!selector) {
+    return undefined;
+  }
+  if (value || isInputStep(step)) {
+    return "fill";
+  }
+  if (
+    isAssertionStep(step) ||
+    match.checkType === "failure" ||
+    match.checkType === "visual" ||
+    /^(?:show|display|render|verify|assert|confirm)\b/i.test(stripTerminalPunctuation(step))
+  ) {
+    return "assert";
+  }
+  if (isInteractionStep(step) || canUsePrimarySelector(step)) {
+    return "click";
+  }
+  return undefined;
+}
+
+function selectorHintFromManifestText(value: string | undefined): ManifestSelectorHint | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const text = value.trim();
+  const attribute = text.match(/\[\s*(data-testid|data-test|testid|testID|aria-label|placeholder)\s*=\s*["']?([^"'\]]+)["']?\s*\]/i) ??
+    text.match(/\b(data-testid|data-test|testid|testID|aria-label|placeholder)\s*[:=]\s*["']?([^"',\]\s]+(?: [^"',\]]+)*)["']?/i);
+  if (attribute) {
+    return selectorHintFromAttribute(attribute[1], attribute[2]);
+  }
+  const role = text.match(/\brole\s*[:=]\s*(button|link)\s*[:=]\s*["']?([^"',\]\s]+(?: [^"',\]]+)*)["']?/i);
+  if (role) {
+    const roleName = role[1].toLowerCase();
+    const label = stripTerminalPunctuation(role[2].trim());
+    return {
+      locator: `page.getByRole("${quoteJs(roleName)}", { name: "${quoteJs(label)}" })`,
+      selectorText: label,
+    };
+  }
+  return undefined;
+}
+
+function selectorHintFromAttribute(attributeName: string | undefined, rawValue: string | undefined): ManifestSelectorHint | undefined {
+  const value = stripTerminalPunctuation(rawValue?.trim() ?? "");
+  if (!value) {
+    return undefined;
+  }
+  const normalizedName = attributeName?.toLowerCase();
+  if (normalizedName === "data-testid" || normalizedName === "data-test" || normalizedName === "testid") {
+    return { locator: `page.getByTestId("${quoteJs(value)}")`, selectorText: value };
+  }
+  if (normalizedName === "aria-label") {
+    return { locator: `page.getByLabel("${quoteJs(value)}")`, selectorText: value };
+  }
+  if (normalizedName === "placeholder") {
+    return { locator: `page.getByPlaceholder("${quoteJs(value)}")`, selectorText: value };
+  }
+  return undefined;
+}
+
+function sampleValueFromManifestText(value: string): string | undefined {
+  const text = value.replace(/\[[^\]]+\]/g, " ");
+  const url = text.match(/\bhttps?:\/\/[^\s"'`)]+/i)?.[0];
+  if (url) {
+    return stripTerminalPunctuation(url);
+  }
+  const quoted = text.match(/\b(?:with|to|as|value|enter|input|fill|type)\s+(["'`])([^"'`]+)\1/i);
+  if (quoted?.[2]) {
+    return quoted[2].trim();
+  }
+  const bare = text.match(/\b(?:with|to|as|value|enter|input|fill|type)\s+([A-Z0-9][A-Z0-9_-]{2,})\b/);
+  return bare?.[1];
+}
+
+function routeFromManifestText(value: string): string | undefined {
+  const text = value.replace(/\bhttps?:\/\/\S+/gi, " ");
+  const route = text.match(/(?:^|[\s(])((?!\/\/)\/[A-Za-z0-9._~:/?#[\]@!$&'()*+,;=%-]+)/)?.[1];
+  if (!route) {
+    return undefined;
+  }
+  return normalizeEntrypointRoute(stripTerminalPunctuation(route));
+}
+
+function normalizeManifestStepKey(value: string): string {
+  return stripTerminalPunctuation(value)
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function playwrightFallbackActionForStep(step: string): string[] {
+  return [
+    `// QAMap could not infer a stable locator for this step: ${step}`,
+    "// Keep this as a runnable smoke assertion, then replace it with a domain-specific locator when the app exposes one.",
+    'await expect(page.locator("body")).toBeVisible();',
+  ];
+}
+
 function sampleInputForStepOrSelector(step: string, selector: string): string {
   return playwrightSampleInput(`${step} ${selector}`);
 }
 
 function playwrightSampleInput(label: string): string {
   if (/\b(?:email|e-mail|메일)\b/i.test(label)) {
-    return "codeward@example.com";
+    return "qamap@example.com";
   }
   if (/\b(?:url|link|링크|주소)\b/i.test(label)) {
-    return "https://example.com/codeward";
+    return "https://example.com/qamap";
   }
   if (/\b(?:code|otp|pin|코드|인증)\b/i.test(label)) {
     return "123456";
   }
   if (/\b(?:name|이름)\b/i.test(label)) {
-    return "CodeWard Test";
+    return "QAMap Test";
   }
-  return "CodeWard sample value";
+  return "QAMap sample value";
 }
 
 function isGestureStep(step: string): boolean {

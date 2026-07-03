@@ -1,18 +1,18 @@
-# CodeWard Eval
+# QAMap Eval
 
-`codeward eval` scores whether a branch is ready for human review in an AI-assisted workflow.
+`qamap eval` scores whether a branch is ready for human review in an AI-assisted workflow.
 
 It does not try to prove that the code is correct. Instead, it checks whether reviewers have enough evidence to trust, challenge, and verify the change without absorbing unnecessary cognitive load.
 
-For a complete PR-facing report that also includes CodeWard review findings and suggested domain tests, use `codeward verify`.
+For a complete PR-facing report that also includes QAMap review findings and suggested domain tests, use `qamap verify`.
 
 ## Usage
 
 ```sh
-codeward verify . --base origin/main --head HEAD --pr-body-file pr-body.md
-codeward eval . --base origin/main --head HEAD --format markdown
-codeward eval . --base origin/main --head HEAD --pr-body-file pr-body.md
-codeward eval services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
+qamap verify . --base origin/main --head HEAD --pr-body-file pr-body.md
+qamap eval . --base origin/main --head HEAD --format markdown
+qamap eval . --base origin/main --head HEAD --pr-body-file pr-body.md
+qamap eval services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
 ```
 
 The GitHub Action can append the same report to the PR comment. On pull request events it reads the PR body from `GITHUB_EVENT_PATH`.
@@ -30,7 +30,7 @@ Each gate is scored from `0` to `2`.
 | Domain test plan | Changed files can be mapped to focused domain verification scenarios. |
 | Review size | The branch is small enough to review without unnecessary verification tax. |
 
-`validationCommands` in `codeward.config.json` can supply commands for custom stacks or monorepos when standard project files are not enough.
+`validationCommands` in `qamap.config.json` can supply commands for custom stacks or monorepos when standard project files are not enough.
 
 ## Ratings
 
@@ -49,4 +49,4 @@ AI-assisted code often looks plausible before it is truly understood. That creat
 - cognitive debt: reviewers receive more code than they can meaningfully understand
 - intent debt: the reason for a change disappears into a prompt or chat session
 
-`codeward eval` turns those risks into a small, static, explainable checklist that can run locally or in CI.
+`qamap eval` turns those risks into a small, static, explainable checklist that can run locally or in CI.

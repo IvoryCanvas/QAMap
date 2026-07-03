@@ -1,40 +1,40 @@
 # Verification Manifest
 
-`.codeward/manifest.yaml` is CodeWard's repo-local verification memory. It lets a team capture the product domains, flows, anchors, and checks that static analysis cannot reliably infer from code alone.
+`.qamap/manifest.yaml` is QAMap's repo-local verification memory. It lets a team capture the product domains, flows, anchors, and checks that static analysis cannot reliably infer from code alone.
 
-> **Important:** create the shared team baseline from the repository's default branch, after pulling the latest changes. CodeWard reads the current checkout and does not silently switch branches, so a manifest generated on a feature branch represents that feature branch rather than the team's default QA map.
+> **Important:** create the shared team baseline from the repository's default branch, after pulling the latest changes. QAMap reads the current checkout and does not silently switch branches, so a manifest generated on a feature branch represents that feature branch rather than the team's default QA map.
 
 The intended workflow for the first shared baseline is:
 
 ```sh
 git switch main
 git pull
-codeward manifest context .
-codeward manifest init .
-codeward manifest validate .
+qamap manifest context .
+qamap manifest init .
+qamap manifest validate .
 ```
 
 Then use the committed manifest from feature branches or PR branches:
 
 ```sh
-codeward manifest explain . --base origin/main --head HEAD
-codeward e2e draft . --base origin/main --head HEAD --dry-run
+qamap manifest explain . --base origin/main --head HEAD
+qamap e2e draft . --base origin/main --head HEAD --dry-run
 ```
 
-Or preview adoption without writing `.codeward/manifest.yaml` into the target repository:
+Or preview adoption without writing `.qamap/manifest.yaml` into the target repository:
 
 ```sh
-codeward manifest init . --write /tmp/codeward-manifest.yaml
-codeward manifest validate . --manifest /tmp/codeward-manifest.yaml
-codeward manifest explain . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD
-codeward e2e draft . --manifest /tmp/codeward-manifest.yaml --base origin/main --head HEAD --dry-run
+qamap manifest init . --write /tmp/qamap-manifest.yaml
+qamap manifest validate . --manifest /tmp/qamap-manifest.yaml
+qamap manifest explain . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD
+qamap e2e draft . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD --dry-run
 ```
 
 `manifest init` reads the current checkout on disk. It does not silently switch to the default branch, because changing a developer's branch or working tree would be surprising and unsafe. If the team wants the manifest to represent the default product baseline, run it from the default branch after pulling the latest changes.
 
-`manifest context` is the read-only preview step. It shows which repo-local documents CodeWard sees, how each source is classified, which validation commands and safety rules were extracted, and which manifest path should be reviewed if the context is missing or stale. Use it before `manifest init` when you want to understand the bootstrap input without writing `.codeward/manifest.yaml`.
+`manifest context` is the read-only preview step. It shows which repo-local documents QAMap sees, how each source is classified, which validation commands and safety rules were extracted, and which manifest path should be reviewed if the context is missing or stale. Use it before `manifest init` when you want to understand the bootstrap input without writing `.qamap/manifest.yaml`.
 
-During baseline generation, CodeWard also looks for repo-local context documents that often contain verification knowledge not visible in source files:
+During baseline generation, QAMap also looks for repo-local context documents that often contain verification knowledge not visible in source files:
 
 - `CONTEXT.md` and `CONTEXT-MAP.md`
 - ADRs such as `docs/adr/*.md`
@@ -46,15 +46,15 @@ These files are used as advisory bootstrap context. They can improve initial nam
 
 ## What It Solves
 
-CodeWard cannot know every team's product priorities from file paths alone. The manifest turns repeated human review knowledge into durable repository context:
+QAMap cannot know every team's product priorities from file paths alone. The manifest turns repeated human review knowledge into durable repository context:
 
 - which file paths belong to a product domain
 - which routes, components, APIs, or tests anchor an important flow
 - which success, failure, edge, contract, or visual checks matter for that flow
 - which runner usually verifies the flow
-- whether the entry came from CodeWard inference or human review
+- whether the entry came from QAMap inference or human review
 
-When a recommendation is wrong, edit the manifest path shown in CodeWard output. The next branch should get better recommendations without another explanation.
+When a recommendation is wrong, edit the manifest path shown in QAMap output. The next branch should get better recommendations without another explanation.
 
 ## Concrete Bootstrap Example
 
@@ -68,7 +68,7 @@ src/pages/checkout/index.tsx
 playwright.config.ts
 ```
 
-If the ADR and context docs use the team phrase `Checkout purchase`, and the route file exposes `/checkout`, `codeward manifest init .` can create a manifest flow close to:
+If the ADR and context docs use the team phrase `Checkout purchase`, and the route file exposes `/checkout`, `qamap manifest init .` can create a manifest flow close to:
 
 ```yaml
 flows:
@@ -87,29 +87,29 @@ flows:
         - adr-context
 ```
 
-When a later PR changes `src/pages/checkout/index.tsx`, `codeward manifest explain . --base origin/main --head HEAD` should name the same flow, show the manifest evidence, and print the repair path:
+When a later PR changes `src/pages/checkout/index.tsx`, `qamap manifest explain . --base origin/main --head HEAD` should name the same flow, show the manifest evidence, and print the repair path:
 
 ```txt
 Flow: Checkout Purchase
 Evidence sources: route-file, adr-context
-If this is wrong: update `.codeward/manifest.yaml > flows.checkout-checkout-purchase.anchors`
+If this is wrong: update `.qamap/manifest.yaml > flows.checkout-checkout-purchase.anchors`
 ```
 
-Then `codeward e2e draft . --base origin/main --head HEAD --dry-run` can preview a concrete draft such as `tests/e2e/checkout-purchase.spec.ts`, using the manifest route, detected selectors, and manifest checks before falling back to generic smoke-test heuristics.
+Then `qamap e2e draft . --base origin/main --head HEAD --dry-run` can preview a concrete draft such as `tests/e2e/checkout-purchase.spec.ts`, using the manifest route, detected selectors, and manifest checks before falling back to generic smoke-test heuristics.
 
 ## Schema
 
 Generated manifests include:
 
 ```yaml
-$schema: https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward-manifest.schema.json
+$schema: https://raw.githubusercontent.com/IvoryCanvas/qamap/main/schema/qamap-manifest.schema.json
 version: 1
 ```
 
 The JSON Schema is shipped in the package at:
 
 ```txt
-schema/codeward-manifest.schema.json
+schema/qamap-manifest.schema.json
 ```
 
 Editors that understand YAML schema comments or `$schema` fields can use this file for validation and completion.
@@ -180,16 +180,16 @@ Use this section to understand which repo-local documents influenced the baselin
 
 - `CONTEXT.md`, ADRs, and goals can carry product language and intent.
 - agent instructions, harness files, skills, and runbooks usually carry workflow, safety, and validation rules.
-- `roles` explain how CodeWard classified a context source: product domain context, workflow lifecycle, verification rubric, test runner, safety policy, release policy, agent skill, or harness config.
+- `roles` explain how QAMap classified a context source: product domain context, workflow lifecycle, verification rubric, test runner, safety policy, release policy, agent skill, or harness config.
 - instruction-derived context should start as `inferred` and should not override human-reviewed domains, flows, and checks.
 - if a recommendation is wrong because a context document is stale, update the document or remove the stale context source from the manifest.
 
 ## Context Report
 
-Run `codeward manifest context .` to see the context layer without writing files:
+Run `qamap manifest context .` to see the context layer without writing files:
 
 ```sh
-codeward manifest context . --format markdown
+qamap manifest context . --format markdown
 ```
 
 The report includes:
@@ -199,12 +199,12 @@ The report includes:
 - validation commands and safety rules extracted from local docs
 - diagnostics that point to the manifest path to edit when context is missing, stale, too broad, or not connected to checks
 
-This command is useful when an E2E recommendation feels too vague. Instead of asking an LLM to re-read the repository, inspect the report, correct the repo-local context or `.codeward/manifest.yaml`, then rerun `codeward e2e draft`.
+This command is useful when an E2E recommendation feels too vague. Instead of asking an LLM to re-read the repository, inspect the report, correct the repo-local context or `.qamap/manifest.yaml`, then rerun `qamap e2e draft`.
 
 ## Minimal Example
 
 ```yaml
-$schema: https://raw.githubusercontent.com/IvoryCanvas/codeward/main/schema/codeward-manifest.schema.json
+$schema: https://raw.githubusercontent.com/IvoryCanvas/qamap/main/schema/qamap-manifest.schema.json
 version: 1
 
 domains:
@@ -237,9 +237,11 @@ flows:
       - id: happy-path
         title: Submit content URL successfully
         type: success
+        selector: "[data-testid=content-url-submit]"
       - id: invalid-input
         title: Show validation error for invalid content URL
         type: failure
+        selector: "[data-testid=content-url-error]"
     source:
       kind: declared
       confidence: high
@@ -261,11 +263,14 @@ flows:
 | `flows[].runner` | Preferred verification runner: `playwright`, `maestro`, or `manual`. |
 | `flows[].anchors` | Matchable route, component, file, API, or test anchors. |
 | `flows[].checks` | Required verification points that should shape E2E drafts. |
+| `flows[].checks[].selector` | Optional stable selector hint for this check, such as `[data-testid=coupon-input]`. |
+| `flows[].checks[].value` | Optional input value for this check, such as `WELCOME10` or `qa@example.com`. |
+| `flows[].checks[].steps` | Optional concrete steps for this check. These are used before the title parser. |
 | `context.instructionFiles` | Advisory repo-local context sources used while bootstrapping the manifest. |
 | `context.instructionFiles[].roles` | Advisory role classification for a context source, such as `verification-rubric`, `workflow-lifecycle`, `agent-skill`, or `harness-config`. |
 | `context.validationCommands` | Validation commands inferred from context documents. |
 | `context.safetyRules` | Workflow or safety rules inferred from context documents, with token-like values redacted. |
-| `source.kind` | `inferred` for CodeWard-generated entries or `declared` after human review. |
+| `source.kind` | `inferred` for QAMap-generated entries or `declared` after human review. |
 | `source.confidence` | `low`, `medium`, or `high` confidence in the entry. |
 | `source.from` | Evidence sources such as `route-file`, `component-file`, `product-qa`, or `human-reviewed`. |
 
@@ -274,7 +279,7 @@ flows:
 Run:
 
 ```sh
-codeward manifest validate .
+qamap manifest validate .
 ```
 
 The validator checks for:
@@ -298,7 +303,7 @@ The validator checks for:
 Run:
 
 ```sh
-codeward manifest explain . --base origin/main --head HEAD
+qamap manifest explain . --base origin/main --head HEAD
 ```
 
 This command answers:
@@ -313,15 +318,16 @@ This command answers:
 
 ## Draft Impact
 
-When a matched manifest flow has an entry route and checks, `codeward e2e draft` promotes that flow ahead of heuristic candidates. The generated draft includes:
+When a matched manifest flow has an entry route and checks, `qamap e2e draft` promotes that flow ahead of heuristic candidates. The generated draft includes:
 
 - `source: verification-manifest` in JSON output
 - the manifest route as a Playwright entrypoint when supported
 - manifest checks as draft steps and coverage notes
+- check-level selector/value/steps hints as concrete draft actions when available
 - manifest evidence comments inside generated files
 - promotion guidance that treats strong manifest matches as commit candidates
 
-This keeps generated tests explainable. A draft is not promoted because CodeWard guessed well once; it is promoted because the repo has durable verification context.
+This keeps generated tests explainable. A draft is not promoted because QAMap guessed well once; it is promoted because the repo has durable verification context.
 
 Manifest-backed output should reduce repeat reviewer labor. A recommendation is useful only when it answers three questions:
 

@@ -53,6 +53,12 @@ export async function generateAgentContext(rootInput: string): Promise<string> {
     lines.push(`- Run \`${snapshot.lintCommand}\` when changing formatting or lint-sensitive code.`);
   }
   lines.push("");
+  lines.push("## Pre-PR QA");
+  lines.push("");
+  lines.push(`- Before opening a pull request, run \`${dlxCommandFor(snapshot.packageManager)} qa . --base origin/main --head HEAD --format agent\` and address the required evidence and bootstrap items it reports.`);
+  lines.push("- Treat the output as QA planning evidence, not as proof that browser, device, or manual QA passed.");
+  lines.push("- For UI-affecting changes, review the suggested E2E draft before handing the pull request to a human.");
+  lines.push("");
   lines.push("## Repository Boundaries");
   lines.push("");
   lines.push("- Do not push directly to `main`.");
@@ -105,6 +111,20 @@ async function detectPackageManager(root: string): Promise<string | undefined> {
     return "npm";
   }
   return undefined;
+}
+
+function dlxCommandFor(packageManager: string | undefined): string {
+  const normalized = packageManager?.split("@")[0];
+  if (normalized === "pnpm") {
+    return "pnpm dlx @ivorycanvas/qamap";
+  }
+  if (normalized === "yarn") {
+    return "yarn dlx @ivorycanvas/qamap";
+  }
+  if (normalized === "bun") {
+    return "bunx @ivorycanvas/qamap";
+  }
+  return "npx @ivorycanvas/qamap";
 }
 
 function commandPrefixFor(packageManager: string | undefined): string {

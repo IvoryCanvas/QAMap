@@ -1,5 +1,5 @@
-name: CodeWard
-description: Run CodeWard in GitHub Actions with PR summaries, annotations, and optional comments.
+name: QAMap
+description: Run QAMap in GitHub Actions with PR summaries, annotations, and optional comments.
 
 inputs:
   mode:
@@ -18,7 +18,7 @@ inputs:
     description: Head ref or SHA for review mode.
     default: "HEAD"
   config:
-    description: Optional CodeWard config path.
+    description: Optional QAMap config path.
     default: ""
   max-files:
     description: Optional maximum number of files to inspect.
@@ -28,22 +28,22 @@ inputs:
     default: high
   report-file:
     description: Markdown report file path.
-    default: codeward-report.md
+    default: qamap-report.md
   comment-file:
     description: Markdown PR comment body file path.
-    default: codeward-pr-comment.md
+    default: qamap-pr-comment.md
   test-plan:
     description: Append a suggested domain test plan to reports and PR comments.
     default: "true"
   test-plan-file:
     description: Markdown test plan file path.
-    default: codeward-test-plan.md
+    default: qamap-test-plan.md
   eval:
     description: Append a verification readiness evaluation to reports and PR comments.
     default: "true"
   eval-file:
     description: Markdown verification readiness evaluation file path.
-    default: codeward-eval.md
+    default: qamap-eval.md
   annotations:
     description: Emit GitHub workflow annotations.
     default: "true"
@@ -60,24 +60,24 @@ inputs:
 outputs:
   report-file:
     description: Markdown report file path.
-    value: ${{ steps.codeward.outputs.report-file }}
+    value: ${{ steps.qamap.outputs.report-file }}
   comment-file:
     description: Markdown PR comment body file path.
-    value: ${{ steps.codeward.outputs.comment-file }}
+    value: ${{ steps.qamap.outputs.comment-file }}
   test-plan-file:
     description: Markdown test plan file path.
-    value: ${{ steps.codeward.outputs.test-plan-file }}
+    value: ${{ steps.qamap.outputs.test-plan-file }}
   eval-file:
     description: Markdown verification readiness evaluation file path.
-    value: ${{ steps.codeward.outputs.eval-file }}
+    value: ${{ steps.qamap.outputs.eval-file }}
   exit-code:
-    description: CodeWard exit code before the comment step ran.
-    value: ${{ steps.codeward.outputs.exit-code }}
+    description: QAMap exit code before the comment step ran.
+    value: ${{ steps.qamap.outputs.exit-code }}
 
 runs:
   using: composite
   steps:
-    - name: Prepare CodeWard
+    - name: Prepare QAMap
       shell: bash
       run: |
         set -euo pipefail
@@ -85,8 +85,8 @@ runs:
         pnpm --dir "$GITHUB_ACTION_PATH" install --frozen-lockfile
         pnpm --dir "$GITHUB_ACTION_PATH" build
 
-    - name: Run CodeWard
-      id: codeward
+    - name: Run QAMap
+      id: qamap
       shell: bash
       run: |
         set +e
@@ -122,8 +122,8 @@ runs:
         fi
 
         node "$GITHUB_ACTION_PATH/dist/cli.js" "${args[@]}"
-        codeward_exit_code=$?
-        echo "exit-code=$codeward_exit_code" >> "$GITHUB_OUTPUT"
+        qamap_exit_code=$?
+        echo "exit-code=$qamap_exit_code" >> "$GITHUB_OUTPUT"
         echo "report-file=${{ inputs.report-file }}" >> "$GITHUB_OUTPUT"
         echo "comment-file=${{ inputs.comment-file }}" >> "$GITHUB_OUTPUT"
         echo "test-plan-file=${{ inputs.test-plan-file }}" >> "$GITHUB_OUTPUT"
@@ -146,7 +146,7 @@ runs:
         body="$(cat "$COMMENT_FILE")"
         comment_id="$(
           gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
-            --jq '.[] | select(.body | contains("<!-- codeward-pr-comment -->")) | .id' \
+            --jq '.[] | select(.body | contains("<!-- qamap-pr-comment -->")) | .id' \
             | head -n 1
         )"
 
@@ -156,7 +156,7 @@ runs:
           gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body" >/dev/null
         fi
 
-    - name: Apply CodeWard failure threshold
-      if: ${{ steps.codeward.outputs.exit-code != '0' }}
+    - name: Apply QAMap failure threshold
+      if: ${{ steps.qamap.outputs.exit-code != '0' }}
       shell: bash
-      run: exit "${{ steps.codeward.outputs.exit-code }}"
+      run: exit "${{ steps.qamap.outputs.exit-code }}"

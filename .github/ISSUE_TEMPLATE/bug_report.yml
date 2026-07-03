@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a CodeWard bug or false positive.
+description: Report a QAMap bug or false positive.
 title: "[Bug]: "
 labels: ["bug"]
 body:

@@ -43,43 +43,43 @@ const severityOrder: Severity[] = ["high", "medium", "low", "info"];
 const areaDefinitions: AreaDefinition[] = [
   {
     name: "Agent instructions",
-    ruleIds: ["CW001", "CW002", "CW003"],
+    ruleIds: ["QM001", "QM002", "QM003"],
     okMessage: "Agent guidance is present and not obviously conflicting.",
     reviewMessage: "Agent guidance needs attention before broad agent use.",
   },
   {
     name: "MCP and agent settings",
-    ruleIds: ["CW004", "CW005", "CW012"],
+    ruleIds: ["QM004", "QM005", "QM012"],
     okMessage: "No risky committed MCP configuration or agent settings were detected.",
     reviewMessage: "MCP configuration or agent settings should be reviewed before agent sessions.",
   },
   {
     name: "Validation",
-    ruleIds: ["CW006"],
+    ruleIds: ["QM006"],
     okMessage: "A usable test command is available.",
     reviewMessage: "Agents do not have a clear default validation command.",
   },
   {
     name: "CI workflows",
-    ruleIds: ["CW007", "CW010"],
+    ruleIds: ["QM007", "QM010"],
     okMessage: "CI exists without broad workflow permissions.",
     reviewMessage: "CI coverage or workflow permissions need attention.",
   },
   {
     name: "Repository automation",
-    ruleIds: ["CW008", "CW009"],
+    ruleIds: ["QM008", "QM009"],
     okMessage: "No committed env files or risky package scripts were detected.",
     reviewMessage: "Local environment files or risky scripts need maintainer review.",
   },
   {
     name: "API contracts",
-    ruleIds: ["CW013"],
+    ruleIds: ["QM013"],
     okMessage: "No documentation-only API contract drift signal was detected.",
     reviewMessage: "API contract documentation may need a machine-readable source of truth.",
   },
   {
     name: "Community health",
-    ruleIds: ["CW011"],
+    ruleIds: ["QM011"],
     okMessage: "Core contributor and security files are present.",
     reviewMessage: "Community health files are incomplete.",
   },
@@ -152,7 +152,7 @@ export function formatMarkdownDoctorReport(result: ScanResult): string {
   const doctor = buildDoctorResult(result);
   const lines: string[] = [];
 
-  lines.push("# CodeWard Doctor");
+  lines.push("# QAMap Doctor");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(doctor.root)}\``);
   if (doctor.workspaceRoot) {

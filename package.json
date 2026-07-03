@@ -1,11 +1,11 @@
 {
-  "name": "@ivorycanvas/codeward",
-  "version": "0.2.1",
+  "name": "@ivorycanvas/qamap",
+  "version": "0.3.0",
   "description": "Local-first QA skill that turns PR diffs into affected flows, missing evidence, and E2E drafts with no cloud or LLM token.",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
   "bin": {
-    "codeward": "dist/cli.js"
+    "qamap": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -23,7 +23,7 @@
     "test": "pnpm build && node --test test/*.test.mjs",
     "coverage": "pnpm build && node --test --experimental-test-coverage --test-coverage-include=\"dist/**/*.js\" --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 test/*.test.mjs",
     "scan": "pnpm build && node dist/cli.js scan .",
-    "report": "pnpm build && node dist/cli.js report . --output CODEWARD_REPORT.md",
+    "report": "pnpm build && node dist/cli.js report . --output QAMAP_REPORT.md",
     "release:check": "pnpm test && pnpm scan && git diff --check && pnpm run coverage && pnpm pack --dry-run"
   },
   "keywords": [
@@ -56,13 +56,13 @@
   ],
   "author": "IvoryCanvas",
   "license": "MIT",
-  "homepage": "https://github.com/IvoryCanvas/codeward#readme",
+  "homepage": "https://github.com/IvoryCanvas/qamap#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/IvoryCanvas/codeward.git"
+    "url": "git+https://github.com/IvoryCanvas/qamap.git"
   },
   "bugs": {
-    "url": "https://github.com/IvoryCanvas/codeward/issues"
+    "url": "https://github.com/IvoryCanvas/qamap/issues"
   },
   "engines": {
     "node": ">=20"

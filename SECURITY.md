@@ -18,4 +18,4 @@ Security-sensitive areas include:
 
 ## Expectations
 
-CodeWard is a guardrail, not a sandbox. It does not execute scanned project code, install dependencies from scanned repositories, or validate that generated code is safe to run.
+QAMap is a guardrail, not a sandbox. It does not execute scanned project code, install dependencies from scanned repositories, or validate that generated code is safe to run.

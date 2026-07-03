@@ -4,7 +4,7 @@ import YAML from "yaml";
 import { pathExists, toPosixPath } from "./fs.js";
 import type { TestPlanChangedFile } from "./test-plan.js";
 
-export const defaultFlowManifestPath = ".codeward/flows.yml";
+export const defaultFlowManifestPath = ".qamap/flows.yml";
 
 export type CoreFlowPriority = "critical" | "recommended" | "optional";
 
@@ -38,9 +38,9 @@ export interface MatchedCoreFlow {
 }
 
 const flowManifestCandidates = [
-  ".codeward/flows.yml",
-  ".codeward/flows.yaml",
-  ".codeward/flows.json",
+  ".qamap/flows.yml",
+  ".qamap/flows.yaml",
+  ".qamap/flows.json",
 ];
 
 const priorityWeights: Record<CoreFlowPriority, number> = {
@@ -159,21 +159,21 @@ function parseFlowManifest(raw: string, manifestPath: string): unknown {
     return YAML.parse(raw);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Could not parse CodeWard flow manifest at ${manifestPath}: ${message}`);
+    throw new Error(`Could not parse QAMap flow manifest at ${manifestPath}: ${message}`);
   }
 }
 
 function normalizeCoreFlows(value: unknown, manifestPath: string): CoreFlowDefinition[] {
-  const record = asRecord(value, `CodeWard flow manifest must be an object: ${manifestPath}`);
+  const record = asRecord(value, `QAMap flow manifest must be an object: ${manifestPath}`);
   const rawFlows = record.flows;
   if (!Array.isArray(rawFlows)) {
-    throw new Error(`CodeWard flow manifest flows must be an array: ${manifestPath}`);
+    throw new Error(`QAMap flow manifest flows must be an array: ${manifestPath}`);
   }
   return rawFlows.map((flow, index) => normalizeCoreFlow(flow, manifestPath, index));
 }
 
 function normalizeCoreFlow(value: unknown, manifestPath: string, index: number): CoreFlowDefinition {
-  const record = asRecord(value, `CodeWard flow manifest flow at index ${index} must be an object: ${manifestPath}`);
+  const record = asRecord(value, `QAMap flow manifest flow at index ${index} must be an object: ${manifestPath}`);
   const id = readRequiredString(record, "id", manifestPath, index);
   const name = readOptionalString(record, "name") ?? readOptionalString(record, "title") ?? id;
   const priority = normalizePriority(readOptionalString(record, "priority") ?? "recommended", manifestPath, index);
@@ -185,7 +185,7 @@ function normalizeCoreFlow(value: unknown, manifestPath: string, index: number):
 
   if (files.length + domains.length + routes.length + tags.length === 0) {
     throw new Error(
-      `CodeWard flow manifest flow ${id} must include at least one of files, domains, routes, or tags: ${manifestPath}`,
+      `QAMap flow manifest flow ${id} must include at least one of files, domains, routes, or tags: ${manifestPath}`,
     );
   }
 
@@ -266,7 +266,7 @@ function asRecord(value: unknown, message: string): Record<string, unknown> {
 function readRequiredString(record: Record<string, unknown>, key: string, manifestPath: string, index: number): string {
   const value = readOptionalString(record, key);
   if (!value) {
-    throw new Error(`CodeWard flow manifest flow at index ${index} is missing ${key}: ${manifestPath}`);
+    throw new Error(`QAMap flow manifest flow at index ${index} is missing ${key}: ${manifestPath}`);
   }
   return value;
 }
@@ -295,13 +295,13 @@ function normalizePriority(value: string, manifestPath: string, index: number): 
     return value;
   }
   throw new Error(
-    `CodeWard flow manifest flow at index ${index} has invalid priority ${value}; expected critical, recommended, or optional: ${manifestPath}`,
+    `QAMap flow manifest flow at index ${index} has invalid priority ${value}; expected critical, recommended, or optional: ${manifestPath}`,
   );
 }
 
 function defaultCoreFlowManifestText(): string {
   return [
-    "# Commit this file when your team wants CodeWard to know the flows humans care about.",
+    "# Commit this file when your team wants QAMap to know the flows humans care about.",
     "flows:",
     "  - id: primary-success-path",
     "    name: Primary success path",

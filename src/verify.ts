@@ -152,7 +152,7 @@ export function formatVerifyReport(result: VerifyResult): string {
 
 export function formatMarkdownVerifyReport(result: VerifyResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard Verify");
+  lines.push("# QAMap Verify");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   if (result.workspaceRoot) {
@@ -189,7 +189,7 @@ export function formatMarkdownVerifyReport(result: VerifyResult): string {
   lines.push("## Review Findings");
   lines.push("");
   if (result.review.newFindings.length === 0 && result.review.changedRiskyFindings.length === 0) {
-    lines.push("No new CodeWard findings or changed risky files were introduced by this branch.");
+    lines.push("No new QAMap findings or changed risky files were introduced by this branch.");
   } else {
     for (const finding of [...result.review.newFindings, ...result.review.changedRiskyFindings].slice(0, 12)) {
       const fileSuffix = finding.file ? ` (${escapeMarkdownInline(finding.file)})` : "";
@@ -220,7 +220,7 @@ export function formatMarkdownVerifyReport(result: VerifyResult): string {
     lines.push("## Manifest Recommendations");
     lines.push("");
     lines.push(
-      "These recommendations come from `.codeward/manifest.yaml`. If they are wrong, update the manifest path shown below so future PRs get better suggestions.",
+      "These recommendations come from `.qamap/manifest.yaml`. If they are wrong, update the manifest path shown below so future PRs get better suggestions.",
     );
     lines.push("");
     for (const match of result.verificationManifestMatches.slice(0, 8)) {

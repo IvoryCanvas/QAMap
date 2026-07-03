@@ -55,7 +55,7 @@ export async function reviewProject(rootInput: string, options: ReviewOptions = 
   const head = options.head ?? "HEAD";
   const diffRoot = workspaceRoot ?? root;
   const changedFiles = scopeChangedFiles(await getChangedFiles(diffRoot, base, head), relativeScanRoot);
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "codeward-review-"));
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-review-"));
 
   try {
     const baseRoot = path.join(tempRoot, "base");
@@ -142,13 +142,13 @@ export function formatReviewReport(result: ReviewResult): string {
 
   if (result.newFindings.length === 0 && result.changedRiskyFindings.length === 0) {
     lines.push("");
-    lines.push("No new CodeWard findings or changed risky files were introduced by this branch.");
+    lines.push("No new QAMap findings or changed risky files were introduced by this branch.");
     return lines.join("\n");
   }
 
   if (result.newFindings.length === 0) {
     lines.push("");
-    lines.push("No new CodeWard findings were introduced by this branch.");
+    lines.push("No new QAMap findings were introduced by this branch.");
   } else {
     for (const severity of severityOrder) {
       const findings = result.newFindings.filter((finding) => finding.severity === severity);
@@ -188,7 +188,7 @@ export function formatReviewReport(result: ReviewResult): string {
 
 export function formatMarkdownReviewReport(result: ReviewResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard Review");
+  lines.push("# QAMap Review");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
   lines.push(`- Base: \`${escapeMarkdownInline(result.base)}\``);
@@ -219,13 +219,13 @@ export function formatMarkdownReviewReport(result: ReviewResult): string {
 
   lines.push("");
   if (result.newFindings.length === 0 && result.changedRiskyFindings.length === 0) {
-    lines.push("No new CodeWard findings or changed risky files were introduced by this branch.");
+    lines.push("No new QAMap findings or changed risky files were introduced by this branch.");
     lines.push("");
     return lines.join("\n");
   }
 
   if (result.newFindings.length === 0) {
-    lines.push("No new CodeWard findings were introduced by this branch.");
+    lines.push("No new QAMap findings were introduced by this branch.");
     lines.push("");
   } else {
     lines.push("## Findings");

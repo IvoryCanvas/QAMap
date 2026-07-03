@@ -18,7 +18,7 @@ export function formatTextReport(result: ScanResult): string {
 
   if (result.findings.length === 0) {
     lines.push("");
-    lines.push("No findings. Your repository has a clean first-pass CodeWard scan.");
+    lines.push("No findings. Your repository has a clean first-pass QAMap scan.");
     return lines.join("\n");
   }
 
@@ -45,7 +45,7 @@ export function formatTextReport(result: ScanResult): string {
 
 export function formatMarkdownReport(result: ScanResult): string {
   const lines: string[] = [];
-  lines.push("# CodeWard Report");
+  lines.push("# QAMap Report");
   lines.push("");
   lines.push(`Generated: ${result.scannedAt}`);
   lines.push(`Root: \`${result.root}\``);
@@ -64,7 +64,7 @@ export function formatMarkdownReport(result: ScanResult): string {
   lines.push("");
 
   if (result.findings.length === 0) {
-    lines.push("No findings. Your repository has a clean first-pass CodeWard scan.");
+    lines.push("No findings. Your repository has a clean first-pass QAMap scan.");
     lines.push("");
     return lines.join("\n");
   }
@@ -109,7 +109,7 @@ export function formatSarifReport(result: ScanResult): string {
           driver: {
             name: result.tool.name,
             semanticVersion: result.tool.version,
-            informationUri: "https://github.com/IvoryCanvas/codeward",
+            informationUri: "https://github.com/IvoryCanvas/qamap",
             rules: Array.from(rules.values()).map((finding) => ({
               id: finding.id,
               name: finding.title,
