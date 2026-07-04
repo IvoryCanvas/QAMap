@@ -89,13 +89,15 @@ pnpm exec qamap scan .
 
 ## 30-Second PR Demo
 
-Preview the PR QA comment/checklist QAMap would generate for the current branch:
+![QAMap: zero tests to a passing E2E in three commands](docs/assets/qamap-30s-demo.gif)
+
+This is a real, unedited recording against the published `@ivorycanvas/qamap` package on a small Next.js app with **zero committed tests**: `qamap qa` names the affected flow and the bootstrap plan, `qamap e2e setup` writes the Playwright config and starter spec, and `npm run test:e2e` finishes with `1 passed`. First-run assertions are smoke checks — the point is a runnable starting point, not finished coverage.
+
+Try the same loop on your own branch:
 
 ```sh
 pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
-
-This section intentionally uses text output instead of an animated recording so the README reflects the current CLI behavior exactly. A new GIF should be recorded only from the published `@ivorycanvas/qamap` package and the current `.qamap/manifest.yaml` flow.
 
 QAMap reads the changed files and project signals:
 
