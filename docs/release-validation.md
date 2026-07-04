@@ -1,4 +1,20 @@
-# 0.2.1 Patch Release Validation
+# Release Validation
+
+## 0.3.2 - 2026-07-04
+
+Validated before publishing `0.3.2` (reverse import graph, diff-anchored steps and names, workspace-member project detection, Python service classification, start-here CLI guide):
+
+| Gate | Result |
+| --- | --- |
+| `pnpm test` | 100/100 passing |
+| `pnpm scan` (self-scan) | 0 findings |
+| Coverage thresholds (lines/branches/functions >= 80) | Passing |
+| `pnpm bench` against four pinned local benchmark targets (web monorepo, Python API server, Expo app, legacy Vue app) | Runner choice 4/4, labeled must-reach recall 9/9, blank actions 0, no metric regressions vs the previous baseline |
+| README demo | Real recorded run; the generated starter spec passes against the demo app |
+
+Historical validation notes for earlier releases follow below.
+
+# 0.2.1 Patch Release Validation (historical)
 
 QAMap should not publish a patch or minor version only because the CLI commands work in fixtures. The `0.2.1` release should prove that the manifest-backed QA skill flow is useful across representative repositories without requiring an LLM call.
 

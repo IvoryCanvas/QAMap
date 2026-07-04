@@ -45,7 +45,6 @@ Before treating the next public release as ready, the golden demo must satisfy t
 - Improve `doctor` output with clearer scoring and remediation grouping.
 - Improve `review` output for changed-line locations.
 - Expand manifest support with richer anchors, symbol-level matching, and configurable taste rubrics.
-- Match changed files to flows through a reverse import graph, not only declared anchor paths, so shared component and hook changes map to the flows that depend on them.
 - Map changed symbols to manifest anchors after the path/route baseline is stable.
 - Keep the `--format agent` output a stable, versioned contract that skills and MCP wrappers can rely on.
 - Add language-specific domain patterns for backend services, CLIs, libraries, mobile apps, and infrastructure repositories.
