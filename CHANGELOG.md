@@ -2,29 +2,27 @@
 
 ## Unreleased
 
-### Changed
-
-- Running `qamap` with no arguments now prints a short "start here" guide (the three core commands and when to use them) instead of the full 25-command usage wall; the full reference moved to `qamap help` and stays on `--help`.
-
-### Added
-
-- Draft steps and assertions now prefer selectors and labels that the diff itself introduced: added `aria-label`/`data-testid`/`testID`/placeholder values rank first when binding actions, so generated specs exercise what the change added instead of pre-existing UI. Selectors carry an `addedInDiff` marker in JSON output, and the benchmark runner reports a `diffAnchor` metric.
-- Domain scenarios are named after the action the diff introduced when an added element label makes one clear (for example "Checkout Submit" instead of "Checkout primary journey"), reducing content-free flow names.
-
-### Fixed
-
-- Django-style Python service files with prefixed names (`views_summary.py`) or inside service module directories (`views/report_export.py`) are now classified as service sources, so backend changes join API contract flows instead of disappearing from the plan.
-
-- Monorepo roots without framework dependencies of their own (turbo/pnpm/yarn workspaces where apps live under `apps/`, `services/`, or `packages/`) are no longer classified as unknown/manual: project detection now aggregates workspace member dependencies, with per-member evidence, so a frontend monorepo gets a web/Playwright recommendation at the root.
+## 0.3.2 - 2026-07-04
 
 ### Added
 
 - Added a reverse import graph: when only shared components, hooks, or library files change, QAMap now follows imports (2 hops, tsconfig paths and workspace package names included) to the pages and screens that consume them, generates the consuming surface's UI flow with the import chain as evidence, and matches verification/flow/domain manifests through the same expansion.
+- Draft steps and assertions now prefer selectors and labels that the diff itself introduced: added `aria-label`/`data-testid`/`testID`/placeholder values rank first when binding actions, gated by step intent so added status copy becomes an assertion target rather than a click target. Selectors carry an `addedInDiff` marker in JSON output.
+- Domain scenarios are named after the action the diff introduced when an added element label makes one clear (for example "Checkout Submit" instead of "Checkout primary journey"), and labels carrying an action word win over plain field labels.
+- Added `scripts/bench.mjs` (`pnpm bench`): a read-only benchmark runner that scores plan/qa output against pinned repositories, with runner-accuracy, must-reach recall, import-propagation, diff-anchoring, blank-action, and generic-title metrics; documented in `docs/benchmarking.md`.
+
+### Changed
+
+- Running `qamap` with no arguments now prints a short "start here" guide (the three core commands and when to use them) instead of the full usage wall; the full reference moved to `qamap help` and stays on `--help`.
+- The README demo is a real, unedited terminal recording of the zero-tests-to-passing-E2E loop against the published package, replacing the earlier staged walkthrough.
+- Fixtures, documentation examples, and CLI usage samples were standardized on a clearly invented demo vocabulary so examples cannot be mistaken for any real product.
 
 ### Fixed
 
+- Monorepo roots without framework dependencies of their own (turbo/pnpm/yarn workspaces where apps live under `apps/`, `services/`, or `packages/`) are no longer classified as unknown/manual: project detection aggregates workspace member dependencies, with per-member evidence, so a frontend monorepo gets a web/Playwright recommendation at the root.
+- Django-style Python service files with prefixed names (`views_summary.py`) or inside service module directories (`views/report_export.py`) are now classified as service sources, so backend changes join API contract flows instead of disappearing from the plan.
 - Draft steps no longer emit blank actions for non-Latin UI labels: Korean (and any Unicode) placeholder, aria-label, and button text now survives step naming, with a selector-kind fallback when a label is symbol-only.
-- Domain scenario names no longer duplicate the "primary journey" suffix (for example "Notification Primary Journey primary journey").
+- Domain scenario names no longer duplicate the "primary journey" suffix.
 
 ## 0.3.1 - 2026-07-03
 

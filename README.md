@@ -30,11 +30,13 @@ Optional team memory
 
 Requires Node.js 20 or newer.
 
-Run QAMap once without adding a dependency:
+Run QAMap once without adding a dependency. Inside a repository whose default branch is `origin/main` (or `main`), the base is inferred automatically:
 
 ```sh
-pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
+pnpm dlx @ivorycanvas/qamap qa
 ```
+
+Pass `--base <ref> --head <ref>` for anything non-standard, and run bare `qamap` any time to see the start-here guide (`qamap help` prints the full reference).
 
 That first command is intentionally manifest-free. It previews a PR comment/checklist that names the affected flow, recommended runner, draft file, missing fixture/selector/assertion evidence, and validation command.
 
@@ -303,7 +305,7 @@ pnpm build
 node dist/cli.js scan /path/to/repo
 ```
 
-QAMap `0.2.x` is a local-first PR verification planner with a repository-level verification manifest loop, not a finished automatic QA bot. A good result is a clear answer to "what should this branch prove before merge?", plus manifest-backed E2E, fixture, selector, and validation work that a developer can turn into real regression coverage. Many first drafts will correctly report `review-only` or `near-runnable` until the project adds runner config, stable selectors, deterministic fixtures, or team-owned manifest entries.
+QAMap is a local-first PR verification planner with a repository-level verification manifest loop, not a finished automatic QA bot. A good result is a clear answer to "what should this branch prove before merge?", plus manifest-backed E2E, fixture, selector, and validation work that a developer can turn into real regression coverage. Many first drafts will correctly report `review-only` or `near-runnable` until the project adds runner config, stable selectors, deterministic fixtures, or team-owned manifest entries.
 
 ## What QAMap Produces
 
