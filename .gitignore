@@ -9,3 +9,5 @@ qamap.sarif
 .env
 .env.*
 !.env.example
+bench.config.local.json
+bench-results/

@@ -1,0 +1,25 @@
+{
+  "$comment": "Copy to bench.config.local.json (gitignored) and point targets at real repositories with pinned commits. The runner is read-only against every target.",
+  "targets": [
+    {
+      "name": "example-web-app",
+      "path": "~/Desktop/example-web-app",
+      "base": "<base-sha>",
+      "head": "<head-sha>",
+      "expect": {
+        "runner": "playwright",
+        "mustReachFiles": ["app/checkout/page.tsx"],
+        "mustNameFlows": ["checkout"]
+      }
+    },
+    {
+      "name": "example-mobile-app",
+      "path": "~/Desktop/example-mobile-app",
+      "base": "<base-sha>",
+      "head": "<head-sha>",
+      "expect": {
+        "runner": "maestro"
+      }
+    }
+  ]
+}
