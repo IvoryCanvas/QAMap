@@ -4727,26 +4727,26 @@ test("verification manifest flows match when changed files are imported by ancho
 test("django service files with prefixed or module-directory names join api flows", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "offers/views"), { recursive: true });
-  await mkdir(path.join(root, "offers/internal_ops"), { recursive: true });
+  await mkdir(path.join(root, "billing/views"), { recursive: true });
+  await mkdir(path.join(root, "billing/reporting"), { recursive: true });
   await writeFile(path.join(root, "manage.py"), "#!/usr/bin/env python\n");
   await writeFile(path.join(root, "requirements.txt"), "django==5.0\n");
-  await writeFile(path.join(root, "offers/views/seeding_creator.py"), "def seeding_creator(request):\n    return None\n");
-  await writeFile(path.join(root, "offers/internal_ops/views_campaigns.py"), "def campaigns(request):\n    return None\n");
+  await writeFile(path.join(root, "billing/views/report_export.py"), "def report_export(request):\n    return None\n");
+  await writeFile(path.join(root, "billing/reporting/views_summary.py"), "def summary(request):\n    return None\n");
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/campaign-sort"]);
-  await writeFile(path.join(root, "offers/views/seeding_creator.py"), "def seeding_creator(request):\n    return {\"sorted\": True}\n");
-  await writeFile(path.join(root, "offers/internal_ops/views_campaigns.py"), "def campaigns(request):\n    return {\"sorted\": True}\n");
+  await git(root, ["switch", "-c", "feature/report-sort"]);
+  await writeFile(path.join(root, "billing/views/report_export.py"), "def report_export(request):\n    return {\"sorted\": True}\n");
+  await writeFile(path.join(root, "billing/reporting/views_summary.py"), "def summary(request):\n    return {\"sorted\": True}\n");
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "sort campaigns"]);
+  await git(root, ["commit", "-m", "sort reports"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const flowFiles = plan.flows.flatMap((flow) => flow.files);
-  assert.ok(flowFiles.includes("offers/views/seeding_creator.py"));
-  assert.ok(flowFiles.includes("offers/internal_ops/views_campaigns.py"));
+  assert.ok(flowFiles.includes("billing/views/report_export.py"));
+  assert.ok(flowFiles.includes("billing/reporting/views_summary.py"));
   assert.ok(plan.flows.some((flow) => /API contract/i.test(flow.title)));
 });
 
