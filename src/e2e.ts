@@ -1,5 +1,6 @@
 import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
+import YAML from "yaml";
 import { buildDomainLanguageSummary } from "./domain-language.js";
 import { defaultDomainManifestPath, loadDomainManifest, matchDomains } from "./domains.js";
 import { collectProjectFiles } from "./fs.js";
@@ -406,6 +407,7 @@ interface PackageJson {
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
   bin?: string | Record<string, string>;
+  workspaces?: string[] | { packages?: string[] };
 }
 
 const maxFilesPerFlow = 8;
@@ -3016,6 +3018,28 @@ export function formatMarkdownE2eSetup(result: E2eSetupResult): string {
   return lines.join("\n");
 }
 
+const frameworkSignalDependencies = [
+  "expo",
+  "react-native",
+  "@playwright/test",
+  "playwright",
+  "@angular/core",
+  "@remix-run/react",
+  "astro",
+  "next",
+  "nuxt",
+  "react-dom",
+  "react-router-dom",
+  "svelte",
+  "vue",
+  "vite",
+  "@nestjs/core",
+  "express",
+  "fastify",
+  "koa",
+  "hono",
+];
+
 async function detectProjectProfile(root: string, workspaceRoot?: string): Promise<E2eProjectProfile> {
   const profileRoots = profileSearchRoots(root, workspaceRoot);
   const packageJson = await readPackageJson(root);
@@ -3027,6 +3051,21 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
     ...(packageJson?.devDependencies ?? {}),
   };
   const evidence: string[] = [];
+
+  const rootHasFrameworkSignal = frameworkSignalDependencies.some((dependency) => dependency in dependencies);
+  if (!rootHasFrameworkSignal) {
+    const memberDependencies = await collectWorkspaceMemberDependencies(root, packageJson);
+    for (const member of memberDependencies) {
+      for (const [dependency, version] of Object.entries(member.dependencies)) {
+        if (!(dependency in dependencies)) {
+          dependencies[dependency] = version;
+        }
+      }
+      if (member.frameworkSignals.length > 0) {
+        evidence.push(`workspace member ${member.directory}: ${member.frameworkSignals.join(", ")}`);
+      }
+    }
+  }
 
   const hasExpoDependency = "expo" in dependencies;
   const hasReactNativeDependency = "react-native" in dependencies;
@@ -8768,6 +8807,87 @@ async function readPackageJson(root: string): Promise<PackageJson | undefined> {
   } catch {
     return undefined;
   }
+}
+
+interface WorkspaceMemberDependencies {
+  directory: string;
+  dependencies: Record<string, string>;
+  frameworkSignals: string[];
+}
+
+const maxWorkspaceMembers = 30;
+
+async function collectWorkspaceMemberDependencies(
+  root: string,
+  packageJson: PackageJson | undefined,
+): Promise<WorkspaceMemberDependencies[]> {
+  const patterns = await readWorkspaceMemberPatterns(root, packageJson);
+  if (patterns.length === 0) {
+    return [];
+  }
+  const memberDirectories = await expandWorkspaceMemberPatterns(root, patterns);
+  const members: WorkspaceMemberDependencies[] = [];
+  for (const directory of memberDirectories.slice(0, maxWorkspaceMembers)) {
+    const memberPackageJson = await readPackageJson(path.join(root, directory));
+    if (!memberPackageJson) {
+      continue;
+    }
+    const dependencies = {
+      ...(memberPackageJson.dependencies ?? {}),
+      ...(memberPackageJson.devDependencies ?? {}),
+    };
+    members.push({
+      directory,
+      dependencies,
+      frameworkSignals: frameworkSignalDependencies.filter((dependency) => dependency in dependencies),
+    });
+  }
+  return members;
+}
+
+async function readWorkspaceMemberPatterns(root: string, packageJson: PackageJson | undefined): Promise<string[]> {
+  const patterns: string[] = [];
+  const workspaces = packageJson?.workspaces;
+  if (Array.isArray(workspaces)) {
+    patterns.push(...workspaces);
+  } else if (workspaces?.packages) {
+    patterns.push(...workspaces.packages);
+  }
+  const workspaceYaml = await readTextIfExists(path.join(root, "pnpm-workspace.yaml"));
+  if (workspaceYaml) {
+    try {
+      const parsed = YAML.parse(workspaceYaml) as { packages?: string[] };
+      patterns.push(...(parsed?.packages ?? []));
+    } catch {
+      // ignore unparseable workspace config
+    }
+  }
+  return uniqueStrings(patterns.filter((pattern) => typeof pattern === "string" && !pattern.startsWith("!")));
+}
+
+async function expandWorkspaceMemberPatterns(root: string, patterns: string[]): Promise<string[]> {
+  const directories: string[] = [];
+  for (const pattern of patterns) {
+    const normalized = pattern.replace(/\/\*{1,2}$/, "");
+    if (normalized.includes("*")) {
+      continue;
+    }
+    if (normalized === pattern) {
+      directories.push(normalized);
+      continue;
+    }
+    try {
+      const entries = await fs.readdir(path.join(root, normalized), { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && !entry.name.startsWith(".")) {
+          directories.push(`${normalized}/${entry.name}`);
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+  return uniqueStrings(directories);
 }
 
 async function readTextIfExists(filePath: string): Promise<string | undefined> {

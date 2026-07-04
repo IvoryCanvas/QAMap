@@ -500,7 +500,8 @@ test("generateE2ePlan surfaces package-scoped targets for monorepo root changes"
   const mobileTarget = plan.workspaceTargets.find((target) => target.path === "apps/mobile");
   const offerTarget = plan.workspaceTargets.find((target) => target.path === "services/offer");
 
-  assert.equal(plan.project.type, "unknown");
+  assert.equal(plan.project.type, "expo-react-native");
+  assert.ok(plan.project.evidence.some((item) => item.startsWith("workspace member apps/mobile:")));
   assert.equal(plan.workspaceTargets.length, 2);
   assert.ok(mobileTarget);
   assert.equal(mobileTarget.packageName, "@fixture/mobile");
