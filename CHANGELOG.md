@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Added a reverse import graph: when only shared components, hooks, or library files change, QAMap now follows imports (2 hops, tsconfig paths and workspace package names included) to the pages and screens that consume them, generates the consuming surface's UI flow with the import chain as evidence, and matches verification/flow/domain manifests through the same expansion.
+
 ## 0.3.1 - 2026-07-03
 
 ### Fixed

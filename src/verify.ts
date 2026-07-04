@@ -5,6 +5,7 @@ import {
   matchVerificationManifest,
 } from "./manifest.js";
 import type { EvalOptions, EvalResult } from "./eval.js";
+import { expandChangedFilesWithImporters } from "./import-graph.js";
 import type { VerificationManifestMatch } from "./manifest.js";
 import { reviewProject } from "./review.js";
 import type { ReviewResult } from "./review.js";
@@ -33,6 +34,25 @@ export interface VerifyResult {
   recommendations: string[];
 }
 
+async function expandForManifestMatching(
+  root: string,
+  changedFiles: ReturnType<typeof changedFilesRelativeToManifestRoot>,
+): Promise<ReturnType<typeof changedFilesRelativeToManifestRoot>> {
+  if (changedFiles.length === 0 || changedFiles.length > 60) {
+    return changedFiles;
+  }
+  try {
+    const expansion = await expandChangedFilesWithImporters(root, changedFiles.map((file) => file.path));
+    const knownPaths = new Set(changedFiles.map((file) => file.path));
+    const importerEntries = expansion.files
+      .filter((file) => !knownPaths.has(file))
+      .map((file) => ({ status: "M", path: file }));
+    return [...changedFiles, ...importerEntries];
+  } catch {
+    return changedFiles;
+  }
+}
+
 export async function verifyChange(rootInput: string, options: VerifyOptions = {}): Promise<VerifyResult> {
   const scanOptions = options.workspaceRoot
     ? { ...options.scanOptions, workspaceRoot: options.workspaceRoot }
@@ -54,7 +74,8 @@ export async function verifyChange(rootInput: string, options: VerifyOptions = {
   const manifestRoot = evaluation.workspaceRoot ?? evaluation.root;
   const verificationManifest = await loadVerificationManifest(manifestRoot, { manifestPath: options.manifestPath });
   const manifestChangedFiles = changedFilesRelativeToManifestRoot(evaluation.changedFiles, evaluation.root, manifestRoot);
-  const verificationManifestMatches = matchVerificationManifest(verificationManifest, manifestChangedFiles);
+  const matchableChangedFiles = await expandForManifestMatching(manifestRoot, manifestChangedFiles);
+  const verificationManifestMatches = matchVerificationManifest(verificationManifest, matchableChangedFiles);
 
   return {
     tool: {

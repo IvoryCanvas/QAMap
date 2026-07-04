@@ -3,6 +3,8 @@ import path from "node:path";
 import { buildDomainLanguageSummary } from "./domain-language.js";
 import { defaultDomainManifestPath, loadDomainManifest, matchDomains } from "./domains.js";
 import { collectProjectFiles } from "./fs.js";
+import { buildReverseImportIndex, expandChangedFilesWithImporters, findImportingSurfaces } from "./import-graph.js";
+import type { ImportImpact } from "./import-graph.js";
 import { loadCoreFlowManifest, matchCoreFlows } from "./flows.js";
 import { loadVerificationManifest, matchVerificationManifest } from "./manifest.js";
 import {
@@ -433,11 +435,12 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const coreFlowRoot = testPlan.workspaceRoot ?? root;
   const coreFlowManifest = await loadCoreFlowManifest(coreFlowRoot);
   const coreFlowChangedFiles = toCoreFlowChangedFiles(testPlan.changedFiles, root, coreFlowRoot);
-  const coreFlows = matchCoreFlows(coreFlowManifest, coreFlowChangedFiles);
+  const matchableChangedFiles = await expandChangedFilesForMatching(coreFlowRoot, coreFlowChangedFiles);
+  const coreFlows = matchCoreFlows(coreFlowManifest, matchableChangedFiles);
   const domainManifest = await loadDomainManifest(coreFlowRoot);
-  const domains = matchDomains(domainManifest, coreFlowChangedFiles);
+  const domains = matchDomains(domainManifest, matchableChangedFiles);
   const verificationManifest = await loadVerificationManifest(coreFlowRoot, { manifestPath: options.manifestPath });
-  const verificationManifestMatches = matchVerificationManifest(verificationManifest, coreFlowChangedFiles);
+  const verificationManifestMatches = matchVerificationManifest(verificationManifest, matchableChangedFiles);
   const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows, domains);
   const workspaceTargets = await buildWorkspaceTargets(root, testPlan);
   const flows = await buildFlows(
@@ -4259,9 +4262,10 @@ async function buildFlows(
   domainLanguage: DomainLanguageSummary,
 ): Promise<E2eFlow[]> {
   const files = changedFiles.map((file) => file.path);
+  const importImpacts = await collectImportImpacts(root, files);
   const fixtureContext = await collectFixtureReadinessContext(root, files);
   const flowResults = await Promise.all(
-    buildFlowCandidates(files, runner, projectType, domainLanguage).map((candidate) =>
+    buildFlowCandidates(files, runner, projectType, domainLanguage, importImpacts).map((candidate) =>
       buildFlow(root, runner, candidate, testSuiteInventory, fixtureContext),
     ),
   );
@@ -4270,20 +4274,73 @@ async function buildFlows(
   return dedupeFlows(flows).slice(0, 4);
 }
 
+async function expandChangedFilesForMatching(
+  root: string,
+  changedFiles: TestPlanChangedFile[],
+): Promise<TestPlanChangedFile[]> {
+  if (changedFiles.length === 0 || changedFiles.length > 60) {
+    return changedFiles;
+  }
+  try {
+    const expansion = await expandChangedFilesWithImporters(root, changedFiles.map((file) => file.path));
+    const knownPaths = new Set(changedFiles.map((file) => file.path));
+    const importerEntries = expansion.files
+      .filter((file) => !knownPaths.has(file))
+      .map((file) => ({ status: "M", path: file }));
+    return [...changedFiles, ...importerEntries];
+  } catch {
+    return changedFiles;
+  }
+}
+
+function isRoutableSurfaceFile(file: string): boolean {
+  if (isApiRouteFile(file) || isTestLikeFile(file)) {
+    return false;
+  }
+  return (
+    /(?:^|\/)app\/.*(?:^|\/)?page\.[cm]?[jt]sx?$/i.test(file) ||
+    /(?:^|\/)pages\/(?!api\/).+\.(?:[cm]?[jt]sx?|vue|svelte)$/i.test(file) ||
+    /(?:^|\/)(?:screens|views)\/.+\.(?:[cm]?[jt]sx?|vue|svelte)$/i.test(file) ||
+    /(?:^|\/)routes\/(?!api\/).+\.(?:[cm]?[jt]sx?|vue|svelte)$/i.test(file)
+  );
+}
+
+async function collectImportImpacts(root: string, changedFiles: string[]): Promise<ImportImpact[]> {
+  const propagatableFiles = changedFiles.filter(
+    (file) =>
+      !isRoutableSurfaceFile(file) && !isTestLikeFile(file) && !isConfigLikeFile(file) && !isContentOrStyleFile(file),
+  );
+  if (propagatableFiles.length === 0) {
+    return [];
+  }
+  try {
+    const index = await buildReverseImportIndex(root);
+    return findImportingSurfaces(index, propagatableFiles, isRoutableSurfaceFile);
+  } catch {
+    return [];
+  }
+}
+
+function describeImportChain(impact: ImportImpact): string {
+  return impact.chain.join(" -> ");
+}
+
 function buildFlowCandidates(
   files: string[],
   runner: E2eRunnerName,
   projectType: E2eProjectType,
   domainLanguage: DomainLanguageSummary,
+  importImpacts: ImportImpact[] = [],
 ): FlowCandidate[] {
-  const lowSignalCandidate = buildLowSignalChangeCandidate(files);
+  const lowSignalCandidate = importImpacts.length === 0 ? buildLowSignalChangeCandidate(files) : undefined;
   if (lowSignalCandidate) {
     return [lowSignalCandidate];
   }
 
   const behaviorFiles = files.filter((file) => !isTestLikeFile(file));
   const candidateFiles = behaviorFiles.length > 0 ? behaviorFiles : files;
-  const uiFiles = candidateFiles.filter(isUserFacingFile);
+  const impactSurfaceFiles = importImpacts.map((impact) => impact.surface).filter((surface) => !candidateFiles.includes(surface));
+  const uiFiles = uniqueStrings([...candidateFiles.filter(isUserFacingFile), ...impactSurfaceFiles]);
   const apiFiles = candidateFiles.filter(isApiLikeFile);
   const apiServiceSourceFiles =
     projectType === "api-service"
@@ -4309,11 +4366,14 @@ function buildFlowCandidates(
 
   if (uiFiles.length > 0) {
     const subject = summarizeFlowSubject(uiFiles, "Changed", domainLanguage);
+    const impactReason = importImpacts.length > 0
+      ? ` Changed shared files reach these surfaces through imports: ${importImpacts.slice(0, 3).map(describeImportChain).join("; ")}.`
+      : "";
     candidates.push({
       kind: "ui",
       title: `${subject} UI smoke flow`,
-      reason: "User-facing route, screen, navigation, or component files changed, so the draft should open the touched surface and cover the primary visible action.",
-      files: uiFiles,
+      reason: `User-facing route, screen, navigation, or component files changed, so the draft should open the touched surface and cover the primary visible action.${impactReason}`,
+      files: uniqueStrings([...uiFiles, ...importImpacts.map((impact) => impact.changedFile)]),
       steps: [
         "Launch the app.",
         "Navigate to the changed screen or component surface.",
