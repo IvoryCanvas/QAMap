@@ -128,7 +128,7 @@ test("scanProject stays quiet for a guarded repository", async () => {
 
 test("scanProject uses workspace root guardrails for package scans", async () => {
   const workspaceRoot = await makeTempRepo();
-  const packageRoot = path.join(workspaceRoot, "services/offer");
+  const packageRoot = path.join(workspaceRoot, "services/listing");
   await mkdir(path.join(workspaceRoot, ".github/workflows"), { recursive: true });
   await mkdir(packageRoot, { recursive: true });
   await writeWorkspaceGuardrails(workspaceRoot);
@@ -282,8 +282,8 @@ test("scanProject reports documentation-only API contracts", async () => {
     [
       "# API",
       "",
-      "GET /v1/offers",
-      "POST /v1/offers",
+      "GET /v1/listings",
+      "POST /v1/listings",
       "",
       "Responses are documented here for frontend integration.",
     ].join("\n"),
@@ -318,16 +318,16 @@ test("scanProject accepts machine-readable API contract sources", async () => {
     path.join(root, ".github/workflows/ci.yml"),
     "name: CI\non: [pull_request]\npermissions:\n  contents: read\n",
   );
-  await writeFile(path.join(root, "docs/api.md"), "# API\n\nGET /v1/offers\nPOST /v1/offers\n");
+  await writeFile(path.join(root, "docs/api.md"), "# API\n\nGET /v1/listings\nPOST /v1/listings\n");
   await writeFile(
     path.join(root, "openapi.yaml"),
     [
       "openapi: 3.1.0",
       "info:",
-      "  title: Offers",
+      "  title: Listings",
       "  version: 1.0.0",
       "paths:",
-      "  /v1/offers:",
+      "  /v1/listings:",
       "    get:",
       "      responses:",
       "        '200':",
@@ -344,9 +344,9 @@ test("scanProject accepts machine-readable API contract sources", async () => {
 test("generateTestPlan suggests domain-focused checks from changed files", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/features/campaign/api"), { recursive: true });
-  await mkdir(path.join(root, "src/features/campaign/config"), { recursive: true });
-  await mkdir(path.join(root, "src/pages/campaign"), { recursive: true });
+  await mkdir(path.join(root, "src/features/bundle/api"), { recursive: true });
+  await mkdir(path.join(root, "src/features/bundle/config"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/bundle"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -357,23 +357,23 @@ test("generateTestPlan suggests domain-focused checks from changed files", async
       },
     }),
   );
-  await writeFile(path.join(root, "src/features/campaign/api/client.ts"), "export const endpoint = '/campaigns';\n");
+  await writeFile(path.join(root, "src/features/bundle/api/client.ts"), "export const endpoint = '/bundles';\n");
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/campaign-survey"]);
-  await writeFile(path.join(root, "src/features/campaign/api/client.ts"), "export const endpoint = '/campaigns/survey';\n");
-  await writeFile(path.join(root, "src/features/campaign/config/resortCampaignConfig.ts"), "export const resorts = [];\n");
-  await writeFile(path.join(root, "src/pages/campaign/survey.tsx"), "export function SurveyPage() { return null; }\n");
+  await git(root, ["switch", "-c", "feature/bundle-survey"]);
+  await writeFile(path.join(root, "src/features/bundle/api/client.ts"), "export const endpoint = '/bundles/survey';\n");
+  await writeFile(path.join(root, "src/features/bundle/config/resortBundleConfig.ts"), "export const resorts = [];\n");
+  await writeFile(path.join(root, "src/pages/bundle/survey.tsx"), "export function SurveyPage() { return null; }\n");
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "add campaign survey"]);
+  await git(root, ["commit", "-m", "add bundle survey"]);
 
   const plan = await generateTestPlan(root, { base: "main", head: "HEAD" });
   const markdown = formatMarkdownTestPlan(plan);
   const titles = plan.items.map((item) => item.title);
 
-  assert.ok(titles.some((title) => /Campaign workflow/.test(title)));
+  assert.ok(titles.some((title) => /Bundle workflow/.test(title)));
   assert.ok(titles.includes("User-facing UI states"));
   assert.ok(titles.includes("API contract and failure handling"));
   assert.ok(titles.includes("Domain configuration and variants"));
@@ -384,9 +384,9 @@ test("generateTestPlan suggests domain-focused checks from changed files", async
 
 test("generateTestPlan scopes monorepo changes to the requested package", async () => {
   const workspaceRoot = await makeTempRepo();
-  const packageRoot = path.join(workspaceRoot, "services/offer");
+  const packageRoot = path.join(workspaceRoot, "services/listing");
   await initGitRepo(workspaceRoot);
-  await mkdir(path.join(packageRoot, "src/features/offer/api"), { recursive: true });
+  await mkdir(path.join(packageRoot, "src/features/listing/api"), { recursive: true });
   await writeFile(
     path.join(workspaceRoot, "package.json"),
     JSON.stringify({
@@ -402,27 +402,27 @@ test("generateTestPlan scopes monorepo changes to the requested package", async 
       },
     }),
   );
-  await writeFile(path.join(packageRoot, "src/features/offer/api/client.ts"), "export const endpoint = '/offers';\n");
+  await writeFile(path.join(packageRoot, "src/features/listing/api/client.ts"), "export const endpoint = '/listings';\n");
   await writeFile(path.join(workspaceRoot, "README.md"), "# Workspace\n");
   await git(workspaceRoot, ["add", "."]);
   await git(workspaceRoot, ["commit", "-m", "base"]);
   await git(workspaceRoot, ["branch", "-M", "main"]);
 
-  await git(workspaceRoot, ["switch", "-c", "feature/offer-flow"]);
-  await writeFile(path.join(packageRoot, "src/features/offer/api/client.ts"), "export const endpoint = '/offers/v2';\n");
+  await git(workspaceRoot, ["switch", "-c", "feature/listing-flow"]);
+  await writeFile(path.join(packageRoot, "src/features/listing/api/client.ts"), "export const endpoint = '/listings/v2';\n");
   await writeFile(path.join(workspaceRoot, "README.md"), "# Workspace\n\nUpdated outside package.\n");
   await git(workspaceRoot, ["add", "."]);
-  await git(workspaceRoot, ["commit", "-m", "update offer flow"]);
+  await git(workspaceRoot, ["commit", "-m", "update listing flow"]);
 
   const plan = await generateTestPlan(packageRoot, { base: "main", head: "HEAD", workspaceRoot });
 
-  assert.deepEqual(plan.changedFiles.map((file) => file.path), ["src/features/offer/api/client.ts"]);
-  assert.equal(plan.changedFiles.some((file) => file.path.startsWith("services/offer")), false);
+  assert.deepEqual(plan.changedFiles.map((file) => file.path), ["src/features/listing/api/client.ts"]);
+  assert.equal(plan.changedFiles.some((file) => file.path.startsWith("services/listing")), false);
   assert.deepEqual(plan.suggestedCommands, ["pnpm test", "pnpm run lint"]);
-  assert.ok(plan.items.some((item) => item.title === "Offer workflow regression"));
+  assert.ok(plan.items.some((item) => item.title === "Listing workflow regression"));
 
-  await mkdir(path.join(packageRoot, "src/pages/offer"), { recursive: true });
-  await writeFile(path.join(packageRoot, "src/pages/offer/detail.tsx"), "export function OfferDetailPage() { return null; }\n");
+  await mkdir(path.join(packageRoot, "src/pages/listing"), { recursive: true });
+  await writeFile(path.join(packageRoot, "src/pages/listing/detail.tsx"), "export function ListingDetailPage() { return null; }\n");
 
   const localPlan = await generateTestPlan(packageRoot, {
     base: "main",
@@ -432,7 +432,7 @@ test("generateTestPlan scopes monorepo changes to the requested package", async 
   });
   const localMarkdown = formatMarkdownTestPlan(localPlan);
 
-  assert.ok(localPlan.changedFiles.some((file) => file.path === "src/pages/offer/detail.tsx"));
+  assert.ok(localPlan.changedFiles.some((file) => file.path === "src/pages/listing/detail.tsx"));
   assert.ok(localPlan.items.some((item) => item.title === "User-facing UI states"));
   assert.match(localMarkdown, /Includes working tree changes: yes/);
 });
@@ -440,10 +440,10 @@ test("generateTestPlan scopes monorepo changes to the requested package", async 
 test("generateE2ePlan surfaces package-scoped targets for monorepo root changes", async () => {
   const root = await makeTempRepo();
   const mobileRoot = path.join(root, "apps/mobile");
-  const offerRoot = path.join(root, "services/offer");
+  const listingRoot = path.join(root, "services/listing");
   await initGitRepo(root);
   await mkdir(path.join(mobileRoot, "src/screens/home"), { recursive: true });
-  await mkdir(path.join(offerRoot, "src/features/campaign"), { recursive: true });
+  await mkdir(path.join(listingRoot, "src/features/bundle"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -464,20 +464,20 @@ test("generateE2ePlan surfaces package-scoped targets for monorepo root changes"
   );
   await writeFile(path.join(mobileRoot, "app.json"), JSON.stringify({ expo: { name: "Fixture" } }));
   await writeFile(
-    path.join(offerRoot, "package.json"),
+    path.join(listingRoot, "package.json"),
     JSON.stringify({
-      name: "@fixture/offer",
+      name: "@fixture/listing",
       dependencies: {
         next: "^15.0.0",
         "react-dom": "^19.0.0",
       },
     }),
   );
-  await writeFile(path.join(offerRoot, "next.config.mjs"), "export default {};\n");
+  await writeFile(path.join(listingRoot, "next.config.mjs"), "export default {};\n");
   await writeFile(path.join(mobileRoot, "src/screens/home/HomeScreen.tsx"), "export function HomeScreen() { return null; }\n");
   await writeFile(
-    path.join(offerRoot, "src/features/campaign/CampaignView.tsx"),
-    "export function CampaignView() { return null; }\n",
+    path.join(listingRoot, "src/features/bundle/BundleView.tsx"),
+    "export function BundleView() { return null; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
@@ -489,8 +489,8 @@ test("generateE2ePlan surfaces package-scoped targets for monorepo root changes"
     "export function HomeScreen() { return <Text>Home</Text>; }\n",
   );
   await writeFile(
-    path.join(offerRoot, "src/features/campaign/CampaignView.tsx"),
-    "export function CampaignView() { return <main>Campaign</main>; }\n",
+    path.join(listingRoot, "src/features/bundle/BundleView.tsx"),
+    "export function BundleView() { return <main>Bundle</main>; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "update workspace targets"]);
@@ -498,7 +498,7 @@ test("generateE2ePlan surfaces package-scoped targets for monorepo root changes"
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const markdown = formatMarkdownE2ePlan(plan);
   const mobileTarget = plan.workspaceTargets.find((target) => target.path === "apps/mobile");
-  const offerTarget = plan.workspaceTargets.find((target) => target.path === "services/offer");
+  const listingTarget = plan.workspaceTargets.find((target) => target.path === "services/listing");
 
   assert.equal(plan.project.type, "expo-react-native");
   assert.ok(plan.project.evidence.some((item) => item.startsWith("workspace member apps/mobile:")));
@@ -508,14 +508,14 @@ test("generateE2ePlan surfaces package-scoped targets for monorepo root changes"
   assert.equal(mobileTarget.project.type, "expo-react-native");
   assert.equal(mobileTarget.recommendedRunner.name, "maestro");
   assert.match(mobileTarget.suggestedCommand, /qamap e2e plan apps\/mobile --workspace-root \. --base main --head HEAD/);
-  assert.ok(offerTarget);
-  assert.equal(offerTarget.packageName, "@fixture/offer");
-  assert.equal(offerTarget.project.type, "web");
-  assert.equal(offerTarget.recommendedRunner.name, "playwright");
-  assert.match(offerTarget.suggestedCommand, /qamap e2e plan services\/offer --workspace-root \. --base main --head HEAD/);
+  assert.ok(listingTarget);
+  assert.equal(listingTarget.packageName, "@fixture/listing");
+  assert.equal(listingTarget.project.type, "web");
+  assert.equal(listingTarget.recommendedRunner.name, "playwright");
+  assert.match(listingTarget.suggestedCommand, /qamap e2e plan services\/listing --workspace-root \. --base main --head HEAD/);
   assert.ok(plan.bootstrap.steps.some((step) => step.title === "Run package-scoped E2E plans for changed targets"));
   assert.match(markdown, /Changed App\/Package Targets/);
-  assert.match(markdown, /services\/offer/);
+  assert.match(markdown, /services\/listing/);
   assert.match(markdown, /apps\/mobile/);
 });
 
@@ -741,7 +741,7 @@ test("generateE2ePlan detects Maestro app ids from app config files", async () =
 test("generateE2ePlan detects API service projects and suggests contract checklists", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/v1/offers/controllers"), { recursive: true });
+  await mkdir(path.join(root, "src/v1/listings/controllers"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -759,22 +759,22 @@ test("generateE2ePlan detects API service projects and suggests contract checkli
       },
     }),
   );
-  await writeFile(path.join(root, "serverless.yml"), "service: offers-api\n");
+  await writeFile(path.join(root, "serverless.yml"), "service: listings-api\n");
   await writeFile(
-    path.join(root, "src/v1/offers/controllers/getOffer.ts"),
-    "export function getOffer() { return { statusCode: 200, body: '{}' }; }\n",
+    path.join(root, "src/v1/listings/controllers/getListing.ts"),
+    "export function getListing() { return { statusCode: 200, body: '{}' }; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/offer-contract"]);
+  await git(root, ["switch", "-c", "feature/listing-contract"]);
   await writeFile(
-    path.join(root, "src/v1/offers/controllers/getOffer.ts"),
-    "export function getOffer() { return { statusCode: 200, body: JSON.stringify({ ok: true }) }; }\n",
+    path.join(root, "src/v1/listings/controllers/getListing.ts"),
+    "export function getListing() { return { statusCode: 200, body: JSON.stringify({ ok: true }) }; }\n",
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update offer contract"]);
+  await git(root, ["commit", "-m", "update listing contract"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const markdown = formatMarkdownE2ePlan(plan);
@@ -950,21 +950,21 @@ test("generateE2ePlan detects data catalog repositories and suggests catalog ver
   await mkdir(path.join(root, "tools"), { recursive: true });
   await mkdir(path.join(root, "site"), { recursive: true });
   await writeFile(
-    path.join(root, "catalog/events/creator.yaml"),
+    path.join(root, "catalog/events/member.yaml"),
     [
       "events:",
-      "  - name: creator_registered",
+      "  - name: member_registered",
       "    owner: growth",
-      "    description: Tracks creator registration completion.",
+      "    description: Tracks member registration completion.",
     ].join("\n"),
   );
   await writeFile(
     path.join(root, "catalog/user_properties.yaml"),
     [
       "properties:",
-      "  - name: creator_id",
+      "  - name: member_id",
       "    owner: growth",
-      "    description: Identifies the creator for analytics consumers.",
+      "    description: Identifies the member for analytics consumers.",
     ].join("\n"),
   );
   await writeFile(path.join(root, "tools/build_catalog.py"), "print('build catalog')\n");
@@ -975,12 +975,12 @@ test("generateE2ePlan detects data catalog repositories and suggests catalog ver
 
   await git(root, ["switch", "-c", "feature/catalog-entry"]);
   await writeFile(
-    path.join(root, "catalog/events/creator.yaml"),
+    path.join(root, "catalog/events/member.yaml"),
     [
       "events:",
-      "  - name: creator_registered",
+      "  - name: member_registered",
       "    owner: growth",
-      "    description: Tracks creator registration completion.",
+      "    description: Tracks member registration completion.",
       "    properties:",
       "      - name: source",
       "        type: string",
@@ -990,9 +990,9 @@ test("generateE2ePlan detects data catalog repositories and suggests catalog ver
     path.join(root, "catalog/user_properties.yaml"),
     [
       "properties:",
-      "  - name: creator_id",
+      "  - name: member_id",
       "    owner: growth",
-      "    description: Identifies the creator for analytics consumers.",
+      "    description: Identifies the member for analytics consumers.",
       "    type: string",
     ].join("\n"),
   );
@@ -1398,18 +1398,18 @@ test("generateE2ePlan treats docs-only changes as documentation verification", a
     }),
   );
   await writeFile(path.join(root, "playwright.config.ts"), "export default {};\n");
-  await writeFile(path.join(root, "docs/offer-workflow.md"), "# Offer workflow\n\nRun the offer review flow.\n");
+  await writeFile(path.join(root, "docs/listing-workflow.md"), "# Listing workflow\n\nRun the listing review flow.\n");
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/docs-offer-workflow"]);
+  await git(root, ["switch", "-c", "feature/docs-listing-workflow"]);
   await writeFile(
-    path.join(root, "docs/offer-workflow.md"),
-    "# Offer workflow\n\nRun the offer review flow and check failed URL submission copy.\n",
+    path.join(root, "docs/listing-workflow.md"),
+    "# Listing workflow\n\nRun the listing review flow and check failed URL submission copy.\n",
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update offer workflow docs"]);
+  await git(root, ["commit", "-m", "update listing workflow docs"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
   const markdown = formatMarkdownE2ePlan(plan);
@@ -1419,7 +1419,7 @@ test("generateE2ePlan treats docs-only changes as documentation verification", a
   assert.equal(plan.flows[0].languageBrief.actor, "Maintainer or documentation reviewer");
   assert.match(plan.flows[0].languageBrief.reviewQuestion, /docs validation/);
   assert.match(markdown, /Documentation verification checklist/);
-  assert.doesNotMatch(markdown, /Suggested user scenarios:[\s\S]*Offer primary journey/);
+  assert.doesNotMatch(markdown, /Suggested user scenarios:[\s\S]*Listing primary journey/);
 });
 
 test("generateE2ePlan treats generated-only changes as generated artifact verification", async () => {
@@ -1437,15 +1437,15 @@ test("generateE2ePlan treats generated-only changes as generated artifact verifi
       },
     }),
   );
-  await writeFile(path.join(root, "src/__generated__/offerClient.ts"), "export const version = 'v1';\n");
+  await writeFile(path.join(root, "src/__generated__/listingClient.ts"), "export const version = 'v1';\n");
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/generated-offer-client"]);
-  await writeFile(path.join(root, "src/__generated__/offerClient.ts"), "export const version = 'v2';\n");
+  await git(root, ["switch", "-c", "feature/generated-listing-client"]);
+  await writeFile(path.join(root, "src/__generated__/listingClient.ts"), "export const version = 'v2';\n");
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update generated offer client"]);
+  await git(root, ["commit", "-m", "update generated listing client"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const titles = plan.flows.map((flow) => flow.title);
@@ -1454,7 +1454,7 @@ test("generateE2ePlan treats generated-only changes as generated artifact verifi
   assert.equal(plan.domainLanguage.terms.length, 0);
   assert.equal(plan.domainLanguage.scenarios.length, 0);
   assert.equal(plan.flows[0].languageBrief.actor, "Maintainer or build owner");
-  assert.equal(titles.some((title) => /Offer|API contract|workflow smoke/i.test(title)), false);
+  assert.equal(titles.some((title) => /Listing|API contract|workflow smoke/i.test(title)), false);
 });
 
 test("generateE2ePlan treats API service source utilities as contract-impacting changes", async () => {
@@ -1494,7 +1494,7 @@ test("generateE2ePlan treats API service source utilities as contract-impacting 
 
 test("generateE2ePlan detects Django service apps from a workspace root", async () => {
   const workspaceRoot = await makeTempRepo();
-  const appRoot = path.join(workspaceRoot, "offers");
+  const appRoot = path.join(workspaceRoot, "listings");
   await initGitRepo(workspaceRoot);
   await mkdir(path.join(appRoot, "tests"), { recursive: true });
   await writeFile(path.join(workspaceRoot, "manage.py"), "import django\n");
@@ -1502,17 +1502,17 @@ test("generateE2ePlan detects Django service apps from a workspace root", async 
     path.join(workspaceRoot, "requirements.txt"),
     ["Django==5.0.0", "djangorestframework==3.15.0", "pytest==8.0.0"].join("\n"),
   );
-  await writeFile(path.join(appRoot, "admin.py"), "class OfferAdmin:\n    list_display = ['id']\n");
+  await writeFile(path.join(appRoot, "admin.py"), "class ListingAdmin:\n    list_display = ['id']\n");
   await writeFile(path.join(appRoot, "tests/test_admin.py"), "def test_admin():\n    assert True\n");
   await git(workspaceRoot, ["add", "."]);
   await git(workspaceRoot, ["commit", "-m", "base"]);
   await git(workspaceRoot, ["branch", "-M", "main"]);
 
-  await git(workspaceRoot, ["switch", "-c", "feature/offer-admin-contract"]);
-  await writeFile(path.join(appRoot, "admin.py"), "class OfferAdmin:\n    list_display = ['id', 'status']\n");
+  await git(workspaceRoot, ["switch", "-c", "feature/listing-admin-contract"]);
+  await writeFile(path.join(appRoot, "admin.py"), "class ListingAdmin:\n    list_display = ['id', 'status']\n");
   await writeFile(path.join(appRoot, "tests/test_admin.py"), "def test_admin_status():\n    assert True\n");
   await git(workspaceRoot, ["add", "."]);
-  await git(workspaceRoot, ["commit", "-m", "update offer admin"]);
+  await git(workspaceRoot, ["commit", "-m", "update listing admin"]);
 
   const plan = await generateE2ePlan(appRoot, {
     workspaceRoot,
@@ -1535,7 +1535,7 @@ test("generateE2ePlan detects Django service apps from a workspace root", async 
 test("generateE2ePlan names versioned API service paths with domain language", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/v1/offer"), { recursive: true });
+  await mkdir(path.join(root, "src/v1/listing"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -1544,48 +1544,48 @@ test("generateE2ePlan names versioned API service paths with domain language", a
       },
     }),
   );
-  await writeFile(path.join(root, "src/v1/offer/utils.ts"), "export function getToken() { return undefined; }\n");
+  await writeFile(path.join(root, "src/v1/listing/utils.ts"), "export function getToken() { return undefined; }\n");
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/offer-token"]);
-  await writeFile(path.join(root, "src/v1/offer/utils.ts"), "export function getToken() { return 'cookie-token'; }\n");
+  await git(root, ["switch", "-c", "feature/listing-token"]);
+  await writeFile(path.join(root, "src/v1/listing/utils.ts"), "export function getToken() { return 'cookie-token'; }\n");
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update offer token"]);
+  await git(root, ["commit", "-m", "update listing token"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const flow = plan.flows.find((item) => /API contract/.test(item.title));
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e" });
-  const draftFile = draft.files.find((file) => file.flowTitle === "Offer API contract");
+  const draftFile = draft.files.find((file) => file.flowTitle === "Listing API contract");
 
   assert.ok(flow);
-  assert.equal(flow.title, "Offer API contract smoke checklist");
-  assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Offer"));
+  assert.equal(flow.title, "Listing API contract smoke checklist");
+  assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Listing"));
   assert.ok(draftFile);
   assert.equal(draftFile.languageBrief.actor, "API consumer or upstream service");
   assert.match(draftFile.languageBrief.trigger, /Call the endpoint, handler, or service path/);
   assert.equal(draftFile.source, "domain-language");
   const manualDraft = await readFile(path.join(root, draftFile.path), "utf8");
-  assert.match(manualDraft, /# Offer API contract/);
+  assert.match(manualDraft, /# Listing API contract/);
   assert.match(manualDraft, /Call the changed endpoint, client, command, or handler with a valid request/);
-  assert.doesNotMatch(manualDraft, /Start from the normal entry point for Offer/);
+  assert.doesNotMatch(manualDraft, /Start from the normal entry point for Listing/);
 });
 
 test("generateE2ePlan uses matched core flow names for API service contracts", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, ".qamap"), { recursive: true });
-  await mkdir(path.join(root, "src/v1/offer"), { recursive: true });
+  await mkdir(path.join(root, "src/v1/listing"), { recursive: true });
   await writeFile(
     path.join(root, ".qamap/flows.yml"),
     [
       "flows:",
-      "  - id: offer-token-fallback",
-      "    name: Offer token fallback",
+      "  - id: listing-token-fallback",
+      "    name: Listing token fallback",
       "    priority: critical",
       "    files:",
-      "      - src/v1/offer/**",
+      "      - src/v1/listing/**",
       "    checks:",
       "      - Read token from the authorization header.",
       "      - Fall back to the token cookie when the header is absent.",
@@ -1599,26 +1599,26 @@ test("generateE2ePlan uses matched core flow names for API service contracts", a
       },
     }),
   );
-  await writeFile(path.join(root, "src/v1/offer/utils.ts"), "export function getToken() { return undefined; }\n");
+  await writeFile(path.join(root, "src/v1/listing/utils.ts"), "export function getToken() { return undefined; }\n");
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/offer-token-fallback"]);
-  await writeFile(path.join(root, "src/v1/offer/utils.ts"), "export function getToken() { return 'cookie-token'; }\n");
+  await git(root, ["switch", "-c", "feature/listing-token-fallback"]);
+  await writeFile(path.join(root, "src/v1/listing/utils.ts"), "export function getToken() { return 'cookie-token'; }\n");
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update offer token fallback"]);
+  await git(root, ["commit", "-m", "update listing token fallback"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const flow = plan.flows.find((item) => /API contract/.test(item.title));
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e" });
-  const draftFile = draft.files.find((file) => file.flowTitle === "Offer token fallback");
+  const draftFile = draft.files.find((file) => file.flowTitle === "Listing token fallback");
 
   assert.equal(plan.coreFlows.length, 1);
   assert.ok(flow);
-  assert.equal(flow.title, "Offer token fallback API contract smoke checklist");
+  assert.equal(flow.title, "Listing token fallback API contract smoke checklist");
   assert.equal(flow.languageBrief.actor, "API consumer or upstream service");
-  assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Offer token fallback"));
+  assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Listing token fallback"));
   assert.ok(draftFile);
   assert.equal(draftFile.source, "core-flow");
   assert.equal(draftFile.promotionStatus, "needs-review");
@@ -1689,8 +1689,8 @@ test("generateE2ePlan keeps service changes generic and avoids fixture-specific 
 test("generateE2ePlan keeps UI actors when API-adjacent screen files change", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/features/partners/components"), { recursive: true });
-  await mkdir(path.join(root, "src/features/partners/api"), { recursive: true });
+  await mkdir(path.join(root, "src/features/vendors/components"), { recursive: true });
+  await mkdir(path.join(root, "src/features/vendors/api"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -1704,40 +1704,40 @@ test("generateE2ePlan keeps UI actors when API-adjacent screen files change", as
     }),
   );
   await writeFile(
-    path.join(root, "src/features/partners/components/PartnersScreen.tsx"),
+    path.join(root, "src/features/vendors/components/VendorsScreen.tsx"),
     [
       "import { Pressable, Text } from 'react-native';",
-      "export function PartnersScreen() {",
-      "  return <Pressable testID=\"partner-open\"><Text>Open partner</Text></Pressable>;",
+      "export function VendorsScreen() {",
+      "  return <Pressable testID=\"vendor-open\"><Text>Open vendor</Text></Pressable>;",
       "}",
     ].join("\n"),
   );
-  await writeFile(path.join(root, "src/features/partners/api/partnerApi.ts"), "export const getPartner = () => '/partners';\n");
+  await writeFile(path.join(root, "src/features/vendors/api/vendorApi.ts"), "export const getVendor = () => '/vendors';\n");
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/partners-screen"]);
+  await git(root, ["switch", "-c", "feature/vendors-screen"]);
   await writeFile(
-    path.join(root, "src/features/partners/components/PartnersScreen.tsx"),
+    path.join(root, "src/features/vendors/components/VendorsScreen.tsx"),
     [
       "import { Pressable, Text } from 'react-native';",
-      "export function PartnersScreen() {",
-      "  return <Pressable testID=\"partner-open\"><Text>Open partner profile</Text></Pressable>;",
+      "export function VendorsScreen() {",
+      "  return <Pressable testID=\"vendor-open\"><Text>Open vendor profile</Text></Pressable>;",
       "}",
     ].join("\n"),
   );
-  await writeFile(path.join(root, "src/features/partners/api/partnerApi.ts"), "export const getPartner = () => '/partners/v2';\n");
+  await writeFile(path.join(root, "src/features/vendors/api/vendorApi.ts"), "export const getVendor = () => '/vendors/v2';\n");
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update partners screen and api"]);
+  await git(root, ["commit", "-m", "update vendors screen and api"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "maestro" });
-  const uiFlow = plan.flows.find((flow) => flow.title === "Partners UI smoke flow");
-  const apiFlow = plan.flows.find((flow) => flow.title === "Partners API contract smoke flow");
+  const uiFlow = plan.flows.find((flow) => flow.title === "Vendors UI smoke flow");
+  const apiFlow = plan.flows.find((flow) => flow.title === "Vendors API contract smoke flow");
 
   assert.ok(uiFlow);
   assert.equal(uiFlow.languageBrief.actor, "User");
-  assert.match(uiFlow.languageBrief.trigger, /Partners/);
+  assert.match(uiFlow.languageBrief.trigger, /Vendors/);
   assert.ok(apiFlow);
   assert.equal(apiFlow.languageBrief.actor, "API consumer or upstream service");
 
@@ -1747,7 +1747,7 @@ test("generateE2ePlan keeps UI actors when API-adjacent screen files change", as
     runner: "maestro",
     output: ".maestro",
   });
-  const draftFile = draft.files.find((file) => file.flowTitle === "Partners primary journey");
+  const draftFile = draft.files.find((file) => file.flowTitle === "Vendors primary journey");
   assert.ok(draftFile);
   assert.equal(draftFile.languageBrief.actor, "User");
 });
@@ -1756,7 +1756,7 @@ test("generateE2eDraft scopes entrypoint hints to each domain scenario", async (
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, "src/app/navigations"), { recursive: true });
-  await mkdir(path.join(root, "src/features/offer/components"), { recursive: true });
+  await mkdir(path.join(root, "src/features/listing/components"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -1776,41 +1776,41 @@ test("generateE2eDraft scopes entrypoint hints to each domain scenario", async (
     "export function ArchiveScreen() { return null; }\n",
   );
   await writeFile(
-    path.join(root, "src/features/offer/components/OfferScreen.tsx"),
-    "export function OfferScreen() { return null; }\n",
+    path.join(root, "src/features/listing/components/ListingScreen.tsx"),
+    "export function ListingScreen() { return null; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/offer"]);
+  await git(root, ["switch", "-c", "feature/listing"]);
   await writeFile(
     path.join(root, "src/app/navigations/ArchiveScreen.tsx"),
     "export function ArchiveScreen() { return <Text>Archive</Text>; }\n",
   );
   await writeFile(
-    path.join(root, "src/features/offer/components/OfferScreen.tsx"),
-    "export function OfferScreen() { return <Text>Offer</Text>; }\n",
+    path.join(root, "src/features/listing/components/ListingScreen.tsx"),
+    "export function ListingScreen() { return <Text>Listing</Text>; }\n",
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update offer"]);
+  await git(root, ["commit", "-m", "update listing"]);
 
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".maestro" });
-  const offerDraftFile = draft.files.find((file) => file.flowTitle === "Offer primary journey");
-  assert.ok(offerDraftFile);
-  const offerDraft = await readFile(path.join(root, offerDraftFile.path), "utf8");
+  const listingDraftFile = draft.files.find((file) => file.flowTitle === "Listing primary journey");
+  assert.ok(listingDraftFile);
+  const listingDraft = await readFile(path.join(root, listingDraftFile.path), "utf8");
 
-  assert.match(offerDraftFile.primaryEntrypoint ?? "", /screen Offer/);
-  assert.doesNotMatch(offerDraftFile.primaryEntrypoint ?? "", /Archive/);
-  assert.match(offerDraft, /screen Offer/);
-  assert.doesNotMatch(offerDraft, /screen Archive/);
+  assert.match(listingDraftFile.primaryEntrypoint ?? "", /screen Listing/);
+  assert.doesNotMatch(listingDraftFile.primaryEntrypoint ?? "", /Archive/);
+  assert.match(listingDraft, /screen Listing/);
+  assert.doesNotMatch(listingDraft, /screen Archive/);
 });
 
 test("generateE2eDraft names changed component actions before generic primary journeys", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/features/offer/components"), { recursive: true });
-  await mkdir(path.join(root, "src/entities/offer/api"), { recursive: true });
+  await mkdir(path.join(root, "src/features/listing/components"), { recursive: true });
+  await mkdir(path.join(root, "src/entities/listing/api"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -1825,61 +1825,61 @@ test("generateE2eDraft names changed component actions before generic primary jo
   );
   await writeFile(path.join(root, "app.json"), JSON.stringify({ expo: { name: "Fixture" } }));
   await writeFile(
-    path.join(root, "src/features/offer/components/OfferScreen.tsx"),
-    "export function OfferScreen() { return null; }\n",
+    path.join(root, "src/features/listing/components/ListingScreen.tsx"),
+    "export function ListingScreen() { return null; }\n",
   );
   await writeFile(
-    path.join(root, "src/features/offer/components/ContentUrlSubmitModal.tsx"),
-    "export function ContentUrlSubmitModal() { return null; }\n",
+    path.join(root, "src/features/listing/components/MediaLinkSubmitModal.tsx"),
+    "export function MediaLinkSubmitModal() { return null; }\n",
   );
   await writeFile(
-    path.join(root, "src/entities/offer/api/offerApi.ts"),
-    "export async function submitContentUrl() { return { ok: true }; }\n",
+    path.join(root, "src/entities/listing/api/listingApi.ts"),
+    "export async function submitMediaLink() { return { ok: true }; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/content-url-submit"]);
+  await git(root, ["switch", "-c", "feature/media-link-submit"]);
   await writeFile(
-    path.join(root, "src/features/offer/components/ContentUrlSubmitModal.tsx"),
+    path.join(root, "src/features/listing/components/MediaLinkSubmitModal.tsx"),
     [
       "import { Pressable, TextInput } from 'react-native';",
-      "export function ContentUrlSubmitModal() {",
-      "  return <><TextInput testID=\"offer-content-url\" /><Pressable testID=\"offer-content-url-submit\" /></>;",
+      "export function MediaLinkSubmitModal() {",
+      "  return <><TextInput testID=\"listing-media-link\" /><Pressable testID=\"listing-media-link-submit\" /></>;",
       "}",
     ].join("\n"),
   );
   await writeFile(
-    path.join(root, "src/entities/offer/api/offerApi.ts"),
-    "export async function submitContentUrl() { return { ok: true, status: 'submitted' }; }\n",
+    path.join(root, "src/entities/listing/api/listingApi.ts"),
+    "export async function submitMediaLink() { return { ok: true, status: 'submitted' }; }\n",
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update content url submit"]);
+  await git(root, ["commit", "-m", "update media link submit"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "maestro" });
-  const specificScenario = plan.domainLanguage.scenarios.find((scenario) => scenario.title === "Offer Content URL Submit");
+  const specificScenario = plan.domainLanguage.scenarios.find((scenario) => scenario.title === "Listing Media Link Submit");
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", runner: "maestro", output: ".maestro" });
-  const draftFile = draft.files.find((file) => file.flowTitle === "Offer Content URL Submit");
+  const draftFile = draft.files.find((file) => file.flowTitle === "Listing Media Link Submit");
   assert.ok(specificScenario);
   assert.match(specificScenario.intent, /instead of stopping at a generic primary journey/);
   assert.ok(draftFile);
   assert.equal(draftFile.source, "domain-language");
-  assert.equal(draftFile.path, ".maestro/offer-content-url-submit.yaml");
-  assert.equal(draft.files.some((file) => file.flowTitle === "Offer primary journey"), false);
+  assert.equal(draftFile.path, ".maestro/listing-media-link-submit.yaml");
+  assert.equal(draft.files.some((file) => file.flowTitle === "Listing primary journey"), false);
   const draftText = await readFile(path.join(root, draftFile.path), "utf8");
-  assert.match(draftText, /Flow: Offer Content URL Submit/);
-  assert.match(draftText, /Content URL Submit/);
-  assert.match(draftText, /src\/features\/offer\/components\/ContentUrlSubmitModal\.tsx/);
-  assert.match(draftText, /tapOn: \{ id: "offer-content-url" \}/);
+  assert.match(draftText, /Flow: Listing Media Link Submit/);
+  assert.match(draftText, /Media Link Submit/);
+  assert.match(draftText, /src\/features\/listing\/components\/MediaLinkSubmitModal\.tsx/);
+  assert.match(draftText, /tapOn: \{ id: "listing-media-link" \}/);
   assert.match(draftText, /inputText: "https:\/\/example\.com\/qamap"/);
-  assert.match(draftText, /offer-content-url-submit/);
+  assert.match(draftText, /listing-media-link-submit/);
 });
 
 test("generateE2eDraft fills inferred web input selectors before submitting actions", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/pages/offer"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/listing"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -1894,27 +1894,27 @@ test("generateE2eDraft fills inferred web input selectors before submitting acti
     }),
   );
   await writeFile(
-    path.join(root, "src/pages/offer/contentUrl.tsx"),
-    "export default function ContentUrlPage() { return null; }\n",
+    path.join(root, "src/pages/listing/mediaLink.tsx"),
+    "export default function MediaLinkPage() { return null; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/content-url-submit"]);
+  await git(root, ["switch", "-c", "feature/media-link-submit"]);
   await writeFile(
-    path.join(root, "src/pages/offer/contentUrl.tsx"),
+    path.join(root, "src/pages/listing/mediaLink.tsx"),
     [
-      "export default function ContentUrlPage() {",
+      "export default function MediaLinkPage() {",
       "  return <form>",
-      "    <input data-testid=\"offer-content-url\" aria-label=\"Content URL\" />",
-      "    <button data-testid=\"offer-content-url-submit\">Submit URL</button>",
+      "    <input data-testid=\"listing-media-link\" aria-label=\"Media Link\" />",
+      "    <button data-testid=\"listing-media-link-submit\">Submit URL</button>",
       "  </form>;",
       "}",
     ].join("\n"),
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "add content url form"]);
+  await git(root, ["commit", "-m", "add media link form"]);
 
   const draft = await generateE2eDraft(root, {
     base: "main",
@@ -1922,20 +1922,20 @@ test("generateE2eDraft fills inferred web input selectors before submitting acti
     output: "tests/e2e",
     runner: "playwright",
   });
-  const draftFile = draft.files.find((file) => file.flowTitle === "Offer Content URL");
+  const draftFile = draft.files.find((file) => file.flowTitle === "Listing Media Link");
   assert.ok(draftFile);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
 
-  assert.match(spec, /await page\.getByTestId\("offer-content-url"\)\.fill\("https:\/\/example\.com\/qamap"\)/);
-  assert.match(spec, /await page\.getByTestId\("offer-content-url-submit"\)\.click\(\)/);
-  assert.doesNotMatch(spec, /page\.getByTestId\("offer-content-url"\)\.click\(\)/);
+  assert.match(spec, /await page\.getByTestId\("listing-media-link"\)\.fill\("https:\/\/example\.com\/qamap"\)/);
+  assert.match(spec, /await page\.getByTestId\("listing-media-link-submit"\)\.click\(\)/);
+  assert.doesNotMatch(spec, /page\.getByTestId\("listing-media-link"\)\.click\(\)/);
 });
 
 test("generateE2ePlan ranks action scenarios by changed domain impact without one domain crowding out others", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/features/offer/components"), { recursive: true });
-  await mkdir(path.join(root, "src/features/partners/components"), { recursive: true });
+  await mkdir(path.join(root, "src/features/listing/components"), { recursive: true });
+  await mkdir(path.join(root, "src/features/vendors/components"), { recursive: true });
   await mkdir(path.join(root, "src/features/link-admin/components"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
@@ -1951,11 +1951,11 @@ test("generateE2ePlan ranks action scenarios by changed domain impact without on
   );
   await writeFile(path.join(root, "app.json"), JSON.stringify({ expo: { name: "Fixture" } }));
   const changedFiles = [
-    "src/features/offer/components/OfferApplicationCompleteScreen.tsx",
-    "src/features/offer/components/OfferCampaignApplyScreen.tsx",
-    "src/features/offer/components/OfferShippingAddressScreen.tsx",
-    "src/features/partners/components/PartnersCollectionSelectScreen.tsx",
-    "src/features/partners/components/PartnersManagementScreen.tsx",
+    "src/features/listing/components/ListingSubmissionCompleteScreen.tsx",
+    "src/features/listing/components/ListingBundleApplyScreen.tsx",
+    "src/features/listing/components/ListingShippingAddressScreen.tsx",
+    "src/features/vendors/components/VendorsCollectionSelectScreen.tsx",
+    "src/features/vendors/components/VendorsManagementScreen.tsx",
     "src/features/link-admin/components/OnboardingScreen.tsx",
   ];
   for (const file of changedFiles) {
@@ -1977,21 +1977,21 @@ test("generateE2ePlan ranks action scenarios by changed domain impact without on
   const topActionTitles = scenarioTitles.slice(0, 4);
 
   assert.deepEqual(topActionTitles, [
-    "Offer Application Complete",
-    "Offer Campaign Apply",
-    "Partners Collection Select",
-    "Partners Management",
+    "Listing Bundle Apply",
+    "Listing Submission Complete",
+    "Vendors Collection Select",
+    "Vendors Management",
   ]);
   assert.equal(topActionTitles.includes("Link Admin Onboarding"), false);
-  assert.equal(topActionTitles.filter((title) => title.startsWith("Offer ")).length, 2);
-  assert.equal(topActionTitles.filter((title) => title.startsWith("Partners ")).length, 2);
+  assert.equal(topActionTitles.filter((title) => title.startsWith("Listing ")).length, 2);
+  assert.equal(topActionTitles.filter((title) => title.startsWith("Vendors ")).length, 2);
 });
 
 test("generateE2ePlan evaluates existing test suite coverage evidence", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/features/campaign/fragments"), { recursive: true });
-  await mkdir(path.join(root, "src/features/campaign/__tests__"), { recursive: true });
+  await mkdir(path.join(root, "src/features/bundle/fragments"), { recursive: true });
+  await mkdir(path.join(root, "src/features/bundle/__tests__"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -2008,16 +2008,16 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
     }),
   );
   await writeFile(
-    path.join(root, "src/features/campaign/fragments/CampaignView.tsx"),
-    "export function CampaignView() { return <main>Campaign</main>; }\n",
+    path.join(root, "src/features/bundle/fragments/BundleView.tsx"),
+    "export function BundleView() { return <main>Bundle</main>; }\n",
   );
   await writeFile(
-    path.join(root, "src/features/campaign/__tests__/CampaignView.test.tsx"),
+    path.join(root, "src/features/bundle/__tests__/BundleView.test.tsx"),
     [
       "import { describe, expect, it } from 'vitest';",
-      "import { CampaignView } from '../fragments/CampaignView';",
-      "describe('CampaignView', () => {",
-      "  it('renders campaign success state', () => expect(CampaignView).toBeDefined());",
+      "import { BundleView } from '../fragments/BundleView';",
+      "describe('BundleView', () => {",
+      "  it('renders bundle success state', () => expect(BundleView).toBeDefined());",
       "  it('shows empty state when there are no results', () => expect('empty').toBe('empty'));",
       "  it('shows error state after request failure', () => expect('error').toBe('error'));",
       "});",
@@ -2027,17 +2027,17 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/campaign-view"]);
+  await git(root, ["switch", "-c", "feature/bundle-view"]);
   await writeFile(
-    path.join(root, "src/features/campaign/fragments/CampaignView.tsx"),
-    "export function CampaignView() { return <main data-testid=\"campaign-view\">Campaign detail</main>; }\n",
+    path.join(root, "src/features/bundle/fragments/BundleView.tsx"),
+    "export function BundleView() { return <main data-testid=\"bundle-view\">Bundle detail</main>; }\n",
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update campaign view"]);
+  await git(root, ["commit", "-m", "update bundle view"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const markdown = formatMarkdownE2ePlan(plan);
-  const flow = plan.flows.find((item) => item.title === "Campaign UI smoke flow");
+  const flow = plan.flows.find((item) => item.title === "Bundle UI smoke flow");
 
   assert.ok(flow);
   assert.equal(plan.testSuite.hasTestSuite, true);
@@ -2055,7 +2055,7 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
   assert.ok(
     flow.coverageEvidence
       .find((evidence) => evidence.targetTitle === "Loading, empty, error, and success states")
-      ?.files.includes("src/features/campaign/__tests__/CampaignView.test.tsx"),
+      ?.files.includes("src/features/bundle/__tests__/BundleView.test.tsx"),
   );
   assert.match(markdown, /Existing test evidence:/);
   assert.match(markdown, /covered Loading, empty, error, and success states/);
@@ -2066,7 +2066,7 @@ test("generateE2ePlan keeps generic test filenames from overmatching unrelated s
   await initGitRepo(root);
   await mkdir(path.join(root, "in_app_purchases/services"), { recursive: true });
   await mkdir(path.join(root, "in_app_purchases/tests"), { recursive: true });
-  await mkdir(path.join(root, "offers/tests"), { recursive: true });
+  await mkdir(path.join(root, "listings/tests"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -2080,7 +2080,7 @@ test("generateE2ePlan keeps generic test filenames from overmatching unrelated s
     path.join(root, "in_app_purchases/tests/test_views.py"),
     "def test_purchase_response_contract():\n    assert {'status': 200}\n",
   );
-  await writeFile(path.join(root, "offers/tests/test_services.py"), "def test_offer_success():\n    assert True\n");
+  await writeFile(path.join(root, "listings/tests/test_services.py"), "def test_listing_success():\n    assert True\n");
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
@@ -2097,7 +2097,7 @@ test("generateE2ePlan keeps generic test filenames from overmatching unrelated s
   assert.ok(flow);
   assert.ok(plan.testSuite.frameworkSignals.includes("pytest"));
   assert.ok(evidenceFiles.includes("in_app_purchases/tests/test_views.py"));
-  assert.equal(evidenceFiles.includes("offers/tests/test_services.py"), false);
+  assert.equal(evidenceFiles.includes("listings/tests/test_services.py"), false);
 });
 
 test("generateE2ePlan suggests setup hints for auth and session changes", async () => {
@@ -2256,14 +2256,14 @@ test("qa command points API-dependent flows at existing repo mock and seed files
       },
     }),
   );
-  await writeFile(path.join(root, "app.json"), JSON.stringify({ expo: { name: "Mood Fixture" } }));
+  await writeFile(path.join(root, "app.json"), JSON.stringify({ expo: { name: "Journal Fixture" } }));
   await writeFile(
-    path.join(root, "src/services/reportMockService.ts"),
-    "export const reportMockService = { success: () => ({ status: 'ready' }) };\n",
+    path.join(root, "src/services/metricsMockService.ts"),
+    "export const metricsMockService = { success: () => ({ status: 'ready' }) };\n",
   );
   await writeFile(
-    path.join(root, "src/services/devSeedService.ts"),
-    "export const devSeedService = { seed: async () => 1 };\n",
+    path.join(root, "src/services/demoSeedService.ts"),
+    "export const demoSeedService = { seed: async () => 1 };\n",
   );
   await writeFile(
     path.join(root, "ios/Pods/boost/boost/random/detail/generator_seed_seq.hpp"),
@@ -2274,25 +2274,25 @@ test("qa command points API-dependent flows at existing repo mock and seed files
     "export function HomePage() { return null; }\n",
   );
   await writeFile(
-    path.join(root, "src/services/emotionService.ts"),
-    "export async function loadEmotion() { return { score: 1 }; }\n",
+    path.join(root, "src/services/sentimentService.ts"),
+    "export async function loadSentiment() { return { score: 1 }; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/emotion-api"]);
+  await git(root, ["switch", "-c", "feature/sentiment-api"]);
   await writeFile(
-    path.join(root, "src/services/emotionService.ts"),
+    path.join(root, "src/services/sentimentService.ts"),
     [
-      "export async function loadEmotion() {",
-      "  const response = await fetch('/api/emotions/current');",
+      "export async function loadSentiment() {",
+      "  const response = await fetch('/api/sentiments/current');",
       "  return response.json();",
       "}",
     ].join("\n"),
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "load emotion api"]);
+  await git(root, ["commit", "-m", "load sentiment api"]);
 
   const qa = await generateQaDraft(root, { base: "main", head: "HEAD", runner: "maestro" });
   const markdown = formatMarkdownQaDraft(qa);
@@ -2301,11 +2301,11 @@ test("qa command points API-dependent flows at existing repo mock and seed files
   assert.ok(fixtureGap);
   assert.equal(fixtureGap.priority, "recommended");
   assert.match(fixtureGap.detail, /Reuse or extend existing fixture\/mock evidence/);
-  assert.match(fixtureGap.detail, /src\/services\/reportMockService\.ts/);
-  assert.match(fixtureGap.detail, /src\/services\/devSeedService\.ts/);
+  assert.match(fixtureGap.detail, /src\/services\/metricsMockService\.ts/);
+  assert.match(fixtureGap.detail, /src\/services\/demoSeedService\.ts/);
   assert.doesNotMatch(fixtureGap.detail, /ios\/Pods/);
-  assert.match(markdown, /src\/services\/reportMockService\.ts/);
-  assert.match(markdown, /src\/services\/devSeedService\.ts/);
+  assert.match(markdown, /src\/services\/metricsMockService\.ts/);
+  assert.match(markdown, /src\/services\/demoSeedService\.ts/);
   assert.doesNotMatch(markdown, /ios\/Pods/);
 });
 
@@ -3031,7 +3031,7 @@ test("generateE2eDraft emits runnable Playwright role and input actions", async 
 test("generateE2eDraft normalizes dynamic routes without creating id domain scenarios", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/pages/campaign/official"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/bundle/official"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -3045,20 +3045,20 @@ test("generateE2eDraft normalizes dynamic routes without creating id domain scen
     }),
   );
   await writeFile(
-    path.join(root, "src/pages/campaign/official/[id].tsx"),
-    "export default function CampaignPage() { return <><a href=\"/public\">Public</a><button data-testid=\"apply-campaign\">Apply</button></>; }\n",
+    path.join(root, "src/pages/bundle/official/[id].tsx"),
+    "export default function BundlePage() { return <><a href=\"/public\">Public</a><button data-testid=\"apply-bundle\">Apply</button></>; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/campaign-route"]);
+  await git(root, ["switch", "-c", "feature/bundle-route"]);
   await writeFile(
-    path.join(root, "src/pages/campaign/official/[id].tsx"),
-    "export default function CampaignPage() { return <><a href=\"/public\">Public</a><button data-testid=\"apply-campaign\">Apply now</button></>; }\n",
+    path.join(root, "src/pages/bundle/official/[id].tsx"),
+    "export default function BundlePage() { return <><a href=\"/public\">Public</a><button data-testid=\"apply-bundle\">Apply now</button></>; }\n",
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update campaign route"]);
+  await git(root, ["commit", "-m", "update bundle route"]);
 
   const draft = await generateE2eDraft(root, {
     base: "main",
@@ -3066,25 +3066,25 @@ test("generateE2eDraft normalizes dynamic routes without creating id domain scen
     output: "tests/e2e",
     runner: "playwright",
   });
-  const campaignDraftFile = draft.files.find((file) => file.flowTitle === "Campaign primary journey");
-  assert.ok(campaignDraftFile);
-  const spec = await readFile(path.join(root, campaignDraftFile.path), "utf8");
+  const bundleDraftFile = draft.files.find((file) => file.flowTitle === "Bundle primary journey");
+  assert.ok(bundleDraftFile);
+  const spec = await readFile(path.join(root, bundleDraftFile.path), "utf8");
 
   assert.equal(draft.plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Id primary journey"), false);
-  assert.match(campaignDraftFile.primaryEntrypoint ?? "", /route \/campaign\/official\/:id/);
+  assert.match(bundleDraftFile.primaryEntrypoint ?? "", /route \/bundle\/official\/:id/);
   assert.match(spec, /route \/public \[medium\]/);
   assert.match(spec, /const routeParams = \{/);
   assert.match(spec, /id: "qamap-id"/);
-  assert.match(spec, /Replace route param id with a real fixture value for \/campaign\/official\/:id/);
-  assert.match(spec, /page\.goto\(`\/campaign\/official\/\$\{routeParams\.id\}`\)/);
+  assert.match(spec, /Replace route param id with a real fixture value for \/bundle\/official\/:id/);
+  assert.match(spec, /page\.goto\(`\/bundle\/official\/\$\{routeParams\.id\}`\)/);
   assert.match(spec, /QAMap used stable sample route params/);
-  assert.doesNotMatch(spec, /page\.goto\("\/campaign\/official\/:id"\)/);
+  assert.doesNotMatch(spec, /page\.goto\("\/bundle\/official\/:id"\)/);
 });
 
 test("generateE2eDraft preserves camelCase pages router route segments", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/pages/campaign/official"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/bundle/official"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -3099,17 +3099,17 @@ test("generateE2eDraft preserves camelCase pages router route segments", async (
     }),
   );
   await writeFile(
-    path.join(root, "src/pages/campaign/official/applicationComplete.tsx"),
-    "export default function ApplicationCompletePage() { return <button aria-label=\"Close\">Close</button>; }\n",
+    path.join(root, "src/pages/bundle/official/submissionComplete.tsx"),
+    "export default function SubmissionCompletePage() { return <button aria-label=\"Close\">Close</button>; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/application-complete"]);
+  await git(root, ["switch", "-c", "feature/submission-complete"]);
   await writeFile(
-    path.join(root, "src/pages/campaign/official/applicationComplete.tsx"),
-    "export default function ApplicationCompletePage() { return <button aria-label=\"Close complete\">Close</button>; }\n",
+    path.join(root, "src/pages/bundle/official/submissionComplete.tsx"),
+    "export default function SubmissionCompletePage() { return <button aria-label=\"Close complete\">Close</button>; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "update application complete"]);
@@ -3120,20 +3120,20 @@ test("generateE2eDraft preserves camelCase pages router route segments", async (
     output: "tests/e2e",
     runner: "playwright",
   });
-  const draftFile = draft.files.find((file) => file.flowTitle === "Campaign Application Complete");
+  const draftFile = draft.files.find((file) => file.flowTitle === "Bundle Submission Complete");
   assert.ok(draftFile);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
 
-  assert.match(draftFile.primaryEntrypoint ?? "", /route \/campaign\/official\/applicationComplete/);
-  assert.match(spec, /route \/campaign\/official\/applicationComplete \[high\]/);
-  assert.match(spec, /page\.goto\("\/campaign\/official\/applicationComplete"\)/);
+  assert.match(draftFile.primaryEntrypoint ?? "", /route \/bundle\/official\/submissionComplete/);
+  assert.match(spec, /route \/bundle\/official\/submissionComplete \[high\]/);
+  assert.match(spec, /page\.goto\("\/bundle\/official\/submissionComplete"\)/);
   assert.doesNotMatch(spec, /applicationcomplete/);
 });
 
 test("generateE2eDraft fills dynamic route params from concrete route hints", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/pages/myapplications"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/mysubmissions"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -3147,27 +3147,27 @@ test("generateE2eDraft fills dynamic route params from concrete route hints", as
     }),
   );
   await writeFile(
-    path.join(root, "src/pages/myapplications/[tab].tsx"),
-    "export default function MyApplicationsPage() { return <a href=\"/myapplications/applied\">Applied</a>; }\n",
+    path.join(root, "src/pages/mysubmissions/[tab].tsx"),
+    "export default function MySubmissionsPage() { return <a href=\"/mysubmissions/applied\">Applied</a>; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/myapplications-route"]);
+  await git(root, ["switch", "-c", "feature/mysubmissions-route"]);
   await writeFile(
-    path.join(root, "src/pages/myapplications/[tab].tsx"),
+    path.join(root, "src/pages/mysubmissions/[tab].tsx"),
     [
-      "export default function MyApplicationsPage() {",
+      "export default function MySubmissionsPage() {",
       "  return <main>",
-      "    <a href=\"/myapplications/applied\">Applied</a>",
+      "    <a href=\"/mysubmissions/applied\">Applied</a>",
       "    <button data-testid=\"submit-application\">Submit</button>",
       "  </main>;",
       "}",
     ].join("\n"),
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update myapplications route"]);
+  await git(root, ["commit", "-m", "update mysubmissions route"]);
 
   const draft = await generateE2eDraft(root, {
     base: "main",
@@ -3175,12 +3175,12 @@ test("generateE2eDraft fills dynamic route params from concrete route hints", as
     output: "tests/e2e",
     runner: "playwright",
   });
-  const draftFile = draft.files.find((file) => file.flowTitle === "Myapplications primary journey");
+  const draftFile = draft.files.find((file) => file.flowTitle === "Mysubmissions primary journey");
   assert.ok(draftFile);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
 
-  assert.match(spec, /route \/myapplications\/:tab \[high\]/);
-  assert.match(spec, /route \/myapplications\/applied \[medium\]/);
+  assert.match(spec, /route \/mysubmissions\/:tab \[high\]/);
+  assert.match(spec, /route \/mysubmissions\/applied \[medium\]/);
   assert.match(spec, /tab: "applied"/);
   assert.match(spec, /Route params were inferred from concrete route hints/);
   assert.doesNotMatch(spec, /TODO-tab/);
@@ -3484,7 +3484,7 @@ test("generateE2ePlan prefers product domains over structural route folders", as
 test("generateE2ePlan skips access route folders when naming scenarios", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/pages/public/campaign/official"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/public/bundle/official"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -3498,46 +3498,46 @@ test("generateE2ePlan skips access route folders when naming scenarios", async (
     }),
   );
   await writeFile(
-    path.join(root, "src/pages/public/campaign/official/[id].tsx"),
-    "export default function PublicCampaignPage() { return <button>Apply</button>; }\n",
+    path.join(root, "src/pages/public/bundle/official/[id].tsx"),
+    "export default function PublicBundlePage() { return <button>Apply</button>; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/public-campaign"]);
+  await git(root, ["switch", "-c", "feature/public-bundle"]);
   await writeFile(
-    path.join(root, "src/pages/public/campaign/official/[id].tsx"),
-    "export default function PublicCampaignPage() { return <button>Apply now</button>; }\n",
+    path.join(root, "src/pages/public/bundle/official/[id].tsx"),
+    "export default function PublicBundlePage() { return <button>Apply now</button>; }\n",
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update public campaign"]);
+  await git(root, ["commit", "-m", "update public bundle"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
 
-  assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Campaign"));
-  assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Campaign primary journey"));
+  assert.ok(plan.domainLanguage.terms.some((term) => term.term === "Bundle"));
+  assert.ok(plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Bundle primary journey"));
   assert.ok(!plan.domainLanguage.terms.some((term) => term.term === "Public"));
   assert.ok(!plan.domainLanguage.scenarios.some((scenario) => scenario.title === "Public primary journey"));
 });
 
 test("generateE2ePlan matches workspace core flows for package scans", async () => {
   const workspaceRoot = await makeTempRepo();
-  const packageRoot = path.join(workspaceRoot, "services/offer");
+  const packageRoot = path.join(workspaceRoot, "services/listing");
   await initGitRepo(workspaceRoot);
   await mkdir(path.join(workspaceRoot, ".qamap"), { recursive: true });
-  await mkdir(path.join(packageRoot, "src/features/offer"), { recursive: true });
+  await mkdir(path.join(packageRoot, "src/features/listing"), { recursive: true });
   await writeFile(
     path.join(workspaceRoot, ".qamap/flows.yml"),
     [
       "flows:",
-      "  - id: offer-submit",
-      "    name: Offer submit",
+      "  - id: listing-submit",
+      "    name: Listing submit",
       "    priority: critical",
       "    files:",
-      "      - services/offer/src/features/offer/**",
+      "      - services/listing/src/features/listing/**",
       "    checks:",
-      "      - Submit an offer with valid terms.",
+      "      - Submit an listing with valid terms.",
     ].join("\n"),
   );
   await writeFile(
@@ -3548,23 +3548,23 @@ test("generateE2ePlan matches workspace core flows for package scans", async () 
       },
     }),
   );
-  await writeFile(path.join(packageRoot, "src/features/offer/submit.ts"), "export const submit = () => true;\n");
+  await writeFile(path.join(packageRoot, "src/features/listing/submit.ts"), "export const submit = () => true;\n");
   await git(workspaceRoot, ["add", "."]);
   await git(workspaceRoot, ["commit", "-m", "base"]);
   await git(workspaceRoot, ["branch", "-M", "main"]);
 
-  await git(workspaceRoot, ["switch", "-c", "feature/offer-submit"]);
-  await writeFile(path.join(packageRoot, "src/features/offer/submit.ts"), "export const submit = () => 'changed';\n");
+  await git(workspaceRoot, ["switch", "-c", "feature/listing-submit"]);
+  await writeFile(path.join(packageRoot, "src/features/listing/submit.ts"), "export const submit = () => 'changed';\n");
   await git(workspaceRoot, ["add", "."]);
-  await git(workspaceRoot, ["commit", "-m", "update offer submit"]);
+  await git(workspaceRoot, ["commit", "-m", "update listing submit"]);
 
   const plan = await generateE2ePlan(packageRoot, { base: "main", head: "HEAD", workspaceRoot });
 
   assert.equal(plan.coreFlowManifestPath, ".qamap/flows.yml");
   assert.equal(plan.coreFlows.length, 1);
-  assert.equal(plan.coreFlows[0].id, "offer-submit");
-  assert.ok(plan.coreFlows[0].matchedFiles.includes("services/offer/src/features/offer/submit.ts"));
-  assert.deepEqual(plan.changedFiles.map((file) => file.path), ["src/features/offer/submit.ts"]);
+  assert.equal(plan.coreFlows[0].id, "listing-submit");
+  assert.ok(plan.coreFlows[0].matchedFiles.includes("services/listing/src/features/listing/submit.ts"));
+  assert.deepEqual(plan.changedFiles.map((file) => file.path), ["src/features/listing/submit.ts"]);
 
   const draft = await generateE2eDraft(packageRoot, {
     base: "main",
@@ -3572,15 +3572,15 @@ test("generateE2ePlan matches workspace core flows for package scans", async () 
     workspaceRoot,
     output: "docs/e2e",
   });
-  const draftFile = draft.files.find((file) => file.flowTitle === "Offer submit");
+  const draftFile = draft.files.find((file) => file.flowTitle === "Listing submit");
   assert.ok(draftFile);
   assert.equal(draftFile.source, "core-flow");
   const manualDraft = await readFile(path.join(packageRoot, draftFile.path), "utf8");
   assert.match(manualDraft, /## Draft Brief/);
-  assert.match(manualDraft, /Core flow: offer-submit \[critical\]/);
-  assert.match(manualDraft, /Submit an offer with valid terms\./);
-  assert.match(manualDraft, /src\/features\/offer\/submit\.ts/);
-  assert.doesNotMatch(manualDraft, /services\/offer\/src\/features\/offer\/submit\.ts/);
+  assert.match(manualDraft, /Core flow: listing-submit \[critical\]/);
+  assert.match(manualDraft, /Submit an listing with valid terms\./);
+  assert.match(manualDraft, /src\/features\/listing\/submit\.ts/);
+  assert.doesNotMatch(manualDraft, /services\/listing\/src\/features\/listing\/submit\.ts/);
 });
 
 test("generateE2eDraft creates a fallback smoke draft without changed files", async () => {
@@ -3655,13 +3655,13 @@ test("generateTestPlan suggests validation commands for common non-JavaScript pr
       name: "go",
       expectedCommands: ["go test ./...", "go vet ./...", "golangci-lint run"],
       setup: async (root) => {
-        await mkdir(path.join(root, "internal/offer"), { recursive: true });
+        await mkdir(path.join(root, "internal/listing"), { recursive: true });
         await writeFile(path.join(root, "go.mod"), "module example.com/qamap-fixture\n\ngo 1.22\n");
         await writeFile(path.join(root, ".golangci.yml"), "run:\n  timeout: 2m\n");
-        await writeFile(path.join(root, "internal/offer/service.go"), "package offer\n\nfunc Price() int { return 1 }\n");
+        await writeFile(path.join(root, "internal/listing/service.go"), "package listing\n\nfunc Price() int { return 1 }\n");
       },
       edit: async (root) => {
-        await writeFile(path.join(root, "internal/offer/service.go"), "package offer\n\nfunc Price() int { return 2 }\n");
+        await writeFile(path.join(root, "internal/listing/service.go"), "package listing\n\nfunc Price() int { return 2 }\n");
       },
     },
     {
@@ -3728,19 +3728,19 @@ test("generateTestPlan suggests validation commands for common non-JavaScript pr
 test("evaluateChangeReadiness recognizes non-JavaScript test files", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "internal/offer"), { recursive: true });
+  await mkdir(path.join(root, "internal/listing"), { recursive: true });
   await writeFile(path.join(root, "go.mod"), "module example.com/qamap-fixture\n\ngo 1.22\n");
   await writeFile(path.join(root, ".golangci.yml"), "run:\n  timeout: 2m\n");
-  await writeFile(path.join(root, "internal/offer/service.go"), "package offer\n\nfunc Price() int { return 1 }\n");
+  await writeFile(path.join(root, "internal/listing/service.go"), "package listing\n\nfunc Price() int { return 1 }\n");
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
   await git(root, ["switch", "-c", "feature/go-coverage"]);
-  await writeFile(path.join(root, "internal/offer/service.go"), "package offer\n\nfunc Price() int { return 2 }\n");
+  await writeFile(path.join(root, "internal/listing/service.go"), "package listing\n\nfunc Price() int { return 2 }\n");
   await writeFile(
-    path.join(root, "internal/offer/service_test.go"),
-    "package offer\n\nimport \"testing\"\n\nfunc TestPrice(t *testing.T) { if Price() != 2 { t.Fatal(\"price\") } }\n",
+    path.join(root, "internal/listing/service_test.go"),
+    "package listing\n\nimport \"testing\"\n\nfunc TestPrice(t *testing.T) { if Price() != 2 { t.Fatal(\"price\") } }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "update go coverage"]);
@@ -3749,7 +3749,7 @@ test("evaluateChangeReadiness recognizes non-JavaScript test files", async () =>
     base: "main",
     head: "HEAD",
     prBody: [
-      "문제: offer price calculation changed for the new flow.",
+      "문제: listing price calculation changed for the new flow.",
       "이유: downstream callers need the updated price.",
       "Risk: behavior change is covered by a focused Go test.",
       "Rollback: revert the price calculation branch.",
@@ -3831,7 +3831,7 @@ test("evaluateChangeReadiness flags missing intent and risk context", async () =
 test("verifyChange combines review findings, readiness, and domain tests", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
-  await mkdir(path.join(root, "src/features/campaign/api"), { recursive: true });
+  await mkdir(path.join(root, "src/features/bundle/api"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -3846,25 +3846,25 @@ test("verifyChange combines review findings, readiness, and domain tests", async
   await writeFile(path.join(root, "LICENSE"), "MIT");
   await writeFile(path.join(root, "SECURITY.md"), "# Security\n");
   await writeFile(path.join(root, "CONTRIBUTING.md"), "# Contributing\n");
-  await writeFile(path.join(root, "src/features/campaign/api/client.ts"), "export const endpoint = '/campaigns';\n");
+  await writeFile(path.join(root, "src/features/bundle/api/client.ts"), "export const endpoint = '/bundles';\n");
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/campaign-api"]);
-  await writeFile(path.join(root, "src/features/campaign/api/client.ts"), "export const endpoint = '/campaigns/v2';\n");
-  await writeFile(path.join(root, "src/features/campaign/api/client.test.ts"), "import './client.js';\n");
+  await git(root, ["switch", "-c", "feature/bundle-api"]);
+  await writeFile(path.join(root, "src/features/bundle/api/client.ts"), "export const endpoint = '/bundles/v2';\n");
+  await writeFile(path.join(root, "src/features/bundle/api/client.test.ts"), "import './client.js';\n");
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "update campaign api"]);
+  await git(root, ["commit", "-m", "update bundle api"]);
 
   const result = await verifyChange(root, {
     base: "main",
     head: "HEAD",
     prBody: [
-      "문제: campaign API path changed for the new flow.",
-      "이유: the old path cannot represent the v2 campaign state.",
+      "문제: bundle API path changed for the new flow.",
+      "이유: the old path cannot represent the v2 bundle state.",
       "Risk: API compatibility is maintained by keeping callers typed.",
-      "Rollback: switch endpoint back to /campaigns.",
+      "Rollback: switch endpoint back to /bundles.",
     ].join("\n"),
   });
   const markdown = formatMarkdownVerifyReport(result);
@@ -3872,7 +3872,7 @@ test("verifyChange combines review findings, readiness, and domain tests", async
   assert.equal(result.evaluation.rating, "strong");
   assert.equal(result.review.newFindings.length, 0);
   assert.match(markdown, /# QAMap Verify/);
-  assert.match(markdown, /Campaign workflow regression/);
+  assert.match(markdown, /Bundle workflow regression/);
   assert.match(markdown, /Verification Gates/);
 });
 
@@ -5021,8 +5021,8 @@ test("manifest init keeps Expo app file domains specific", async () => {
   await writeFile(path.join(root, "app/+not-found.tsx"), "export default function NotFound() { return null; }\n");
   await writeFile(path.join(root, "app/_layout.tsx"), "export default function Layout() { return null; }\n");
   await writeFile(
-    path.join(root, "app/EmotionChatPage.tsx"),
-    "export default function EmotionChatPage() { return <Button title=\"Send\" />; }\n",
+    path.join(root, "app/SentimentChatPage.tsx"),
+    "export default function SentimentChatPage() { return <Button title=\"Send\" />; }\n",
   );
   await writeFile(
     path.join(root, "app/SettingsPage.tsx"),
@@ -5033,10 +5033,10 @@ test("manifest init keeps Expo app file domains specific", async () => {
   const manifest = await loadVerificationManifest(root);
 
   assert.equal(manifest.domains.some((domain) => domain.id === "not-found"), false);
-  assert.ok(manifest.domains.some((domain) => domain.id === "emotionchatpage"));
-  assert.ok(manifest.domains.some((domain) => domain.paths.includes("app/EmotionChatPage.tsx")));
+  assert.ok(manifest.domains.some((domain) => domain.id === "sentimentchatpage"));
+  assert.ok(manifest.domains.some((domain) => domain.paths.includes("app/SentimentChatPage.tsx")));
   assert.ok(manifest.domains.some((domain) => domain.paths.includes("app/SettingsPage.tsx")));
-  assert.ok(manifest.flows.some((flow) => flow.domain === "emotionchatpage"));
+  assert.ok(manifest.flows.some((flow) => flow.domain === "sentimentchatpage"));
   assert.equal(manifest.flows.some((flow) => flow.domain === "not-found"), false);
 });
 
@@ -5044,7 +5044,7 @@ test("manifest matches explain e2e and verify recommendations", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, ".qamap"), { recursive: true });
-  await mkdir(path.join(root, "src/pages/campaign/official"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/bundle/official"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -5063,10 +5063,10 @@ test("manifest matches explain e2e and verify recommendations", async () => {
     [
       "version: 1",
       "domains:",
-      "  - id: campaign",
-      "    name: Campaign",
+      "  - id: bundle",
+      "    name: Bundle",
       "    paths:",
-      "      - src/pages/campaign/**",
+      "      - src/pages/bundle/**",
       "    criticality: medium",
       "    source:",
       "      kind: declared",
@@ -5074,25 +5074,25 @@ test("manifest matches explain e2e and verify recommendations", async () => {
       "      from:",
       "        - human-reviewed",
       "flows:",
-      "  - id: campaign-application-complete",
-      "    domain: campaign",
-      "    name: Campaign Application Complete",
+      "  - id: bundle-submission-complete",
+      "    domain: bundle",
+      "    name: Bundle Submission Complete",
       "    entry:",
-      "      route: /campaign/official/applicationComplete",
+      "      route: /bundle/official/submissionComplete",
       "      source: declared",
       "    runner: playwright",
       "    anchors:",
       "      - kind: route",
-      "        path: src/pages/campaign/official/applicationComplete.tsx",
-      "        route: /campaign/official/applicationComplete",
+      "        path: src/pages/bundle/official/submissionComplete.tsx",
+      "        route: /bundle/official/submissionComplete",
       "        source: declared",
       "        confidence: high",
       "    checks:",
       "      - id: happy-path",
-      "        title: Submit content URL successfully",
+      "        title: Submit media link successfully",
       "        type: success",
       "      - id: invalid-input",
-      "        title: Show validation error for invalid content URL",
+      "        title: Show validation error for invalid media link",
       "        type: failure",
       "    source:",
       "      kind: declared",
@@ -5102,17 +5102,17 @@ test("manifest matches explain e2e and verify recommendations", async () => {
     ].join("\n"),
   );
   await writeFile(
-    path.join(root, "src/pages/campaign/official/applicationComplete.tsx"),
+    path.join(root, "src/pages/bundle/official/submissionComplete.tsx"),
     "export default function Page() { return <button data-testid=\"submit-url\">Submit</button>; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/campaign-complete-copy"]);
+  await git(root, ["switch", "-c", "feature/bundle-complete-copy"]);
   await writeFile(
-    path.join(root, "src/pages/campaign/official/applicationComplete.tsx"),
-    "export default function Page() { return <button data-testid=\"submit-url\">Submit content URL</button>; }\n",
+    path.join(root, "src/pages/bundle/official/submissionComplete.tsx"),
+    "export default function Page() { return <button data-testid=\"submit-url\">Submit media link</button>; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "update application complete"]);
@@ -5141,25 +5141,25 @@ test("manifest matches explain e2e and verify recommendations", async () => {
   assert.equal(validation.status, "valid");
   assert.match(validationMarkdown, /QAMap Manifest Validate/);
   assert.match(explainMarkdown, /QAMap Manifest Explain/);
-  assert.match(explainMarkdown, /Campaign Application Complete/);
+  assert.match(explainMarkdown, /Bundle Submission Complete/);
   assert.match(explainMarkdown, /Evidence sources: product-qa/);
   assert.match(explainMarkdown, /Next actions/);
   assert.match(explainMarkdown, /Repair hints/);
-  assert.match(explainMarkdown, /If this is wrong: update `\.qamap\/manifest\.yaml > flows\.campaign-application-complete\.anchors`/);
+  assert.match(explainMarkdown, /If this is wrong: update `\.qamap\/manifest\.yaml > flows\.bundle-submission-complete\.anchors`/);
   assert.match(planMarkdown, /## Manifest Recommendations/);
   assert.match(planMarkdown, /Why this was recommended/);
-  assert.match(planMarkdown, /Draft or review E2E coverage for the Campaign Application Complete flow/);
-  assert.match(planMarkdown, /rewrite \.qamap\/manifest\.yaml > flows\.campaign-application-complete\.checks in team language/);
-  assert.match(planMarkdown, /If this is wrong: update `\.qamap\/manifest\.yaml > flows\.campaign-application-complete\.anchors`/);
+  assert.match(planMarkdown, /Draft or review E2E coverage for the Bundle Submission Complete flow/);
+  assert.match(planMarkdown, /rewrite \.qamap\/manifest\.yaml > flows\.bundle-submission-complete\.checks in team language/);
+  assert.match(planMarkdown, /If this is wrong: update `\.qamap\/manifest\.yaml > flows\.bundle-submission-complete\.anchors`/);
   assert.ok(draft.files.some((file) => file.source === "verification-manifest"));
-  assert.ok(draft.files.some((file) => file.flowTitle === "Campaign Application Complete"));
+  assert.ok(draft.files.some((file) => file.flowTitle === "Bundle Submission Complete"));
   assert.match(draftMarkdown, /## Manifest Recommendations/);
   assert.match(draftMarkdown, /Evidence sources: product-qa/);
   assert.match(draftMarkdown, /commit-candidate/);
   assert.match(writtenDraftText, /Verification manifest evidence/);
-  assert.match(writtenDraftText, /Submit content URL successfully/);
-  assert.match(writtenDraftText, /Show validation error for invalid content URL/);
-  assert.match(writtenDraftText, /page\.goto\("\/campaign\/official\/applicationComplete"\)/);
+  assert.match(writtenDraftText, /Submit media link successfully/);
+  assert.match(writtenDraftText, /Show validation error for invalid media link/);
+  assert.match(writtenDraftText, /page\.goto\("\/bundle\/official\/submissionComplete"\)/);
   assert.match(verifyMarkdown, /## Manifest Recommendations/);
   assert.match(verifyMarkdown, /Next actions/);
   assert.match(verifyMarkdown, /Repair hints/);
@@ -5180,7 +5180,7 @@ test("manifest matches explain e2e and verify recommendations", async () => {
     "markdown",
   ]);
   assert.match(cliExplain.stdout, /QAMap Manifest Explain/);
-  assert.match(cliExplain.stdout, /Campaign Application Complete/);
+  assert.match(cliExplain.stdout, /Bundle Submission Complete/);
 });
 
 test("manifest validate reports missing and stale manifest policy", async () => {
@@ -5254,9 +5254,9 @@ test("manifest validate reports missing and stale manifest policy", async () => 
 
 test("domains and flows suggest changed-file manifests for package scopes", async () => {
   const workspaceRoot = await makeTempRepo();
-  const packageRoot = path.join(workspaceRoot, "services/offer");
+  const packageRoot = path.join(workspaceRoot, "services/listing");
   await initGitRepo(workspaceRoot);
-  await mkdir(path.join(packageRoot, "src/pages/offer"), { recursive: true });
+  await mkdir(path.join(packageRoot, "src/pages/listing"), { recursive: true });
   await writeFile(
     path.join(packageRoot, "package.json"),
     JSON.stringify({
@@ -5270,10 +5270,10 @@ test("domains and flows suggest changed-file manifests for package scopes", asyn
     }),
   );
   await writeFile(
-    path.join(packageRoot, "src/pages/offer/[offerId].tsx"),
+    path.join(packageRoot, "src/pages/listing/[listingId].tsx"),
     [
-      "export default function OfferPage() {",
-      "  return <button data-testid=\"apply-offer\">Apply</button>;",
+      "export default function ListingPage() {",
+      "  return <button data-testid=\"apply-listing\">Apply</button>;",
       "}",
     ].join("\n"),
   );
@@ -5281,21 +5281,21 @@ test("domains and flows suggest changed-file manifests for package scopes", asyn
   await git(workspaceRoot, ["commit", "-m", "base"]);
   await git(workspaceRoot, ["branch", "-M", "main"]);
 
-  await git(workspaceRoot, ["switch", "-c", "feature/offer-apply"]);
+  await git(workspaceRoot, ["switch", "-c", "feature/listing-apply"]);
   await writeFile(
-    path.join(packageRoot, "src/pages/offer/[offerId].tsx"),
+    path.join(packageRoot, "src/pages/listing/[listingId].tsx"),
     [
-      "export async function loadOffer(offerId) {",
-      "  const response = await fetch(`/api/offers/${offerId}`);",
+      "export async function loadListing(listingId) {",
+      "  const response = await fetch(`/api/listings/${listingId}`);",
       "  return response.json();",
       "}",
-      "export default function OfferPage() {",
-      "  return <button data-testid=\"apply-offer\">Apply offer</button>;",
+      "export default function ListingPage() {",
+      "  return <button data-testid=\"apply-listing\">Apply listing</button>;",
       "}",
     ].join("\n"),
   );
   await git(workspaceRoot, ["add", "."]);
-  await git(workspaceRoot, ["commit", "-m", "update offer apply"]);
+  await git(workspaceRoot, ["commit", "-m", "update listing apply"]);
 
   const domainOutput = await execFileAsync(process.execPath, [
     cliPath,
@@ -5348,27 +5348,27 @@ test("domains and flows suggest changed-file manifests for package scopes", asyn
   });
 
   assert.match(domainOutput.stdout, /domains:/);
-  assert.match(domainOutput.stdout, /id: offer/);
-  assert.match(domainOutput.stdout, /name: Offer/);
-  assert.match(domainOutput.stdout, /services\/offer\/src\/pages\/offer\/\*\*/);
-  assert.match(domainOutput.stdout, /\/offer\/:offerId/);
-  assert.match(domainOutput.stdout, /Offer primary journey/);
+  assert.match(domainOutput.stdout, /id: listing/);
+  assert.match(domainOutput.stdout, /name: Listing/);
+  assert.match(domainOutput.stdout, /services\/listing\/src\/pages\/listing\/\*\*/);
+  assert.match(domainOutput.stdout, /\/listing\/:listingId/);
+  assert.match(domainOutput.stdout, /Listing primary journey/);
   assert.match(flowOutput.stdout, /flows:/);
-  assert.match(flowOutput.stdout, /id: offer-primary-journey/);
+  assert.match(flowOutput.stdout, /id: listing-primary-journey/);
   assert.match(flowOutput.stdout, /domains:/);
-  assert.match(flowOutput.stdout, /- offer/);
+  assert.match(flowOutput.stdout, /- listing/);
   assert.match(flowOutput.stdout, /routes:/);
-  assert.match(flowOutput.stdout, /\/offer\/:offerId/);
+  assert.match(flowOutput.stdout, /\/listing\/:listingId/);
   assert.match(writeOutput.stdout, /Wrote /);
   assert.match(writtenManifest, /domains:/);
-  assert.match(writtenManifest, /services\/offer\/src\/pages\/offer\/\*\*/);
+  assert.match(writtenManifest, /services\/listing\/src\/pages\/listing\/\*\*/);
   assert.equal(domainSuggestion.promotionPlan.counts.commitCandidate, 1);
   assert.equal(domainSuggestion.promotionPlan.candidates[0].status, "commit-candidate");
-  assert.equal(domainSuggestion.promotionPlan.candidates[0].id, "offer");
+  assert.equal(domainSuggestion.promotionPlan.candidates[0].id, "listing");
   assert.match(domainSuggestion.promotionPlan.candidates[0].action, /\.qamap\/domains\.yml/);
   assert.equal(flowSuggestion.promotionPlan.counts.commitCandidate, 1);
   assert.equal(flowSuggestion.promotionPlan.candidates[0].status, "commit-candidate");
-  assert.equal(flowSuggestion.promotionPlan.candidates[0].id, "offer-primary-journey");
+  assert.equal(flowSuggestion.promotionPlan.candidates[0].id, "listing-primary-journey");
   assert.match(flowSuggestion.promotionPlan.candidates[0].action, /\.qamap\/flows\.yml/);
 });
 
@@ -5732,7 +5732,7 @@ test("github-action command writes PR artifacts before failing", async () => {
 
 test("reviewProject uses workspace root guardrails for package branches", async () => {
   const workspaceRoot = await makeTempRepo();
-  const packageRoot = path.join(workspaceRoot, "services/offer");
+  const packageRoot = path.join(workspaceRoot, "services/listing");
   await initGitRepo(workspaceRoot);
   await mkdir(packageRoot, { recursive: true });
   await writeWorkspaceGuardrails(workspaceRoot);

@@ -87,7 +87,7 @@ git switch main
 git pull
 qamap manifest context .
 qamap manifest init .
-qamap manifest init services/offer --workspace-root .
+qamap manifest init services/listing --workspace-root .
 qamap manifest validate .
 qamap manifest explain . --base origin/main --head HEAD
 ```
@@ -107,10 +107,10 @@ $schema: https://raw.githubusercontent.com/IvoryCanvas/qamap/main/schema/qamap-m
 version: 1
 
 domains:
-  - id: campaign
-    name: Campaign
+  - id: bundle
+    name: Bundle
     paths:
-      - src/pages/campaign/**
+      - src/pages/bundle/**
     criticality: medium
     source:
       kind: inferred
@@ -119,25 +119,25 @@ domains:
         - pages
 
 flows:
-  - id: campaign-application-complete
-    domain: campaign
-    name: Campaign Application Complete
+  - id: bundle-submission-complete
+    domain: bundle
+    name: Bundle Submission Complete
     entry:
-      route: /campaign/official/applicationComplete
+      route: /bundle/official/submissionComplete
       source: inferred
     runner: playwright
     anchors:
       - kind: route
-        path: src/pages/campaign/official/applicationComplete.tsx
-        route: /campaign/official/applicationComplete
+        path: src/pages/bundle/official/submissionComplete.tsx
+        route: /bundle/official/submissionComplete
         source: inferred
         confidence: high
     checks:
       - id: happy-path
-        title: Campaign Application Complete happy path works
+        title: Bundle Submission Complete happy path works
         type: success
       - id: api-failure-fixture
-        title: Campaign Application Complete handles failed, empty, or unauthorized responses
+        title: Bundle Submission Complete handles failed, empty, or unauthorized responses
         type: failure
     source:
       kind: inferred

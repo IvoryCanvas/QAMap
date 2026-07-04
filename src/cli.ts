@@ -915,7 +915,7 @@ Formats:
 
 Examples:
   qamap scan .
-  qamap scan services/offer --workspace-root .
+  qamap scan services/listing --workspace-root .
   qamap scan . --format sarif --output qamap.sarif
   qamap scan . --fail-on medium
   qamap report . --output QAMAP_REPORT.md
@@ -939,7 +939,7 @@ Examples:
   qamap domains init .
   qamap domains suggest . --base origin/main --head HEAD
   qamap history init .
-  qamap test-plan services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
+  qamap test-plan services/listing --workspace-root . --base origin/main --head HEAD --include-working-tree
   qamap context . --write AGENTS.md
   qamap init .
 `);
@@ -958,7 +958,7 @@ Usage:
 
 Examples:
   qamap manifest init .
-  qamap manifest init services/offer --workspace-root .
+  qamap manifest init services/listing --workspace-root .
   qamap manifest init . --write .qamap/manifest.yaml --force
   qamap manifest init . --write /tmp/qamap-manifest.yaml
   qamap manifest validate .
@@ -1013,7 +1013,7 @@ Usage:
 Examples:
   qamap flows init .
   qamap flows suggest . --base origin/main --head HEAD
-  qamap flows suggest services/offer --workspace-root . --include-working-tree
+  qamap flows suggest services/listing --workspace-root . --include-working-tree
 `);
 }
 
@@ -1029,7 +1029,7 @@ Usage:
 Examples:
   qamap domains init .
   qamap domains suggest . --base origin/main --head HEAD
-  qamap domains suggest services/offer --workspace-root . --include-working-tree
+  qamap domains suggest services/listing --workspace-root . --include-working-tree
 `);
 }
 

@@ -24,7 +24,7 @@ For custom stacks or team-specific flows, add `validationCommands` to `qamap.con
 ```sh
 qamap verify . --base origin/main --head HEAD --format markdown
 qamap verify . --base origin/main --head HEAD --pr-body-file pr-body.md
-qamap verify services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
+qamap verify services/listing --workspace-root . --base origin/main --head HEAD --include-working-tree
 ```
 
 Use `--fail-on high` or `--fail-on medium` to fail on QAMap review findings at or above a severity threshold. Readiness and manifest recommendations stay advisory until the team decides to make them required PR evidence.

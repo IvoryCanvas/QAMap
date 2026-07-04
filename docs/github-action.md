@@ -48,7 +48,7 @@ For production workflows, pin to a version tag such as `IvoryCanvas/qamap@v0.3.1
 - uses: IvoryCanvas/qamap@main
   with:
     mode: review
-    path: services/offer
+    path: services/listing
     workspace-root: .
     base: ${{ github.event.pull_request.base.sha }}
     head: HEAD

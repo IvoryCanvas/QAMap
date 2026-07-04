@@ -59,19 +59,19 @@ When a repository has `.qamap/manifest.yaml`, QAMap should explain why a recomme
 ```txt
 Manifest recommendations: 3
 
-Campaign Application Complete `campaign-application-complete`
+Bundle Submission Complete `bundle-submission-complete`
 - Kind: flow
 - Confidence: high
-- Why this was recommended: Changed files match anchors for the Campaign Application Complete flow.
+- Why this was recommended: Changed files match anchors for the Bundle Submission Complete flow.
 - Evidence sources: product-qa
-- Manifest evidence: .qamap/manifest.yaml > flows.campaign-application-complete.anchors
-- If this is wrong: update .qamap/manifest.yaml > flows.campaign-application-complete.anchors
+- Manifest evidence: .qamap/manifest.yaml > flows.bundle-submission-complete.anchors
+- If this is wrong: update .qamap/manifest.yaml > flows.bundle-submission-complete.anchors
 - Next actions:
-  - Draft or review E2E coverage for the Campaign Application Complete flow.
-  - Cover the declared checks: Submit content URL successfully; Show validation error for invalid content URL.
+  - Draft or review E2E coverage for the Bundle Submission Complete flow.
+  - Cover the declared checks: Submit media link successfully; Show validation error for invalid media link.
 - Repair hints:
-  - If these files do not belong to this flow, update .qamap/manifest.yaml > flows.campaign-application-complete.anchors.
-  - If the recommended assertions feel vague, rewrite .qamap/manifest.yaml > flows.campaign-application-complete.checks in team language.
+  - If these files do not belong to this flow, update .qamap/manifest.yaml > flows.bundle-submission-complete.anchors.
+  - If the recommended assertions feel vague, rewrite .qamap/manifest.yaml > flows.bundle-submission-complete.checks in team language.
 ```
 
 This is the feedback loop: static analysis proposes a baseline, humans correct durable manifest entries, and future E2E recommendations become more specific without spending another LLM prompt on the same explanation.
@@ -93,26 +93,26 @@ Changed files: 1
 Matches: 3
 
 Matches:
-- Campaign Application Complete (flow, high)
-  Why: Changed files match anchors for the Campaign Application Complete flow.
-  Evidence: .qamap/manifest.yaml > flows.campaign-application-complete.anchors
-  If wrong: update .qamap/manifest.yaml > flows.campaign-application-complete.anchors
-  Checks: Submit content URL successfully; Show validation error for invalid content URL
+- Bundle Submission Complete (flow, high)
+  Why: Changed files match anchors for the Bundle Submission Complete flow.
+  Evidence: .qamap/manifest.yaml > flows.bundle-submission-complete.anchors
+  If wrong: update .qamap/manifest.yaml > flows.bundle-submission-complete.anchors
+  Checks: Submit media link successfully; Show validation error for invalid media link
 ```
 
 When that flow includes an entry route and checks, `qamap e2e draft` promotes it ahead of heuristic drafts:
 
 ```ts
 // Verification manifest evidence:
-// - Flow: Campaign Application Complete (campaign-application-complete)
-// - Entry route: /campaign/official/applicationComplete
+// - Flow: Bundle Submission Complete (bundle-submission-complete)
+// - Entry route: /bundle/official/submissionComplete
 // - Required checks:
-//   - [ ] Submit content URL successfully
-//   - [ ] Show validation error for invalid content URL
+//   - [ ] Submit media link successfully
+//   - [ ] Show validation error for invalid media link
 
-test("Campaign Application Complete", async ({ page }) => {
-  await test.step("Open route /campaign/official/applicationComplete.", async () => {
-    await page.goto("/campaign/official/applicationComplete");
+test("Bundle Submission Complete", async ({ page }) => {
+  await test.step("Open route /bundle/official/submissionComplete.", async () => {
+    await page.goto("/bundle/official/submissionComplete");
   });
 });
 ```
@@ -245,42 +245,42 @@ appId: ${APP_ID}
 When the changed file name exposes a narrower user action, the generated flow should use that action instead of stopping at a broad domain journey:
 
 ```txt
-Changed file: src/features/offer/components/ContentUrlSubmitModal.tsx
-Domain term: Offer
-Generated scenario: Offer Content URL Submit
-Generated draft path: .maestro/offer-content-url-submit.yaml
+Changed file: src/features/listing/components/MediaLinkSubmitModal.tsx
+Domain term: Listing
+Generated scenario: Listing Media Link Submit
+Generated draft path: .maestro/listing-media-link-submit.yaml
 ```
 
 The draft should then carry the same product-action wording into the runnable skeleton:
 
 ```yaml
-# Flow: Offer Content URL Submit
-# Domain scenario: Offer Content URL Submit
-# Intent: Verify the changed "Content URL Submit" behavior inside Offer instead of stopping at a generic primary journey.
+# Flow: Listing Media Link Submit
+# Domain scenario: Listing Media Link Submit
+# Intent: Verify the changed "Media Link Submit" behavior inside Listing instead of stopping at a generic primary journey.
 appId: ${APP_ID}
 ---
 - launchApp
-- tapOn: { id: "offer-content-url-submit" }
+- tapOn: { id: "listing-media-link-submit" }
 ```
 
 ## API / Service Contract
 
-For backend changes such as `src/v1/offer/utils.ts`, QAMap should not invent a browser journey. It should infer the domain word and stay contract-focused:
+For backend changes such as `src/v1/listing/utils.ts`, QAMap should not invent a browser journey. It should infer the domain word and stay contract-focused:
 
 ```txt
 Project: API / service
 Recommended runner: Manual
 
-Flow: Offer API contract smoke checklist
+Flow: Listing API contract smoke checklist
 Actor: API consumer or upstream service
-Trigger: Call the endpoint, handler, or service path affected by src/v1/offer/utils.ts.
+Trigger: Call the endpoint, handler, or service path affected by src/v1/listing/utils.ts.
 Success signal: the changed contract returns the expected status, response shape, auth behavior, and failure handling
 ```
 
 The manual draft should stay actionable:
 
 ```md
-# Offer API contract
+# Listing API contract
 
 ## Steps
 
@@ -367,7 +367,7 @@ If reusable repo-local evidence already exists, the PR QA output should point at
 
 ```txt
 Missing evidence before trusting this PR
-- [recommended] fixture: Confirm fixture coverage - Reuse or extend existing fixture/mock evidence for this flow: src/services/devSeedService.ts, src/services/reportMockService.ts.
+- [recommended] fixture: Confirm fixture coverage - Reuse or extend existing fixture/mock evidence for this flow: src/services/demoSeedService.ts, src/services/metricsMockService.ts.
 ```
 
 ```ts
@@ -423,24 +423,24 @@ Expected root-level behavior:
 Changed App/Package Targets
 
 | Target | Package | Project | Runner | Scoped Command |
-| services/offer | offer | Web | Playwright | qamap e2e plan services/offer --workspace-root . --base main --head HEAD |
+| services/listing | listing | Web | Playwright | qamap e2e plan services/listing --workspace-root . --base main --head HEAD |
 | apps/mobile | @acme/mobile | Expo / React Native | Maestro | qamap e2e plan apps/mobile --workspace-root . --base main --head HEAD |
 ```
 
 For package scans, QAMap should use workspace policy without leaking workspace-root paths into package-local drafts:
 
 ```sh
-qamap e2e plan services/offer --workspace-root . --base main --head HEAD
+qamap e2e plan services/listing --workspace-root . --base main --head HEAD
 ```
 
 Expected behavior:
 
 ```txt
 Workspace root: .
-Package root: services/offer
-Matched core flow: Offer submit
-Changed files: src/features/offer/submit.ts
-Generated draft path: docs/e2e/offer-submit.md
+Package root: services/listing
+Matched core flow: Listing submit
+Changed files: src/features/listing/submit.ts
+Generated draft path: docs/e2e/listing-submit.md
 ```
 
 The draft should mention package-local files:
@@ -448,7 +448,7 @@ The draft should mention package-local files:
 ```md
 Related Changed Files
 
-- `src/features/offer/submit.ts`
+- `src/features/listing/submit.ts`
 ```
 
 ## What Good Output Feels Like

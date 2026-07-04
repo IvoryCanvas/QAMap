@@ -12,7 +12,7 @@ For a complete PR-facing report that also includes QAMap review findings and sug
 qamap verify . --base origin/main --head HEAD --pr-body-file pr-body.md
 qamap eval . --base origin/main --head HEAD --format markdown
 qamap eval . --base origin/main --head HEAD --pr-body-file pr-body.md
-qamap eval services/offer --workspace-root . --base origin/main --head HEAD --include-working-tree
+qamap eval services/listing --workspace-root . --base origin/main --head HEAD --include-working-tree
 ```
 
 The GitHub Action can append the same report to the PR comment. On pull request events it reads the PR body from `GITHUB_EVENT_PATH`.

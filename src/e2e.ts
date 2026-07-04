@@ -2225,7 +2225,7 @@ function inferFlowActor(flow: Omit<E2eFlow, "languageBrief">): string {
   if (/\b(auth|login|logout|session|account|profile|permission)\b/.test(haystack)) {
     return "Signed-in user or guest";
   }
-  if (/\b(checkout|purchase|payment|order|cart|offer|subscription|membership|billing)\b/.test(haystack)) {
+  if (/\b(checkout|purchase|payment|order|cart|offer|listing|subscription|membership|billing)\b/.test(haystack)) {
     return "Customer";
   }
   if (hasUserFacingEntrypointOrFile(flow)) {

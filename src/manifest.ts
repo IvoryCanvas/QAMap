@@ -796,7 +796,7 @@ async function validateFlowDefinitions(
       }
       checkIds.add(check.id);
       if (!check.title.trim()) {
-        issues.push(issue("error", `${checkPath}.title`, "Check title is empty.", "Write the behavior the draft must prove, such as `Submit content URL successfully`."));
+        issues.push(issue("error", `${checkPath}.title`, "Check title is empty.", "Write the behavior the draft must prove, such as `Submit media link successfully`."));
       }
     }
     const anchorKeys = new Set<string>();

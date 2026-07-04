@@ -208,10 +208,10 @@ $schema: https://raw.githubusercontent.com/IvoryCanvas/qamap/main/schema/qamap-m
 version: 1
 
 domains:
-  - id: campaign
-    name: Campaign
+  - id: bundle
+    name: Bundle
     paths:
-      - src/pages/campaign/**
+      - src/pages/bundle/**
     criticality: medium
     source:
       kind: declared
@@ -220,28 +220,28 @@ domains:
         - product-qa
 
 flows:
-  - id: campaign-application-complete
-    domain: campaign
-    name: Campaign Application Complete
+  - id: bundle-submission-complete
+    domain: bundle
+    name: Bundle Submission Complete
     entry:
-      route: /campaign/official/applicationComplete
+      route: /bundle/official/submissionComplete
       source: declared
     runner: playwright
     anchors:
       - kind: route
-        path: src/pages/campaign/official/applicationComplete.tsx
-        route: /campaign/official/applicationComplete
+        path: src/pages/bundle/official/submissionComplete.tsx
+        route: /bundle/official/submissionComplete
         source: declared
         confidence: high
     checks:
       - id: happy-path
-        title: Submit content URL successfully
+        title: Submit media link successfully
         type: success
-        selector: "[data-testid=content-url-submit]"
+        selector: "[data-testid=media-link-submit]"
       - id: invalid-input
-        title: Show validation error for invalid content URL
+        title: Show validation error for invalid media link
         type: failure
-        selector: "[data-testid=content-url-error]"
+        selector: "[data-testid=media-link-error]"
     source:
       kind: declared
       confidence: high

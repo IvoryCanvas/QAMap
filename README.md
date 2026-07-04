@@ -347,7 +347,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap domains init .` | Create a starter `.qamap/domains.yml` for shared product/domain language. |
 | `qamap domains suggest . --base origin/main --head HEAD` | Generate suggested `.qamap/domains.yml` entries with commit-readiness guidance from changed files and inferred product language. |
 | `qamap history init .` | Create local QAMap history directories and protect generated run history with `.gitignore`. |
-| `qamap doctor services/offer --workspace-root .` | Scan a monorepo package while using root guardrails. |
+| `qamap doctor services/listing --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `qamap context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `qamap init .` | Create a starter `qamap.config.json`. |
 
@@ -367,7 +367,7 @@ When a repository does not already have the selected E2E runner, the plan includ
 
 `qamap e2e setup` is the opt-in apply step. For Playwright it can create `playwright.config.ts`, `tests/e2e/`, a `test:e2e` script, and the first changed-flow Playwright spec. For Maestro it can create `.maestro/`, `.maestro/README.md`, a `test:e2e` script, and the first changed-flow YAML draft. Existing draft files are skipped unless `--force` is passed. It does not run package installation automatically; it prints the install command so teams can keep dependency policy under review.
 
-When run at a monorepo root, the E2E plan also reports changed app/package targets. This helps a maintainer move from a broad workspace diff to scoped commands such as `qamap e2e plan services/offer --workspace-root . --base origin/main --head HEAD`, where package-specific runner detection and flow naming are usually sharper.
+When run at a monorepo root, the E2E plan also reports changed app/package targets. This helps a maintainer move from a broad workspace diff to scoped commands such as `qamap e2e plan services/listing --workspace-root . --base origin/main --head HEAD`, where package-specific runner detection and flow naming are usually sharper.
 
 Each candidate flow also includes a flow language brief: actor, trigger, goal, success signal, reviewer question, and edge cases. The brief keeps generated tests tied to product behavior rather than only changed file names.
 
@@ -398,26 +398,26 @@ When `.qamap/manifest.yaml` exists, `qamap verify`, `qamap e2e plan`, and `qamap
 
 ```txt
 Why this was recommended:
-- Changed files match anchors for the Campaign Application Complete flow.
+- Changed files match anchors for the Bundle Submission Complete flow.
 
 Manifest evidence:
-- .qamap/manifest.yaml > flows.campaign-application-complete.anchors
+- .qamap/manifest.yaml > flows.bundle-submission-complete.anchors
 
 Next actions:
-- Draft or review E2E coverage for the Campaign Application Complete flow.
-- Cover the declared checks: Submit content URL successfully; Show validation error for invalid content URL.
+- Draft or review E2E coverage for the Bundle Submission Complete flow.
+- Cover the declared checks: Submit media link successfully; Show validation error for invalid media link.
 
 If this is wrong:
-- Update .qamap/manifest.yaml > flows.campaign-application-complete.anchors
+- Update .qamap/manifest.yaml > flows.bundle-submission-complete.anchors
 
 Repair hints:
-- If these files do not belong to this flow, update .qamap/manifest.yaml > flows.campaign-application-complete.anchors.
-- If the recommended assertions feel vague, rewrite .qamap/manifest.yaml > flows.campaign-application-complete.checks in team language.
+- If these files do not belong to this flow, update .qamap/manifest.yaml > flows.bundle-submission-complete.anchors.
+- If the recommended assertions feel vague, rewrite .qamap/manifest.yaml > flows.bundle-submission-complete.checks in team language.
 ```
 
 When a matched manifest flow has an entry route and checks, `qamap e2e draft` promotes it ahead of heuristic candidates. The generated Playwright, Maestro, or manual draft carries the manifest evidence, uses the manifest route as an entrypoint when possible, and turns manifest checks into draft steps and required coverage notes. If a check includes concrete hints such as `[data-testid=coupon-input]`, `with WELCOME10`, or optional `selector`, `value`, and `steps` fields, QAMap uses those facts before falling back to fuzzy selector inference. This is the core cost-saving loop: humans fix durable QA context once, then future PRs start from a stronger draft instead of a blank test file.
 
-The domain language section is intentionally less implementation-oriented than the raw file list. For example, changes under `src/features/in-app-purchase/` become terms such as `In App Purchase` and scenarios such as `In App Purchase primary journey`. When a changed component or service file names a concrete behavior, QAMap should prefer that behavior before the generic primary journey: `src/features/offer/components/ContentUrlSubmitModal.tsx` can become `Offer Content URL Submit`, and the generated draft file can become `.maestro/offer-content-url-submit.yaml`. When `.qamap/domains.yml` exists, declared product terms and routes receive higher confidence. When `.qamap/flows.yml` exists, team-approved flow names appear as preferred scenario names.
+The domain language section is intentionally less implementation-oriented than the raw file list. For example, changes under `src/features/in-app-purchase/` become terms such as `In App Purchase` and scenarios such as `In App Purchase primary journey`. When a changed component or service file names a concrete behavior, QAMap should prefer that behavior before the generic primary journey: `src/features/listing/components/MediaLinkSubmitModal.tsx` can become `Listing Media Link Submit`, and the generated draft file can become `.maestro/listing-media-link-submit.yaml`. When `.qamap/domains.yml` exists, declared product terms and routes receive higher confidence. When `.qamap/flows.yml` exists, team-approved flow names appear as preferred scenario names.
 
 If `.qamap/domains.yml` exists, `qamap e2e plan` also matches changed files against shared product or domain language:
 

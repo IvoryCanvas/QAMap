@@ -76,8 +76,8 @@ Start advisory, then tighten the gate once the findings are understood.
 When scanning a package inside a larger workspace, pass the workspace root so QAMap can separate package-local risks from repository guardrails:
 
 ```sh
-qamap doctor services/offer --workspace-root . --format markdown
-qamap scan services/offer --workspace-root . --json
+qamap doctor services/listing --workspace-root . --format markdown
+qamap scan services/listing --workspace-root . --json
 ```
 
 With `--workspace-root`, QAMap reads package-local files such as `package.json`, `.env.*`, and MCP config from the package path. It reads repo-level guardrails such as `AGENTS.md`, `.github/workflows`, `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` from the workspace root.
