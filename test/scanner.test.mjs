@@ -4813,6 +4813,44 @@ test("diff-added selectors rank first and name the changed behavior", async () =
   assert.match(stepText, /pin/i);
 });
 
+test("observed changed-endpoint responses are asserted with diff-derived status bounds", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "app/api/orders"), { recursive: true });
+  await mkdir(path.join(root, "app/orders"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ scripts: { test: "playwright test" }, dependencies: { next: "^15.0.0", "@playwright/test": "^1.56.0" } }),
+  );
+  await writeFile(path.join(root, "app/api/orders/route.ts"), "export async function POST() {\n  return Response.json({ total: 0 });\n}\n");
+  await writeFile(
+    path.join(root, "app/orders/page.tsx"),
+    "export default function OrdersPage() { return <main><button data-testid=\"submit-order\">Order</button></main>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/discount"]);
+  await writeFile(
+    path.join(root, "app/api/orders/route.ts"),
+    "export async function POST() {\n  return Response.json({ total: 0, discount: 10 }, { status: 201 });\n}\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add discount"]);
+
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "tests/e2e", runner: "playwright" });
+  const apiDraft = draft.files.find((file) => /api/i.test(file.flowTitle));
+  assert.ok(apiDraft);
+  const spec = await readFile(path.join(root, apiDraft.path), "utf8");
+  assert.match(spec, /observedChangedApiResponses/);
+  assert.match(spec, /only shows success statuses \(201\)/);
+  assert.match(spec, /Response shape hint from the changed handler: \{ total, discount \}/);
+  assert.match(spec, /toBeLessThan\(400\)/);
+  assert.match(spec, /Changed endpoints were not exercised/);
+  assert.doesNotMatch(spec, /toBeLessThan\(500\)/);
+});
+
 test("generated drafts are not counted as test-suite evidence", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);

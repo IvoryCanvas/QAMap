@@ -534,6 +534,12 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
 export async function generateE2eDraft(rootInput: string, options: E2eDraftOptions = {}): Promise<E2eDraftResult> {
   const root = path.resolve(rootInput);
   const plan = await generateE2ePlan(root, options);
+  const addedDiffText = await collectAddedDiffText(root, {
+    base: plan.base,
+    head: plan.head,
+    workspaceRoot: plan.workspaceRoot,
+    includeWorkingTree: options.includeWorkingTree,
+  });
   const runner = plan.recommendedRunner.name;
   const outputDirectory = path.resolve(root, options.output ?? defaultDraftOutputDirectory(runner));
   const draftLimit = options.maxDrafts && options.maxDrafts > 0 ? Math.floor(options.maxDrafts) : undefined;
@@ -552,7 +558,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
     const promotionGuidance = buildDraftPromotionGuidance(flow);
     const fileAlreadyExists = await exists(filePath);
     const shouldSkip = fileAlreadyExists && !options.force && !dryRun;
-    const content = shouldSkip ? ((await readTextIfExists(filePath)) ?? "") : draftContentForFlow(plan, flow, runner);
+    const content = shouldSkip ? ((await readTextIfExists(filePath)) ?? "") : draftContentForFlow(plan, flow, runner, addedDiffText);
     const todoCount = countTodos(content);
     const selfCheck = evaluateDraftSelfCheck(plan, flow, runner, content, todoCount);
     const actionItems = buildDraftActionItems(plan, flow, runner, validationSummary, promotionGuidance, selfCheck);
@@ -7090,12 +7096,17 @@ function draftExtension(runner: E2eRunnerName): string {
   return ".md";
 }
 
-function draftContentForFlow(plan: E2ePlanResult, flow: E2eFlow, runner: E2eRunnerName): string {
+function draftContentForFlow(
+  plan: E2ePlanResult,
+  flow: E2eFlow,
+  runner: E2eRunnerName,
+  addedDiffText: Record<string, string> = {},
+): string {
   if (runner === "maestro") {
     return buildMaestroDraft(plan, flow);
   }
   if (runner === "playwright") {
-    return buildPlaywrightDraft(plan, flow);
+    return buildPlaywrightDraft(plan, flow, addedDiffText);
   }
   return buildManualDraft(plan, flow);
 }
@@ -7199,7 +7210,7 @@ function maestroCommandForStep(
   };
 }
 
-function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
+function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow, addedDiffText: Record<string, string> = {}): string {
   const testName = flow.title.replaceAll('"', "'");
   const selectorQueue = [...flow.selectors];
   const scenario = domainScenarioForFlow(flow);
@@ -7255,6 +7266,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow): string {
         : playwrightFallbackActionForStep(step));
     appendPlaywrightTestStep(lines, step, body);
   }
+  appendObservedResponseAssertion(lines, flow, addedDiffText);
   appendDomainScenarioComments(lines, flow, "  //");
   appendPlaywrightCoverageComments(lines, flow);
   lines.push("});");
@@ -7904,12 +7916,7 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
   if (flow.fixtureReadiness.status === "not-needed" || flow.fixtureReadiness.apiEndpoints.length === 0) {
     return;
   }
-  const changedEndpointHints = uniqueStrings(flow.fixtureReadiness.backendSignals.flatMap(apiEndpointFromBackendFile));
-  const observedEndpoints = changedEndpointHints.length > 0
-    ? changedEndpointHints
-    : flow.fixtureReadiness.backendSignals.length > 0
-    ? flow.fixtureReadiness.apiEndpoints
-    : [];
+  const observedEndpoints = observedEndpointsForFlow(flow);
   if (observedEndpoints.length > 0) {
     appendPlaywrightApiObservationScaffold(lines, observedEndpoints);
   }
@@ -7940,6 +7947,74 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
   lines.push("        body: JSON.stringify(response.body),");
   lines.push("      });");
   lines.push("    });");
+  lines.push("  }");
+}
+
+function observedEndpointsForFlow(flow: E2eFlow): string[] {
+  if (flow.fixtureReadiness.status === "not-needed" || flow.fixtureReadiness.apiEndpoints.length === 0) {
+    return [];
+  }
+  const changedEndpointHints = uniqueStrings(flow.fixtureReadiness.backendSignals.flatMap(apiEndpointFromBackendFile));
+  if (changedEndpointHints.length > 0) {
+    return changedEndpointHints;
+  }
+  return flow.fixtureReadiness.backendSignals.length > 0 ? flow.fixtureReadiness.apiEndpoints : [];
+}
+
+interface ChangedHandlerEvidence {
+  statuses: number[];
+  successOnly: boolean;
+  responseKeys: string[];
+}
+
+function collectChangedHandlerEvidence(flow: E2eFlow, addedDiffText: Record<string, string>): ChangedHandlerEvidence {
+  const statuses: number[] = [];
+  const responseKeys: string[] = [];
+  for (const file of flow.fixtureReadiness.backendSignals) {
+    const addedText = addedDiffText[file];
+    if (!addedText) {
+      continue;
+    }
+    for (const match of addedText.matchAll(/(?:status[:(]\s*|\.status\(\s*)(\d{3})\b/g)) {
+      const status = Number(match[1]);
+      if (status >= 100 && status < 600) {
+        statuses.push(status);
+      }
+    }
+    for (const match of addedText.matchAll(/(?:NextResponse|Response|res)\.json\(\s*\{([^}]{1,200})\}/g)) {
+      for (const keyMatch of match[1].matchAll(/(?:^|[,{])\s*([A-Za-z_$][\w$]*)\s*[:,}]/g)) {
+        responseKeys.push(keyMatch[1]);
+      }
+    }
+  }
+  const uniqueStatuses = [...new Set(statuses)];
+  return {
+    statuses: uniqueStatuses,
+    successOnly: uniqueStatuses.length > 0 && uniqueStatuses.every((status) => status < 400),
+    responseKeys: [...new Set(responseKeys)].slice(0, 6),
+  };
+}
+
+function appendObservedResponseAssertion(lines: string[], flow: E2eFlow, addedDiffText: Record<string, string>): void {
+  if (observedEndpointsForFlow(flow).length === 0) {
+    return;
+  }
+  const evidence = collectChangedHandlerEvidence(flow, addedDiffText);
+  const statusCeiling = evidence.successOnly ? 400 : 500;
+  lines.push("");
+  if (evidence.successOnly) {
+    lines.push(`  // The added handler code only shows success statuses (${evidence.statuses.join(", ")}), so any 4xx/5xx here is unexpected.`);
+  } else {
+    lines.push("  // Changed-endpoint check: the journey must not surface server errors from the code under test.");
+  }
+  if (evidence.responseKeys.length > 0) {
+    lines.push(`  // Response shape hint from the changed handler: { ${evidence.responseKeys.join(", ")} } — assert on these fields when promoting this draft.`);
+  }
+  lines.push("  for (const response of observedChangedApiResponses) {");
+  lines.push(`    expect(response.status, \`unexpected status from \${response.url}\`).toBeLessThan(${statusCeiling});`);
+  lines.push("  }");
+  lines.push("  if (observedChangedApiResponses.length === 0) {");
+  lines.push('    console.warn("Changed endpoints were not exercised by this draft; extend the steps above to cover them.");');
   lines.push("  }");
 }
 

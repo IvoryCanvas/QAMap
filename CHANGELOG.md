@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Observed changed-endpoint responses are now asserted, not just collected: every observed response must stay below a status ceiling derived from the handler's added code (below 400 when the diff only shows success statuses, below 500 otherwise), response-shape keys from the changed handler are emitted as promotion hints, and zero observations warn instead of failing.
+
 - Diff-added action names are also read from button and link inner text (`<button>Apply coupon</button>`), not only from attribute labels, so flows changed by copy-level edits get named after the action instead of "primary journey".
 
 - `qamap qa` now opens with an At a Glance section — the affected flows in one line, the single next command to run, and the one or two blocking evidence items — before the detailed report. Execution blockers already covered by a required action are no longer repeated, required items sort before recommended ones, and the missing-evidence list is capped with a summary line.
