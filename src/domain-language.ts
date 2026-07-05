@@ -320,14 +320,22 @@ function isBehaviorOnlyTerm(term: string, file: string): boolean {
 const addedLabelMatcher =
   /(?:aria-label|accessibilityLabel)=["']([^"'{}<>\n]{3,60})["']|data-testid=["']([^"'{}<>\n]{3,60})["']|testID=["']([^"'{}<>\n]{3,60})["']/g;
 
+const addedActionTextMatcher = /<(?:button|Button|Pressable|a|Link)\b[^<>]*>\s*([^<>{}\n]{3,60})\s*</g;
+
 function behaviorLabelFromAddedText(addedText: string | undefined, domainTerm: string): string | undefined {
   if (!addedText) {
     return undefined;
   }
   const domainTokens = behaviorTokensFromText(domainTerm);
   let fallback: string | undefined;
+  const labels: string[] = [];
   for (const match of addedText.matchAll(addedLabelMatcher)) {
-    const label = match[1] ?? match[2] ?? match[3];
+    labels.push(match[1] ?? match[2] ?? match[3]);
+  }
+  for (const match of addedText.matchAll(addedActionTextMatcher)) {
+    labels.push(match[1].trim());
+  }
+  for (const label of labels) {
     const tokens = behaviorTokensFromText(label)
       .filter((token) => !domainTokens.some((domainToken) => sameToken(domainToken, token)))
       .filter((token) => !behaviorStructuralTokens.has(token));
