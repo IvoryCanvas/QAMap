@@ -1,5 +1,18 @@
 # Release Validation
 
+## 0.3.3 - 2026-07-05
+
+Validated before publishing `0.3.3` (at-a-glance qa verdict, diff-anchored action naming incl. button/link text and logic-only fallbacks, observed-response assertions with diff-derived status bounds, Vue bound-attribute/i18n selector fixes):
+
+| Gate | Result |
+| --- | --- |
+| `pnpm test` | 103/103 passing |
+| `pnpm scan` (self-scan) | 0 findings |
+| Coverage thresholds (lines/branches/functions >= 80) | Passing |
+| `pnpm bench` against the four pinned local benchmark targets | Runner choice 4/4, labeled must-reach recall 9/9, blank actions 0, no metric regressions vs the 0.3.2 baseline |
+| README demo repository | Flow names and recorded demo unchanged |
+
+
 ## 0.3.2 - 2026-07-04
 
 Validated before publishing `0.3.2` (reverse import graph, diff-anchored steps and names, workspace-member project detection, Python service classification, start-here CLI guide):
