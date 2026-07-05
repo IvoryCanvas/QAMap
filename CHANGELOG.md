@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- `qamap qa` now opens with an At a Glance section — the affected flows in one line, the single next command to run, and the one or two blocking evidence items — before the detailed report. Execution blockers already covered by a required action are no longer repeated, required items sort before recommended ones, and the missing-evidence list is capped with a summary line.
+
 ## 0.3.2 - 2026-07-04
 
 ### Added

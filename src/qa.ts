@@ -148,6 +148,25 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("");
   lines.push("> Local-first PR QA skill output. No cloud. No LLM token. Manifest is optional, not required for first use.");
   lines.push("");
+  lines.push("## At a Glance");
+  lines.push("");
+  if (result.flows.length === 0) {
+    lines.push("- Affected: no changed flow candidate was generated from this diff.");
+  } else {
+    const flowTitles = result.flows.slice(0, 3).map((flow) => escapeMarkdownInline(flow.title)).join(", ");
+    const moreFlows = result.flows.length > 3 ? ` and ${result.flows.length - 3} more` : "";
+    lines.push(`- Affected: ${flowTitles}${moreFlows}`);
+  }
+  lines.push(`- Do next: \`${escapeMarkdownInline(nextStepCommand(result))}\``);
+  const blocking = result.missingEvidence.filter((item) => item.priority === "required").slice(0, 2);
+  if (blocking.length === 0) {
+    lines.push("- Blocking: nothing blocking detected; review the draft and run the validation command.");
+  } else {
+    for (const [index, item] of blocking.entries()) {
+      lines.push(`- Blocking${blocking.length > 1 ? ` ${index + 1}` : ""}: ${escapeMarkdownInline(item.title)} — ${escapeMarkdownInline(item.detail)}`);
+    }
+  }
+  lines.push("");
   lines.push("## Summary");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
@@ -238,8 +257,11 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   if (result.missingEvidence.length === 0) {
     lines.push("- No required evidence gap was detected in the generated QA draft. Still run the project validation command before merge.");
   } else {
-    for (const item of result.missingEvidence.slice(0, 8)) {
+    for (const item of result.missingEvidence.slice(0, 6)) {
       lines.push(`- [${item.priority}] ${item.kind}: ${escapeMarkdownInline(item.title)} - ${escapeMarkdownInline(item.detail)} (${escapeMarkdownInline(item.flowTitle)})`);
+    }
+    if (result.missingEvidence.length > 6) {
+      lines.push(`- ... ${result.missingEvidence.length - 6} more lower-priority items (see \`--format json\` for the full list)`);
     }
   }
   lines.push("");
@@ -259,6 +281,18 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("");
 
   return lines.join("\n");
+}
+
+function nextStepCommand(result: QaDraftResult): string {
+  if (!result.testSuite.hasTestSuite) {
+    return firstDraftCreateCommand(result);
+  }
+  const validationCommand = result.suggestedCommands[0];
+  if (validationCommand) {
+    return validationCommand;
+  }
+  const draftPath = result.flows[0]?.draftPath;
+  return draftPath ? `review ${draftPath}` : "qamap e2e draft . --dry-run";
 }
 
 function firstDraftCreateCommand(result: QaDraftResult): string {
@@ -302,7 +336,13 @@ function buildMissingEvidence(files: E2eDraftFile[]): QaDraftMissingEvidence[] {
     for (const item of file.actionItems ?? []) {
       evidence.push(missingEvidenceFromAction(file, item));
     }
+    const actionText = normalizeEvidenceText(
+      (file.actionItems ?? []).map((item) => `${item.title} ${item.detail}`).join(" "),
+    );
     for (const blocker of file.executionBlockers ?? []) {
+      if (actionTextCoversBlocker(actionText, blocker)) {
+        continue;
+      }
       evidence.push({
         flowTitle: file.flowTitle,
         priority: "required",
@@ -312,7 +352,26 @@ function buildMissingEvidence(files: E2eDraftFile[]): QaDraftMissingEvidence[] {
       });
     }
   }
-  return uniqueMissingEvidence(evidence).slice(0, 12);
+  const unique = uniqueMissingEvidence(evidence);
+  const required = unique.filter((item) => item.priority === "required");
+  const recommended = unique.filter((item) => item.priority !== "required");
+  return [...required, ...recommended].slice(0, 12);
+}
+
+function normalizeEvidenceText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9\uAC00-\uD7A3 ]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function actionTextCoversBlocker(actionText: string, blocker: string): boolean {
+  if (!actionText) {
+    return false;
+  }
+  const blockerTokens = normalizeEvidenceText(blocker).split(" ").filter((token) => token.length > 3);
+  if (blockerTokens.length === 0) {
+    return false;
+  }
+  const covered = blockerTokens.filter((token) => actionText.includes(token)).length;
+  return covered / blockerTokens.length >= 0.7;
 }
 
 function missingEvidenceFromAction(file: E2eDraftFile, item: E2eDraftActionItem): QaDraftMissingEvidence {

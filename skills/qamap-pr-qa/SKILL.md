@@ -45,7 +45,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
    - `requiredBootstrap[]` — setup steps that block trusting generated drafts.
    - `firstDraftCommand` — present only when the repo has no test suite; run it to create the first starter draft.
    - `prChecklist[]` and `commands[]` — checklist lines and validation commands for the handoff.
-   In markdown format, read the `PR Comment Draft`, `Missing Evidence Before Trusting This PR`, and `PR Checklist` sections.
+   In markdown format, start from `At a Glance` (affected flows, the single next command, blocking items), then read the `PR Comment Draft`, `Missing Evidence Before Trusting This PR`, and `PR Checklist` sections.
 6. Include the useful parts in the PR body, review note, or handoff summary.
 
 ## Output Rules

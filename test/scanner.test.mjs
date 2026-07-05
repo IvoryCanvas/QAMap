@@ -4523,6 +4523,10 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.ok(qa.flows.some((flow) => flow.changedFiles.includes("src/pages/checkout/index.tsx")));
   assert.match(markdown, /QAMap QA Draft/);
   assert.match(markdown, /Local-first PR QA skill output/);
+  assert.match(markdown, /## At a Glance/);
+  assert.match(markdown, /- Affected: /);
+  assert.match(markdown, /- Do next: `/);
+  assert.match(markdown, /- Blocking/);
   assert.match(markdown, /Manifest: not found; using repo signals and PR diff only/);
   assert.match(markdown, /PR Comment Draft/);
   assert.match(markdown, /Affected Flow/);
