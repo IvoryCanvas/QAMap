@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Vue bound attributes (`:aria-label="t('nav.search')"`, `v-bind` expressions) are no longer mistaken for literal selector values, and dotted i18n-key tokens (`menu.items.search`) are rejected as selector text, so Vue single-file components stop producing locators that can never match rendered UI.
+
 ### Changed
 
 - Observed changed-endpoint responses are now asserted, not just collected: every observed response must stay below a status ceiling derived from the handler's added code (below 400 when the diff only shows success statuses, below 500 otherwise), response-shape keys from the changed handler are emitted as promotion hints, and zero observations warn instead of failing.

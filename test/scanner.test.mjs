@@ -4851,6 +4851,55 @@ test("observed changed-endpoint responses are asserted with diff-derived status 
   assert.doesNotMatch(spec, /toBeLessThan\(500\)/);
 });
 
+test("vue bound attributes and i18n keys are not extracted as selectors", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ scripts: { test: "playwright test" }, dependencies: { vue: "^3.4.0", "@playwright/test": "^1.56.0" } }),
+  );
+  await writeFile(
+    path.join(root, "src/pages/SearchPage.vue"),
+    [
+      "<template>",
+      "  <main>",
+      "    <input placeholder=\"Search notes\" :aria-label=\"t('nav.search')\" />",
+      "    <button data-test=\"run-search\" :label=\"'menu.items.search'\">Search</button>",
+      "  </main>",
+      "</template>",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/search-copy"]);
+  await writeFile(
+    path.join(root, "src/pages/SearchPage.vue"),
+    [
+      "<template>",
+      "  <main>",
+      "    <input placeholder=\"Search notes\" :aria-label=\"t('nav.search')\" />",
+      "    <input placeholder=\"Filter by tag\" :placeholder-hint=\"t('nav.filter')\" />",
+      "    <button data-test=\"run-search\" :label=\"'menu.items.search'\">Search</button>",
+      "  </main>",
+      "</template>",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add filter"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const values = plan.flows.flatMap((flow) => flow.selectors.map((selector) => selector.value));
+  assert.ok(values.includes("Search notes"));
+  assert.ok(values.includes("Filter by tag"));
+  assert.ok(values.includes("run-search"));
+  assert.ok(!values.some((value) => value.includes("nav.search")), "bound i18n expression must not leak");
+  assert.ok(!values.some((value) => value.includes("menu.items.search")), "dotted i18n key must not leak");
+  assert.ok(!values.some((value) => value === "t"), "expression fragments must not leak");
+});
+
 test("generated drafts are not counted as test-suite evidence", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);

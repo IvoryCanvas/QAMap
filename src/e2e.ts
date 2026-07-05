@@ -8856,7 +8856,7 @@ function extractAttributeSelectors(
   const selectors: E2eSelector[] = [];
   for (const attribute of attributes) {
     const matcher = new RegExp(
-      `${escapeRegExp(attribute)}\\s*=\\s*(?:"([^"]+)"|'([^']+)'|\\{\\s*["'\`]([^"'\`{}]+)["'\`]\\s*\\})`,
+      `(?<![:@.\\w-])${escapeRegExp(attribute)}\\s*=\\s*(?:"([^"]+)"|'([^']+)'|\\{\\s*["'\`]([^"'\`{}]+)["'\`]\\s*\\})`,
       "g",
     );
     for (const match of text.matchAll(matcher)) {
@@ -8923,7 +8923,15 @@ function normalizeSelectorValue(value: string | undefined): string | undefined {
 }
 
 function isUsefulSelector(value: string): boolean {
-  return value.length >= 2 && value.length <= 80 && !/[{}()[\]=>]/.test(value);
+  if (value.length < 2 || value.length > 80 || /[{}()[\]=>]/.test(value)) {
+    return false;
+  }
+  // Dotted tokens without spaces are almost always i18n keys or property paths,
+  // never rendered UI text, so a locator built from them can never match.
+  if (/^[\w$-]+(?:\.[\w$-]+)+$/.test(value)) {
+    return false;
+  }
+  return true;
 }
 
 async function readPackageJson(root: string): Promise<PackageJson | undefined> {
