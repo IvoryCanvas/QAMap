@@ -164,3 +164,65 @@ Prefer severity overrides over broad ignores when a rule is useful but too noisy
 ```
 
 Use `ignoreRules` only for findings that the team intentionally accepts.
+
+## Where QAMap Fits
+
+On the QA side, QAMap starts one step earlier than test-writing tools — it decides what a PR must prove before anyone records, generates, or writes a test:
+
+| Tool category | Typical focus | QAMap focus |
+| --- | --- | --- |
+| Test recorders and studios | Turning a known flow into a script by watching you run it. | Deciding which flow a PR affects and what evidence is missing, before recording starts. |
+| LLM test generation | Spending model tokens to write test code from source. | Free, deterministic PR-to-QA mapping; drafts are starter scaffolds an agent or human finishes. |
+| Re-prompting an agent per PR | Re-deriving repo QA context in every session. | Repo-owned QA memory (`.qamap/manifest.yaml`) plus a compact `--format agent` handoff. |
+| Change-impact test selection | Choosing which existing unit/CI tests to run. | Naming the user-facing flow and E2E/checklist work that should exist at all. |
+
+On the guardrails side, QAMap is not trying to replace the larger security ecosystem:
+
+| Tool category | Typical focus | QAMap focus |
+| --- | --- | --- |
+| OpenSSF Scorecard | Broad open source security posture. | AI-agent readiness at the repository boundary. |
+| Secret scanning | Exposed credentials in code or history. | Secret-like values plus unsafe agent, workflow, and script context. |
+| MCP security scanners | Deep analysis of MCP servers, tools, prompts, and skills. | Static repo checks without executing untrusted MCP servers. |
+| General linters | Code style, correctness, or framework rules. | Guardrails that affect AI-assisted development safety. |
+
+
+## Why This Is Different From Recorders And Generators
+
+Recorders such as browser or mobile test studios are useful when you already know the flow to exercise. QAMap starts one step earlier: it asks what the PR changed, which repo-owned QA memory applies, and what test artifact should exist before merge.
+
+A good QAMap result should answer:
+
+- which product flow changed
+- which manifest domain, flow, and checks caused the recommendation
+- which draft test file was generated or previewed
+- which success, failure, edge, contract, or visual cases the draft covers
+- which selector, fixture, auth, runner, or validation gaps still block trusted regression evidence
+- which manifest path to edit when the recommendation is wrong
+
+That is the product bet: one human correction to the repo-local manifest should improve future PR recommendations without another LLM prompt.
+
+You do not need a manifest to start. Without one, QAMap uses the PR diff, package signals, routes, selectors, runner config, and existing tests. Add a manifest only when the team wants durable QA language that improves future recommendations.
+
+## What QAMap Is For
+
+QAMap is intentionally small:
+
+- time-saving: it surfaces missing context, risky settings, and validation gaps before agent work becomes review churn
+- static by default: it does not execute scanned project code
+- no-token by default: it does not call an LLM API
+- verification-focused: it tells reviewers what evidence is missing, not how to style code
+- PR QA skill output: `qamap qa` turns a branch into a PR-ready affected-flow summary, suggested E2E/checklist draft, missing evidence list, and copyable checklist
+- packaged agent skill: `skills/qamap-pr-qa/SKILL.md` gives coding agents a compact PR QA workflow for running QAMap before handoff
+- domain-aware E2E drafting: it turns branch changes into flow language, draft specs, readiness summaries, and action items
+- repo-local verification base: shared manifests can be committed, while generated run history stays ignored by default
+- context-aware baseline generation: manifest init can use repo-local context, ADRs, goals, agent instructions, harness files, skills, and runbooks as advisory bootstrap signals
+- harness/skill role hints: instruction-derived context is classified as agent skill, harness config, workflow lifecycle, verification rubric, safety policy, release policy, or test runner context
+- ecosystem-aware: it suggests validation commands for JavaScript/TypeScript, Python, Go, Rust, Gradle, and Maven projects
+- CI-friendly: text, JSON, Markdown, and SARIF output are supported
+- explainable: every finding includes a concrete fix
+
+It is built for teams using AI coding agents, MCP-powered tools, or any workflow where an agent can read, edit, test, commit, or open pull requests.
+
+For PR verification, QAMap treats the repository itself as the working base: committed manifests hold durable team language, ignored local history holds generated run observations, and the current branch diff supplies what changed now.
+
+

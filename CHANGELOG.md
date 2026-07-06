@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Slimmed the README from ~640 lines to ~100: it now carries only the demo, quick start, agent usage, positioning, and a documentation index. The full command reference moved to `docs/commands.md`, the guardrails scanner section to `docs/guardrails.md`, and positioning tables into `docs/adoption.md`.
+
 ## 0.3.3 - 2026-07-05
 
 ### Changed
