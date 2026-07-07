@@ -19,7 +19,7 @@ Summary
 - Project: Web
 - Recommended runner: Playwright
 - Manifest: not found; using repo signals and PR diff only
-- Readiness: near-runnable
+- Stage: almost runnable (3 of 4)
 
 PR Comment Draft
 - Affected flow: Checkout UI smoke flow
@@ -349,7 +349,7 @@ Draft action items should make the next developer action explicit:
 
 ```txt
 Action summary:
-- readiness score: 64/100 (needs-work)
+- readiness stage: draft in progress (2 of 4), score 64/100
 - runnable status: near-runnable
 - self-check: pass or warning based on generated starter code and execution profile
 - top blocker: No Playwright config file was detected.

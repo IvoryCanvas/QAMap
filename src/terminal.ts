@@ -41,7 +41,7 @@ function colorizeLine(line: string): string {
   }
   let output = line;
   output = output.replace(
-    /^(- (?:Affected|Do next|Blocking(?: \d+)?|Base|Head|Project|Recommended runner|Manifest|Readiness|Draft flows)):/,
+    /^(- (?:Affected|Do next|Blocking(?: \d+)?|Base|Head|Project|Recommended runner|Manifest|Stage|Draft flows)):/,
     `${BOLD}$1${RESET}:`,
   );
   output = output.replace(/\[(required|missing|error)\]/g, `${RED}[$1]${RESET}`);
@@ -57,6 +57,14 @@ function colorizeLine(line: string): string {
   );
   output = output.replace(
     /\b(Readiness|runnable|self-check|Status|status)(\[0m)?: (ready|runnable-candidate|pass|passed|created|applied)\b/g,
+    `$1$2: ${GREEN}$3${RESET}`,
+  );
+  output = output.replace(
+    /\b(Stage)(\[0m)?: (setup needed|draft in progress|almost runnable)\b/g,
+    `$1$2: ${YELLOW}$3${RESET}`,
+  );
+  output = output.replace(
+    /\b(Stage)(\[0m)?: (ready to run)\b/g,
     `$1$2: ${GREEN}$3${RESET}`,
   );
   output = output.replace(/`([^`\n]+)`/g, `${CYAN}$1${RESET}`);

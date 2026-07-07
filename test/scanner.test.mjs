@@ -2688,7 +2688,7 @@ test("generateE2ePlan captures Playwright execution profile and self-check block
   assert.deepEqual(draftFile.executionBlockers?.filter((blocker) => /Playwright|baseURL|start command/i.test(blocker)), []);
   assert.match(formatMarkdownE2eDraft(draft), /near-runnable/);
   assert.match(formatMarkdownE2eDraft(draft), /## Draft Self Checks/);
-  assert.match(formatMarkdownE2eDraft(draft), /Score: \d+\/100/);
+  assert.match(formatMarkdownE2eDraft(draft), /Stage: [a-z ]+ \(\d of 4\) — readiness \d+\/100/);
   assert.match(spec, /Execution profile:/);
   assert.match(spec, /Start command: pnpm run dev/);
   assert.match(spec, /Test command: pnpm run test:e2e/);
@@ -4985,13 +4985,13 @@ test("terminal colorizer decorates reports only and passes machine formats throu
     "> quoted note",
     "- Do next: `qamap e2e setup`",
     "- [required] fixture: add data",
-    "- Readiness: blocked (0/100)",
+    "- Stage: setup needed (1 of 4) — readiness 0/100",
   ].join("\n");
   const colored = colorizeReport(report);
   assert.match(colored, /\u001b\[1m\u001b\[36m# QAMap QA Draft\u001b\[0m/);
   assert.match(colored, /\u001b\[2m> quoted note\u001b\[0m/);
   assert.match(colored, /\u001b\[31m\[required\]\u001b\[0m/);
-  assert.match(colored, /Readiness\u001b\[0m: \u001b\[31mblocked\u001b\[0m/);
+  assert.match(colored, /Stage\u001b\[0m: \u001b\[33msetup needed\u001b\[0m/);
   assert.match(colored, /\u001b\[36mqamap e2e setup\u001b\[0m/);
 
   const json = JSON.stringify({ schema: { name: "qamap.qa" } });

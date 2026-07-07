@@ -23,6 +23,15 @@ Use `pnpm dlx @ivorycanvas/qamap ...` for one-off runs without installing QAMap 
 
 Human-facing reports (`text` and `markdown` formats) open with an **At a Glance** section — the affected flows in one line, the single next command to run, and the one or two blocking evidence items — before the detailed sections. When printed to an interactive terminal the report is colorized (headings, statuses, priority tags, inline commands); files written with `--output`, pipes, CI logs, and the machine formats (`json`, `agent`, `sarif`) are always plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
 
+Draft readiness is reported as a **stage on a fixed four-step journey**, for example `Stage: setup needed (1 of 4) — readiness 0/100`. A fresh repository usually starts at stage 1 — that is the expected starting point, not a failure. Each stage maps to a stable `readiness.level` value in the `json` and `agent` formats, which keeps machine output unchanged:
+
+| Stage line | JSON `readiness.level` | Meaning |
+| --- | --- | --- |
+| `setup needed (1 of 4)` | `blocked` | Drafts describe the flow but need runner config or other required setup before they can run. |
+| `draft in progress (2 of 4)` | `needs-work` | Drafts exist; close the required action items to make them runnable. |
+| `almost runnable (3 of 4)` | `near-runnable` | Run the drafts locally and clear the remaining review items. |
+| `ready to run (4 of 4)` | `ready` | Drafts are ready to try as local regression evidence. |
+
 
 ## What QAMap Produces
 

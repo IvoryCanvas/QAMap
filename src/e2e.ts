@@ -362,6 +362,21 @@ export interface E2eDraftReadinessSummary {
   topBlockers: string[];
 }
 
+// Human reports render readiness as a stage on a fixed journey instead of a
+// verdict, so a first run reads as "you are at the start", not "you failed".
+// JSON/agent output keeps the raw level values as the stable contract.
+const draftReadinessStages: Record<E2eDraftReadinessLevel, { position: number; label: string }> = {
+  blocked: { position: 1, label: "setup needed" },
+  "needs-work": { position: 2, label: "draft in progress" },
+  "near-runnable": { position: 3, label: "almost runnable" },
+  ready: { position: 4, label: "ready to run" },
+};
+
+export function formatDraftReadinessStage(summary: Pick<E2eDraftReadinessSummary, "level" | "score">): string {
+  const stage = draftReadinessStages[summary.level];
+  return `${stage.label} (${stage.position} of 4) — readiness ${summary.score}/100`;
+}
+
 export interface E2eDraftResult {
   tool: {
     name: string;
@@ -2184,8 +2199,8 @@ function draftReadinessRecommendation(level: E2eDraftReadinessLevel, blockers: s
       : "Close required action items before treating the drafts as regression evidence.";
   }
   return blocker
-    ? `Do not treat these drafts as runnable yet. Start with: ${withTerminalPeriod(blocker)}`
-    : "Do not treat these drafts as runnable until required setup and validation gaps are closed.";
+    ? `Keep these drafts review-only for now and start with: ${withTerminalPeriod(blocker)}`
+    : "Keep these drafts review-only until the required setup and validation gaps are closed.";
 }
 
 function withTerminalPeriod(value: string): string {
@@ -2861,7 +2876,7 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
   lines.push("## Draft Readiness Summary");
   lines.push("");
   lines.push(
-    `Score: ${result.readinessSummary.score}/100 (${result.readinessSummary.level}) - ${escapeMarkdownInline(result.readinessSummary.recommendation)}`,
+    `Stage: ${formatDraftReadinessStage(result.readinessSummary)}. ${escapeMarkdownInline(result.readinessSummary.recommendation)}`,
   );
   lines.push(
     `Summary: ${result.actionSummary.required} required action${result.actionSummary.required === 1 ? "" : "s"}, ${result.actionSummary.recommended} recommended action${result.actionSummary.recommended === 1 ? "" : "s"}.`,
@@ -2991,7 +3006,7 @@ export function formatMarkdownE2eSetup(result: E2eSetupResult): string {
       lines.push(`- Output directory: \`${escapeMarkdownInline(result.draftOutputDirectory)}\``);
     }
     if (result.draftReadinessSummary) {
-      lines.push(`- Readiness: ${result.draftReadinessSummary.level} (${result.draftReadinessSummary.score}/100)`);
+      lines.push(`- Stage: ${formatDraftReadinessStage(result.draftReadinessSummary)}`);
     }
     for (const file of result.draftFiles) {
       const details = [

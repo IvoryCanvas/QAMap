@@ -168,7 +168,7 @@ Summary
 - Project: Web
 - Recommended runner: Playwright
 - Manifest: .qamap/manifest.yaml
-- Readiness: near-runnable
+- Stage: almost runnable (3 of 4)
 
 PR Comment Draft
 - Affected flow: Checkout purchase

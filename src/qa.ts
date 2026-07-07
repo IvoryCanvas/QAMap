@@ -1,5 +1,5 @@
 import path from "node:path";
-import { generateE2eDraft } from "./e2e.js";
+import { formatDraftReadinessStage, generateE2eDraft } from "./e2e.js";
 import type {
   E2eDraftActionItem,
   E2eDraftFile,
@@ -175,7 +175,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push(`- Project: ${formatProjectType(result.project)}`);
   lines.push(`- Recommended runner: ${formatRunnerName(result.runner)}`);
   lines.push(`- Manifest: ${result.manifestPath ? `\`${escapeMarkdownInline(result.manifestPath)}\`` : "not found; using repo signals and PR diff only"}`);
-  lines.push(`- Readiness: ${result.readiness.level} (${result.readiness.score}/100)`);
+  lines.push(`- Stage: ${formatDraftReadinessStage(result.readiness)}`);
   lines.push(`- Draft flows: ${result.flows.length}`);
   lines.push("");
 
