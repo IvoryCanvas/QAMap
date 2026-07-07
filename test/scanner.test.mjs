@@ -4476,12 +4476,43 @@ test("manifest flows keep bare product-action components and wrapped default exp
     ].join("\n"),
   );
 
+  // Western funnel naming (Success/Confirmation) counts the same as
+  // Complete/Checkout, and feature-shaped prefixes (Story) are not plumbing.
+  await writeFile(path.join(root, "src/features/billing/OrderSuccess.tsx"), "export function OrderSuccess() { return null; }\n");
+  await writeFile(path.join(root, "src/features/billing/StoryView.tsx"), "export function StoryView() { return null; }\n");
+
   const manifest = (await writeVerificationManifestBaseline(root)).manifest;
   const names = manifest.flows.map((flow) => flow.name);
   assert.ok(names.includes("Checkout"));
   assert.equal(names.includes("Modal"), false);
+  assert.ok(names.includes("Order Success"));
+  assert.ok(names.includes("Story View"));
   const paymentFlow = manifest.flows.find((flow) => flow.name === "Payment Form");
   assert.equal(paymentFlow?.anchors[0]?.symbol, "PaymentForm");
+});
+
+test("manifest criticality never downgrades auth-token domains", async () => {
+  const root = await makeTempRepo();
+  await mkdir(path.join(root, "src/features/tokens"), { recursive: true });
+  await mkdir(path.join(root, "packages/design-tokens/src"), { recursive: true });
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ dependencies: { react: "^19.0.0" } }));
+  await writeFile(
+    path.join(root, "src/features/tokens/TokensPage.tsx"),
+    "export function TokensPage() { return null; }\n",
+  );
+  await writeFile(
+    path.join(root, "packages/design-tokens/src/ColorTokensPage.tsx"),
+    "export function ColorTokensPage() { return null; }\n",
+  );
+
+  const manifest = (await writeVerificationManifestBaseline(root)).manifest;
+  const authTokens = manifest.domains.find((domain) => domain.id === "tokens");
+  const designTokens = manifest.domains.find((domain) => domain.id === "design-tokens");
+  assert.ok(authTokens);
+  assert.ok(designTokens);
+  // An API/auth token area is not design tooling.
+  assert.notEqual(authTokens.criticality, "low");
+  assert.equal(designTokens.criticality, "low");
 });
 
 test("manifest runner detects Expo workspaces through member package.json files", async () => {

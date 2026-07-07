@@ -1507,7 +1507,9 @@ function domainCriticality(id: string, paths: string[]): "high" | "medium" | "lo
   if (/payment|billing|checkout|subscription|purchase|order|cart|auth|login|signup|credit|account/.test(haystack)) {
     return "high";
   }
-  if (/icons?|tokens|design-system|storybook|figma|tooling/.test(haystack)) {
+  // "design-tokens", not bare "tokens": an auth/API-token domain must never
+  // be downgraded to low criticality.
+  if (/icons?|design-tokens|design-system|storybook|figma|tooling/.test(haystack)) {
     return "low";
   }
   return "medium";
@@ -2185,7 +2187,9 @@ function normalizeRouteSegments(value: string): string {
 }
 
 // Component basenames that are UI plumbing rather than product behavior; a
-// flow named after them tests a primitive, not a user journey.
+// flow named after them tests a primitive, not a user journey. Only terms
+// that are generic in ANY codebase belong here — a feature-shaped word
+// (Story, Logger) may be someone's real product surface.
 const genericComponentPrefixes = new Set([
   "app",
   "base",
@@ -2195,13 +2199,11 @@ const genericComponentPrefixes = new Set([
   "generic",
   "index",
   "loading",
-  "logger",
   "main",
   "mock",
   "root",
   "sample",
   "shared",
-  "story",
   "test",
   "ui",
 ]);
@@ -2220,7 +2222,7 @@ function componentNameFromFile(file: string): string | undefined {
     return undefined;
   }
   const basename = path.basename(normalized).replace(/\.[^.]+$/, "");
-  const suffixMatch = basename.match(/(page|screen|view|modal|form|flow|checkout|submit|complete)$/i);
+  const suffixMatch = basename.match(/(page|screen|view|modal|form|flow|checkout|submit|complete|success|confirmation)$/i);
   if (!suffixMatch) {
     return undefined;
   }
