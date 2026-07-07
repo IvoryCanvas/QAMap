@@ -2337,12 +2337,98 @@ test("analyzeFixtureSource extracts exports, handled routes, and sample keys", a
   assert.deepEqual(jsonFixture.handledEndpoints, []);
   assert.deepEqual(jsonFixture.sampleKeys, ["id", "status"]);
 
+  const dashedJson = analyzeFixtureSource("tests/fixtures/summary.json", '{"created-at": "x", "total": 1}');
+  assert.deepEqual(dashedJson.sampleKeys, ["created-at", "total"]);
+
   const globPattern = analyzeFixtureSource(
     "tests/mocks/routes.ts",
     'export function installRoutes(page) { return page.route("**/api/reports/*", () => {}); }',
   );
   assert.deepEqual(globPattern.handledEndpoints, ["/api/reports/*"]);
   assert.equal(insightCoversEndpoint(globPattern, "/api/reports/monthly"), true);
+  // A trailing single wildcard matches exactly one segment, never zero or two.
+  assert.equal(insightCoversEndpoint(globPattern, "/api/reports"), false);
+  assert.equal(insightCoversEndpoint(globPattern, "/api/reports/monthly/details"), false);
+
+  // Hosts never masquerade as path segments, and catch-all handlers register.
+  const hostPatterns = analyzeFixtureSource(
+    "src/mocks/host-handlers.ts",
+    [
+      'export const hostHandlers = [',
+      '  http.get("//api.example.test/api/orders", () => HttpResponse.json({ ok: true })),',
+      '];',
+      'export function installCatchAll(page) { return page.route("**", () => {}); }',
+    ].join("\n"),
+  );
+  assert.deepEqual(hostPatterns.handledEndpoints, ["/api/orders", "/**"]);
+  assert.equal(insightCoversEndpoint(hostPatterns, "/api/orders"), true);
+  assert.equal(insightCoversEndpoint(hostPatterns, "/api/anything/else"), true);
+
+  // Relative patterns are dropped instead of silently truncated, and code
+  // option keys whose values are not data literals stay out of sampleKeys.
+  const noisy = analyzeFixtureSource(
+    "src/mocks/noisy.ts",
+    'export const q = { queryFn: fetchThing, retries: 2 }; page.route("api/orders", () => {});',
+  );
+  assert.deepEqual(noisy.handledEndpoints, []);
+  assert.deepEqual(noisy.sampleKeys, ["retries"]);
+});
+
+test("generated mock bodies quote non-identifier fixture keys from JSON fixtures", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "fixtures"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/billing"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "playwright test",
+      },
+      dependencies: {
+        "@playwright/test": "^1.56.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "fixtures/billing-summary.json"),
+    '{"created-at": "2026-01-01", "total": 1}',
+  );
+  await writeFile(
+    path.join(root, "src/pages/billing/BillingPage.tsx"),
+    "export function BillingPage() { return <button>Open billing</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/billing-payments"]);
+  await writeFile(
+    path.join(root, "src/pages/billing/BillingPage.tsx"),
+    [
+      "export async function loadSummary() {",
+      "  const response = await fetch('/api/payments/summary');",
+      "  return response.json();",
+      "}",
+      "export function BillingPage() { return <button data-testid=\"open-billing\">Open billing</button>; }",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "load payments summary"]);
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const draftFile = draft.files.find((file) => file.fixtureReadinessStatus === "partial");
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+  assert.match(spec, /"created-at": "qamap-created-at"/);
+  assert.match(spec, /total: "qamap-total"/);
+  assert.match(spec, /Response shape keys reuse fixtures\/billing-summary\.json/);
 });
 
 test("fixture guidance names the mock handler file to extend and shapes mock payloads", async () => {

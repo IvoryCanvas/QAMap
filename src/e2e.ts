@@ -4975,16 +4975,24 @@ async function collectFixtureReadinessContext(root: string, changedFiles: string
   const changedMockFiles = changedFiles.filter(isMockOrFixtureFile).slice(0, maxFilesPerFlow);
   const projectMockEntries = projectFiles.filter((file) => isMockOrFixtureFile(file.path));
 
-  // The project walk already loaded these files' text; parsing it here is what
-  // lets fixture guidance name concrete exports, handled routes, and keys.
+  // The project walk already loaded these files' text (with its own size and
+  // text-extension guards); parsing it here is what lets fixture guidance
+  // name concrete exports, handled routes, and keys.
+  const walkTexts = new Map(projectFiles.map((file) => [file.path, file.text]));
   const mockFileInsights = new Map<string, FixtureFileInsight>();
   for (const file of changedMockFiles) {
-    const text = await readTextIfExists(path.join(root, file));
+    let text = walkTexts.get(file);
+    if (text === undefined && fixtureEvidenceSourceExtensions.has(path.extname(file).toLowerCase())) {
+      text = await readTextIfExists(path.join(root, file));
+    }
     if (text !== undefined) {
       mockFileInsights.set(file, analyzeFixtureSource(file, text));
     }
   }
-  for (const file of projectMockEntries.slice(0, maxAnalyzedMockFiles)) {
+  for (const file of projectMockEntries) {
+    if (mockFileInsights.size >= maxAnalyzedMockFiles) {
+      break;
+    }
     if (!mockFileInsights.has(file.path) && file.text !== undefined) {
       mockFileInsights.set(file.path, analyzeFixtureSource(file.path, file.text));
     }
@@ -5274,7 +5282,7 @@ function normalizeApiEndpointHint(value: string | undefined): string | undefined
   if (!/(?:\/api(?:\/|$)|\/graphql(?:\/|$)|\/trpc(?:\/|$))/i.test(endpoint)) {
     return undefined;
   }
-  if (/[\s<>{}]/.test(endpoint)) {
+  if (/[\s<>{}`]/.test(endpoint)) {
     return undefined;
   }
   return endpoint;
@@ -5326,16 +5334,35 @@ function isMockOrFixtureFile(file: string): boolean {
   if (/(?:^|\/)(?:__mocks__|mocks?|fixtures?|factories|seeds?|test-data|testData|msw|mirage)\//i.test(file)) {
     return true;
   }
-  // Match whole name tokens, not substrings: demoSeedService and mock-users
-  // qualify, but a useSeedlingCatalog hook or an errorHandler utility does
-  // not. "handler" alone is an ordinary code word, so it only counts as mock
-  // evidence when the mock-ish directory rule above already matched.
-  const stemTokens = stem.split(/[^a-zA-Z0-9]+|(?<=[a-z0-9])(?=[A-Z])/).map((token) => token.toLowerCase());
-  return canUseBroadFilenameMatch &&
-    stemTokens.some((token) => token === "mock" || token === "mocks" || token === "fixture" || token === "fixtures" ||
-      token === "factory" || token === "factories" || token === "seed" || token === "seeds" ||
-      token === "msw" || token === "mirage");
+  // Match whole name tokens, not substrings: demoSeedService, APIMockClient,
+  // and mock-users qualify, but a useSeedlingCatalog hook or an errorHandler
+  // utility does not. "handler" alone is an ordinary code word, so it only
+  // counts as mock evidence when the mock-ish directory rule above already
+  // matched. Progressive forms like "seeding" stay excluded on purpose: the
+  // -ing form usually names ongoing product behavior, not stored seed data.
+  const stemTokens = stem
+    .split(/[^a-zA-Z0-9]+|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/)
+    .map((token) => token.toLowerCase());
+  return canUseBroadFilenameMatch && stemTokens.some((token) => mockEvidenceNameTokens.has(token));
 }
+
+const mockEvidenceNameTokens = new Set([
+  "mock",
+  "mocks",
+  "mocked",
+  "mocking",
+  "fixture",
+  "fixtures",
+  "factory",
+  "factories",
+  "seed",
+  "seeds",
+  "seeded",
+  "seeder",
+  "seeders",
+  "msw",
+  "mirage",
+]);
 
 function isFixtureEvidenceIgnoredPath(file: string): boolean {
   return /(?:^|\/)(?:node_modules|vendor|vendors|Pods|build|dist|coverage|\.next|\.nuxt|\.expo|\.turbo|\.yarn\/cache)\//i.test(file);
@@ -8056,8 +8083,8 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
   lines.push("  const mockApiResponses = {");
   for (const endpoint of mockableEndpoints.slice(0, maxFilesPerFlow)) {
     const insight =
-      insights.find((candidate) => candidate.sampleKeys.length > 0 && insightCoversEndpoint(candidate, endpoint)) ??
-      insights.find((candidate) => candidate.sampleKeys.length > 0);
+      insights.find((candidate) => specSafeSampleKeys(candidate).length > 0 && insightCoversEndpoint(candidate, endpoint)) ??
+      insights.find((candidate) => specSafeSampleKeys(candidate).length > 0);
     lines.push(`    "${quoteJs(playwrightMockRoutePattern(endpoint))}": {`);
     lines.push("      status: 200,");
     lines.push("      body: {");
@@ -8065,8 +8092,9 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
       if (!shapeSources.includes(insight.file)) {
         shapeSources.push(insight.file);
       }
-      for (const key of insight.sampleKeys) {
-        lines.push(`        ${key}: "qamap-${key}",`);
+      for (const key of specSafeSampleKeys(insight)) {
+        const propertyName = isJsIdentifier(key) ? key : JSON.stringify(key);
+        lines.push(`        ${propertyName}: ${JSON.stringify(`qamap-${key}`)},`);
       }
     } else {
       lines.push('        ok: true,');
@@ -8090,6 +8118,12 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
   lines.push("      });");
   lines.push("    });");
   lines.push("  }");
+}
+
+// Drafts are pinned to contain no literal TODO marker, so a fixture key that
+// would introduce one disqualifies itself from spec interpolation.
+function specSafeSampleKeys(insight: FixtureFileInsight): string[] {
+  return insight.sampleKeys.filter((key) => !/todo/i.test(key));
 }
 
 function observedEndpointsForFlow(flow: E2eFlow): string[] {
