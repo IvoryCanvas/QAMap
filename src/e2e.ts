@@ -4786,7 +4786,11 @@ function selectorStepLabel(selector: E2eSelector): string {
 }
 
 function actionVerbForSelector(selector: E2eSelector): string {
-  if (/\b(?:submit|send|apply|complete|confirm|save|continue|next|upload)\b/i.test(selector.value.replace(/[-_]+/g, " "))) {
+  const normalized = selector.value.replace(/[-_]+/g, " ");
+  if (/\b(?:submit|send|apply|complete|confirm|save|continue|next|upload)\b/i.test(normalized)) {
+    return "Submit";
+  }
+  if (/(?:제출|저장|보내기|전송|등록|신청|결제|구매|확인|완료)/.test(normalized)) {
     return "Submit";
   }
   return "Activate";
@@ -9175,11 +9179,12 @@ function selectorRank(kind: E2eSelectorKind): number {
 }
 
 function slugify(value: string): string {
-  return value
+  const slug = value
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/[^a-z0-9\uAC00-\uD7A3]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
+  return slug || "draft";
 }
 
 function quoteYaml(value: string): string {

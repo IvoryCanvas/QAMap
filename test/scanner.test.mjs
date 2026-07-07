@@ -4944,6 +4944,39 @@ test("logic-only changes name journeys from the page's primary action", async ()
   assert.ok(!titles.some((title) => /Invoices primary journey/i.test(title)));
 });
 
+test("korean action labels name flows and survive slugified filenames", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "app/memo"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ scripts: { test: "playwright test" }, dependencies: { next: "^15.0.0", "@playwright/test": "^1.56.0" } }),
+  );
+  await writeFile(
+    path.join(root, "app/memo/page.tsx"),
+    "export default function MemoPage() { return <main><input placeholder=\"메모를 입력하세요\" /></main>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/save"]);
+  await writeFile(
+    path.join(root, "app/memo/page.tsx"),
+    "export default function MemoPage() { return <main><input placeholder=\"메모를 입력하세요\" /><button aria-label=\"저장하기\">저장</button></main>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "save button"]);
+
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", runner: "playwright", dryRun: true });
+  const file = draft.files.find((item) => /저장/.test(item.flowTitle));
+  assert.ok(file, `expected a korean action-named flow, got: ${draft.files.map((item) => item.flowTitle).join(", ")}`);
+  assert.match(file.flowTitle, /^Memo 저장하기$/);
+  assert.match(file.path, /memo-저장하기\.spec\.ts$/);
+  const stepText = (file.draftSteps ?? []).join("\n");
+  assert.match(stepText, /저장하기/);
+});
+
 test("generated drafts are not counted as test-suite evidence", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);

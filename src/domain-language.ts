@@ -403,11 +403,11 @@ function behaviorLabelFromAddedText(addedText: string | undefined, domainTerm: s
     if (tokens.length === 0 || tokens.length > 4) {
       continue;
     }
-    if (tokens.length === 1 && !behaviorActionTokens.has(tokens[0]) && !isLikelyBusinessObjectToken(tokens[0])) {
+    if (tokens.length === 1 && !isActionToken(tokens[0]) && !isLikelyBusinessObjectToken(tokens[0])) {
       continue;
     }
     const title = titleCase(tokens.map(formatBehaviorToken).join(" "));
-    if (tokens.some((token) => behaviorActionTokens.has(token))) {
+    if (tokens.some((token) => isActionToken(token))) {
       return title;
     }
     fallback ??= title;
@@ -424,7 +424,7 @@ function behaviorLabelFromPath(file: string, domainTerm: string): string | undef
   if (tokens.length === 0) {
     return undefined;
   }
-  if (tokens.length === 1 && !behaviorActionTokens.has(tokens[0]) && !isLikelyBusinessObjectToken(tokens[0])) {
+  if (tokens.length === 1 && !isActionToken(tokens[0]) && !isLikelyBusinessObjectToken(tokens[0])) {
     return undefined;
   }
   return titleCase(tokens.map(formatBehaviorToken).join(" "));
@@ -480,8 +480,53 @@ function compareBehaviorScenarioCandidates(left: BehaviorScenarioCandidate, righ
   return left.title.localeCompare(right.title);
 }
 
+const koreanActionStems = [
+  "가입",
+  "검색",
+  "결제",
+  "공유",
+  "구매",
+  "다운로드",
+  "등록",
+  "로그인",
+  "만들",
+  "발송",
+  "변경",
+  "보내",
+  "복사",
+  "삭제",
+  "생성",
+  "선택",
+  "수정",
+  "시작",
+  "신고",
+  "신청",
+  "업로드",
+  "완료",
+  "이동",
+  "인증",
+  "입력",
+  "작성",
+  "저장",
+  "전송",
+  "제출",
+  "조회",
+  "주문",
+  "초대",
+  "추가",
+  "취소",
+  "편집",
+  "확인",
+];
+
+const koreanActionTokenMatcher = new RegExp(`^(?:${koreanActionStems.join("|")})(?:하기|합니다|하세요|해요|함|중)?$`);
+
+function isActionToken(token: string): boolean {
+  return behaviorActionTokens.has(token) || koreanActionTokenMatcher.test(token);
+}
+
 function hasActionToken(value: string): boolean {
-  return behaviorTokensFromText(value).some((token) => behaviorActionTokens.has(token));
+  return behaviorTokensFromText(value).some((token) => isActionToken(token));
 }
 
 async function collectUiCopyTerms(
