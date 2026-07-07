@@ -22,7 +22,7 @@ Validated before publishing `0.3.2` (reverse import graph, diff-anchored steps a
 | `pnpm test` | 100/100 passing |
 | `pnpm scan` (self-scan) | 0 findings |
 | Coverage thresholds (lines/branches/functions >= 80) | Passing |
-| `pnpm bench` against four pinned local benchmark targets (web monorepo, Python API server, Expo app, legacy Vue app) | Runner choice 4/4, labeled must-reach recall 9/9, blank actions 0, no metric regressions vs the previous baseline |
+| `pnpm bench` against four pinned local benchmark repositories covering common stack shapes (monorepo, API server, mobile, legacy web) | Runner choice 4/4, labeled must-reach recall 9/9, blank actions 0, no metric regressions vs the previous baseline |
 | README demo | Real recorded run; the generated starter spec passes against the demo app |
 
 Historical validation notes for earlier releases follow below.

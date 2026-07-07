@@ -5338,8 +5338,11 @@ function isMockOrFixtureFile(file: string): boolean {
   // and mock-users qualify, but a useSeedlingCatalog hook or an errorHandler
   // utility does not. "handler" alone is an ordinary code word, so it only
   // counts as mock evidence when the mock-ish directory rule above already
-  // matched. Progressive forms like "seeding" stay excluded on purpose: the
-  // -ing form usually names ongoing product behavior, not stored seed data.
+  // matched. Derived -ing forms stay excluded on purpose: the canonical
+  // seed-data conventions (seeds/ and seeders/ directories, seed.* files)
+  // are already covered by the rules above, and an -ing filename is
+  // ambiguous between fixture data and application behavior — ambiguity
+  // must not count as mock evidence.
   const stemTokens = stem
     .split(/[^a-zA-Z0-9]+|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/)
     .map((token) => token.toLowerCase());
