@@ -24,7 +24,7 @@ node scripts/bench.mjs --baseline bench-results/<file>.json   # delta vs a saved
 - `viaImport` — flows produced through the reverse import graph (shared-file changes reaching surfaces).
 - `diffAnchor` — flows whose selector set includes at least one selector introduced by the diff itself; higher means drafts act on what the change added instead of pre-existing UI.
 - `blank` — steps with blank action slots (must stay 0).
-- `generic` — flows with content-free names (`... primary journey`, `... smoke flow`); lower is better.
+- `generic` — user-facing draft flow titles with content-free names (`... primary journey`, `... smoke flow`); lower is better. Measured on the `qa` result (what a reader sees), not on internal plan candidates — baselines saved before this definition changed are not comparable for this column.
 - `reach` — recall of `mustReachFiles`; missing files are listed per target.
 - `agentBytes` — size of the `--format agent` payload.
 

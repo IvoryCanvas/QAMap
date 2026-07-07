@@ -58,7 +58,7 @@ for (const target of config.targets) {
     runnerExpected: expect.runner ?? null,
     runnerCorrect: expect.runner ? plan.recommendedRunner.name === expect.runner : null,
     flows: plan.flows.length,
-    genericTitles: plan.flows.filter((flow) => genericTitlePattern.test(flow.title)).length,
+    genericTitles: qa.flows.filter((flow) => genericTitlePattern.test(flow.title)).length,
     importPropagatedFlows: plan.flows.filter((flow) => flow.reason.includes("through imports")).length,
     diffAnchoredFlows: plan.flows.filter((flow) => (flow.selectors ?? []).some((selector) => selector.addedInDiff)).length,
     blankActions: allSteps.filter((step) => blankActionPattern.test(step)).length,
