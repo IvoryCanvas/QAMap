@@ -32,7 +32,7 @@ qamap e2e draft . --manifest /tmp/qamap-manifest.yaml --base origin/main --head 
 
 `manifest init` reads the current checkout on disk. It does not silently switch to the default branch, because changing a developer's branch or working tree would be surprising and unsafe. If the team wants the manifest to represent the default product baseline, run it from the default branch after pulling the latest changes.
 
-`manifest context` is the read-only preview step. It shows which repo-local documents QAMap sees, how each source is classified, which validation commands and safety rules were extracted, and which manifest path should be reviewed if the context is missing or stale. Use it before `manifest init` when you want to understand the bootstrap input without writing `.qamap/manifest.yaml`.
+`manifest context` is the read-only preview step. It shows which repo-local documents QAMap sees, how each source is classified, which validation commands were collected (from project configuration such as `package.json` scripts and pytest setup, plus instruction docs), which safety rules were extracted, and which manifest path should be reviewed if the context is missing or stale. Use it before `manifest init` when you want to understand the bootstrap input without writing `.qamap/manifest.yaml`.
 
 During baseline generation, QAMap also looks for repo-local context documents that often contain verification knowledge not visible in source files:
 
@@ -196,7 +196,7 @@ The report includes:
 
 - role summary by source file, such as `verification-rubric`, `test-runner`, `agent-skill`, or `harness-config`
 - captured context sources with kind, confidence, roles, and signals
-- validation commands and safety rules extracted from local docs
+- validation commands (project configuration first, then local docs) and safety rules extracted from prose
 - diagnostics that point to the manifest path to edit when context is missing, stale, too broad, or not connected to checks
 
 This command is useful when an E2E recommendation feels too vague. Instead of asking an LLM to re-read the repository, inspect the report, correct the repo-local context or `.qamap/manifest.yaml`, then rerun `qamap e2e draft`.
@@ -268,7 +268,7 @@ flows:
 | `flows[].checks[].steps` | Optional concrete steps for this check. These are used before the title parser. |
 | `context.instructionFiles` | Advisory repo-local context sources used while bootstrapping the manifest. |
 | `context.instructionFiles[].roles` | Advisory role classification for a context source, such as `verification-rubric`, `workflow-lifecycle`, `agent-skill`, or `harness-config`. |
-| `context.validationCommands` | Validation commands inferred from context documents. |
+| `context.validationCommands` | Validation commands from project configuration (verification-shaped `package.json` scripts, detected pytest setup) and context documents, ground truth first. |
 | `context.safetyRules` | Workflow or safety rules inferred from context documents, with token-like values redacted. |
 | `source.kind` | `inferred` for QAMap-generated entries or `declared` after human review. |
 | `source.confidence` | `low`, `medium`, or `high` confidence in the entry. |

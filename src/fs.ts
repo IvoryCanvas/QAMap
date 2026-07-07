@@ -52,6 +52,8 @@ const textExtensions = new Set([
   ".ts",
   ".tsx",
   ".txt",
+  ".vue",
+  ".svelte",
   ".yaml",
   ".yml",
   ".zsh",
@@ -67,6 +69,7 @@ const textBasenames = new Set([
   "CODE_OF_CONDUCT.md",
   "Dockerfile",
   "Makefile",
+  "setup.cfg",
 ]);
 
 const maxReadableBytes = 256 * 1024;
