@@ -19,6 +19,10 @@ pnpm exec qamap e2e draft . --base origin/main --head HEAD --dry-run
 
 Use `pnpm dlx @ivorycanvas/qamap ...` for one-off runs without installing QAMap into the target repository.
 
+## Reading The Output
+
+Human-facing reports (`text` and `markdown` formats) open with an **At a Glance** section — the affected flows in one line, the single next command to run, and the one or two blocking evidence items — before the detailed sections. When printed to an interactive terminal the report is colorized (headings, statuses, priority tags, inline commands); files written with `--output`, pipes, CI logs, and the machine formats (`json`, `agent`, `sarif`) are always plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
+
 
 ## What QAMap Produces
 
@@ -132,6 +136,8 @@ Repair hints:
 
 When a matched manifest flow has an entry route and checks, `qamap e2e draft` promotes it ahead of heuristic candidates. The generated Playwright, Maestro, or manual draft carries the manifest evidence, uses the manifest route as an entrypoint when possible, and turns manifest checks into draft steps and required coverage notes. If a check includes concrete hints such as `[data-testid=coupon-input]`, `with WELCOME10`, or optional `selector`, `value`, and `steps` fields, QAMap uses those facts before falling back to fuzzy selector inference. This is the core cost-saving loop: humans fix durable QA context once, then future PRs start from a stronger draft instead of a blank test file.
 
+Flow and scenario names prefer what the diff itself introduced: an added `aria-label`/`data-testid`/`testID`/placeholder value or button/link inner text with an action word names the journey ("Checkout Apply Coupon" instead of "Checkout primary journey"). Korean action labels qualify the same way — `저장하기` and 35 other common stems, with `~하기/~합니다`-style endings normalized — and draft filenames keep Hangul. When a diff changes only logic or styles (no labeled elements added), the surface's primary action-bearing control names the journey instead.
+
 The domain language section is intentionally less implementation-oriented than the raw file list. For example, changes under `src/features/in-app-purchase/` become terms such as `In App Purchase` and scenarios such as `In App Purchase primary journey`. When a changed component or service file names a concrete behavior, QAMap should prefer that behavior before the generic primary journey: `src/features/listing/components/MediaLinkSubmitModal.tsx` can become `Listing Media Link Submit`, and the generated draft file can become `.maestro/listing-media-link-submit.yaml`. When `.qamap/domains.yml` exists, declared product terms and routes receive higher confidence. When `.qamap/flows.yml` exists, team-approved flow names appear as preferred scenario names.
 
 If `.qamap/domains.yml` exists, `qamap e2e plan` also matches changed files against shared product or domain language:
@@ -188,6 +194,7 @@ The draft result is meant to be useful as a PR artifact, not only as generated f
 - `languageBrief`: actor, trigger, goal, success signal, reviewer question, and edge cases for each draft file
 - `promotionStatus`: whether the draft is a `commit-candidate`, `needs-review`, or `low-signal`
 - `runnableStatus`: whether the draft is a `runnable-candidate`, `near-runnable`, or `review-only`
+- selectors carry `addedInDiff: true` when the value was introduced by the diff itself, so agents can bind actions to what the change added
 - `selfCheck`: static runner checks for generated draft structure, unresolved placeholders, starter-code quality, and the execution profile
 - `status`: whether the file was `preview`ed by `--dry-run`, `created`, or `skipped`
 - `actionItems`: required and recommended follow-up work, grouped by assertion, fixture, selector, runner, validation, and manifest
