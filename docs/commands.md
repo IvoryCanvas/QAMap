@@ -78,6 +78,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap doctor services/listing --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `qamap context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `qamap init .` | Create a starter `qamap.config.json`. |
+| `qamap init --agent .` | One-command agent onboarding: add a marked QAMap Pre-PR QA section to `AGENTS.md`, install the packaged skill to `.claude/skills/qamap-pr-qa/SKILL.md`, and create `qamap.config.json` if missing. Idempotent; existing `AGENTS.md` content is preserved. |
 
 For monorepos, pass `--workspace-root` when scanning a package. Package-local checks still use the package directory, while repo-level guardrails such as `AGENTS.md`, `.github/workflows`, `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` are read from the workspace root.
 

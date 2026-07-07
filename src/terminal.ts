@@ -45,8 +45,8 @@ function colorizeLine(line: string): string {
     `${BOLD}$1${RESET}:`,
   );
   output = output.replace(/\[(required|missing|error)\]/g, `${RED}[$1]${RESET}`);
-  output = output.replace(/\[(recommended|warning)\]/g, `${YELLOW}[$1]${RESET}`);
-  output = output.replace(/\[(covered|ready|created|pass)\]/g, `${GREEN}[$1]${RESET}`);
+  output = output.replace(/\[(recommended|warning|skipped)\]/g, `${YELLOW}[$1]${RESET}`);
+  output = output.replace(/\[(covered|ready|created|updated|pass)\]/g, `${GREEN}[$1]${RESET}`);
   output = output.replace(
     /\b(Readiness|runnable|self-check|Status|status)(\[0m)?: (blocked|failed|fail|missing)\b/g,
     `$1$2: ${RED}$3${RESET}`,

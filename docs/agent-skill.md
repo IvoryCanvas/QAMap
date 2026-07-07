@@ -8,6 +8,22 @@ The goal is not to replace a reviewer or claim QA passed. The goal is to remove 
 What user flow did this PR touch, what should be tested, and what evidence is missing?
 ```
 
+## One-Command Setup
+
+The fastest way to make a repository agent-ready is:
+
+```sh
+npx @ivorycanvas/qamap init --agent .
+```
+
+It performs three idempotent steps:
+
+- adds a marked `Pre-PR QA (QAMap)` section to `AGENTS.md` (created if missing, appended if present; re-runs refresh only the marked section and never touch your own content)
+- installs the packaged skill to `.claude/skills/qamap-pr-qa/SKILL.md` so Claude Code discovers it as a project skill (a locally modified copy is left alone unless you pass `--force`)
+- creates a starter `qamap.config.json` when the repository has none
+
+After that, agents that read `AGENTS.md` or project skills will run the QA pass below on their own. The rest of this document explains what that pass does and how to wire it manually on other agent surfaces.
+
 ## Recommended Agent Step
 
 Run this before writing a PR body or asking for review. Agents should prefer the compact agent format — one minified JSON object (about 2 KB for a typical small PR) instead of a long report:
@@ -39,7 +55,7 @@ Use it when an agent surface supports local skill folders, instruction folders, 
 After installing QAMap as a dev dependency, inspect the template:
 
 ```sh
-cat node_modules/qamap/skills/qamap-pr-qa/SKILL.md
+cat node_modules/@ivorycanvas/qamap/skills/qamap-pr-qa/SKILL.md
 ```
 
 Or from a cloned QAMap repository:

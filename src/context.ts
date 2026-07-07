@@ -113,6 +113,11 @@ async function detectPackageManager(root: string): Promise<string | undefined> {
   return undefined;
 }
 
+export async function detectDlxCommand(rootInput: string): Promise<string> {
+  const packageManager = await detectPackageManager(path.resolve(rootInput));
+  return dlxCommandFor(packageManager);
+}
+
 function dlxCommandFor(packageManager: string | undefined): string {
   const normalized = packageManager?.split("@")[0];
   if (normalized === "pnpm") {

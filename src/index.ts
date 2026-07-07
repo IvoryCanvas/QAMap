@@ -1,5 +1,6 @@
+export { buildAgentQaSection, formatAgentInitReport, initAgentSetup } from "./agent-init.js";
 export { defaultConfig, loadConfig, writeDefaultConfig } from "./config.js";
-export { generateAgentContext } from "./context.js";
+export { detectDlxCommand, generateAgentContext } from "./context.js";
 export { buildDomainLanguageSummary } from "./domain-language.js";
 export {
   defaultDomainManifestPath,

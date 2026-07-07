@@ -6043,6 +6043,60 @@ test("reviewProject uses workspace root guardrails for package branches", async 
   );
 });
 
+test("initAgentSetup creates AGENTS.md, installs the packaged skill, and stays idempotent", async () => {
+  const { initAgentSetup, formatAgentInitReport } = await import("../dist/agent-init.js");
+  const root = await makeTempRepo();
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "smoke" }));
+
+  const first = await initAgentSetup(root);
+  assert.deepEqual(first.files.map((file) => file.status), ["created", "created", "created"]);
+  const agents = await readFile(path.join(root, "AGENTS.md"), "utf8");
+  assert.match(agents, /<!-- qamap:agent:start -->/);
+  assert.match(agents, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
+  assert.match(agents, /requiredEvidence/);
+  const skill = await readFile(path.join(root, ".claude", "skills", "qamap-pr-qa", "SKILL.md"), "utf8");
+  assert.match(skill, /name: qamap-pr-qa/);
+  await stat(path.join(root, "qamap.config.json"));
+
+  const second = await initAgentSetup(root);
+  assert.deepEqual(second.files.map((file) => file.status), ["unchanged", "unchanged", "unchanged"]);
+  const report = formatAgentInitReport(second);
+  assert.match(report, /# QAMap Agent Setup/);
+  assert.match(report, /npx @ivorycanvas\/qamap qa \./);
+});
+
+test("initAgentSetup appends to an existing AGENTS.md and refreshes only its own section", async () => {
+  const { initAgentSetup } = await import("../dist/agent-init.js");
+  const root = await makeTempRepo();
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "smoke" }));
+  await writeFile(path.join(root, "AGENTS.md"), "# Team Rules\n\n- Never push to main.\n");
+
+  const first = await initAgentSetup(root);
+  assert.equal(first.files[0].status, "updated");
+  const appended = await readFile(path.join(root, "AGENTS.md"), "utf8");
+  assert.ok(appended.startsWith("# Team Rules"));
+  assert.match(appended, /Never push to main/);
+  assert.match(appended, /<!-- qamap:agent:end -->/);
+
+  await writeFile(path.join(root, "AGENTS.md"), appended.replace("token-free QA pass", "OLD WORDING"));
+  const refreshed = await initAgentSetup(root);
+  assert.equal(refreshed.files[0].status, "updated");
+  const current = await readFile(path.join(root, "AGENTS.md"), "utf8");
+  assert.ok(current.startsWith("# Team Rules"));
+  assert.doesNotMatch(current, /OLD WORDING/);
+
+  await writeFile(
+    path.join(root, ".claude", "skills", "qamap-pr-qa", "SKILL.md"),
+    "locally modified",
+  );
+  const skipped = await initAgentSetup(root);
+  assert.equal(skipped.files[1].status, "skipped");
+  const forced = await initAgentSetup(root, { force: true });
+  assert.equal(forced.files[1].status, "updated");
+  const skill = await readFile(path.join(root, ".claude", "skills", "qamap-pr-qa", "SKILL.md"), "utf8");
+  assert.match(skill, /name: qamap-pr-qa/);
+});
+
 test("generateAgentContext reflects npm scripts and repository boundaries", async () => {
   const root = await makeTempRepo();
   await writeFile(

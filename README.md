@@ -53,7 +53,7 @@ Stop re-explaining the same QA context to your agent on every PR:
 qamap qa --format agent
 ```
 
-One minified JSON object (`schema: qamap.qa`, ~2 KB for a small PR) with affected flows, draft paths, required evidence, and the PR checklist — the decision content of the full report at a fraction of the context cost. A portable skill template ships in the package ([skills/qamap-pr-qa/SKILL.md](skills/qamap-pr-qa/SKILL.md)), and `qamap context --write AGENTS.md` teaches agents in a repo to run QAMap themselves. Details: [agent skill guide](docs/agent-skill.md).
+One minified JSON object (`schema: qamap.qa`, ~2 KB for a small PR) with affected flows, draft paths, required evidence, and the PR checklist — the decision content of the full report at a fraction of the context cost. To make agents run this themselves, run `qamap init --agent` once: it adds a Pre-PR QA section to `AGENTS.md` and installs the packaged skill ([skills/qamap-pr-qa/SKILL.md](skills/qamap-pr-qa/SKILL.md)) into `.claude/skills/`. Details: [agent skill guide](docs/agent-skill.md).
 
 ## Why QAMap
 

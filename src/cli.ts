@@ -2,6 +2,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { loadConfig, writeDefaultConfig } from "./config.js";
+import { formatAgentInitReport, initAgentSetup } from "./agent-init.js";
 import { generateAgentContext } from "./context.js";
 import { defaultDomainManifestPath, writeDefaultDomainManifest } from "./domains.js";
 import { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
@@ -81,6 +82,7 @@ interface ParsedOptions {
   manifestPath?: string;
   recordHistory?: boolean;
   dryRun?: boolean;
+  agent?: boolean;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -485,6 +487,11 @@ async function main(argv: string[]): Promise<number> {
 
   if (command === "init") {
     const options = parseOptions(rest);
+    if (options.agent) {
+      const result = await initAgentSetup(options.path, { force: options.force });
+      await printOrWrite(formatAgentInitReport(result));
+      return 0;
+    }
     const outputPath = await writeDefaultConfig(options.path, options.write ?? "qamap.config.json", options.force);
     console.log(`Wrote ${outputPath}`);
     return 0;
@@ -512,6 +519,11 @@ function parseOptions(args: string[]): ParsedOptions {
 
     if (arg === "--force") {
       options.force = true;
+      continue;
+    }
+
+    if (arg === "--agent") {
+      options.agent = true;
       continue;
     }
 
@@ -903,6 +915,9 @@ Start here, from inside your repository, on the branch you want to check:
       branches get sharper recommendations. Optional — qa works without it.
 
 Handing the result to a coding agent? Add: --format agent
+Want your agent to run QAMap by itself? Run once: qamap init --agent
+      Adds a Pre-PR QA section to AGENTS.md and installs the packaged
+      QAMap skill, so agents run the QA pass before every handoff.
 
 Full command reference: qamap help`);
 }
@@ -935,6 +950,7 @@ Usage:
   qamap history init [path]
   qamap context [path] [--write [file]] [--force]
   qamap init [path] [--write <file>] [--force]
+  qamap init --agent [path] [--force]
 
 Severities:
   info, low, medium, high
@@ -972,6 +988,7 @@ Examples:
   qamap test-plan services/listing --workspace-root . --base origin/main --head HEAD --include-working-tree
   qamap context . --write AGENTS.md
   qamap init .
+  qamap init --agent .
 `);
 }
 
