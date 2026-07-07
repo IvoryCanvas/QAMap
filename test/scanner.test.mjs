@@ -4410,6 +4410,96 @@ test("manifest init ranks product journeys ahead of alphabetical UI plumbing", a
   assert.equal(result.summary.flows > 0, true);
 });
 
+test("manifest init never mints domains from colocated files or non-Python marker dirs", async () => {
+  const root = await makeTempRepo();
+  // Next.js App Router colocation: components/hooks/utils under app/.
+  await mkdir(path.join(root, "src/app/components"), { recursive: true });
+  await mkdir(path.join(root, "src/app/hooks"), { recursive: true });
+  await mkdir(path.join(root, "src/app/utils"), { recursive: true });
+  await mkdir(path.join(root, "src/app/api/health"), { recursive: true });
+  await mkdir(path.join(root, "src/app/orders"), { recursive: true });
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ dependencies: { next: "^15.0.0", react: "^19.0.0" } }));
+  await writeFile(path.join(root, "src/app/components/Button.tsx"), "export function Button() { return null; }\n");
+  await writeFile(path.join(root, "src/app/hooks/useCart.ts"), "export function useCart() { return null; }\n");
+  await writeFile(path.join(root, "src/app/utils/format.ts"), "export function format() { return null; }\n");
+  await writeFile(path.join(root, "src/app/api/health/route.ts"), "export async function GET() { return Response.json({}); }\n");
+  await writeFile(path.join(root, "src/app/orders/page.tsx"), "export default function OrdersPage() { return null; }\n");
+  // Rails-shaped tree: marker dirs with non-Python contents.
+  await mkdir(path.join(root, "server/models"), { recursive: true });
+  await mkdir(path.join(root, "server/views/users"), { recursive: true });
+  await writeFile(path.join(root, "server/models/user.rb"), "class User; end\n");
+  await writeFile(path.join(root, "server/views/users/index.html.erb"), "<div></div>\n");
+
+  const manifest = (await writeVerificationManifestBaseline(root)).manifest;
+
+  assert.deepEqual(manifest.domains.map((domain) => domain.id), ["orders"]);
+  // route.* handlers are never navigable flows, even outside app/api.
+  assert.equal(manifest.flows.some((flow) => flow.entry?.route?.includes("health")), false);
+  const validation = await validateVerificationManifest(root);
+  assert.equal(validation.issues.some((item) => item.severity === "error"), false);
+});
+
+test("manifest init merges same-id domains from the JS and Django passes", async () => {
+  const root = await makeTempRepo();
+  await mkdir(path.join(root, "src/features/orders"), { recursive: true });
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ dependencies: { react: "^19.0.0" } }));
+  await writeFile(path.join(root, "src/features/orders/OrdersPage.tsx"), "export function OrdersPage() { return null; }\n");
+  await mkdir(path.join(root, "backend/orders"), { recursive: true });
+  await writeFile(path.join(root, "backend/orders/models.py"), "class Order: pass\n");
+  await writeFile(path.join(root, "backend/orders/views.py"), "def index(request): return None\n");
+
+  const manifest = (await writeVerificationManifestBaseline(root)).manifest;
+  const ordersDomains = manifest.domains.filter((domain) => domain.id === "orders");
+  assert.equal(ordersDomains.length, 1);
+  // Nested Django apps are recognized and merged into the JS-derived domain.
+  assert.ok(ordersDomains[0].paths.some((glob) => glob === "backend/orders/**"));
+  assert.ok(ordersDomains[0].source.from.some((label) => label.startsWith("django-")));
+  const validation = await validateVerificationManifest(root);
+  assert.equal(validation.issues.some((item) => item.severity === "error"), false);
+});
+
+test("manifest flows keep bare product-action components and wrapped default exports", async () => {
+  const root = await makeTempRepo();
+  await mkdir(path.join(root, "src/features/billing"), { recursive: true });
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ dependencies: { react: "^19.0.0" } }));
+  // Bare product action survives; bare structural noun does not.
+  await writeFile(path.join(root, "src/features/billing/Checkout.tsx"), "export function Checkout() { return null; }\n");
+  await writeFile(path.join(root, "src/features/billing/Modal.tsx"), "export function Modal() { return null; }\n");
+  // Wrapped default export resolves to the component, not the first const.
+  await writeFile(
+    path.join(root, "src/features/billing/PaymentForm.tsx"),
+    [
+      "import { memo } from 'react';",
+      "export const layoutConfig = { wide: true };",
+      "const PaymentForm = () => null;",
+      "export default memo(PaymentForm);",
+    ].join("\n"),
+  );
+
+  const manifest = (await writeVerificationManifestBaseline(root)).manifest;
+  const names = manifest.flows.map((flow) => flow.name);
+  assert.ok(names.includes("Checkout"));
+  assert.equal(names.includes("Modal"), false);
+  const paymentFlow = manifest.flows.find((flow) => flow.name === "Payment Form");
+  assert.equal(paymentFlow?.anchors[0]?.symbol, "PaymentForm");
+});
+
+test("manifest runner detects Expo workspaces through member package.json files", async () => {
+  const root = await makeTempRepo();
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ private: true, workspaces: ["apps/*"] }));
+  await mkdir(path.join(root, "apps/mobile/src/screens"), { recursive: true });
+  await writeFile(path.join(root, "apps/mobile/package.json"), JSON.stringify({ dependencies: { expo: "~51.0.0" } }));
+  await writeFile(path.join(root, "apps/mobile/app.json"), JSON.stringify({ expo: { slug: "mobile" } }));
+  await writeFile(
+    path.join(root, "apps/mobile/src/screens/OrdersScreen.tsx"),
+    "export function OrdersScreen() { return null; }\n",
+  );
+
+  const manifest = (await writeVerificationManifestBaseline(root)).manifest;
+  assert.ok(manifest.flows.length > 0);
+  assert.ok(manifest.flows.every((flow) => flow.runner === "maestro"));
+});
+
 test("manifest init derives domains from Django app structure", async () => {
   const root = await makeTempRepo();
   for (const app of ["orders", "payments"]) {

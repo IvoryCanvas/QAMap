@@ -290,7 +290,11 @@ export async function writeVerificationManifestBaseline(
   }
 
   const maxFiles = options.maxFiles ?? defaultMaxManifestFiles;
-  const files = await collectProjectFiles(root, maxFiles);
+  // Probe one file past the cap so a repo with exactly maxFiles files is not
+  // reported as truncated.
+  const collected = await collectProjectFiles(root, maxFiles + 1);
+  const truncated = collected.length > maxFiles;
+  const files = truncated ? collected.slice(0, maxFiles) : collected;
   const manifest = buildVerificationManifestBaseline(root, manifestRoot, files);
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, formatVerificationManifestYaml(manifest), "utf8");
@@ -310,7 +314,7 @@ export async function writeVerificationManifestBaseline(
     scan: {
       files: files.length,
       maxFiles,
-      truncated: files.length >= maxFiles,
+      truncated,
     },
   };
 }
@@ -705,7 +709,7 @@ function buildVerificationManifestBaseline(
       path: toPosixPath(path.relative(manifestRoot, path.join(root, file.path))),
     }))
     .filter((file) => !file.path.startsWith("../"));
-  const domains = [...buildBaselineDomains(behaviorFiles, context), ...buildPythonAppDomains(files, manifestRoot, root)].slice(0, 12);
+  const domains = mergeDomainsById(buildBaselineDomains(behaviorFiles, context), buildPythonAppDomains(files, manifestRoot, root)).slice(0, 12);
   const flows = buildBaselineFlows(behaviorFiles, domains, inferRunner(files), context).slice(0, 16);
 
   return {
@@ -1462,6 +1466,29 @@ function buildBaselineDomains(
     });
 }
 
+// Same-id domains from different inference passes (JS structure vs Django
+// structure) must merge, not duplicate: duplicate ids fail manifest validate.
+function mergeDomainsById(
+  ...groups: VerificationManifestDomain[][]
+): VerificationManifestDomain[] {
+  const byId = new Map<string, VerificationManifestDomain>();
+  for (const domain of groups.flat()) {
+    const existing = byId.get(domain.id);
+    if (!existing) {
+      byId.set(domain.id, domain);
+      continue;
+    }
+    existing.paths = dropSubsumedPatterns(uniqueStrings([...existing.paths, ...domain.paths])).slice(0, 5);
+    existing.criticality = existing.criticality === "high" || domain.criticality === "high" ? "high" : existing.criticality;
+    existing.source = {
+      ...existing.source,
+      confidence: existing.source.confidence === "medium" || domain.source.confidence === "medium" ? "medium" : existing.source.confidence,
+      from: uniqueStrings([...existing.source.from, ...domain.source.from]).slice(0, 4),
+    };
+  }
+  return [...byId.values()];
+}
+
 // A child glob adds nothing when a parent glob in the same list already
 // covers it; the survivors read as curated when they are not.
 function dropSubsumedPatterns(patterns: string[]): string[] {
@@ -1489,35 +1516,45 @@ function domainCriticality(id: string, paths: string[]): "high" | "medium" | "lo
 // Django-style backends: an app directory with several framework marker files
 // is a product domain even though no JS behavior file ever names it.
 function buildPythonAppDomains(files: ProjectFile[], manifestRoot: string, root: string): VerificationManifestDomain[] {
-  const markers = new Map<string, Set<string>>();
+  const markers = new Map<string, { appPaths: Set<string>; found: Set<string>; name: string }>();
   for (const file of files) {
     const relative = toPosixPath(path.relative(manifestRoot, path.join(root, file.path)));
     if (relative.startsWith("../")) {
       continue;
     }
-    const match = relative.match(/^([\w-]+)\/(models|views|urls|serializers|forms|admin|apps|tasks)(?:\/|\.py$)/);
+    // Only actual Python files count: Rails app/models/user.rb and Vue
+    // client/views/Home.vue must not fabricate Django evidence.
+    if (!relative.endsWith(".py")) {
+      continue;
+    }
+    const match = relative.match(/^((?:[\w.-]+\/)*)([\w-]+)\/(models|views|urls|serializers|forms|admin|apps|tasks)(?:\/|\.py$)/);
     if (!match) {
       continue;
     }
-    const existing = markers.get(match[1]) ?? new Set<string>();
-    existing.add(match[2]);
-    markers.set(match[1], existing);
+    const appPath = `${match[1]}${match[2]}`;
+    const id = slugify(match[2]);
+    if (!id || structuralDomainIds.has(id)) {
+      continue;
+    }
+    const existing = markers.get(id) ?? { appPaths: new Set<string>(), found: new Set<string>(), name: match[2] };
+    existing.appPaths.add(appPath);
+    existing.found.add(match[3]);
+    markers.set(id, existing);
   }
   return [...markers.entries()]
-    .filter(([app, found]) => found.size >= 2 && !structuralDomainIds.has(slugify(app)))
-    .sort((left, right) => right[1].size - left[1].size || left[0].localeCompare(right[0]))
-    .map(([app, found]) => {
-      const id = slugify(app);
-      const paths = [`${app}/**`];
+    .filter(([, value]) => value.found.size >= 2)
+    .sort((left, right) => right[1].found.size - left[1].found.size || left[0].localeCompare(right[0]))
+    .map(([id, value]) => {
+      const paths = [...value.appPaths].sort().map((appPath) => `${appPath}/**`).slice(0, 5);
       return {
         id,
-        name: titleCase(app),
+        name: titleCase(value.name),
         paths,
         criticality: domainCriticality(id, paths),
         source: {
           kind: "inferred" as const,
           confidence: "medium" as const,
-          from: [...found].slice(0, 4).map((marker) => `django-${marker}`),
+          from: [...value.found].slice(0, 4).map((marker) => `django-${marker}`),
         },
       };
     });
@@ -1545,7 +1582,9 @@ function buildBaselineFlows(
     );
     const id = slugify([domain?.id, subject].filter(Boolean).join(" "));
     const contextEvidence = contextEvidenceForTerms(context, [subject, domain?.name, domain?.id].filter(Boolean) as string[]);
-    const symbol = route ? undefined : (exportedSymbolFromText(file.text) ?? undefined);
+    const symbol = route
+      ? undefined
+      : (exportedSymbolFromText(file.text, path.basename(file.path).replace(/\.[^.]+$/, "")) ?? undefined);
     const anchors: VerificationManifestAnchor[] = [
       {
         kind: route ? "route" : "component",
@@ -1623,18 +1662,31 @@ function interleaveFlowsByDomain(flows: VerificationManifestFlow[]): Verificatio
 }
 
 // The real exported identifier, so anchor symbols are greppable code names
-// rather than humanized guesses; absent when it cannot be resolved.
-function exportedSymbolFromText(text?: string): string | undefined {
+// rather than humanized guesses; absent when it cannot be resolved. The
+// default export wins; otherwise only a named export that matches the file's
+// basename qualifies — the first export in the file is often an unrelated
+// constant.
+function exportedSymbolFromText(text: string | undefined, basename: string): string | undefined {
   if (!text) {
     return undefined;
   }
-  const match =
+  const defaultMatch =
     text.match(/export\s+default\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/) ??
     text.match(/export\s+default\s+class\s+([A-Za-z_$][\w$]*)/) ??
-    text.match(/export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/) ??
-    text.match(/export\s+const\s+([A-Za-z_$][\w$]*)/) ??
-    text.match(/\bname:\s*["']([\w-]+)["']/);
-  return match?.[1];
+    // Bare or wrapped identifier defaults: `export default PaymentForm;`,
+    // `export default memo(PaymentForm)`.
+    text.match(/export\s+default\s+(?:(?!function\b|class\b|async\b|new\b|await\b|typeof\b)[A-Za-z_$][\w$]*\s*\(\s*)*(?!function\b|class\b|async\b|new\b|await\b|typeof\b)([A-Z][\w$]*)/);
+  if (defaultMatch) {
+    return defaultMatch[1];
+  }
+  const normalizedBasename = basename.replace(/[-_.]/g, "").toLowerCase();
+  const named = [...text.matchAll(/export\s+(?:async\s+)?(?:function|const|class)\s+([A-Za-z_$][\w$]*)/g)]
+    .map((match) => match[1])
+    .find((identifier) => identifier.replace(/[-_$]/g, "").toLowerCase() === normalizedBasename);
+  if (named) {
+    return named;
+  }
+  return text.match(/\bname:\s*["']([\w-]+)["']/)?.[1];
 }
 
 function checksForFlow(subject: string, text?: string): VerificationManifestCheck[] {
@@ -2054,20 +2106,30 @@ function contextKindRank(kind: VerificationManifestInstructionKind): number {
 }
 
 function inferRunner(files: ProjectFile[]): VerificationManifestRunner {
-  // Decide from dependency KEYS, not raw package.json text: the word "react"
-  // in a description or an eslint-plugin-react entry is not a web app, and a
-  // stray app.json (used by many non-mobile tools) is not a mobile app.
-  const packageText = files.find((file) => file.path === "package.json")?.text;
-  let dependencies: Record<string, unknown> = {};
-  if (packageText !== undefined) {
+  // Decide from dependency KEYS across every collected package.json, not raw
+  // text: the word "react" in a description or an eslint-plugin-react entry
+  // is not a web app. app.json only counts as mobile evidence when it has a
+  // top-level "expo" key.
+  const dependencies: Record<string, unknown> = {};
+  let hasExpoAppJson = false;
+  for (const file of files) {
+    if (file.text === undefined) {
+      continue;
+    }
+    const basename = path.basename(file.path);
     try {
-      const parsed = JSON.parse(packageText) as { dependencies?: Record<string, unknown>; devDependencies?: Record<string, unknown> };
-      dependencies = { ...parsed.dependencies, ...parsed.devDependencies };
+      if (basename === "package.json") {
+        const parsed = JSON.parse(file.text) as { dependencies?: Record<string, unknown>; devDependencies?: Record<string, unknown> };
+        Object.assign(dependencies, parsed.dependencies, parsed.devDependencies);
+      } else if (basename === "app.json") {
+        const parsed = JSON.parse(file.text) as Record<string, unknown>;
+        hasExpoAppJson ||= parsed.expo !== undefined;
+      }
     } catch {
-      // Unreadable package.json: fall through to manual.
+      // Unreadable JSON: contributes no signal.
     }
   }
-  if (dependencies["expo"] !== undefined || dependencies["react-native"] !== undefined || files.some((file) => file.path.startsWith(".maestro/"))) {
+  if (dependencies["expo"] !== undefined || dependencies["react-native"] !== undefined || hasExpoAppJson || files.some((file) => file.path.startsWith(".maestro/"))) {
     return "maestro";
   }
   const webDependencies = ["next", "react", "react-dom", "vue", "nuxt", "svelte", "astro", "vite", "@remix-run/react", "@angular/core", "@playwright/test", "playwright"];
@@ -2091,7 +2153,9 @@ function routeFromFile(file: string): string | undefined {
   if (appRootMatch) {
     return "/";
   }
-  const appMatch = normalized.match(/(?:^|\/)(?:src\/)?app\/(.+)\/(?:page|route)\.(?:[cm]?[jt]sx?)$/);
+  // Only page.* files are navigable; route.* files are HTTP handlers even
+  // outside app/api (App Router allows them anywhere).
+  const appMatch = normalized.match(/(?:^|\/)(?:src\/)?app\/(.+)\/page\.(?:[cm]?[jt]sx?)$/);
   if (appMatch) {
     if (/^api(?:\/|$)/.test(appMatch[1])) {
       return undefined;
@@ -2112,7 +2176,7 @@ function normalizeRouteSegments(value: string): string {
     .map((segment) =>
       segment
         .replace(/^\[(\.\.\.)?(.+)\]$/, ":$2")
-        // Nuxt-style dynamic segments: _scheduleId -> :scheduleId, so entry
+        // Nuxt-style dynamic segments: _orderId -> :orderId, so entry
         // routes read as navigable specs rather than file paths.
         .replace(/^_(.+)$/, ":$1"),
     )
@@ -2123,12 +2187,9 @@ function normalizeRouteSegments(value: string): string {
 // Component basenames that are UI plumbing rather than product behavior; a
 // flow named after them tests a primitive, not a user journey.
 const genericComponentPrefixes = new Set([
-  "",
   "app",
   "base",
   "common",
-  "complete",
-  "confirm",
   "default",
   "error",
   "generic",
@@ -2145,6 +2206,10 @@ const genericComponentPrefixes = new Set([
   "ui",
 ]);
 
+// Suffixes that are structural nouns: bare "Modal.tsx" or "Page.tsx" is a
+// primitive, while a bare product action like "Checkout.tsx" is a flow.
+const structuralComponentSuffixMatcher = /^(?:page|screen|view|modal|form|flow)$/i;
+
 function componentNameFromFile(file: string): string | undefined {
   const normalized = toPosixPath(file);
   // Icon sets, mocks, and generic component buckets never hold product flows.
@@ -2160,6 +2225,11 @@ function componentNameFromFile(file: string): string | undefined {
     return undefined;
   }
   const prefix = basename.slice(0, basename.length - suffixMatch[1].length).replace(/[-_.]+$/, "");
+  // A bare structural noun (Modal, Page) is a primitive; a bare product
+  // action (Checkout, Submit, Complete) is a real funnel step.
+  if (prefix === "") {
+    return structuralComponentSuffixMatcher.test(basename) ? undefined : titleCase(basename);
+  }
   if (genericComponentPrefixes.has(prefix.toLowerCase())) {
     return undefined;
   }
@@ -2176,15 +2246,31 @@ function domainCandidateFromPath(file: string): { id: string; name: string; from
   }
   const routeIndex = segments.findIndex((segment) => ["app", "pages", "screens"].includes(segment));
   if (routeIndex >= 0) {
-    // Walk past structural segments (navigations, providers, layout) toward
-    // the first product-shaped one instead of giving up on the first miss.
-    for (const segment of segments.slice(routeIndex + 1)) {
+    // Walk past structural DIRECTORY segments (navigations, providers,
+    // layout) toward the first product-shaped one instead of giving up on
+    // the first miss — but never descend into the file basename, or every
+    // colocated components/hooks/utils file mints its own garbage domain.
+    for (const segment of segments.slice(routeIndex + 1, -1)) {
       if (!segment || segment.startsWith("_") || segment.startsWith("+") || /^\(.+\)$/.test(segment)) {
         continue;
+      }
+      // pages/api and app/api are HTTP handler trees, not product areas.
+      if (segment === "api") {
+        return undefined;
       }
       const candidate = domainCandidate(segment, segments[routeIndex]);
       if (candidate) {
         return candidate;
+      }
+    }
+    // The basename may only speak for itself when the file sits directly
+    // under the route dir (app/SentimentChatPage.tsx), not when a
+    // structural directory owns the subtree. Router-convention names
+    // (_layout, +not-found, (group)) never qualify.
+    if (segments.length === routeIndex + 2) {
+      const basename = segments[routeIndex + 1];
+      if (basename && !basename.startsWith("_") && !basename.startsWith("+") && !/^\(.+\)$/.test(basename)) {
+        return domainCandidate(basename, segments[routeIndex]);
       }
     }
   }
@@ -2216,8 +2302,6 @@ const structuralDomainIds = new Set([
   "shared",
   "src",
   "state",
-  "store",
-  "stores",
   "styles",
   "theme",
   "themes",
