@@ -1,0 +1,8 @@
+{
+  "color": {
+    "surface": { "value": "#ffffff" },
+    "surfaceMuted": { "value": "#f5f7fa" },
+    "text": { "value": "#111111" },
+    "textSubtle": { "value": "#5f6773" }
+  }
+}

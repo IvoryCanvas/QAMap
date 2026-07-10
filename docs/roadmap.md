@@ -28,28 +28,23 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 ## Now
 
-- Keep the scanner fast, static, and easy to understand.
-- Keep the [release validation checklist](release-validation.md), [manifest guide](manifest.md), and public [E2E output examples](e2e-output-examples.md) aligned with the current release bar.
-- Keep the [release runbook](releasing.md) ready for npm publishing and versioned GitHub Action follow-up.
-- Improve adoption docs and sample output so new maintainers understand the QA manifest plus PR-to-E2E draft loop quickly.
+- Treat the committed [benchmark contract](benchmarking.md) as the quality gate for recommendations, not only implementation correctness. Reduce real failures into public fixtures and require `pnpm bench:ci` on every PR.
+- Make `qa` the primary product surface. Its first screen and `--format agent` payload should agree on affected behavior, reviewer question, repository evidence, draft path, and missing trust requirements.
+- Improve changed-file impact mapping from shared symbols and components to consuming routes, screens, API contracts, and manifest flows.
+- Keep the [release validation checklist](release-validation.md), [manifest guide](manifest.md), public [E2E output examples](e2e-output-examples.md), and README examples aligned with captured output from the public fixtures.
 - Stabilize the manifest feedback loop with `.qamap/manifest.yaml`, `manifest init`, `manifest validate`, `manifest explain`, JSON Schema, and manifest-driven E2E draft shaping.
 - Keep `manifest context` useful as a pre-init sanity check for repo-local QA memory, harness docs, agent instructions, and runbooks.
 - Improve generated drafts until the golden demo feels like a real starting point, not a generic checklist.
-- Make `qa` the best first-run experience for AI-assisted PRs; keep `verify`, `e2e`, and `manifest` as the deeper layers behind it.
-- Keep `eval` explainable enough that maintainers trust the score and know what to fix.
-- Keep expanding representative validation targets beyond JavaScript so planning advice works for Python, Go, Rust, and JVM repositories.
+- Keep `verify`, `e2e`, and `manifest` as deeper layers behind `qa`; freeze new scanner, doctor, eval, domains, flows, and history features until the core QA contract is consistently useful.
 
 ## Next
 
-- Publish a versioned GitHub Action release tag after the first public package is ready.
-- Improve `doctor` output with clearer scoring and remediation grouping.
-- Improve `review` output for changed-line locations.
-- Expand manifest support with richer anchors, symbol-level matching, and configurable taste rubrics.
-- Map changed symbols to manifest anchors after the path/route baseline is stable.
+- Add symbol-level anchors for exported components, hooks, API clients, handlers, schemas, and queries after the public import-impact fixture stays stable.
+- Add a manifest correction command that proposes the exact flow/anchor patch and applies it only after human approval, avoiding routine hand-edits to YAML.
+- Add stronger deterministic draft adapters for Playwright and Maestro while keeping `manual` output for API, CLI, token, and catalog repositories.
+- Expand the public benchmark corpus with package-scoped monorepos, auth/session changes, dynamic routes, API failure fixtures, and non-JavaScript services.
 - Keep the `--format agent` output a stable, versioned contract that skills and MCP wrappers can rely on.
-- Add language-specific domain patterns for backend services, CLIs, libraries, mobile apps, and infrastructure repositories.
 - Continue expanding agent surface detection across popular coding-agent tools without making the public workflow depend on a single vendor.
-- Generate rule documentation from scanner metadata.
 
 ## Later
 

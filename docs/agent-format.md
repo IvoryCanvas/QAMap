@@ -20,7 +20,7 @@ The intended loop for a coding agent:
 
 1. Run the command above and parse stdout as JSON.
 2. If `readiness.level` is `blocked` or `needs-work`, treat generated drafts as review-only; `requiredBootstrap` lists what unlocks the next stage.
-3. Use `flows[].steps` and `flows[].selectors` to write or review tests; `flows[].runnable` says how much to trust the generated draft.
+3. Use `flows[].changedFiles`, `flows[].evidence`, and `flows[].reviewQuestion` to understand why the flow was selected. Use `steps`, `selectors`, and `successSignal` to write or review tests; `runnable` says how much to trust the generated draft.
 4. Surface `requiredEvidence` in the PR description, and paste `prChecklist` items into the PR body.
 5. Run `commands` to validate.
 
@@ -36,7 +36,7 @@ The intended loop for a coding agent:
 | `readiness` | object | `score` (0–100) and `level` (`ready` \| `near-runnable` \| `needs-work` \| `blocked`). Human reports render the same value as a four-stage journey; the machine value is stable. |
 | `testSuite` | object | `present` (boolean) and `files` (number of detected test files). |
 | `firstDraftCommand` | string? | One command that creates the first E2E draft. Present only when the repository has no test suite. |
-| `flows` | array | Affected user flows, most relevant first (capped). Each has `title`, `source` (for example `verification-manifest`, `core-flow`), `draft` (generated file path), optional `runnable` (`runnable-candidate` \| `near-runnable` \| `review-only`), optional `entry` (best entrypoint hint), `steps`, and `selectors`. |
+| `flows` | array | Affected user flows, most relevant first (capped). Each has `title`, `source`, `draft`, optional `runnable` and `entry`, plus `changedFiles`, `reviewQuestion`, `successSignal`, `steps`, `selectors`, and short `evidence` reasons. Optional fields may be absent when the repository does not provide enough static evidence. |
 | `requiredEvidence` | array | Required-priority QA evidence still missing, capped at 8: `flow`, `kind`, `title`. |
 | `recommendedEvidenceCount` | number | How many recommended-priority items were omitted; run without `--format agent` to see them. |
 | `requiredBootstrap` | array | Setup steps (capped at 3) that must happen before drafts count as regression coverage: `title`, `action`. |
@@ -48,5 +48,5 @@ List fields are capped to keep the payload small; caps may grow within version 1
 ## Example
 
 ```json
-{"schema":{"name":"qamap.qa","version":1},"base":"main","head":"HEAD","project":"web","runner":"playwright","manifest":null,"readiness":{"score":20,"level":"blocked"},"testSuite":{"present":false,"files":0},"firstDraftCommand":"qamap e2e draft . --base main --head HEAD --output tests/e2e","flows":[{"title":"Checkout Apply Coupon","source":"core-flow","draft":"tests/e2e/checkout-apply-coupon.spec.ts","runnable":"review-only","entry":"/checkout","steps":["Open /checkout","Click 'Apply coupon'","Expect the discount row to appear"],"selectors":["[data-testid=\"apply-coupon\"]"]}],"requiredEvidence":[{"flow":"Checkout Apply Coupon","kind":"runner-config","title":"Playwright is not configured yet"}],"recommendedEvidenceCount":3,"requiredBootstrap":[{"title":"Set up the Playwright runner","action":"qamap e2e setup . --runner playwright"}],"prChecklist":["[ ] Checkout Apply Coupon happy path verified"],"commands":["qamap e2e setup . --runner playwright"]}
+{"schema":{"name":"qamap.qa","version":1},"base":"main","head":"HEAD","project":"web","runner":"playwright","manifest":null,"readiness":{"score":51,"level":"needs-work"},"testSuite":{"present":false,"files":0},"firstDraftCommand":"qamap e2e setup . --runner playwright","flows":[{"title":"Checkout Submit","source":"domain-language","draft":"tests/e2e/checkout-submit.spec.ts","runnable":"near-runnable","entry":"route: /checkout (high)","changedFiles":["src/pages/checkout/index.tsx"],"reviewQuestion":"Can a reviewer confirm that Checkout Submit still works from this entrypoint and this outcome is verified: visible text Order confirmed appears?","successSignal":"visible text Order confirmed appears","steps":["Fill Email with realistic data.","Submit Submit using Checkout Submit."],"selectors":["web-test-id: checkout-submit"],"evidence":["Primary entrypoint inferred as route /checkout."]}],"requiredEvidence":[{"flow":"Checkout Submit","kind":"runner","title":"Configure Playwright execution"}],"recommendedEvidenceCount":2,"requiredBootstrap":[{"title":"Configure Playwright before making drafts required","action":"Run qamap e2e setup . --runner playwright."}],"prChecklist":["Review the generated draft path: tests/e2e/checkout-submit.spec.ts."],"commands":["npm run build"]}
 ```

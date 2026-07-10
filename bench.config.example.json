@@ -1,5 +1,5 @@
 {
-  "$comment": "Copy to bench.config.local.json (gitignored) and point targets at real repositories with pinned commits. The runner is read-only against every target.",
+  "$comment": "Copy to bench.config.local.json (gitignored) and point targets at real repositories with pinned commits. Project code is read but never executed.",
   "targets": [
     {
       "name": "example-web-app",
@@ -9,7 +9,13 @@
       "expect": {
         "runner": "playwright",
         "mustReachFiles": ["app/checkout/page.tsx"],
-        "mustNameFlows": ["checkout"]
+        "mustNameFlows": ["checkout"],
+        "mustDraftFiles": ["checkout"],
+        "mustFindSelectors": ["apply-coupon"],
+        "mustFindSuccessSignals": ["Discount applied"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
       }
     },
     {

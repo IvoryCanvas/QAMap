@@ -21,7 +21,7 @@ Use `pnpm dlx @ivorycanvas/qamap ...` for one-off runs without installing QAMap 
 
 ## Reading The Output
 
-Human-facing reports (`text` and `markdown` formats) open with an **At a Glance** section — the affected flows in one line, the single next command to run, and the one or two blocking evidence items — before the detailed sections. When printed to an interactive terminal the report is colorized (headings, statuses, priority tags, inline commands); files written with `--output`, pipes, CI logs, and the machine formats (`json`, `agent`, `sarif`) are always plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
+Human-facing reports (`text` and `markdown` formats) open with an **At a Glance** section: affected behavior, the reviewer question to answer before merge, concrete repository evidence, the proposed draft path, the next command, and the one or two missing trust requirements. When printed to an interactive terminal the report is colorized (headings, statuses, priority tags, inline commands); files written with `--output`, pipes, CI logs, and the machine formats (`json`, `agent`, `sarif`) are always plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
 
 Draft readiness is reported as a **stage on a fixed four-step journey**, for example `Stage: setup needed (1 of 4) — readiness 0/100`. A fresh repository usually starts at stage 1 — that is the expected starting point, not a failure. Each stage maps to a stable `readiness.level` value in the `json` and `agent` formats, which keeps machine output unchanged:
 
@@ -240,4 +240,3 @@ await test.step("Fill profile email.", async () => {
 `qamap history init` prepares that local storage explicitly without running an analysis. It creates `.qamap/runs/`, `.qamap/cache/`, and `.qamap/tmp/`, then adds the generated-history ignore patterns to `.gitignore` idempotently.
 
 `qamap eval` scores whether a branch has enough validation evidence, changed-test coverage, intent capture, risk explanation, domain verification paths, and reviewable size. In GitHub Actions, QAMap can read the pull request body from the event payload and append the evaluation to the PR comment.
-

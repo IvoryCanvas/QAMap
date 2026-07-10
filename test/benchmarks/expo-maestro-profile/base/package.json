@@ -1,0 +1,13 @@
+{
+  "name": "benchmark-expo-maestro-profile",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "test:e2e": "maestro test .maestro"
+  },
+  "dependencies": {
+    "expo": "54.0.0",
+    "react": "19.0.0",
+    "react-native": "0.81.0"
+  }
+}

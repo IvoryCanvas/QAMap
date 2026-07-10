@@ -1,0 +1,8 @@
+{
+  "expo": {
+    "name": "Benchmark Profile",
+    "slug": "benchmark-profile",
+    "ios": { "bundleIdentifier": "dev.qamap.benchmark.profile" },
+    "android": { "package": "dev.qamap.benchmark.profile" }
+  }
+}

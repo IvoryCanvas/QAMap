@@ -94,8 +94,26 @@
             "description": "How trustworthy the generated draft is as an executable test. Absent when not evaluated."
           },
           "entry": { "type": "string", "description": "Best entrypoint hint (route or screen). Absent when unknown." },
+          "changedFiles": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Changed or import-reached files that support this flow mapping (capped)."
+          },
+          "reviewQuestion": {
+            "type": "string",
+            "description": "The concrete question a reviewer should answer before merge."
+          },
+          "successSignal": {
+            "type": "string",
+            "description": "The observable result that would prove the flow still works."
+          },
           "steps": { "type": "array", "items": { "type": "string" } },
-          "selectors": { "type": "array", "items": { "type": "string" } }
+          "selectors": { "type": "array", "items": { "type": "string" } },
+          "evidence": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Short reasons and repository facts behind the mapping (capped)."
+          }
         }
       }
     },

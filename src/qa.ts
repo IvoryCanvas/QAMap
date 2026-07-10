@@ -130,8 +130,16 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
       draft: flow.draftPath,
       runnable: flow.runnableStatus,
       entry: flow.entrypointHints[0],
+      changedFiles: flow.changedFiles.slice(0, 4),
+      reviewQuestion: flow.userJourney?.reviewQuestion
+        ? truncateForAgent(flow.userJourney.reviewQuestion, 180)
+        : undefined,
+      successSignal: flow.userJourney?.successSignal
+        ? truncateForAgent(flow.userJourney.successSignal)
+        : undefined,
       steps: flow.draftSteps.slice(0, agentListLimit).map((step) => truncateForAgent(step)),
       selectors: flow.selectorHints.slice(0, 5).map((selector) => truncateForAgent(selector, 100)),
+      evidence: flow.why.slice(0, 2).map((reason) => truncateForAgent(reason)),
     })),
     requiredEvidence,
     recommendedEvidenceCount: result.missingEvidence.filter((item) => item.priority === "recommended").length,
@@ -151,19 +159,32 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("## At a Glance");
   lines.push("");
   if (result.flows.length === 0) {
-    lines.push("- Affected: no changed flow candidate was generated from this diff.");
+    lines.push("- Affected behavior: no changed flow candidate was generated from this diff.");
   } else {
     const flowTitles = result.flows.slice(0, 3).map((flow) => escapeMarkdownInline(flow.title)).join(", ");
     const moreFlows = result.flows.length > 3 ? ` and ${result.flows.length - 3} more` : "";
-    lines.push(`- Affected: ${flowTitles}${moreFlows}`);
+    lines.push(`- Affected behavior: ${flowTitles}${moreFlows}`);
+    const primaryFlow = result.flows[0];
+    if (primaryFlow.userJourney?.reviewQuestion) {
+      lines.push(`- Verify before merge: ${escapeMarkdownInline(primaryFlow.userJourney.reviewQuestion)}`);
+    }
+    const evidence = atAGlanceEvidence(primaryFlow);
+    if (evidence.length > 0) {
+      lines.push(`- Evidence found: ${evidence.map(escapeMarkdownInline).join("; ")}`);
+    }
+    lines.push(
+      `- Proposed draft: \`${escapeMarkdownInline(primaryFlow.draftPath)}\` (${formatRunnableStatus(primaryFlow.runnableStatus)})`,
+    );
   }
-  lines.push(`- Do next: \`${escapeMarkdownInline(nextStepCommand(result))}\``);
+  lines.push(`- Next command: \`${escapeMarkdownInline(nextStepCommand(result))}\``);
   const blocking = result.missingEvidence.filter((item) => item.priority === "required").slice(0, 2);
   if (blocking.length === 0) {
-    lines.push("- Blocking: nothing blocking detected; review the draft and run the validation command.");
+    lines.push("- Missing before trust: no required evidence gap detected; review the draft and run the validation command.");
   } else {
     for (const [index, item] of blocking.entries()) {
-      lines.push(`- Blocking${blocking.length > 1 ? ` ${index + 1}` : ""}: ${escapeMarkdownInline(item.title)} — ${escapeMarkdownInline(item.detail)}`);
+      lines.push(
+        `- Missing before trust${blocking.length > 1 ? ` ${index + 1}` : ""}: ${escapeMarkdownInline(item.title)} — ${escapeMarkdownInline(item.detail)}`,
+      );
     }
   }
   lines.push("");
@@ -293,6 +314,18 @@ function nextStepCommand(result: QaDraftResult): string {
   }
   const draftPath = result.flows[0]?.draftPath;
   return draftPath ? `review ${draftPath}` : "qamap e2e draft . --dry-run";
+}
+
+function atAGlanceEvidence(flow: QaDraftFlow): string[] {
+  const stableSelector = flow.selectorHints.find((selector) =>
+    /^(?:web-test-id|test-id|input-web-test-id|input-test-id|accessibility-label|role-button):/i.test(selector)
+  ) ?? flow.selectorHints[0];
+  const evidence = [
+    flow.changedFiles[0] ? `changed file ${flow.changedFiles[0]}` : undefined,
+    flow.entrypointHints[0],
+    stableSelector,
+  ].filter((value): value is string => Boolean(value));
+  return uniqueStrings(evidence).slice(0, 3);
 }
 
 function firstDraftCreateCommand(result: QaDraftResult): string {

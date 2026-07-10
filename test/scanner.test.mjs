@@ -5126,9 +5126,13 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.match(markdown, /QAMap QA Draft/);
   assert.match(markdown, /Local-first PR QA skill output/);
   assert.match(markdown, /## At a Glance/);
-  assert.match(markdown, /- Affected: /);
-  assert.match(markdown, /- Do next: `/);
-  assert.match(markdown, /- Blocking/);
+  assert.match(markdown, /- Affected behavior: /);
+  assert.match(markdown, /- Verify before merge: /);
+  assert.match(markdown, /visible text "Order confirmed" appears/);
+  assert.match(markdown, /- Evidence found: /);
+  assert.match(markdown, /- Proposed draft: `/);
+  assert.match(markdown, /- Next command: `/);
+  assert.match(markdown, /- Missing before trust/);
   assert.match(markdown, /Manifest: not found; using repo signals and PR diff only/);
   assert.match(markdown, /PR Comment Draft/);
   assert.match(markdown, /Affected Flow/);
@@ -5155,6 +5159,11 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.deepEqual(agentSummary.schema, { name: "qamap.qa", version: 1 });
   assert.equal(agentSummary.manifest, null);
   assert.equal(agentSummary.flows.length > 0, true);
+  assert.ok(agentSummary.flows[0].changedFiles.includes("src/pages/checkout/index.tsx"));
+  assert.equal(typeof agentSummary.flows[0].reviewQuestion, "string");
+  assert.equal(typeof agentSummary.flows[0].successSignal, "string");
+  assert.match(agentSummary.flows[0].successSignal, /Order confirmed/);
+  assert.equal(Array.isArray(agentSummary.flows[0].evidence), true);
   assert.equal(typeof agentSummary.readiness.score, "number");
   assert.equal(Array.isArray(agentSummary.requiredEvidence), true);
   assert.equal(Array.isArray(agentSummary.prChecklist), true);

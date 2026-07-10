@@ -1,0 +1,105 @@
+{
+  "$comment": "Committed quality contract. Each fixture is materialized as a temporary Git repository with a main baseline and one PR change.",
+  "targets": [
+    {
+      "name": "web-testless-checkout",
+      "fixture": "test/benchmarks/web-testless-checkout",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minDiffAnchoredFlows": 1,
+        "mustReachFiles": ["src/pages/checkout/index.tsx"],
+        "mustNameFlows": ["checkout"],
+        "mustDraftFiles": ["tests/e2e/checkout-submit.spec.ts"],
+        "mustFindSelectors": ["checkout-submit"],
+        "mustFindSuccessSignals": ["Order confirmed"],
+        "mustFindEvidence": ["fixture"],
+        "mustRecommendCommands": ["playwright"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
+      "name": "web-playwright-orders",
+      "fixture": "test/benchmarks/web-playwright-orders",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minDiffAnchoredFlows": 1,
+        "mustReachFiles": ["src/pages/orders/index.tsx"],
+        "mustNameFlows": ["orders"],
+        "mustDraftFiles": ["tests/e2e/orders-refresh.spec.ts"],
+        "mustFindSelectors": ["orders-refresh"],
+        "mustFindSuccessSignals": ["Orders refreshed"],
+        "mustFindEvidence": ["/api/orders"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
+      "name": "expo-maestro-profile",
+      "fixture": "test/benchmarks/expo-maestro-profile",
+      "expect": {
+        "runner": "maestro",
+        "minFlows": 1,
+        "minDiffAnchoredFlows": 1,
+        "mustReachFiles": ["src/screens/ProfileScreen.tsx"],
+        "mustNameFlows": ["profile"],
+        "mustDraftFiles": [".maestro/profile-save.yaml"],
+        "mustFindSelectors": ["profile-save"],
+        "mustFindSuccessSignals": ["Profile saved"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
+      "name": "api-orders-contract",
+      "fixture": "test/benchmarks/api-orders-contract",
+      "expect": {
+        "runner": "manual",
+        "minFlows": 1,
+        "mustReachFiles": ["src/routes/orders.ts"],
+        "mustNameFlows": ["orders"],
+        "mustDraftFiles": ["docs/e2e/orders-api-contract.md"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
+      "name": "design-token-consumer",
+      "fixture": "test/benchmarks/design-token-consumer",
+      "expect": {
+        "runner": "manual",
+        "minFlows": 1,
+        "mustReachFiles": ["tokens/color.json"],
+        "mustNameFlows": ["color"],
+        "mustDraftFiles": ["docs/e2e/color-design-token-contract-checklist.md"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
+      "name": "web-shared-component",
+      "fixture": "test/benchmarks/web-shared-component",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minImportPropagatedFlows": 1,
+        "mustReachFiles": [
+          "src/components/SubmitButton.tsx",
+          "src/pages/checkout/index.tsx"
+        ],
+        "mustNameFlows": ["checkout"],
+        "mustFindSelectors": ["checkout-submit"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    }
+  ]
+}

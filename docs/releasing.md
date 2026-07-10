@@ -26,6 +26,7 @@ The gate must pass:
 
 - `pnpm test`
 - `pnpm scan`
+- `pnpm bench:ci`
 - `git diff --check`
 - coverage thresholds for lines, branches, and functions
 - `pnpm pack --dry-run`
@@ -45,6 +46,7 @@ The tarball must include runtime output, public documentation, schemas, and pack
 
 - `dist`
 - `docs`
+- `skills`
 - `schema`
 - `README.md`
 - `CHANGELOG.md`
@@ -65,9 +67,10 @@ npm publish --access public
 After publish, verify the public package can be executed without a source checkout:
 
 ```sh
-pnpm dlx @ivorycanvas/qamap@0.3.1 scan .
-pnpm dlx @ivorycanvas/qamap@0.3.1 manifest validate .
-pnpm dlx @ivorycanvas/qamap@0.3.1 e2e draft . --base origin/main --head HEAD --dry-run
+VERSION="$(node -p "require('./package.json').version")"
+pnpm dlx "@ivorycanvas/qamap@$VERSION" qa . --base origin/main --head HEAD
+pnpm dlx "@ivorycanvas/qamap@$VERSION" manifest validate .
+pnpm dlx "@ivorycanvas/qamap@$VERSION" e2e draft . --base origin/main --head HEAD --dry-run
 ```
 
 Use a fresh shell or temporary directory for the smoke check when possible.
@@ -77,8 +80,8 @@ Use a fresh shell or temporary directory for the smoke check when possible.
 After npm publish succeeds:
 
 ```sh
-git tag v0.3.1
-git push origin v0.3.1
+git tag "v$VERSION"
+git push origin "v$VERSION"
 ```
 
 Create a GitHub Release for the tag with:
@@ -93,13 +96,13 @@ Create a GitHub Release for the tag with:
 After the tag and GitHub Release are visible, run:
 
 ```sh
-pnpm dlx @ivorycanvas/qamap@0.3.1 --version
-pnpm dlx @ivorycanvas/qamap@0.3.1 scan .
-pnpm dlx @ivorycanvas/qamap@0.3.1 manifest explain . --base origin/main --head HEAD
-pnpm dlx @ivorycanvas/qamap@0.3.1 verify . --base origin/main --head HEAD
+pnpm dlx "@ivorycanvas/qamap@$VERSION" --version
+pnpm dlx "@ivorycanvas/qamap@$VERSION" qa . --base origin/main --head HEAD --format agent
+pnpm dlx "@ivorycanvas/qamap@$VERSION" manifest explain . --base origin/main --head HEAD
+pnpm dlx "@ivorycanvas/qamap@$VERSION" verify . --base origin/main --head HEAD
 ```
 
-Then update any public setup examples that should pin to `v0.3.1`.
+Then update any public setup examples that should pin to the new `v$VERSION` tag.
 
 ## Rollback Notes
 

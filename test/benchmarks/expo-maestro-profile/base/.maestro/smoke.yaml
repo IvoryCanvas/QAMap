@@ -1,0 +1,4 @@
+appId: dev.qamap.benchmark.profile
+---
+- launchApp
+- assertVisible: "Profile"

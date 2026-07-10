@@ -1,31 +1,67 @@
 # Benchmarking QAMap
 
-`scripts/bench.mjs` scores QAMap's plan/qa output against a fixed set of repositories with pinned commits, so heuristic changes can be judged by numbers instead of feel. The runner is read-only against every target.
+QAMap's unit tests prove that the implementation behaves as coded. The benchmark contract checks a different question: does a representative PR receive a useful QA answer?
 
-## Setup
+`bench.config.json` is committed and runs in CI. Each target under `test/benchmarks/` contains a `base/` repository snapshot and a `head/` overlay. The runner materializes them as a temporary Git repository with a `main` baseline and one feature commit. QAMap reads those repositories but never installs dependencies or executes their code.
 
-1. Copy `bench.config.example.json` to `bench.config.local.json` (gitignored).
-2. Point each target at a local repository checkout, pin `base`/`head` commit SHAs, and optionally declare expectations:
-   - `expect.runner` — the runner a human would pick for this repo (`playwright`, `maestro`, `manual`).
-   - `expect.mustReachFiles` — files a human QA would name for this diff window; recall against generated flows is reported.
-   - `expect.mustNameFlows` — substrings that should appear in at least one flow title.
-
-## Run
+## Run the public contract
 
 ```sh
-pnpm bench                      # table only
-node scripts/bench.mjs --save   # also writes bench-results/<timestamp>.json
-node scripts/bench.mjs --baseline bench-results/<file>.json   # delta vs a saved run
+pnpm bench:ci
 ```
 
-## Metrics
+The command fails when any target violates its declared expectations. The initial corpus covers:
 
-- `runner` mismatch lines — wrong tool recommendation for a known repo shape.
-- `viaImport` — flows produced through the reverse import graph (shared-file changes reaching surfaces).
-- `diffAnchor` — flows whose selector set includes at least one selector introduced by the diff itself; higher means drafts act on what the change added instead of pre-existing UI.
-- `blank` — steps with blank action slots (must stay 0).
-- `generic` — user-facing draft flow titles with content-free names (`... primary journey`, `... smoke flow`); lower is better. Measured on the `qa` result (what a reader sees), not on internal plan candidates — baselines saved before this definition changed are not comparable for this column.
-- `reach` — recall of `mustReachFiles`; missing files are listed per target.
-- `agentBytes` — size of the `--format agent` payload.
+- a web app with no tests;
+- a web app with Playwright and an existing mock handler;
+- an Expo app with Maestro;
+- an API service that should produce a contract checklist instead of a browser journey;
+- a design-token repository that should stay on artifact verification;
+- a shared component change that must reach its consuming page through reverse imports.
 
-Re-run with `--baseline` before merging heuristic changes; a PR that moves these numbers should say so in its body.
+## Expectations
+
+Each target can declare:
+
+| Field | Meaning |
+| --- | --- |
+| `runner` | Expected `playwright`, `maestro`, or `manual` recommendation. |
+| `minFlows` | Minimum number of affected flows. |
+| `minImportPropagatedFlows` | Minimum flows discovered through reverse imports. |
+| `minDiffAnchoredFlows` | Minimum flows using selector evidence introduced by the diff. |
+| `mustReachFiles` | Files that the selected flows must reach. |
+| `mustNameFlows` | Product terms that must appear in a user-facing flow title. |
+| `mustDraftFiles` | Expected generated draft path fragments. |
+| `mustIncludeSteps` | Behavior terms that must appear in draft steps. |
+| `mustFindSelectors` | Stable selector evidence that must be recovered from the repository. |
+| `mustFindSuccessSignals` | Observable outcome text that must appear in the flow's success criteria. |
+| `mustFindEvidence` | Required evidence or fixture terms that must be reported. |
+| `mustRecommendCommands` | Commands the setup or validation path must expose. |
+| `maxBlankActions` | Maximum malformed or empty draft steps; public fixtures keep this at zero. |
+| `maxGenericTitles` | Maximum titles ending in generic `primary journey` or `smoke flow` wording. |
+| `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. |
+
+## Local repositories
+
+Private or large repositories remain useful as a local smoke layer. Copy `bench.config.example.json` to `bench.config.local.json`, pin base/head SHAs, and run:
+
+```sh
+pnpm bench
+node scripts/bench.mjs --save
+node scripts/bench.mjs --baseline bench-results/<file>.json
+```
+
+When both files exist, `pnpm bench` prefers the gitignored local config. CI always passes `--config bench.config.json --assert`, so private paths cannot affect the public quality gate.
+
+Saved results include flow titles, draft paths, recall gaps, readiness, agent payload size, and timing. Use a saved baseline to see heuristic movement, but treat the committed expectation contract as the merge gate.
+
+## Adding a regression
+
+When a real repository produces a poor recommendation:
+
+1. Reduce it to the smallest reproducible `base/` and `head/` fixture.
+2. Write the human expectation in `bench.config.json` before changing heuristics.
+3. Confirm `pnpm bench:ci` fails for the intended reason.
+4. Fix the inference and keep the fixture as permanent regression evidence.
+
+Do not copy proprietary code, credentials, or production data into a public fixture.

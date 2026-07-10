@@ -28,9 +28,12 @@ Every report now opens with the verdict (trimmed real output):
 ```txt
 ## At a Glance
 
-- Affected: Orders Submit, Orders API contract smoke flow
-- Do next: `qamap e2e setup . --runner playwright`
-- Blocking 1: Configure Playwright execution — create playwright.config.ts (...)
+- Affected behavior: Checkout Submit
+- Verify before merge: ... this outcome is verified: visible text "Order confirmed" appears?
+- Evidence found: changed file src/pages/checkout/index.tsx; route: /checkout (high); web-test-id: checkout-submit (...)
+- Proposed draft: `tests/e2e/checkout-submit.spec.ts` (near runnable)
+- Next command: `qamap e2e setup . --runner playwright`
+- Missing before trust: Add deterministic fixture or mock data for /api/checkout (...)
 ```
 
 ## Install & Quick Start

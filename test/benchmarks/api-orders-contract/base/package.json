@@ -1,0 +1,11 @@
+{
+  "name": "benchmark-api-orders-contract",
+  "private": true,
+  "scripts": {
+    "test": "node --test",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "express": "5.0.0"
+  }
+}

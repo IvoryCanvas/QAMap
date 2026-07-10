@@ -2401,6 +2401,12 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return "the affected build or runtime variant starts cleanly and handles fallback values";
   }
+  const visibleOutcome = flow.selectors.find(
+    (selector) => selector.kind === "visible-text" && isVisibleSuccessOutcome(selector.value),
+  );
+  if (visibleOutcome) {
+    return `visible text "${visibleOutcome.value}" appears`;
+  }
   const verificationStep = flow.steps.find((step) => isAssertionStep(step));
   if (verificationStep) {
     return stripTerminalPunctuation(verificationStep);
@@ -2412,32 +2418,37 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
   return "the changed journey reaches a visible, stable success state";
 }
 
+function isVisibleSuccessOutcome(value: string): boolean {
+  return /\b(?:confirmed|saved|refreshed|succeeded|success|completed|created|updated|deleted|sent|approved|accepted)\b/i.test(value) ||
+    /(?:완료|성공|저장(?:됨|됐|되)|등록(?:됨|됐|되)|제출(?:됨|됐|되)|승인(?:됨|됐|되))/.test(value);
+}
+
 function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSignal: string): string {
   if (isApiContractFocusedFlow(flow)) {
-    return `Can a reviewer confirm that the changed endpoint, handler, or service contract is exercised and that "${successSignal}" is asserted?`;
+    return `Can a reviewer confirm that the changed endpoint, handler, or service contract is exercised and this outcome is verified: ${successSignal}?`;
   }
   if (isDesignTokenFocusedFlow(flow)) {
-    return `Can a reviewer confirm that the changed token artifact is regenerated, consumed, and that "${successSignal}" is asserted?`;
+    return `Can a reviewer confirm that the changed token artifact is regenerated, consumed, and this outcome is verified: ${successSignal}?`;
   }
   if (isCatalogFocusedFlow(flow)) {
-    return `Can a reviewer confirm that the changed catalog artifact is regenerated, consumed, and that "${successSignal}" is asserted?`;
+    return `Can a reviewer confirm that the changed catalog artifact is regenerated, consumed, and this outcome is verified: ${successSignal}?`;
   }
   if (isTestEvidenceFocusedFlow(flow)) {
-    return `Can a reviewer confirm that the changed tests are run and that "${successSignal}" is documented as PR evidence?`;
+    return `Can a reviewer confirm that the changed tests are run and this outcome is documented as PR evidence: ${successSignal}?`;
   }
   if (isDocumentationFocusedFlow(flow)) {
-    return `Can a reviewer confirm that docs validation ran and that "${successSignal}" is true?`;
+    return `Can a reviewer confirm that docs validation ran and this outcome is true: ${successSignal}?`;
   }
   if (isGeneratedArtifactFocusedFlow(flow)) {
-    return `Can a reviewer confirm that the artifact was regenerated and that "${successSignal}" is true?`;
+    return `Can a reviewer confirm that the artifact was regenerated and this outcome is true: ${successSignal}?`;
   }
   if (isCliCommandFocusedFlow(flow)) {
-    return `Can a reviewer confirm that the changed command path is run and that "${successSignal}" is asserted?`;
+    return `Can a reviewer confirm that the changed command path is run and this outcome is verified: ${successSignal}?`;
   }
   if (/\bconfiguration verification\b/i.test(flow.title)) {
-    return `Can a reviewer confirm that the affected build, startup, or release variant is exercised and that "${successSignal}" is asserted?`;
+    return `Can a reviewer confirm that the affected build, startup, or release variant is exercised and this outcome is verified: ${successSignal}?`;
   }
-  return `Can a reviewer confirm that ${flow.title} still works from this entrypoint and that "${successSignal}" is asserted?`;
+  return `Can a reviewer confirm that ${flow.title} still works from this entrypoint and this outcome is verified: ${successSignal}?`;
 }
 
 function isApiContractFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
@@ -4418,7 +4429,13 @@ function buildFlowCandidates(
   const behaviorFiles = files.filter((file) => !isTestLikeFile(file));
   const candidateFiles = behaviorFiles.length > 0 ? behaviorFiles : files;
   const impactSurfaceFiles = importImpacts.map((impact) => impact.surface).filter((surface) => !candidateFiles.includes(surface));
-  const uiFiles = uniqueStrings([...candidateFiles.filter(isUserFacingFile), ...impactSurfaceFiles]);
+  // Backend route modules often live under `routes/`, which is also a common
+  // frontend surface directory. Once the repository is classified as an API
+  // service, keep those files in contract analysis instead of inventing a UI
+  // journey that the project cannot run.
+  const uiFiles = projectType === "api-service"
+    ? []
+    : uniqueStrings([...impactSurfaceFiles, ...candidateFiles.filter(isUserFacingFile)]);
   const apiFiles = candidateFiles.filter(isApiLikeFile);
   const apiServiceSourceFiles =
     projectType === "api-service"
@@ -4443,7 +4460,8 @@ function buildFlowCandidates(
   const candidates: FlowCandidate[] = [];
 
   if (uiFiles.length > 0) {
-    const subject = summarizeFlowSubject(uiFiles, "Changed", domainLanguage);
+    const subjectFiles = impactSurfaceFiles.length > 0 ? impactSurfaceFiles : uiFiles;
+    const subject = summarizeFlowSubject(subjectFiles, "Changed", domainLanguage);
     const impactReason = importImpacts.length > 0
       ? ` Changed shared files reach these surfaces through imports: ${importImpacts.slice(0, 3).map(describeImportChain).join("; ")}.`
       : "";
@@ -6598,7 +6616,13 @@ async function buildDomainScenarioDraftFlow(
   const reason = specializedScenario?.reason ?? scenario.intent;
   const steps = specializedScenario?.steps ?? (scenario.checks.length > 0 ? scenario.checks : (baseFlow?.steps ?? []));
   const scenarioFiles = normalizeScenarioFilesForRoot(plan, scenario.files);
-  const files = uniqueStrings(scenarioFiles.length > 0 ? scenarioFiles : (baseFlow?.files ?? [])).slice(0, 20);
+  const files = uniqueStrings(
+    specializedScenario?.useBaseFlowFiles
+      ? [...(baseFlow?.files ?? []), ...scenarioFiles]
+      : scenarioFiles.length > 0
+        ? scenarioFiles
+        : (baseFlow?.files ?? []),
+  ).slice(0, 20);
   const coverage = baseFlow?.coverage ?? buildCoverageTargets("domain", files, plan.recommendedRunner.name);
   const runner = plan.recommendedRunner.name;
   const entrypoints = uniqueEntrypoints([
@@ -6652,6 +6676,7 @@ interface SpecializedDomainScenarioDraft {
   title: string;
   reason: string;
   steps: string[];
+  useBaseFlowFiles?: boolean;
 }
 
 function specializedDomainScenarioDraft(
@@ -6660,6 +6685,15 @@ function specializedDomainScenarioDraft(
 ): SpecializedDomainScenarioDraft | undefined {
   if (scenario.source !== "changed-file" || !baseFlow) {
     return undefined;
+  }
+  if (/through imports/i.test(baseFlow.reason) && /\sprimary journey$/i.test(scenario.title)) {
+    const subject = baseFlow.title.replace(/\s+UI smoke flow$/i, "").trim();
+    return {
+      title: subject,
+      reason: baseFlow.reason,
+      steps: baseFlow.steps,
+      useBaseFlowFiles: true,
+    };
   }
   if (isApiContractFocusedFlow(baseFlow)) {
     const subject = scenario.title.replace(/\s+primary journey$/i, "");
@@ -9070,6 +9104,34 @@ function extractTextNodeSelectors(file: string, text: string): E2eSelector[] {
     selectors.push(selector);
   }
 
+  selectors.push(...extractRenderedStateSelectors(file, text));
+
+  return selectors;
+}
+
+function extractRenderedStateSelectors(file: string, text: string): E2eSelector[] {
+  const selectors: E2eSelector[] = [];
+  const renderedNames = new Set(
+    [...text.matchAll(/>\s*\{\s*([A-Za-z_$][\w$]*)\s*\}\s*</g)].map((match) => match[1]),
+  );
+  for (const stateName of renderedNames) {
+    const stateDeclaration = new RegExp(
+      `\\bconst\\s*\\[\\s*${escapeRegExp(stateName)}\\s*,\\s*([A-Za-z_$][\\w$]*)\\s*\\]\\s*=\\s*useState\\b`,
+    ).exec(text);
+    const setterName = stateDeclaration?.[1];
+    if (!setterName) {
+      continue;
+    }
+    const setterCallMatcher = new RegExp(`\\b${escapeRegExp(setterName)}\\s*\\(([^\\n;]{0,300})\\)`, "g");
+    for (const call of text.matchAll(setterCallMatcher)) {
+      for (const literal of call[1].matchAll(/"([^"]+)"|'([^']+)'|`([^`]+)`/g)) {
+        const value = normalizeSelectorValue(literal[1] ?? literal[2] ?? literal[3]);
+        if (value && isUsefulSelector(value)) {
+          selectors.push({ kind: "visible-text", value, file });
+        }
+      }
+    }
+  }
   return selectors;
 }
 

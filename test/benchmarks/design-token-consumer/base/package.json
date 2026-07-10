@@ -1,0 +1,11 @@
+{
+  "name": "@benchmark/design-tokens",
+  "private": true,
+  "scripts": {
+    "build": "style-dictionary build",
+    "test": "node scripts/validate-tokens.mjs"
+  },
+  "devDependencies": {
+    "style-dictionary": "4.0.0"
+  }
+}
