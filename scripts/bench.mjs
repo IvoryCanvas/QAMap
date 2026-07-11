@@ -9,7 +9,12 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
-import { formatAgentQaDraft, generateE2ePlan, generateQaDraft } from "../dist/index.js";
+import {
+  formatAgentQaDraft,
+  generateE2ePlan,
+  generateQaDraft,
+  writeVerificationManifestBaseline,
+} from "../dist/index.js";
 
 const execFileAsync = promisify(execFile);
 const args = process.argv.slice(2);
@@ -31,6 +36,7 @@ for (const target of config.targets) {
       base: prepared.base,
       head: prepared.head,
       workspaceRoot: prepared.workspaceRoot,
+      manifestPath: prepared.manifestPath,
     };
     const startedAt = Date.now();
     const plan = await generateE2ePlan(prepared.root, options);
@@ -104,6 +110,9 @@ function scoreTarget(target, plan, qa, durationMs) {
     genericTitles: qa.flows.filter((flow) => genericTitlePattern.test(flow.title)).length,
     importPropagatedFlows: plan.flows.filter((flow) => flow.reason.includes("through imports")).length,
     diffAnchoredFlows: plan.flows.filter((flow) => (flow.selectors ?? []).some((selector) => selector.addedInDiff)).length,
+    manifestMatches: plan.verificationManifestMatches.length,
+    manifestFlowMatches: plan.verificationManifestMatches.filter((match) => match.kind === "flow").length,
+    manifestBackedFlows: qa.flows.filter((flow) => flow.source === "manifest-backed").length,
     blankActions: allSteps.filter((step) => blankActionPattern.test(step)).length,
     mustReachRecall: mustReach.length > 0 ? `${reached.length}/${mustReach.length}` : null,
     mustReachMissing: mustReach.filter((file) => !flowFiles.has(file)),
@@ -146,6 +155,15 @@ function evaluateContract(expect, result, plan, qa) {
   }
   if (expect.minDiffAnchoredFlows !== undefined && result.diffAnchoredFlows < expect.minDiffAnchoredFlows) {
     failures.push(`expected at least ${expect.minDiffAnchoredFlows} diff-anchored flow(s), got ${result.diffAnchoredFlows}`);
+  }
+  if (expect.minManifestMatches !== undefined && result.manifestMatches < expect.minManifestMatches) {
+    failures.push(`expected at least ${expect.minManifestMatches} manifest match(es), got ${result.manifestMatches}`);
+  }
+  if (expect.minManifestFlowMatches !== undefined && result.manifestFlowMatches < expect.minManifestFlowMatches) {
+    failures.push(`expected at least ${expect.minManifestFlowMatches} manifest flow match(es), got ${result.manifestFlowMatches}`);
+  }
+  if (expect.minManifestBackedFlows !== undefined && result.manifestBackedFlows < expect.minManifestBackedFlows) {
+    failures.push(`expected at least ${expect.minManifestBackedFlows} manifest-backed flow(s), got ${result.manifestBackedFlows}`);
   }
   appendMissingTerms(failures, "flow title", result.flowTitles, expect.mustNameFlows);
   appendUnexpectedTerms(failures, "flow title", result.flowTitles, expect.mustNotNameFlows);
@@ -217,6 +235,14 @@ async function materializeFixture(target, configDir) {
   await git(repositoryRoot, ["config", "user.name", "QAMap Benchmark"]);
   await git(repositoryRoot, ["add", "."]);
   await git(repositoryRoot, ["commit", "-m", "benchmark baseline"]);
+  let manifestPath;
+  if (target.manifestBaseline) {
+    manifestPath = path.join(tempRoot, "manifest.yaml");
+    await writeVerificationManifestBaseline(repositoryRoot, {
+      write: manifestPath,
+      force: true,
+    });
+  }
   await git(repositoryRoot, ["switch", "-c", "benchmark/change"]);
   if (await exists(headRoot)) {
     await fs.cp(headRoot, repositoryRoot, { recursive: true, force: true });
@@ -226,6 +252,7 @@ async function materializeFixture(target, configDir) {
   const prepared = targetPaths(target, repositoryRoot, "main", "HEAD");
   return {
     ...prepared,
+    manifestPath,
     cleanup: () => fs.rm(tempRoot, { recursive: true, force: true }),
   };
 }
@@ -266,6 +293,7 @@ function printTable(rows) {
     ["flows", 5],
     ["importPropagatedFlows", 10],
     ["diffAnchoredFlows", 10],
+    ["manifestFlowMatches", 8],
     ["blankActions", 6],
     ["genericTitles", 8],
     ["mustReachRecall", 10],
@@ -303,7 +331,7 @@ function printDeltas(baselineRows, currentRows) {
       continue;
     }
     const deltas = [];
-    for (const key of ["flows", "importPropagatedFlows", "diffAnchoredFlows", "blankActions", "genericTitles", "agentBytes"]) {
+    for (const key of ["flows", "importPropagatedFlows", "diffAnchoredFlows", "manifestFlowMatches", "blankActions", "genericTitles", "agentBytes"]) {
       const diff = (current[key] ?? 0) - (before[key] ?? 0);
       if (diff !== 0) {
         deltas.push(`${key} ${diff > 0 ? "+" : ""}${diff}`);
@@ -318,6 +346,7 @@ function shortLabel(key) {
     contractPassed: "contract",
     importPropagatedFlows: "viaImport",
     diffAnchoredFlows: "diffAnchor",
+    manifestFlowMatches: "manifest",
     blankActions: "blank",
     genericTitles: "generic",
     mustReachRecall: "reach",

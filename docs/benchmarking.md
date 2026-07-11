@@ -31,6 +31,9 @@ Each target can declare:
 | `minFlows` | Minimum number of affected flows. |
 | `minImportPropagatedFlows` | Minimum flows discovered through reverse imports. |
 | `minDiffAnchoredFlows` | Minimum flows using selector evidence introduced by the diff. |
+| `minManifestMatches` | Minimum domain, flow, and check matches from an external base manifest. |
+| `minManifestFlowMatches` | Minimum flow-level matches from the external base manifest. |
+| `minManifestBackedFlows` | Minimum QA flows that preserve manifest provenance. |
 | `mustReachFiles` | Files that the selected flows must reach. |
 | `mustNameFlows` | Product terms that must appear in a user-facing flow title. |
 | `mustNotNameFlows` | Misleading flow-title terms that must not be emitted. |
@@ -44,6 +47,8 @@ Each target can declare:
 | `maxBlankActions` | Maximum malformed or empty draft steps; public fixtures keep this at zero. |
 | `maxGenericTitles` | Maximum titles ending in generic `primary journey` or `smoke flow` wording. |
 | `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. |
+
+Set `manifestBaseline: true` on a committed fixture to generate its manifest from the base snapshot into the benchmark temp directory, then pass that external manifest to analysis of the head commit. The fixture repository is never modified by this step. This protects the feedback loop itself: a baseline must affect the next PR, not merely serialize valid YAML.
 
 ## Local repositories
 
@@ -68,4 +73,4 @@ When a real repository produces a poor recommendation:
 3. Confirm `pnpm bench:ci` fails for the intended reason.
 4. Fix the inference and keep the fixture as permanent regression evidence.
 
-Do not copy proprietary code, credentials, or production data into a public fixture.
+Do not copy repository names, proprietary code, domain language, file paths, credentials, production data, or raw smoke output into a public fixture. Reduce the behavior to neutral synthetic vocabulary and keep private diagnostics outside the repository.

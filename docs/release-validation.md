@@ -1,5 +1,19 @@
 # Release Validation
 
+## 0.3.5 - 2026-07-11
+
+Validated as a manifest-feedback reliability patch:
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm test` | 127/127 passing |
+| `pnpm bench:ci` | Eight public PR fixtures pass; API and reverse-import fixtures also generate an external base manifest and require a manifest-backed head flow |
+| Coverage | Lines 86.09%, branches 83.18%, functions 94.66% |
+| `npm publish --dry-run --access public` | Passed for `@ivorycanvas/qamap@0.3.5`; 115 files, 772.8 kB packed |
+| API manifest baseline | Common server modules produce manual contract flows with API anchors and success/failure checks |
+| Domain fallback | Domain-only matches preserve manifest provenance without claiming unrelated files or inventing manifest checks |
+| Privacy | Public changes use synthetic fixtures; private smoke output remains outside the repository |
+
 ## 0.3.4 - 2026-07-10
 
 Validated before publishing `0.3.4` with a committed, CI-enforced recommendation contract instead of relying only on private smoke repositories:
@@ -216,40 +230,13 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 
 See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft snippets users should see from the current release.
 
-## Latest PR Validation Snapshot
+## Private Smoke Protocol
 
-Last verified on 2026-07-03 for the 0.3.1 README demo patch after removing the stale animated GIF from the README and npm tarball:
-
-| Check | Result |
-| --- | --- |
-| `pnpm test` | 95 tests passed. |
-| `git diff --check` | Passed. |
-| `pnpm pack --dry-run` | Passed; tarball includes 97 files and no committed demo GIF. |
-| `npm publish --dry-run --access public` | Passed for `@ivorycanvas/qamap@0.3.1`; package size is 289.1 kB and includes the manifest schema, quick-start docs, release docs, and `skills/qamap-pr-qa/SKILL.md`. |
-
-## Real Repository Smoke Snapshot
-
-The latest smoke run used private representative repositories and wrote draft output only under `/tmp/qamap-preview-*`. The smoke commands did not run `e2e setup` or write generated files into the target repositories. The table records public-safe target shapes rather than private repository names.
-
-2026-07-02 follow-up smoke on PR #71 ran `manifest context`, `manifest init --write /tmp/...`, `e2e plan`, and `e2e draft --dry-run` across 14 local Git repositories plus package-scoped scans for a large frontend monorepo. All commands completed without changing target repository status. The run exposed one important adoption need: users should be able to generate a manifest outside the target repo and pass it back into PR commands. PR #71 now supports that read-only preview through `--manifest <file>`.
-
-The same follow-up also showed the next quality gap. External manifest previews work, but many real branch changes did not match route/page-only manifest anchors, so generated drafts often stayed `domain-language`, `review-only`, or `near-runnable` instead of `verification-manifest`. The next release bar should improve component, function, API client, query, schema, and test anchors so manifest matches cover more than route files.
-
-| Target shape | Base/head mode | Result | Follow-up signal |
-| --- | --- | --- | --- |
-| Expo / React Native manifest baseline | `manifest init` wrote only to `/tmp/qamap-journal-note-manifest.yaml` | Generated 9 domains, 8 flows, 8 anchors, and 16 checks without changing the target repo. Direct `app/*.tsx` screens now produce specific paths such as `app/SentimentChatPage.tsx`; `+not-found.tsx` is not promoted as a product domain. | Good 0.2.x signal for baseline quality. Remaining work is richer screen/route semantics and selector-specific checks. |
-| Web monorepo package | Package scan with `--workspace-root`, feature branch compared with `main`, working tree included | Detected `web`, recommended Playwright, inferred a concrete route, produced changed-flow specs, and correctly blocked promotion because Playwright config, deterministic fixture/mock data, selector evidence, and validation evidence were missing. | Flow naming improved, but docs/design-only files can still create low-signal drafts that should be filtered or demoted. |
-| Expo / React Native app | Feature branch compared with `develop`, working tree included | Detected `expo-react-native`, recommended Maestro, found an existing Jest suite, produced multiple near-runnable YAML drafts, and gave useful blockers for missing Maestro directory plus missing stable mobile selectors. | Strongest current real-repo result; remaining gap is selector and app-specific setup quality. |
-| Nuxt / Vue web app with existing Playwright tests | `origin/develop` to `HEAD`, working tree included | Detected `web`, recommended Playwright, recognized existing test evidence, and blocked draft promotion because no Playwright config or runnable route/screen entrypoint was inferred. | Test-only or generated-test changes can still produce generic smoke draft names; QAMap should better distinguish changed tests from changed product behavior. |
-| Django-style API service | `origin/develop` to `HEAD`, working tree included | Detected `api-service`, selected manual output, found a large pytest suite, generated API contract and configuration checklists with zero TODOs, and avoided browser/device runner assumptions. | Good service classification; fixture readiness should become more endpoint-specific. |
-| Design token repository | `main` to `HEAD`, working tree included | Detected `design-tokens`, selected manual output, avoided browser/device selector requirements, and produced review-only artifact validation output. | Docs-only or style-only changes may still surface content/theme wording instead of token artifact language. |
-| Taxonomy / data catalog repository | `main` to `HEAD`, working tree included | Detected `data-catalog`, selected manual output, avoided API mock requirements, and produced review-only checklist output with no TODOs. | Catalog-specific changes are handled, but docs/config-only changes should be labeled more explicitly as low-signal. |
-
-Interpretation: the next release should be described as a planner that removes blank-page verification work by combining static analysis with repo-local manifest memory. The smoke results are useful, but they also show that many real repositories will start at `review-only` or `near-runnable` until teams add runner config, selectors, fixtures, validation evidence, and durable manifests.
+Private repositories may be used as local, read-only diagnostics, but their raw output is never release documentation or fixture input. Write manifests and drafts only to an operating-system temp directory, compare target `git status` before and after, and retain no repository names, paths, flow titles, source excerpts, or domain vocabulary in commits or pull requests. Reduce every confirmed defect to a minimal synthetic fixture before it enters the public suite.
 
 ## Ongoing Validation Notes
 
-The release candidate has passed the fixture-backed suite, package dry-run, npm publish dry-run, and representative private-repository smoke checks recorded above. For future patch releases, record only public-safe notes in this document or in release notes:
+The release candidate must pass the fixture-backed suite, package dry-run, and read-only smoke protocol. Record only public synthetic evidence in this document or in release notes:
 
 - whether the generated flow names match the team's domain language
 - whether the recommended runner is plausible
@@ -260,7 +247,7 @@ The release candidate has passed the fixture-backed suite, package dry-run, npm 
 
 ## Stop Conditions
 
-Do not publish `0.2.1` if any representative target shows one of these problems:
+Do not publish the current candidate if any representative target shows one of these problems:
 
 - generated flow names are dominated by generic folder names instead of product language
 - test-only or docs-only changes are presented as confident product journeys without low-signal wording

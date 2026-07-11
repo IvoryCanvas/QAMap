@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.3.5 - 2026-07-11
+
+### Added
+
+- `manifest init` now creates reusable manual API contract flows for common server route, controller, handler, and framework-backed service modules. Each inferred flow carries API file anchors plus success-contract and invalid-request checks, so a baseline can shape later service changes instead of containing domains only.
+- The public benchmark can generate an external verification manifest from a fixture's base commit and assert manifest matches and manifest-backed QA flows against the head commit. API contract and reverse-import fixtures now protect this feedback loop in CI without executing fixture code.
+
+### Changed
+
+- A changed file that matches a declared manifest domain but no flow anchor now keeps manifest provenance on the best overlapping inferred flow. QAMap does not invent manifest checks or merge unrelated flows; it preserves the code-derived steps, selectors, and entrypoint while explaining the domain-level evidence.
+- Private repository smoke output is treated as local-only diagnostic data. Public regression coverage uses minimized synthetic fixtures and neutral sample vocabulary.
+
+### Fixed
+
+- Replaced legacy real-world-derived example vocabulary with neutral synthetic examples in tests and documentation.
+
 ## 0.3.4 - 2026-07-10
 
 ### Added
@@ -19,7 +35,7 @@
 
 - Reports are colorized when printed to an interactive terminal: headings, the At a Glance keys, status words and stage labels, priority tags, and inline commands get ANSI styling with zero dependencies. Files written with `--output`, pipes, CI logs, and machine formats (`json`, `agent`, `sarif`) are byte-identical to before; the standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
 - Mock/fixture file detection now matches whole name tokens instead of substrings, and a bare `handler` filename no longer counts as mock evidence outside mock-style directories. Files like `useSeedlingCatalog.ts` or `errorHandler.ts` stop being misreported as fixtures, which also stops branches from being marked `ready` on the strength of ordinary source files.
-- Fixture guidance now names the concrete thing to do instead of assigning homework. QAMap statically reads the contents of discovered mock/fixture/seed files (up to 24 per plan) and extracts exports, handled routes (MSW, Mirage, express-style, Playwright `route(...)`), and response keys. Next actions become instructions like `Extend src/mocks/handlers.ts (already handles /api/invoices) to also cover /api/payments/summary` or `Reuse src/services/demoSeedService.ts (exports demoSeedService) to build a deterministic response for /api/sentiments/current`; missing-fixture guidance names the affected endpoints; generated Playwright mock bodies reuse the response keys observed in the matched fixture file instead of the `ok: true` placeholder; and fixture action-item titles carry the endpoints so the compact agent format keeps the target. Matched insights are exposed as an optional `mockInsights` array on `fixtureReadiness` in JSON output.
+- Fixture guidance now names the concrete thing to do instead of assigning homework. QAMap statically reads the contents of discovered mock/fixture/seed files (up to 24 per plan) and extracts exports, handled routes (MSW, Mirage, express-style, Playwright `route(...)`), and response keys. Next actions name the reusable fixture and uncovered endpoint; generated Playwright mock bodies reuse observed response keys instead of the `ok: true` placeholder; and fixture action-item titles carry the endpoints so the compact agent format keeps the target. Matched insights are exposed as an optional `mockInsights` array on `fixtureReadiness` in JSON output.
 - `qamap init --agent` gives agent onboarding a single command: it adds a marked `Pre-PR QA (QAMap)` section to `AGENTS.md` (created if missing, appended if present, refreshed in place on re-runs without touching surrounding content), installs the packaged skill to `.claude/skills/qamap-pr-qa/SKILL.md`, and creates a starter `qamap.config.json` when none exists. Every step is idempotent, and a locally modified skill copy is never replaced without `--force`.
 - Korean action labels now qualify for flow and scenario naming: labels like `저장하기` or `신청하기` (36 common action stems, with `~하기/~합니다`-style endings) name the journey the same way English action words do, draft filenames keep Hangul instead of collapsing to an empty slug, and Korean submit-like labels drive `Submit` steps. This closes the known limit noted in 0.3.3.
 

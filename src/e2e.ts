@@ -6540,9 +6540,52 @@ async function buildManifestDraftFlows(
     .filter((match) => match.kind === "flow")
     .slice(0, 4);
   const checkMatches = plan.verificationManifestMatches.filter((match) => match.kind === "check");
-  return Promise.all(
+  const flowDrafts = await Promise.all(
     flowMatches.map((match) => buildManifestDraftFlow(plan, match, checkMatches, baseFlows)),
   );
+  const flowMatchedFiles = new Set(flowMatches.flatMap((match) => match.matchedFiles));
+  const domainDrafts = await Promise.all(
+    plan.verificationManifestMatches
+      .filter((match) => match.kind === "domain" && match.matchedFiles.some((file) => !flowMatchedFiles.has(file)))
+      .slice(0, 4)
+      .map((match) => buildManifestDomainDraftFlow(plan, match, baseFlows)),
+  );
+  return [...flowDrafts, ...domainDrafts.filter((flow): flow is DraftE2eFlow => Boolean(flow))].slice(0, 4);
+}
+
+async function buildManifestDomainDraftFlow(
+  plan: E2ePlanResult,
+  match: VerificationManifestMatch,
+  baseFlows: E2eFlow[],
+): Promise<DraftE2eFlow | undefined> {
+  const manifestFiles = normalizeScenarioFilesForRoot(plan, match.matchedFiles);
+  const baseFlow = bestOverlappingBaseFlowForManifestMatch(manifestFiles, baseFlows);
+  if (!baseFlow || isVerificationOnlyFlow(baseFlow)) {
+    return undefined;
+  }
+  // A domain path can cover many independent flows. Preserve manifest
+  // provenance on the best overlapping flow without claiming every matched
+  // domain file belongs to that single draft.
+  const files = baseFlow.files;
+  const flow: Omit<DraftE2eFlow, "languageBrief"> = {
+    ...baseFlow,
+    reason: `${match.reason} ${baseFlow.reason}`,
+    files,
+    entrypoints: uniqueEntrypoints([
+      ...baseFlow.entrypoints,
+      ...(await inferFlowEntrypoints(plan.root, files, plan.recommendedRunner.name)),
+    ]),
+    selectors: uniqueSelectors([
+      ...baseFlow.selectors,
+      ...(await inferFlowSelectors(plan.root, files, plan.recommendedRunner.name)),
+    ]),
+    draftSource: "verification-manifest",
+    manifestMatch: match,
+  };
+  return {
+    ...flow,
+    languageBrief: buildFlowLanguageBrief(flow),
+  };
 }
 
 async function buildManifestDraftFlow(
@@ -6608,6 +6651,13 @@ function bestBaseFlowForManifestMatch(files: string[], baseFlows: E2eFlow[]): E2
     }
   }
   return best && best.score > 0 ? best.flow : baseFlows[0];
+}
+
+function bestOverlappingBaseFlowForManifestMatch(files: string[], baseFlows: E2eFlow[]): E2eFlow | undefined {
+  const ranked = baseFlows
+    .map((flow) => ({ flow, score: fileOverlapScore(files, flow.files) }))
+    .sort((left, right) => right.score - left.score);
+  return ranked[0]?.score > 0 ? ranked[0].flow : undefined;
 }
 
 function coreFlowForManifestMatch(plan: E2ePlanResult, match: VerificationManifestMatch): MatchedCoreFlow | undefined {

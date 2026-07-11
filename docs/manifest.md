@@ -56,6 +56,10 @@ QAMap cannot know every team's product priorities from file paths alone. The man
 
 When a recommendation is wrong, edit the manifest path shown in QAMap output. The next branch should get better recommendations without another explanation.
 
+For server projects, the generated baseline can include manual API contract flows inferred from common route, controller, handler, and framework-backed service modules. These flows use file anchors and start with success-contract and invalid-request checks; maintainers should still review names, criticality, and project-specific failure behavior before committing them as team policy.
+
+A domain match is useful even when no declared flow anchor matches. In that case QAMap keeps the existing code-derived flow, steps, selectors, and entrypoint, and adds the manifest domain as provenance. It does not fabricate flow-level checks. Add or correct a flow anchor when the team wants the manifest to supply durable checks and runner details on later PRs.
+
 ## Concrete Bootstrap Example
 
 A first baseline can be useful before a human writes YAML by hand. Suppose the default branch has:

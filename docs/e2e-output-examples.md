@@ -367,7 +367,7 @@ If reusable repo-local evidence already exists, the PR QA output reads its conte
 
 ```txt
 Missing evidence before trusting this PR
-- [recommended] fixture: Confirm fixture coverage for /api/sentiments/current - Reuse src/services/demoSeedService.ts (exports demoSeedService) to build a deterministic response for /api/sentiments/current.
+- [recommended] fixture: Confirm fixture coverage for /api/sample/status - Reuse src/services/sampleSeed.ts (exports sampleSeed) to build a deterministic response for /api/sample/status.
 ```
 
 When an existing handler file already covers part of the flow, the next action names the file and the still-uncovered endpoints, for example `Extend src/mocks/handlers.ts (already handles /api/invoices) to also cover /api/payments/summary`. The generated Playwright mock bodies then reuse the response keys observed in that file (`invoices: "qamap-invoices"`) instead of the generic placeholder below, with a comment noting the source file.

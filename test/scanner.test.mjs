@@ -2394,14 +2394,14 @@ test("qa command points API-dependent flows at existing repo mock and seed files
       },
     }),
   );
-  await writeFile(path.join(root, "app.json"), JSON.stringify({ expo: { name: "Journal Fixture" } }));
+  await writeFile(path.join(root, "app.json"), JSON.stringify({ expo: { name: "Sample Fixture" } }));
   await writeFile(
     path.join(root, "src/services/metricsMockService.ts"),
     "export const metricsMockService = { success: () => ({ status: 'ready' }) };\n",
   );
   await writeFile(
-    path.join(root, "src/services/demoSeedService.ts"),
-    "export const demoSeedService = { seed: async () => 1 };\n",
+    path.join(root, "src/services/sampleSeed.ts"),
+    "export const sampleSeed = { seed: async () => 1 };\n",
   );
   await writeFile(
     path.join(root, "ios/Pods/boost/boost/random/detail/generator_seed_seq.hpp"),
@@ -2412,25 +2412,25 @@ test("qa command points API-dependent flows at existing repo mock and seed files
     "export function HomePage() { return null; }\n",
   );
   await writeFile(
-    path.join(root, "src/services/sentimentService.ts"),
-    "export async function loadSentiment() { return { score: 1 }; }\n",
+    path.join(root, "src/services/sampleStatusService.ts"),
+    "export async function loadSampleStatus() { return { status: 'ready' }; }\n",
   );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
 
-  await git(root, ["switch", "-c", "feature/sentiment-api"]);
+  await git(root, ["switch", "-c", "feature/sample-api"]);
   await writeFile(
-    path.join(root, "src/services/sentimentService.ts"),
+    path.join(root, "src/services/sampleStatusService.ts"),
     [
-      "export async function loadSentiment() {",
-      "  const response = await fetch('/api/sentiments/current');",
+      "export async function loadSampleStatus() {",
+      "  const response = await fetch('/api/sample/status');",
       "  return response.json();",
       "}",
     ].join("\n"),
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "load sentiment api"]);
+  await git(root, ["commit", "-m", "load sample api"]);
 
   const qa = await generateQaDraft(root, { base: "main", head: "HEAD", runner: "maestro" });
   const markdown = formatMarkdownQaDraft(qa);
@@ -2440,10 +2440,10 @@ test("qa command points API-dependent flows at existing repo mock and seed files
   assert.equal(fixtureGap.priority, "recommended");
   assert.match(
     fixtureGap.detail,
-    /Reuse src\/services\/demoSeedService\.ts \(exports demoSeedService\) to build a deterministic response for \/api\/sentiments\/current/,
+    /Reuse src\/services\/sampleSeed\.ts \(exports sampleSeed\) to build a deterministic response for \/api\/sample\/status/,
   );
   assert.doesNotMatch(fixtureGap.detail, /ios\/Pods/);
-  assert.match(markdown, /src\/services\/demoSeedService\.ts/);
+  assert.match(markdown, /src\/services\/sampleSeed\.ts/);
   assert.doesNotMatch(markdown, /ios\/Pods/);
 });
 
@@ -6035,8 +6035,8 @@ test("manifest init keeps Expo app file domains specific", async () => {
   await writeFile(path.join(root, "app/+not-found.tsx"), "export default function NotFound() { return null; }\n");
   await writeFile(path.join(root, "app/_layout.tsx"), "export default function Layout() { return null; }\n");
   await writeFile(
-    path.join(root, "app/SentimentChatPage.tsx"),
-    "export default function SentimentChatPage() { return <Button title=\"Send\" />; }\n",
+    path.join(root, "app/SampleChatPage.tsx"),
+    "export default function SampleChatPage() { return <Button title=\"Send\" />; }\n",
   );
   await writeFile(
     path.join(root, "app/SettingsPage.tsx"),
@@ -6047,10 +6047,10 @@ test("manifest init keeps Expo app file domains specific", async () => {
   const manifest = await loadVerificationManifest(root);
 
   assert.equal(manifest.domains.some((domain) => domain.id === "not-found"), false);
-  assert.ok(manifest.domains.some((domain) => domain.id === "sentimentchatpage"));
-  assert.ok(manifest.domains.some((domain) => domain.paths.includes("app/SentimentChatPage.tsx")));
+  assert.ok(manifest.domains.some((domain) => domain.id === "samplechatpage"));
+  assert.ok(manifest.domains.some((domain) => domain.paths.includes("app/SampleChatPage.tsx")));
   assert.ok(manifest.domains.some((domain) => domain.paths.includes("app/SettingsPage.tsx")));
-  assert.ok(manifest.flows.some((flow) => flow.domain === "sentimentchatpage"));
+  assert.ok(manifest.flows.some((flow) => flow.domain === "samplechatpage"));
   assert.equal(manifest.flows.some((flow) => flow.domain === "not-found"), false);
 });
 

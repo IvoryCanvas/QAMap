@@ -1,6 +1,6 @@
 {
   "name": "@ivorycanvas/qamap",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Local-first QA skill that turns PR diffs into affected flows, missing evidence, and E2E drafts with no cloud or LLM token.",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
