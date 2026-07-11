@@ -1,6 +1,7 @@
 import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
+import { analyzeBehaviorGraph, createInferredFlowBehaviorAdapter } from "./behavior.js";
 import { buildDomainLanguageSummary } from "./domain-language.js";
 import { defaultDomainManifestPath, loadDomainManifest, matchDomains } from "./domains.js";
 import { analyzeFixtureSource, insightCoversEndpoint } from "./fixture-insight.js";
@@ -23,6 +24,7 @@ import type { MatchedCoreFlow } from "./flows.js";
 import type { VerificationManifestMatch } from "./manifest.js";
 import type { LocalHistoryReference } from "./history.js";
 import type { CoverageEvidence, TestSuiteInventory, TestSuiteSummary } from "./test-evidence.js";
+import type { BehaviorGraph, BehaviorSurfaceKind, InferredBehaviorFlow } from "./behavior.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
 export type E2eProjectType =
@@ -35,6 +37,20 @@ export type E2eProjectType =
   | "cli"
   | "unknown";
 export type E2eRunnerName = "maestro" | "playwright" | "manual";
+export type E2eFlowKind =
+  | "ui"
+  | "api"
+  | "state"
+  | "content"
+  | "config"
+  | "test-evidence"
+  | "documentation"
+  | "generated-artifact"
+  | "artifact"
+  | "catalog"
+  | "command"
+  | "domain"
+  | "changed-file";
 export type E2eEntrypointKind = "route" | "screen" | "command";
 export type E2eEntrypointConfidence = "high" | "medium" | "low";
 export type E2eSetupHintKind = "auth" | "network" | "fixture" | "environment" | "payment" | "state";
@@ -132,6 +148,7 @@ export interface E2eFlowLanguageBrief {
 }
 
 export interface E2eFlow {
+  kind?: E2eFlowKind;
   title: string;
   reason: string;
   files: string[];
@@ -249,6 +266,7 @@ export interface E2ePlanResult {
   localHistory?: LocalHistoryReference;
   workspaceTargets: E2eWorkspaceTarget[];
   flows: E2eFlow[];
+  behaviorGraph?: BehaviorGraph;
   validationMatrix: E2eValidationMatrix;
   bootstrap: E2eBootstrapPlan;
   missingTestability: string[];
@@ -484,6 +502,23 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     domainLanguage,
     addedDiffText,
   );
+  const behaviorGraph = await analyzeBehaviorGraph(
+    {
+      root: testPlan.root,
+      workspaceRoot: testPlan.workspaceRoot,
+      base: testPlan.base,
+      head: testPlan.head,
+      projectType: project.type,
+      surface: behaviorSurfaceForProject(project.type),
+      runner: recommendedRunner.name,
+      changedFiles: testPlan.changedFiles.map((file) => ({
+        path: file.path,
+        status: file.status,
+        previousPath: file.previousPath,
+      })),
+    },
+    [createInferredFlowBehaviorAdapter({ flows: flows.map(toInferredBehaviorFlow) })],
+  );
   const testSuite = summarizeTestSuiteInventory(testSuiteInventory);
   const missingTestability = uniqueStrings([
     ...flows.flatMap((flow) => flow.missingTestability),
@@ -547,10 +582,45 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     suggestedCommands: testPlan.suggestedCommands,
     workspaceTargets,
     flows,
+    behaviorGraph,
     validationMatrix,
     bootstrap,
     missingTestability,
     setupNotes,
+  };
+}
+
+function behaviorSurfaceForProject(projectType: E2eProjectType): BehaviorSurfaceKind {
+  if (projectType === "web") {
+    return "web";
+  }
+  if (projectType === "expo-react-native" || projectType === "react-native") {
+    return "mobile";
+  }
+  if (projectType === "api-service") {
+    return "api";
+  }
+  if (projectType === "cli") {
+    return "cli";
+  }
+  if (projectType === "design-tokens" || projectType === "data-catalog") {
+    return "artifact";
+  }
+  return "unknown";
+}
+
+function toInferredBehaviorFlow(flow: E2eFlow): InferredBehaviorFlow {
+  return {
+    kind: flow.kind ?? "changed-file",
+    title: flow.title,
+    reason: flow.reason,
+    files: flow.files,
+    steps: flow.steps,
+    entrypoints: flow.entrypoints,
+    selectors: flow.selectors,
+    coverage: flow.coverage,
+    fixtureStatus: flow.fixtureReadiness.status,
+    fixtureFiles: flow.fixtureReadiness.mockInsights?.map((insight) => insight.file) ?? [],
   };
 }
 
@@ -4369,22 +4439,9 @@ function toCoreFlowChangedFiles(
   }));
 }
 
-type E2eFlowKind =
-  | "ui"
-  | "api"
-  | "state"
-  | "content"
-  | "config"
-  | "test-evidence"
-  | "documentation"
-  | "generated-artifact"
-  | "artifact"
-  | "catalog"
-  | "command"
-  | "domain"
-  | "changed-file";
 type FlowCandidate = Omit<
   E2eFlow,
+  | "kind"
   | "languageBrief"
   | "coverage"
   | "coverageEvidence"
@@ -4817,6 +4874,7 @@ async function buildFlow(
     ? await inferFlowSelectors(root, files, runner, addedDiffText)
     : [];
   const flow: Omit<E2eFlow, "languageBrief"> = {
+    kind: candidate.kind,
     title: candidate.title,
     reason: candidate.reason,
     files,
@@ -6620,6 +6678,7 @@ async function buildManifestDraftFlow(
     ...(await inferFlowSetupHints(plan.root, files, "domain")),
   ]);
   const flow: Omit<DraftE2eFlow, "languageBrief"> = {
+    kind: baseFlow?.kind ?? "domain",
     title: match.name,
     reason: match.reason,
     files,
@@ -6786,6 +6845,7 @@ async function buildDomainScenarioDraftFlow(
     checks: refinedSteps,
   };
   const flow: Omit<DraftE2eFlow, "languageBrief"> = {
+    kind: baseFlow?.kind ?? "domain",
     title,
     reason,
     files,
@@ -7265,6 +7325,7 @@ function buildFallbackFlow(plan: E2ePlanResult): E2eFlow {
   const fallback = fallbackFlowDefinition(plan.project.type);
   const coverage = buildCoverageTargets(fallback.kind, [], plan.recommendedRunner.name);
   const flow: Omit<E2eFlow, "languageBrief"> = {
+    kind: fallback.kind,
     title: fallback.title,
     reason: fallback.reason,
     files: [],

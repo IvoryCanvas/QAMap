@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Added the first framework-neutral Behavior Graph contract with stable content-derived node and edge ids, evidence provenance, direct and propagated impact, deterministic graph merging, adapter diagnostics, and an analyzer adapter interface for future language and framework support.
+- Added a compatibility adapter that maps existing inferred flows, entrypoints, steps, assertions, selectors, fixtures, and changed source files into the graph. `generateE2ePlan` now exposes this additive graph without changing current runner recommendations or human reports.
+
+### Changed
+
+- Documented the architecture and conservative pre-1.0 version policy: compatible graph and adapter improvements remain patch work, while the next minor is reserved for a complete explicit diff-to-evidence execution slice.
+
 ## 0.3.5 - 2026-07-11
 
 ### Added

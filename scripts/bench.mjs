@@ -113,6 +113,13 @@ function scoreTarget(target, plan, qa, durationMs) {
     manifestMatches: plan.verificationManifestMatches.length,
     manifestFlowMatches: plan.verificationManifestMatches.filter((match) => match.kind === "flow").length,
     manifestBackedFlows: qa.flows.filter((flow) => flow.source === "manifest-backed").length,
+    behaviorNodes: plan.behaviorGraph.summary.nodes,
+    behaviorEdges: plan.behaviorGraph.summary.edges,
+    behaviorImpactedNodes: plan.behaviorGraph.summary.impactedNodes,
+    behaviorGraph: `${plan.behaviorGraph.summary.nodes}/${plan.behaviorGraph.summary.impactedNodes}`,
+    behaviorKinds: Object.entries(plan.behaviorGraph.summary.byKind)
+      .filter(([, count]) => count > 0)
+      .map(([kind]) => kind),
     blankActions: allSteps.filter((step) => blankActionPattern.test(step)).length,
     mustReachRecall: mustReach.length > 0 ? `${reached.length}/${mustReach.length}` : null,
     mustReachMissing: mustReach.filter((file) => !flowFiles.has(file)),
@@ -138,6 +145,26 @@ function evaluateContract(expect, result, plan, qa) {
     ...qa.runnerSetup.installCommands,
     ...qa.runnerSetup.nextCommands,
   ].filter(Boolean);
+  const behaviorNodeIds = new Set(plan.behaviorGraph.nodes.map((node) => node.id));
+  const danglingBehaviorEdges = plan.behaviorGraph.edges.filter(
+    (edge) => !behaviorNodeIds.has(edge.from) || !behaviorNodeIds.has(edge.to),
+  );
+
+  if (plan.behaviorGraph.schemaVersion !== 1) {
+    failures.push(`behavior graph schema expected 1, got ${plan.behaviorGraph.schemaVersion}`);
+  }
+  if (plan.behaviorGraph.summary.byKind.flow < plan.flows.length) {
+    failures.push(
+      `behavior graph expected at least ${plan.flows.length} flow node(s), got ${plan.behaviorGraph.summary.byKind.flow}`,
+    );
+  }
+  if (plan.changedFiles.length > 0 && plan.behaviorGraph.summary.impactedNodes === 0) {
+    failures.push("behavior graph has no impacted nodes for a non-empty branch diff");
+  }
+  if (danglingBehaviorEdges.length > 0) {
+    failures.push(`behavior graph has ${danglingBehaviorEdges.length} dangling edge(s)`);
+  }
+  appendMissingTerms(failures, "behavior kind", result.behaviorKinds, expect.mustHaveBehaviorKinds);
 
   if (expect.runner && result.runner !== expect.runner) {
     failures.push(`runner expected ${expect.runner}, got ${result.runner}`);
@@ -294,6 +321,7 @@ function printTable(rows) {
     ["importPropagatedFlows", 10],
     ["diffAnchoredFlows", 10],
     ["manifestFlowMatches", 8],
+    ["behaviorGraph", 9],
     ["blankActions", 6],
     ["genericTitles", 8],
     ["mustReachRecall", 10],
@@ -331,7 +359,7 @@ function printDeltas(baselineRows, currentRows) {
       continue;
     }
     const deltas = [];
-    for (const key of ["flows", "importPropagatedFlows", "diffAnchoredFlows", "manifestFlowMatches", "blankActions", "genericTitles", "agentBytes"]) {
+    for (const key of ["flows", "importPropagatedFlows", "diffAnchoredFlows", "manifestFlowMatches", "behaviorNodes", "behaviorImpactedNodes", "blankActions", "genericTitles", "agentBytes"]) {
       const diff = (current[key] ?? 0) - (before[key] ?? 0);
       if (diff !== 0) {
         deltas.push(`${key} ${diff > 0 ? "+" : ""}${diff}`);
@@ -347,6 +375,7 @@ function shortLabel(key) {
     importPropagatedFlows: "viaImport",
     diffAnchoredFlows: "diffAnchor",
     manifestFlowMatches: "manifest",
+    behaviorGraph: "graph n/i",
     blankActions: "blank",
     genericTitles: "generic",
     mustReachRecall: "reach",

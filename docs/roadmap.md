@@ -4,16 +4,16 @@ QAMap starts as a local CLI for repo-level AI agent readiness. The project can g
 
 ## North Star
 
-QAMap should become a local-first QA skill plus optional QA memory layer: it maps PR changes to affected flows, drafts the E2E/checklist work needed before merge, and improves over time through a repository-level verification manifest. The goal is not to replace reviewers or QA. The goal is to remove the repeated blank-page work that makes developers skip good verification.
+QAMap should become a local, zero-LLM, change-aware QA engine. It should map any PR change to affected behavior, select the smallest relevant QA set, and eventually execute that QA with local evidence. A repository-level verification manifest supplies reviewed product intent that static code evidence cannot prove. The goal is not to replace reviewers or QA. The goal is to remove the repeated blank-page and manual verification work that makes developers skip good QA.
 
 The sharp product position is:
 
 ```txt
-Do not re-prompt AI for the same QA context.
-Run a local PR QA draft first, then capture team QA memory in the repo when repeated corrections should improve future recommendations.
+Read the change, find the affected behavior, and produce local QA evidence.
+No source upload. No LLM token. Let reviewed repository memory improve every later PR.
 ```
 
-This means QAMap should be judged less like a generic test recorder and more like a manifest-backed PR verification assistant. A recorder captures what a person just clicked. QAMap should explain what the PR changed, which durable flow/check knowledge applies, and what test artifact should now exist.
+This means QAMap should be judged by whether it identifies the right behavior and catches a seeded regression, not only whether it writes plausible test code. Playwright, Maestro, and other runners are implementation details behind that product contract.
 
 ## Release Bar
 
@@ -28,6 +28,8 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 ## Now
 
+- Introduce a stable, framework-neutral Behavior Graph with adapter isolation, deterministic ids, evidence provenance, and direct versus propagated impact. Keep the existing flow inference as a compatibility adapter until source analyzers emit graph fragments directly.
+- Preserve `qa` as the static, read-only product surface while designing explicit execution behind `verify`; never turn a scan into implicit project-code execution.
 - Treat the committed [benchmark contract](benchmarking.md) as the quality gate for recommendations, not only implementation correctness. Reduce real failures into public fixtures and require `pnpm bench:ci` on every PR.
 - Make `qa` the primary product surface. Its first screen and `--format agent` payload should agree on affected behavior, reviewer question, repository evidence, draft path, and missing trust requirements.
 - Improve changed-file impact mapping from shared symbols and components to consuming routes, screens, API contracts, and manifest flows.
@@ -39,6 +41,9 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 ## Next
 
+- Move route, screen, endpoint, selector, fixture, test, and contract discovery into analyzer adapters, starting with TypeScript web stacks and reusing one web behavior model across Next.js, React Router, Vue/Nuxt, and SvelteKit.
+- Compare base and head Behavior Graphs, then select impacted graph paths before compiling deterministic success, validation, failure, empty, loading, auth, and contract scenarios.
+- Add an execution benchmark that injects known regressions and requires QAMap to select and fail the relevant scenario without changing the fixture repository.
 - Add symbol-level anchors for exported components, hooks, API clients, handlers, schemas, and queries after the public import-impact fixture stays stable.
 - Add a manifest correction command that proposes the exact flow/anchor patch and applies it only after human approval, avoiding routine hand-edits to YAML.
 - Add stronger deterministic draft adapters for Playwright and Maestro while keeping `manual` output for API, CLI, token, and catalog repositories.
@@ -55,7 +60,8 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 ## Non-Goals
 
-- QAMap will not execute untrusted project code.
+- Static commands such as `qa`, `scan`, and planning modes will not execute scanned project code. Future execution requires an explicit command and a visible, policy-controlled execution plan.
+- QAMap will not implement its own browser or device automation engine; it will orchestrate proven local executors behind a framework-neutral QA contract.
 - QAMap will not replace tests, review, branch protection, threat modeling, or security review.
 - QAMap will not become a general-purpose code style linter.
 - QAMap will not become a deep MCP server analysis engine.

@@ -34,6 +34,7 @@ Each target can declare:
 | `minManifestMatches` | Minimum domain, flow, and check matches from an external base manifest. |
 | `minManifestFlowMatches` | Minimum flow-level matches from the external base manifest. |
 | `minManifestBackedFlows` | Minimum QA flows that preserve manifest provenance. |
+| `mustHaveBehaviorKinds` | Behavior Graph node kinds that must be present, such as `flow`, `surface`, `source`, `assertion`, or `locator`. |
 | `mustReachFiles` | Files that the selected flows must reach. |
 | `mustNameFlows` | Product terms that must appear in a user-facing flow title. |
 | `mustNotNameFlows` | Misleading flow-title terms that must not be emitted. |
@@ -63,6 +64,8 @@ node scripts/bench.mjs --baseline bench-results/<file>.json
 When both files exist, `pnpm bench` prefers the gitignored local config. CI always passes `--config bench.config.json --assert`, so private paths cannot affect the public quality gate.
 
 Saved results include flow titles, draft paths, recall gaps, readiness, agent payload size, and timing. Use a saved baseline to see heuristic movement, but treat the committed expectation contract as the merge gate.
+
+Every benchmark target also enforces the Behavior Graph base contract: graph schema version 1, at least one graph flow for every planned flow, at least one impacted node for a non-empty diff, and no edge whose endpoint is missing. The table reports `graph n/i` as total nodes versus impacted nodes. These checks keep the graph connected to real PR analysis while framework-specific adapters are introduced incrementally.
 
 ## Adding a regression
 

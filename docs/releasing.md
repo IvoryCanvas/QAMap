@@ -2,6 +2,19 @@
 
 This runbook defines the release process for `qamap`. It is intentionally conservative: the package should be published only when the local release gate, documentation, and representative repository validation all agree.
 
+## Pre-1.0 Version Policy
+
+QAMap keeps major and minor changes deliberately rare during `0.x` development.
+
+- Patch is the default for bug fixes, inference quality, performance, internal architecture, benchmarks, documentation, and additional adapters that preserve the existing CLI, schema, and safety contracts.
+- Minor is reserved for a new product-level capability, an incompatible CLI or manifest contract, or a meaningful change to default execution and safety behavior.
+- Risky minor work should ship through `alpha`, `beta`, and `rc` prereleases before the final minor.
+- Do not pre-allocate a minor version to every roadmap phase. Define the next minor release bar and continue compatible work as patches until that bar is met.
+
+The next minor release is earned when QAMap can complete one supported diff-to-evidence vertical slice: identify affected behavior, compile deterministic QA, execute it explicitly in temporary space, and report normalized evidence without modifying the target repository.
+
+Version `1.0.0` requires a stable public contract and external adoption, not implementation volume alone. CLI commands, exit codes, machine output, manifest migration, adapter compatibility, no-LLM/no-upload guarantees, and release operations must be dependable. Repository stars are useful social proof, but repeated use in unrelated repositories and reported QA value are stronger release evidence.
+
 ## Release Owner Checklist
 
 Before publishing, confirm:

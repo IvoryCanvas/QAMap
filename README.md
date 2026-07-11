@@ -4,7 +4,7 @@
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/qamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**A local-first QA skill for AI-generated PRs. QAMap turns a PR diff into affected flows, missing evidence, and E2E drafts. No cloud. No LLM token.**
+**A local, zero-LLM QA map for code changes. QAMap turns any PR diff into affected behavior, missing evidence, and deterministic E2E drafts. No cloud. No source upload. No token.**
 
 QAMap reads git changes, project structure, runner signals, selectors, and optional repo QA memory, then answers the question every reviewer asks: *"This PR looks plausible — which user flow could it break, and what should we verify before merge?"* It focuses on the judgment step ("what deserves testing"), not on competing with LLMs at writing test code.
 
@@ -97,8 +97,9 @@ pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 | [Configuration](docs/configuration.md) | `qamap.config.json` policy options |
 | [GitHub Action](docs/github-action.md) | PR annotations, summaries, and comments in CI |
 | [Benchmarking](docs/benchmarking.md) | Scoring output quality against pinned repositories |
+| [Architecture](docs/architecture.md) | Behavior Graph, adapter boundaries, execution safety, and migration order |
 | [Roadmap](docs/roadmap.md) | Where this is going |
 
 ## Project Status
 
-QAMap is early and pre-`1.0`; the public API may change. Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). QAMap does not replace review, tests, or security tooling; it removes the blank-page work that makes teams skip good verification.
+QAMap is early and pre-`1.0`; the public API may change. Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). QAMap does not replace review, tests, or security tooling; it removes the blank-page work that makes teams skip good verification. AI-assisted PRs are an important use case, not a requirement.

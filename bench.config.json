@@ -8,6 +8,7 @@
         "runner": "playwright",
         "minFlows": 1,
         "minDiffAnchoredFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "surface", "source", "assertion", "locator"],
         "mustReachFiles": ["src/pages/checkout/index.tsx"],
         "mustNameFlows": ["checkout"],
         "mustDraftFiles": ["tests/e2e/checkout-submit.spec.ts"],
@@ -27,6 +28,7 @@
         "runner": "playwright",
         "minFlows": 1,
         "minDiffAnchoredFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "surface", "source", "assertion", "locator"],
         "mustReachFiles": ["src/pages/orders/index.tsx"],
         "mustNameFlows": ["orders"],
         "mustDraftFiles": ["tests/e2e/orders-refresh.spec.ts"],
@@ -45,6 +47,7 @@
         "runner": "maestro",
         "minFlows": 1,
         "minDiffAnchoredFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "surface", "source", "assertion", "locator"],
         "mustReachFiles": ["src/screens/ProfileScreen.tsx"],
         "mustNameFlows": ["profile"],
         "mustDraftFiles": [".maestro/profile-save.yaml"],
@@ -65,6 +68,7 @@
         "minManifestMatches": 3,
         "minManifestFlowMatches": 1,
         "minManifestBackedFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "source", "assertion"],
         "mustReachFiles": ["src/routes/orders.ts"],
         "mustNameFlows": ["orders"],
         "mustDraftFiles": ["docs/e2e/orders-api-contract.md"],
@@ -79,6 +83,7 @@
       "expect": {
         "runner": "manual",
         "minFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "source", "assertion"],
         "mustReachFiles": ["tokens/color.json"],
         "mustNameFlows": ["color"],
         "mustDraftFiles": ["docs/e2e/color-design-token-contract-checklist.md"],
@@ -98,6 +103,7 @@
         "minManifestMatches": 3,
         "minManifestFlowMatches": 1,
         "minManifestBackedFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "surface", "source", "assertion", "locator"],
         "mustReachFiles": [
           "src/components/SubmitButton.tsx",
           "src/pages/checkout/index.tsx"
@@ -115,6 +121,7 @@
       "expect": {
         "runner": "manual",
         "minFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "source", "assertion"],
         "mustReachFiles": [
           "android/app/build.gradle",
           "app.json",
@@ -137,6 +144,7 @@
       "expect": {
         "runner": "maestro",
         "minFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "source", "assertion"],
         "mustReachFiles": [
           ".maestro/notification-primary-journey.yaml",
           ".maestro/search-primary-journey.yaml"

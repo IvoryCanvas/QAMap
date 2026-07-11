@@ -8,6 +8,7 @@
       "head": "<head-sha>",
       "expect": {
         "runner": "playwright",
+        "mustHaveBehaviorKinds": ["flow", "surface", "source", "assertion", "locator"],
         "mustReachFiles": ["app/checkout/page.tsx"],
         "mustNameFlows": ["checkout"],
         "mustDraftFiles": ["checkout"],
@@ -24,7 +25,8 @@
       "base": "<base-sha>",
       "head": "<head-sha>",
       "expect": {
-        "runner": "maestro"
+        "runner": "maestro",
+        "mustHaveBehaviorKinds": ["flow", "surface", "source", "assertion", "locator"]
       }
     }
   ]
