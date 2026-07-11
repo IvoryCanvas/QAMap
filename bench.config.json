@@ -58,9 +58,13 @@
     {
       "name": "api-orders-contract",
       "fixture": "test/benchmarks/api-orders-contract",
+      "manifestBaseline": true,
       "expect": {
         "runner": "manual",
         "minFlows": 1,
+        "minManifestMatches": 3,
+        "minManifestFlowMatches": 1,
+        "minManifestBackedFlows": 1,
         "mustReachFiles": ["src/routes/orders.ts"],
         "mustNameFlows": ["orders"],
         "mustDraftFiles": ["docs/e2e/orders-api-contract.md"],
@@ -86,10 +90,14 @@
     {
       "name": "web-shared-component",
       "fixture": "test/benchmarks/web-shared-component",
+      "manifestBaseline": true,
       "expect": {
         "runner": "playwright",
         "minFlows": 1,
         "minImportPropagatedFlows": 1,
+        "minManifestMatches": 3,
+        "minManifestFlowMatches": 1,
+        "minManifestBackedFlows": 1,
         "mustReachFiles": [
           "src/components/SubmitButton.tsx",
           "src/pages/checkout/index.tsx"

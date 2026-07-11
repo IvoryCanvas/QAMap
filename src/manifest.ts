@@ -702,15 +702,22 @@ function buildVerificationManifestBaseline(
   files: ProjectFile[],
 ): VerificationManifest {
   const context = buildManifestContext(root, manifestRoot, files);
-  const behaviorFiles = files
-    .filter((file) => isBehaviorFile(file.path))
+  const manifestFiles = files
     .map((file) => ({
       ...file,
       path: toPosixPath(path.relative(manifestRoot, path.join(root, file.path))),
     }))
     .filter((file) => !file.path.startsWith("../"));
+  const behaviorFiles = manifestFiles.filter((file) => isBehaviorFile(file.path));
   const domains = mergeDomainsById(buildBaselineDomains(behaviorFiles, context), buildPythonAppDomains(files, manifestRoot, root)).slice(0, 12);
-  const flows = buildBaselineFlows(behaviorFiles, domains, inferRunner(files), context).slice(0, 16);
+  const runner = inferRunner(files);
+  const uiFlows = buildBaselineFlows(behaviorFiles, domains, runner, context);
+  const apiFlows = buildBaselineApiFlows(manifestFiles, domains, runner);
+  const flows = apiFlows.length === 0
+    ? uiFlows.slice(0, 16)
+    : uiFlows.length === 0
+      ? apiFlows.slice(0, 16)
+      : dedupeFlows([...uiFlows.slice(0, 12), ...apiFlows.slice(0, 4)]).slice(0, 16);
 
   return {
     $schema: verificationManifestSchemaUrl,
@@ -1620,6 +1627,160 @@ function buildBaselineFlows(
   return interleaveFlowsByDomain(dedupeFlows(scored.map((entry) => entry.flow)));
 }
 
+function buildBaselineApiFlows(
+  files: ProjectFile[],
+  domains: VerificationManifestDomain[],
+  runner: VerificationManifestRunner,
+): VerificationManifestFlow[] {
+  const serviceProject = runner === "manual" && hasApiServiceSignal(files);
+  const grouped = new Map<string, {
+    domain?: VerificationManifestDomain;
+    name: string;
+    anchors: VerificationManifestAnchor[];
+  }>();
+
+  for (const file of files) {
+    if (!isApiBehaviorFile(file.path, runner, serviceProject)) {
+      continue;
+    }
+    const domain = bestDomainForFile(domains, file.path);
+    const subject = domain?.name ?? apiSubjectFromFile(file.path);
+    const id = slugify(`${domain?.id ?? subject} api contract`);
+    if (!id) {
+      continue;
+    }
+    const symbol = /\.[cm]?[jt]sx?$/.test(file.path) && file.text
+      ? (exportedSymbolFromText(file.text, path.basename(file.path).replace(/\.[^.]+$/, "")) ?? undefined)
+      : undefined;
+    const anchor: VerificationManifestAnchor = {
+      kind: "api",
+      path: file.path,
+      symbol,
+      source: "inferred",
+      confidence: symbol ? "high" : "medium",
+    };
+    const existing = grouped.get(id);
+    if (existing) {
+      if (!existing.anchors.some((candidate) => candidate.path === anchor.path)) {
+        existing.anchors.push(anchor);
+      }
+      continue;
+    }
+    grouped.set(id, {
+      domain,
+      name: `${subject} API contract`,
+      anchors: [anchor],
+    });
+  }
+
+  return [...grouped.entries()]
+    .map(([id, value]) => ({
+      id,
+      domain: value.domain?.id,
+      name: value.name,
+      runner: "manual" as const,
+      anchors: value.anchors.slice(0, 6),
+      checks: [
+        {
+          id: "response-contract",
+          title: `Return the expected ${value.name.replace(/ API contract$/, "")} response contract`,
+          type: "contract" as const,
+        },
+        {
+          id: "invalid-request",
+          title: "Reject invalid requests without partial side effects",
+          type: "failure" as const,
+        },
+      ],
+      source: {
+        kind: "inferred" as const,
+        confidence: "medium" as const,
+        from: ["api-route-file"],
+      },
+    }))
+    .sort((left, right) => right.anchors.length - left.anchors.length || left.id.localeCompare(right.id));
+}
+
+function isApiBehaviorFile(
+  file: string,
+  runner: VerificationManifestRunner,
+  serviceProject: boolean,
+): boolean {
+  const normalized = toPosixPath(file);
+  if (/(?:^|\/)(?:tests?|__tests__|e2e|dist|build|out|\.output|__generated__)(?:\/|$)/i.test(normalized)) {
+    return false;
+  }
+  if (runner !== "manual") {
+    return false;
+  }
+  return (
+    /(?:^|\/)(?:api|routes?|controllers?|handlers?)\/.+\.(?:[cm]?[jt]s|py|go|rs|java|kt|cs|rb)$/i.test(normalized) ||
+    /(?:^|\/)(?:api|routes?|controllers?|handlers?|views)(?:\/[^/]+|[_-][^/]+)?\.py$/i.test(normalized) ||
+    /(?:^|\/)(?:urls|views|api|controllers?|handlers?)\.py$/i.test(normalized) ||
+    (serviceProject && isNamedServiceModule(normalized))
+  );
+}
+
+function isNamedServiceModule(file: string): boolean {
+  return (
+    /(?:^|\/)src\/(?:.*\/)?(?:domains?|features?|modules?|services?)\/.+\.(?:[cm]?[jt]s|py|go|rs|java|kt|cs|rb)$/i.test(file) ||
+    /(?:^|\/)[^/]*(?:controller|endpoint|gateway|handler|repository|resolver|router|service|use-?case)[^/]*\.(?:[cm]?[jt]s|py|go|rs|java|kt|cs|rb)$/i.test(file)
+  );
+}
+
+function hasApiServiceSignal(files: ProjectFile[]): boolean {
+  const serverDependencies = new Set([
+    "@hapi/hapi",
+    "@nestjs/core",
+    "express",
+    "fastify",
+    "hono",
+    "koa",
+    "restify",
+  ]);
+  for (const file of files) {
+    if (!file.text) {
+      continue;
+    }
+    const basename = path.basename(file.path).toLowerCase();
+    if (basename === "package.json") {
+      try {
+        const parsed = JSON.parse(file.text) as {
+          dependencies?: Record<string, unknown>;
+          devDependencies?: Record<string, unknown>;
+        };
+        const dependencies = { ...parsed.dependencies, ...parsed.devDependencies };
+        if ([...serverDependencies].some((dependency) => dependencies[dependency] !== undefined)) {
+          return true;
+        }
+      } catch {
+        continue;
+      }
+    }
+    if (
+      ["requirements.txt", "pyproject.toml", "pipfile"].includes(basename) &&
+      /\b(?:django|fastapi|flask|litestar|sanic|starlette)\b/i.test(file.text)
+    ) {
+      return true;
+    }
+    if (basename === "go.mod" && /\b(?:gin-gonic|gofiber|labstack\/echo)\b/i.test(file.text)) {
+      return true;
+    }
+    if (basename === "cargo.toml" && /\b(?:actix-web|axum|rocket)\b/i.test(file.text)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function apiSubjectFromFile(file: string): string {
+  const segments = toPosixPath(file).split("/").filter(Boolean);
+  const basename = (segments.at(-1) ?? "api").replace(/\.[^.]+$/, "");
+  const generic = /^(?:api|controller|controllers|handler|handlers|index|route|routes|urls|view|views)$/i;
+  const candidate = generic.test(basename) ? (segments.at(-2) ?? "api") : basename;
+  return titleCase(candidate) || "API";
+}
+
 const productSignalMatcher =
   /login|signin|sign-in|signup|sign-up|register|auth|password|payment|pay\b|checkout|billing|subscription|purchase|order|cart|onboarding|settings|account|profile|search|upload|home/i;
 
@@ -2266,7 +2427,7 @@ function domainCandidateFromPath(file: string): { id: string; name: string; from
       }
     }
     // The basename may only speak for itself when the file sits directly
-    // under the route dir (app/SentimentChatPage.tsx), not when a
+    // under the route dir (app/SampleChatPage.tsx), not when a
     // structural directory owns the subtree. Router-convention names
     // (_layout, +not-found, (group)) never qualify.
     if (segments.length === routeIndex + 2) {
