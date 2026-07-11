@@ -122,6 +122,13 @@ test("domain-only manifest matches preserve manifest provenance in QA drafts", a
   assert.equal(plan.verificationManifestMatches.filter((match) => match.kind === "domain").length, 1);
   assert.equal(plan.verificationManifestMatches.filter((match) => match.kind === "flow").length, 0);
   assert.ok(plan.flows.length >= 2);
+  assert.ok(plan.behaviorGraph.adapters.some((adapter) => adapter.id === "qamap.verification-manifest" && adapter.status === "used"));
+  assert.equal(plan.behaviorGraph.summary.byKind.domain, 1);
+  assert.ok(
+    plan.behaviorGraph.nodes.some(
+      (node) => node.kind === "domain" && node.evidence.some((evidence) => evidence.kind === "manifest"),
+    ),
+  );
 
   const qa = await generateQaDraft(root, options);
   assert.equal(qa.flows.length, plan.flows.length);

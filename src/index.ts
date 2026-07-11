@@ -7,6 +7,7 @@ export {
   createInferredFlowBehaviorAdapter,
   mergeBehaviorGraphFragments,
 } from "./behavior.js";
+export { createManifestBehaviorAdapter } from "./behavior-manifest.js";
 export { defaultConfig, loadConfig, writeDefaultConfig } from "./config.js";
 export { detectDlxCommand, generateAgentContext } from "./context.js";
 export { buildDomainLanguageSummary } from "./domain-language.js";
@@ -104,6 +105,7 @@ export type {
   InferredBehaviorSelector,
   InferredFlowAdapterOptions,
 } from "./behavior.js";
+export type { ManifestBehaviorAdapterOptions } from "./behavior-manifest.js";
 export type {
   CoverageEvidence,
   CoverageEvidenceConfidence,

@@ -116,6 +116,9 @@ function scoreTarget(target, plan, qa, durationMs) {
     behaviorNodes: plan.behaviorGraph.summary.nodes,
     behaviorEdges: plan.behaviorGraph.summary.edges,
     behaviorImpactedNodes: plan.behaviorGraph.summary.impactedNodes,
+    manifestBehaviorNodes: plan.behaviorGraph.nodes.filter((node) =>
+      node.evidence.some((evidence) => evidence.kind === "manifest")
+    ).length,
     behaviorGraph: `${plan.behaviorGraph.summary.nodes}/${plan.behaviorGraph.summary.impactedNodes}`,
     behaviorKinds: Object.entries(plan.behaviorGraph.summary.byKind)
       .filter(([, count]) => count > 0)
@@ -163,6 +166,14 @@ function evaluateContract(expect, result, plan, qa) {
   }
   if (danglingBehaviorEdges.length > 0) {
     failures.push(`behavior graph has ${danglingBehaviorEdges.length} dangling edge(s)`);
+  }
+  if (
+    expect.minManifestBehaviorNodes !== undefined &&
+    result.manifestBehaviorNodes < expect.minManifestBehaviorNodes
+  ) {
+    failures.push(
+      `expected at least ${expect.minManifestBehaviorNodes} manifest behavior node(s), got ${result.manifestBehaviorNodes}`,
+    );
   }
   appendMissingTerms(failures, "behavior kind", result.behaviorKinds, expect.mustHaveBehaviorKinds);
 
@@ -359,7 +370,7 @@ function printDeltas(baselineRows, currentRows) {
       continue;
     }
     const deltas = [];
-    for (const key of ["flows", "importPropagatedFlows", "diffAnchoredFlows", "manifestFlowMatches", "behaviorNodes", "behaviorImpactedNodes", "blankActions", "genericTitles", "agentBytes"]) {
+    for (const key of ["flows", "importPropagatedFlows", "diffAnchoredFlows", "manifestFlowMatches", "behaviorNodes", "behaviorImpactedNodes", "manifestBehaviorNodes", "blankActions", "genericTitles", "agentBytes"]) {
       const diff = (current[key] ?? 0) - (before[key] ?? 0);
       if (diff !== 0) {
         deltas.push(`${key} ${diff > 0 ? "+" : ""}${diff}`);

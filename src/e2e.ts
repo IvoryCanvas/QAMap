@@ -2,6 +2,7 @@ import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
 import { analyzeBehaviorGraph, createInferredFlowBehaviorAdapter } from "./behavior.js";
+import { createManifestBehaviorAdapter } from "./behavior-manifest.js";
 import { buildDomainLanguageSummary } from "./domain-language.js";
 import { defaultDomainManifestPath, loadDomainManifest, matchDomains } from "./domains.js";
 import { analyzeFixtureSource, insightCoversEndpoint } from "./fixture-insight.js";
@@ -517,7 +518,10 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
         previousPath: file.previousPath,
       })),
     },
-    [createInferredFlowBehaviorAdapter({ flows: flows.map(toInferredBehaviorFlow) })],
+    [
+      createInferredFlowBehaviorAdapter({ flows: flows.map(toInferredBehaviorFlow) }),
+      createManifestBehaviorAdapter({ matches: verificationManifestMatches }),
+    ],
   );
   const testSuite = summarizeTestSuiteInventory(testSuiteInventory);
   const missingTestability = uniqueStrings([

@@ -10,6 +10,7 @@ import {
   createBehaviorNodeId,
   createInferredFlowBehaviorAdapter,
 } from "../dist/behavior.js";
+import { createManifestBehaviorAdapter } from "../dist/behavior-manifest.js";
 import { generateE2ePlan } from "../dist/e2e.js";
 
 const baseContext = {
@@ -129,6 +130,113 @@ test("behavior adapter failures are isolated and dangling edges are removed", as
     ),
   );
   assert.ok(graph.diagnostics.some((diagnostic) => /endpoint nodes were missing/.test(diagnostic.message)));
+});
+
+test("manifest adapter connects reviewed domains, flows, checks, routes, and selectors", async () => {
+  const manifestPath = ".qamap/manifest.yaml";
+  const matches = [
+    {
+      kind: "domain",
+      id: "checkout",
+      name: "Checkout",
+      manifestPath: `${manifestPath} > domains.checkout.paths`,
+      updatePath: `${manifestPath} > domains.checkout.paths`,
+      reason: "Changed files match the Checkout domain.",
+      evidenceSources: ["human-reviewed"],
+      nextActions: [],
+      repairHints: [],
+      matchedFiles: ["src/pages/checkout.tsx"],
+      confidence: "high",
+      criticality: "high",
+    },
+    {
+      kind: "flow",
+      id: "checkout-submit",
+      name: "Checkout Submit",
+      manifestPath: `${manifestPath} > flows.checkout-submit.anchors`,
+      updatePath: `${manifestPath} > flows.checkout-submit.anchors`,
+      reason: "Changed files match the Checkout Submit flow.",
+      evidenceSources: ["human-reviewed"],
+      nextActions: [],
+      repairHints: [],
+      matchedFiles: ["src/pages/checkout.tsx"],
+      confidence: "high",
+      criticality: "high",
+      runner: "playwright",
+      entryRoute: "/checkout",
+      checks: ["Show confirmation after submit"],
+    },
+    {
+      kind: "check",
+      id: "checkout-submit.confirmation",
+      name: "Show confirmation after submit",
+      manifestPath: `${manifestPath} > flows.checkout-submit.checks.confirmation`,
+      updatePath: `${manifestPath} > flows.checkout-submit.checks`,
+      reason: "The flow declares this success check.",
+      evidenceSources: ["human-reviewed"],
+      nextActions: [],
+      repairHints: [],
+      matchedFiles: ["src/pages/checkout.tsx"],
+      confidence: "high",
+      runner: "playwright",
+      entryRoute: "/checkout",
+      checks: ["Show confirmation after submit"],
+      checkType: "success",
+      checkSelector: "[data-testid=checkout-confirmation]",
+      checkSteps: ["Submit checkout", "Verify confirmation"],
+    },
+  ];
+
+  const graph = await analyzeBehaviorGraph(baseContext, [createManifestBehaviorAdapter({ matches })]);
+
+  assert.deepEqual(graph.adapters.map((adapter) => [adapter.id, adapter.status]), [
+    ["qamap.verification-manifest", "used"],
+  ]);
+  assert.equal(graph.summary.byKind.domain, 1);
+  assert.equal(graph.summary.byKind.flow, 1);
+  assert.equal(graph.summary.byKind.assertion, 1);
+  assert.equal(graph.summary.byKind.surface, 1);
+  assert.equal(graph.summary.byKind.locator, 1);
+  assert.equal(graph.summary.byKind.source, 1);
+  assert.ok(graph.nodes.every((node) => node.impact?.kind === "direct" || node.kind === "surface" || node.kind === "locator"));
+  assert.ok(graph.nodes.some((node) => node.kind === "assertion" && node.evidence.some((item) => item.kind === "manifest")));
+  assert.ok(graph.edges.some((edge) => edge.kind === "contains"));
+  assert.ok(graph.edges.some((edge) => edge.kind === "expects"));
+  assert.ok(graph.edges.some((edge) => edge.kind === "located-by"));
+});
+
+test("manifest adapter normalizes workspace paths for package-scoped impact", async () => {
+  const context = {
+    ...baseContext,
+    root: "/repo/packages/web-app",
+    workspaceRoot: "/repo",
+    changedFiles: [{ status: "M", path: "src/pages/checkout.tsx" }],
+  };
+  const matches = [
+    {
+      kind: "flow",
+      id: "checkout-submit",
+      name: "Checkout Submit",
+      manifestPath: ".qamap/manifest.yaml > flows.checkout-submit.anchors",
+      updatePath: ".qamap/manifest.yaml > flows.checkout-submit.anchors",
+      reason: "Workspace manifest flow matched.",
+      evidenceSources: ["human-reviewed"],
+      nextActions: [],
+      repairHints: [],
+      matchedFiles: ["packages/web-app/src/pages/checkout.tsx"],
+      confidence: "high",
+      runner: "playwright",
+      entryRoute: "/checkout",
+      checks: [],
+    },
+  ];
+
+  const graph = await analyzeBehaviorGraph(context, [createManifestBehaviorAdapter({ matches })]);
+
+  const source = graph.nodes.find((node) => node.kind === "source");
+  assert.equal(source?.label, "src/pages/checkout.tsx");
+  assert.deepEqual(source?.impact, { kind: "direct", changedFiles: ["src/pages/checkout.tsx"] });
+  assert.equal(graph.nodes.some((node) => node.label.startsWith("packages/web-app/")), false);
 });
 
 test("E2E planning exposes a behavior graph for a real branch diff", async () => {

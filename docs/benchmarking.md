@@ -34,6 +34,7 @@ Each target can declare:
 | `minManifestMatches` | Minimum domain, flow, and check matches from an external base manifest. |
 | `minManifestFlowMatches` | Minimum flow-level matches from the external base manifest. |
 | `minManifestBackedFlows` | Minimum QA flows that preserve manifest provenance. |
+| `minManifestBehaviorNodes` | Minimum Behavior Graph nodes carrying verification-manifest evidence. |
 | `mustHaveBehaviorKinds` | Behavior Graph node kinds that must be present, such as `flow`, `surface`, `source`, `assertion`, or `locator`. |
 | `mustReachFiles` | Files that the selected flows must reach. |
 | `mustNameFlows` | Product terms that must appear in a user-facing flow title. |
