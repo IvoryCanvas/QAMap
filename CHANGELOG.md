@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.6 - 2026-07-11
+
 ### Added
 
 - Added the first framework-neutral Behavior Graph contract with stable content-derived node and edge ids, evidence provenance, direct and propagated impact, deterministic graph merging, adapter diagnostics, and an analyzer adapter interface for future language and framework support.
