@@ -13,6 +13,8 @@ export {
   mergeBehaviorGraphFragments,
 } from "./behavior.js";
 export { createManifestBehaviorAdapter } from "./behavior-manifest.js";
+export { createChangeIntentBehaviorAdapter } from "./behavior-intent.js";
+export { analyzeChangeIntents } from "./change-intent.js";
 export { defaultConfig, loadConfig, writeDefaultConfig } from "./config.js";
 export { detectDlxCommand, generateAgentContext } from "./context.js";
 export { buildDomainLanguageSummary } from "./domain-language.js";
@@ -111,6 +113,21 @@ export type {
   InferredFlowAdapterOptions,
 } from "./behavior.js";
 export type { ManifestBehaviorAdapterOptions } from "./behavior-manifest.js";
+export type { ChangeIntentBehaviorAdapterOptions } from "./behavior-intent.js";
+export type {
+  BehaviorLifecycleStage,
+  BehaviorLifecycleStageKind,
+  ChangeIntent,
+  ChangeIntentAnalysis,
+  ChangeIntentAnalysisOptions,
+  ChangeIntentCommit,
+  ChangeIntentConfidence,
+  ChangeIntentEvidence,
+  ChangeIntentEvidenceKind,
+  IntentQaScenario,
+  IntentQaScenarioKind,
+  IntentQaScenarioPriority,
+} from "./change-intent.js";
 export type {
   CoverageEvidence,
   CoverageEvidenceConfidence,

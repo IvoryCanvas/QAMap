@@ -1,0 +1,13 @@
+{
+  "name": "benchmark-web-preferences-lifecycle",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@playwright/test": "1.56.0",
+    "react": "19.0.0",
+    "vite": "7.0.0"
+  }
+}

@@ -71,6 +71,47 @@
         "files": { "type": "number", "minimum": 0 }
       }
     },
+    "intents": {
+      "type": "array",
+      "description": "Evidence-backed change intents derived before runner selection (capped).",
+      "items": {
+        "type": "object",
+        "required": ["title", "confidence", "reviewRequired", "evidence", "lifecycle", "scenarios"],
+        "properties": {
+          "title": { "type": "string" },
+          "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+          "reviewRequired": { "type": "boolean" },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "lifecycle": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["phase", "label"],
+              "properties": {
+                "phase": {
+                  "type": "string",
+                  "enum": ["trigger", "condition", "action", "state-change", "side-effect", "observable-outcome"]
+                },
+                "label": { "type": "string" }
+              }
+            }
+          },
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["priority", "kind", "title", "assertions"],
+              "properties": {
+                "priority": { "type": "string", "enum": ["critical", "recommended"] },
+                "kind": { "type": "string", "enum": ["primary", "failure", "boundary", "state-transition"] },
+                "title": { "type": "string" },
+                "assertions": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        }
+      }
+    },
     "firstDraftCommand": {
       "type": "string",
       "description": "One command that creates the first E2E draft. Only present when the repository has no test suite and the diff reaches a product journey."

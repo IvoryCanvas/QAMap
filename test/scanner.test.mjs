@@ -636,7 +636,8 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.ok(plan.missingTestability.some((gap) => /\.maestro/.test(gap)));
   assert.deepEqual(plan.suggestedCommands, ["pnpm run lint"]);
   assert.match(markdown, /# QAMap E2E Plan/);
-  assert.match(markdown, /Recommended runner: Maestro/);
+  assert.match(markdown, /Automation adapter: Maestro/);
+  assert.match(markdown, /selects an output adapter only after deriving runner-independent change intent/i);
   assert.match(markdown, /## Execution Profile/);
   assert.match(markdown, /App id: `Fixture`/);
   assert.match(markdown, /Coverage targets:/);

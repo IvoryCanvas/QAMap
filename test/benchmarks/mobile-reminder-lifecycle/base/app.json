@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Summary Fixture",
+    "slug": "summary-fixture",
+    "ios": {
+      "bundleIdentifier": "com.example.summaryfixture"
+    },
+    "android": {
+      "package": "com.example.summaryfixture"
+    }
+  }
+}

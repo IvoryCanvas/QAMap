@@ -31,6 +31,7 @@ export interface QaDraftResult {
   testSuite: E2eDraftResult["plan"]["testSuite"];
   bootstrap: E2eDraftResult["plan"]["bootstrap"];
   runnerSetup: E2eDraftResult["plan"]["runnerSetup"];
+  changeAnalysis: E2eDraftResult["plan"]["changeAnalysis"];
   readiness: E2eDraftReadinessSummary;
   flows: QaDraftFlow[];
   missingEvidence: QaDraftMissingEvidence[];
@@ -94,6 +95,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     testSuite: draft.plan.testSuite,
     bootstrap: draft.plan.bootstrap,
     runnerSetup: draft.plan.runnerSetup,
+    changeAnalysis: draft.plan.changeAnalysis,
     readiness: draft.readinessSummary,
     flows,
     missingEvidence,
@@ -127,6 +129,22 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
     manifest: result.manifestPath ?? null,
     readiness: { score: result.readiness.score, level: result.readiness.level },
     testSuite: { present: result.testSuite.hasTestSuite, files: result.testSuite.testFileCount },
+    intents: result.changeAnalysis.intents.slice(0, 3).map((intent) => ({
+      title: truncateForAgent(intent.title, 100),
+      confidence: intent.confidence,
+      reviewRequired: intent.reviewRequired,
+      evidence: intent.evidence.slice(0, 4).map((item) => truncateForAgent(item.value, 100)),
+      lifecycle: intent.lifecycle.slice(0, 8).map((stage) => ({
+        phase: stage.kind,
+        label: truncateForAgent(stage.label, 120),
+      })),
+      scenarios: intent.scenarios.slice(0, 4).map((scenario) => ({
+        priority: scenario.priority,
+        kind: scenario.kind,
+        title: truncateForAgent(scenario.title, 100),
+        assertions: scenario.assertions.slice(0, 3).map((assertion) => truncateForAgent(assertion, 120)),
+      })),
+    })),
     firstDraftCommand: !result.testSuite.hasTestSuite && needsGeneratedDraft(result)
       ? firstDraftCreateCommand(result)
       : undefined,
@@ -166,6 +184,19 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("");
   lines.push("## At a Glance");
   lines.push("");
+  const primaryIntent = result.changeAnalysis.intents[0];
+  if (primaryIntent) {
+    lines.push(`- Change intent: ${escapeMarkdownInline(primaryIntent.title)} [${primaryIntent.confidence}]`);
+    const lifecycle = primaryIntent.lifecycle.slice(0, 5).map((stage) => `${stage.kind}: ${stage.label}`).join(" -> ");
+    if (lifecycle) {
+      lines.push(`- Behavior lifecycle: ${escapeMarkdownInline(lifecycle)}`);
+    }
+    if (primaryIntent.reviewRequired) {
+      lines.push("- Intent confidence: human review is required before treating generated scenarios as regression policy.");
+    }
+  } else {
+    lines.push("- Change intent: not inferred; heuristic flow suggestions remain review-only.");
+  }
   if (result.flows.length === 0) {
     lines.push("- Affected behavior: no changed flow candidate was generated from this diff.");
   } else {
@@ -210,11 +241,13 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push(`- Base: \`${escapeMarkdownInline(result.base)}\``);
   lines.push(`- Head: \`${escapeMarkdownInline(result.head)}\``);
   lines.push(`- Project: ${formatProjectType(result.project)}`);
-  lines.push(`- Recommended runner: ${formatRunnerName(result.runner)}`);
+  lines.push(`- Automation adapter: ${formatRunnerName(result.runner)}`);
   lines.push(`- Manifest: ${result.manifestPath ? `\`${escapeMarkdownInline(result.manifestPath)}\`` : "not found; using repo signals and PR diff only"}`);
   lines.push(`- Stage: ${formatDraftReadinessStage(result.readiness)}`);
   lines.push(`- Draft flows: ${result.flows.length}`);
   lines.push("");
+
+  appendQaChangeIntentMarkdown(lines, result);
 
   if (!result.testSuite.hasTestSuite && needsGeneratedDraft(result)) {
     lines.push("## First E2E Draft Bootstrap");
@@ -326,6 +359,36 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("");
 
   return lines.join("\n");
+}
+
+function appendQaChangeIntentMarkdown(lines: string[], result: QaDraftResult): void {
+  lines.push("## Change Intent Evidence");
+  lines.push("");
+  if (result.changeAnalysis.intents.length === 0) {
+    lines.push("No behavior-bearing commit intent was found. QAMap did not promote inferred names into trusted QA scenarios.");
+    lines.push("");
+    return;
+  }
+  for (const intent of result.changeAnalysis.intents.slice(0, 3)) {
+    lines.push(`### ${escapeMarkdownInline(intent.title)}`);
+    lines.push("");
+    lines.push(`- Confidence: ${intent.confidence}${intent.reviewRequired ? "; review required" : ""}`);
+    for (const commit of intent.commits.slice(0, 5)) {
+      lines.push(`- Evidence: \`${commit.sha.slice(0, 12)}\` ${escapeMarkdownInline(commit.subject)}`);
+    }
+    lines.push("- Lifecycle:");
+    for (const stage of intent.lifecycle.slice(0, 10)) {
+      lines.push(`  - ${stage.kind}: ${escapeMarkdownInline(stage.label)}`);
+    }
+    lines.push("- QA scenarios:");
+    for (const scenario of intent.scenarios.slice(0, 4)) {
+      lines.push(`  - [${scenario.priority}] ${escapeMarkdownInline(scenario.title)}`);
+      for (const assertion of scenario.assertions.slice(0, 2)) {
+        lines.push(`    - Assert: ${escapeMarkdownInline(assertion)}`);
+      }
+    }
+    lines.push("");
+  }
 }
 
 function nextStepCommand(result: QaDraftResult): string {
@@ -582,6 +645,9 @@ function formatDraftSource(source: E2eDraftFile["source"]): string {
   }
   if (source === "domain-language") {
     return "domain-language";
+  }
+  if (source === "change-intent") {
+    return "commit-and-diff-intent";
   }
   if (source === "core-flow") {
     return "core-flow";

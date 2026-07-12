@@ -79,7 +79,7 @@
     },
     "evidenceKind": {
       "type": "string",
-      "enum": ["diff", "source", "manifest", "selector", "fixture", "test", "inference"]
+      "enum": ["commit", "diff", "source", "manifest", "selector", "fixture", "test", "inference"]
     },
     "evidence": {
       "type": "object",

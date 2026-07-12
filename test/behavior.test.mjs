@@ -16,6 +16,7 @@ import {
   createInferredFlowBehaviorAdapter,
 } from "../dist/behavior.js";
 import { createManifestBehaviorAdapter } from "../dist/behavior-manifest.js";
+import { createChangeIntentBehaviorAdapter } from "../dist/behavior-intent.js";
 import { generateE2ePlan } from "../dist/e2e.js";
 
 const baseContext = {
@@ -93,6 +94,93 @@ test("behavior graph JSON schema stays aligned with runtime enums", async () => 
   assert.deepEqual(schema.$defs.edgeKind.enum, behaviorEdgeKinds);
   assert.deepEqual(schema.$defs.evidenceKind.enum, behaviorEvidenceKinds);
   assert.ok(schema.required.includes("$schema"));
+});
+
+test("change intent adapter preserves commit lifecycle and QA assertions", async () => {
+  const commitEvidence = {
+    kind: "commit",
+    value: "feat: schedule a digest reminder after report completion",
+    commit: "1234567890abcdef",
+  };
+  const analysis = {
+    base: "main",
+    head: "HEAD",
+    source: "commits-and-diff",
+    commits: [],
+    diagnostics: [],
+    intents: [
+      {
+        id: "intent:digest",
+        title: "Schedule a digest reminder after report completion",
+        summary: "Schedule and open a digest reminder",
+        confidence: "high",
+        commits: [],
+        files: ["src/reminder.ts"],
+        keywords: ["digest", "reminder"],
+        evidence: [commitEvidence],
+        reviewRequired: false,
+        lifecycle: [
+          {
+            id: "stage:trigger",
+            kind: "trigger",
+            label: "After report completion.",
+            confidence: "high",
+            evidence: [commitEvidence],
+            files: [],
+          },
+          {
+            id: "stage:effect",
+            kind: "side-effect",
+            label: "Schedule a digest reminder.",
+            confidence: "high",
+            evidence: [commitEvidence],
+            files: ["src/reminder.ts"],
+          },
+          {
+            id: "stage:outcome",
+            kind: "observable-outcome",
+            label: "Open the linked digest.",
+            confidence: "high",
+            evidence: [commitEvidence],
+            files: ["src/reminder.ts"],
+          },
+        ],
+        scenarios: [
+          {
+            id: "scenario:primary",
+            kind: "primary",
+            priority: "critical",
+            title: "Schedule a digest reminder",
+            rationale: "Commit evidence",
+            setup: [],
+            steps: ["Complete a report."],
+            assertions: ["Verify the linked digest opens."],
+            edgeCases: [],
+            evidence: [commitEvidence],
+          },
+        ],
+      },
+    ],
+  };
+
+  const graph = await analyzeBehaviorGraph(
+    {
+      ...baseContext,
+      changedFiles: [{ status: "M", path: "src/reminder.ts" }],
+    },
+    [createChangeIntentBehaviorAdapter({ analysis })],
+  );
+
+  assert.deepEqual(graph.adapters.map((adapter) => [adapter.id, adapter.status]), [["qamap.change-intent", "used"]]);
+  assert.equal(graph.summary.byKind.contract, 1);
+  assert.ok(graph.summary.byKind.action >= 1);
+  assert.ok(graph.summary.byKind.effect >= 1);
+  assert.ok(graph.summary.byKind.assertion >= 2);
+  assert.ok(graph.nodes.some((node) => node.evidence.some((evidence) => evidence.kind === "commit")));
+  assert.ok(graph.edges.some((edge) => edge.kind === "precedes"));
+  assert.ok(graph.edges.some((edge) => edge.kind === "expects"));
+  const ids = new Set(graph.nodes.map((node) => node.id));
+  assert.ok(graph.edges.every((edge) => ids.has(edge.from) && ids.has(edge.to)));
 });
 
 test("behavior adapter failures are isolated and dangling edges are removed", async () => {

@@ -79,6 +79,61 @@
       }
     },
     {
+      "name": "web-preferences-lifecycle",
+      "fixture": "test/benchmarks/web-preferences-lifecycle",
+      "commitMessage": "feat: submit notification preferences, persist the selected timezone, and show the saved state after the request completes",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minHighConfidenceIntents": 1,
+        "minCommitBehaviorNodes": 3,
+        "minDiffAnchoredFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "contract", "state", "effect", "assertion", "source", "locator"],
+        "mustReachFiles": ["src/pages/preferences.tsx"],
+        "mustNameIntents": ["submit notification preferences"],
+        "mustNameFlows": ["submit notification preferences"],
+        "mustNotNameFlows": ["primary journey", "smoke flow"],
+        "mustDraftFiles": ["tests/e2e/submit-notification-preferences"],
+        "mustIncludeLifecycle": ["persist the selected timezone", "show the saved state", "after the request completes"],
+        "mustIncludeQaScenarios": ["Failure, timeout, and retry handling", "Re-entry and stale state recovery"],
+        "mustFindIntentEvidence": ["submit notification preferences"],
+        "mustFindEntrypoints": ["/preferences"],
+        "mustFindSelectors": ["preferences-save"],
+        "mustFindSuccessSignals": ["Preferences saved"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 8192
+      }
+    },
+    {
+      "name": "mobile-reminder-lifecycle",
+      "fixture": "test/benchmarks/mobile-reminder-lifecycle",
+      "commitMessage": "feat: schedule a summary reminder after survey completion, resync it when preferences change, and open the linked summary when tapped",
+      "expect": {
+        "runner": "maestro",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minHighConfidenceIntents": 1,
+        "minCommitBehaviorNodes": 3,
+        "minDiffAnchoredFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "contract", "state", "effect", "assertion", "source", "locator"],
+        "mustReachFiles": ["src/services/summaryReminder.ts", "src/screens/SurveyCompleteScreen.tsx"],
+        "mustNameIntents": ["schedule a summary reminder"],
+        "mustNameFlows": ["schedule a summary reminder"],
+        "mustNotNameFlows": ["primary journey", "smoke flow"],
+        "mustDraftFiles": [".maestro/schedule-a-summary-reminder-after-survey-completion"],
+        "mustIncludeLifecycle": ["after survey completion", "resync it when preferences change", "open the linked summary"],
+        "mustIncludeQaScenarios": ["Scheduling, calendar, and duplicate boundary", "Entry payload and destination routing"],
+        "mustFindIntentEvidence": ["schedule a summary reminder"],
+        "mustFindSelectors": ["summary-reminder-toggle", "summary-reminder-preview"],
+        "mustFindSuccessSignals": ["Summary reminder scheduled"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 8192
+      }
+    },
+    {
       "name": "expo-maestro-profile",
       "fixture": "test/benchmarks/expo-maestro-profile",
       "expect": {

@@ -28,7 +28,7 @@ export const behaviorEdgeKinds = [
   "implemented-by",
   "impacts",
 ] as const;
-export const behaviorEvidenceKinds = ["diff", "source", "manifest", "selector", "fixture", "test", "inference"] as const;
+export const behaviorEvidenceKinds = ["commit", "diff", "source", "manifest", "selector", "fixture", "test", "inference"] as const;
 
 export type BehaviorConfidence = "low" | "medium" | "high";
 export type BehaviorAdapterConfidence = "none" | BehaviorConfidence;

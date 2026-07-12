@@ -95,6 +95,15 @@ function scoreTarget(target, plan, qa, durationMs) {
     .map((flow) => flow.userJourney?.successSignal)
     .filter(Boolean);
   const entrypoints = plan.flows.flatMap((flow) => flow.entrypoints.map((entrypoint) => entrypoint.value));
+  const intentTitles = plan.changeAnalysis.intents.map((intent) => intent.title);
+  const intentLifecycle = plan.changeAnalysis.intents.flatMap((intent) =>
+    intent.lifecycle.map((stage) => `${stage.kind}: ${stage.label}`)
+  );
+  const intentScenarios = plan.changeAnalysis.intents.flatMap((intent) =>
+    intent.scenarios.map((scenario) =>
+      `${scenario.priority} ${scenario.kind}: ${scenario.title} ${scenario.assertions.join(" ")}`
+    )
+  );
   const mustName = expect.mustNameFlows ?? [];
   const named = mustName.filter((name) => includesTerm(flowTitles, name));
 
@@ -108,6 +117,14 @@ function scoreTarget(target, plan, qa, durationMs) {
     flowTitles,
     successSignals,
     entrypoints,
+    changeIntents: plan.changeAnalysis.intents.length,
+    highConfidenceIntents: plan.changeAnalysis.intents.filter((intent) => intent.confidence === "high").length,
+    intentTitles,
+    intentLifecycle,
+    intentScenarios,
+    intentEvidence: plan.changeAnalysis.intents.flatMap((intent) =>
+      intent.evidence.map((evidence) => evidence.value)
+    ),
     draftPaths: qa.flows.map((flow) => normalizePath(flow.draftPath)),
     genericTitles: qa.flows.filter((flow) => genericTitlePattern.test(flow.title)).length,
     importPropagatedFlows: plan.flows.filter((flow) => flow.reason.includes("through imports")).length,
@@ -120,6 +137,9 @@ function scoreTarget(target, plan, qa, durationMs) {
     behaviorImpactedNodes: plan.behaviorGraph.summary.impactedNodes,
     manifestBehaviorNodes: plan.behaviorGraph.nodes.filter((node) =>
       node.evidence.some((evidence) => evidence.kind === "manifest")
+    ).length,
+    commitBehaviorNodes: plan.behaviorGraph.nodes.filter((node) =>
+      node.evidence.some((evidence) => evidence.kind === "commit")
     ).length,
     behaviorGraph: `${plan.behaviorGraph.summary.nodes}/${plan.behaviorGraph.summary.impactedNodes}`,
     behaviorKinds: Object.entries(plan.behaviorGraph.summary.byKind)
@@ -178,6 +198,27 @@ function evaluateContract(expect, result, plan, qa) {
     );
   }
   appendMissingTerms(failures, "behavior kind", result.behaviorKinds, expect.mustHaveBehaviorKinds);
+  if (expect.minChangeIntents !== undefined && result.changeIntents < expect.minChangeIntents) {
+    failures.push(`expected at least ${expect.minChangeIntents} change intent(s), got ${result.changeIntents}`);
+  }
+  if (
+    expect.minHighConfidenceIntents !== undefined &&
+    result.highConfidenceIntents < expect.minHighConfidenceIntents
+  ) {
+    failures.push(
+      `expected at least ${expect.minHighConfidenceIntents} high-confidence intent(s), got ${result.highConfidenceIntents}`,
+    );
+  }
+  if (expect.minCommitBehaviorNodes !== undefined && result.commitBehaviorNodes < expect.minCommitBehaviorNodes) {
+    failures.push(
+      `expected at least ${expect.minCommitBehaviorNodes} commit-backed behavior node(s), got ${result.commitBehaviorNodes}`,
+    );
+  }
+  appendMissingTerms(failures, "intent title", result.intentTitles, expect.mustNameIntents);
+  appendUnexpectedTerms(failures, "intent title", result.intentTitles, expect.mustNotNameIntents);
+  appendMissingTerms(failures, "intent lifecycle", result.intentLifecycle, expect.mustIncludeLifecycle);
+  appendMissingTerms(failures, "intent QA scenario", result.intentScenarios, expect.mustIncludeQaScenarios);
+  appendMissingTerms(failures, "intent evidence", result.intentEvidence, expect.mustFindIntentEvidence);
 
   if (expect.runner && result.runner !== expect.runner) {
     failures.push(`runner expected ${expect.runner}, got ${result.runner}`);
@@ -289,7 +330,7 @@ async function materializeFixture(target, configDir) {
     await fs.cp(headRoot, repositoryRoot, { recursive: true, force: true });
   }
   await git(repositoryRoot, ["add", "-A"]);
-  await git(repositoryRoot, ["commit", "--allow-empty", "-m", "benchmark change"]);
+  await git(repositoryRoot, ["commit", "--allow-empty", "-m", target.commitMessage ?? "benchmark change"]);
   const prepared = targetPaths(target, repositoryRoot, "main", "HEAD");
   return {
     ...prepared,
@@ -336,6 +377,7 @@ function printTable(rows) {
     ["diffAnchoredFlows", 10],
     ["manifestFlowMatches", 8],
     ["behaviorGraph", 9],
+    ["changeIntents", 7],
     ["blankActions", 6],
     ["genericTitles", 8],
     ["mustReachRecall", 10],
@@ -373,7 +415,7 @@ function printDeltas(baselineRows, currentRows) {
       continue;
     }
     const deltas = [];
-    for (const key of ["flows", "importPropagatedFlows", "diffAnchoredFlows", "manifestFlowMatches", "behaviorNodes", "behaviorImpactedNodes", "manifestBehaviorNodes", "blankActions", "genericTitles", "agentBytes"]) {
+    for (const key of ["flows", "changeIntents", "highConfidenceIntents", "importPropagatedFlows", "diffAnchoredFlows", "manifestFlowMatches", "behaviorNodes", "behaviorImpactedNodes", "manifestBehaviorNodes", "commitBehaviorNodes", "blankActions", "genericTitles", "agentBytes"]) {
       const diff = (current[key] ?? 0) - (before[key] ?? 0);
       if (diff !== 0) {
         deltas.push(`${key} ${diff > 0 ? "+" : ""}${diff}`);
@@ -390,6 +432,7 @@ function shortLabel(key) {
     diffAnchoredFlows: "diffAnchor",
     manifestFlowMatches: "manifest",
     behaviorGraph: "graph n/i",
+    changeIntents: "intents",
     blankActions: "blank",
     genericTitles: "generic",
     mustReachRecall: "reach",
