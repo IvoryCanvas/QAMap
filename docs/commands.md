@@ -21,7 +21,7 @@ Use `pnpm dlx @ivorycanvas/qamap ...` for one-off runs without installing QAMap 
 
 ## Reading The Output
 
-Human-facing reports (`text` and `markdown` formats) open with an **At a Glance** section: affected behavior, the reviewer question to answer before merge, concrete repository evidence, the proposed draft path, the next command, and the one or two missing trust requirements. When printed to an interactive terminal the report is colorized (headings, statuses, priority tags, inline commands); files written with `--output`, pipes, CI logs, and the machine formats (`json`, `agent`, `sarif`) are always plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
+Human-facing reports (`text` and `markdown` formats) open with an **At a Glance** section: evidence-backed change intent, behavior lifecycle, affected behavior, the reviewer question to answer before merge, concrete repository evidence, the proposed draft path, and missing trust requirements. Runner information appears later as an automation adapter. When printed to an interactive terminal the report is colorized (headings, statuses, priority tags, inline commands); files written with `--output`, pipes, CI logs, and the machine formats (`json`, `agent`, `sarif`) are always plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
 
 Draft readiness is reported as a **stage on a fixed four-step journey**, for example `Stage: setup needed (1 of 4) — readiness 0/100`. A fresh repository usually starts at stage 1 — that is the expected starting point, not a failure. Each stage maps to a stable `readiness.level` value in the `json` and `agent` formats, which keeps machine output unchanged:
 
@@ -37,7 +37,9 @@ Draft readiness is reported as a **stage on a fixed four-step journey**, for exa
 
 On a changed branch, QAMap tries to produce reviewable verification artifacts instead of only saying "write more tests":
 
-- a branch-aware verification plan that names the changed domain, actor, trigger, goal, success signal, and edge cases
+- a commit-and-diff-backed change intent with confidence, review requirements, and source evidence
+- an ordered trigger, condition, action, state-change, side-effect, and observable-outcome lifecycle
+- runner-independent primary, failure, boundary, and state-transition QA scenarios
 - draft Playwright, Maestro, CLI command, or manual checklist files when the repository shape supports them
 - a repo-level verification manifest loop where humans correct durable flows once and later PRs get sharper route/check/test draft suggestions
 - a runner setup proposal that explains why Playwright or Maestro fits the changed surface and which files/commands would be created if the team accepts it
@@ -61,9 +63,9 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap eval . --base origin/main --head HEAD --pr-body-file pr-body.md` | Score change readiness across intent, risk, tests, and review size. |
 | `qamap github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `qamap test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
-| `qamap qa . --base origin/main --head HEAD` | One-command PR QA: affected flows, missing QA evidence, a PR checklist, and E2E starter drafts, opening with At a Glance. |
-| `qamap qa . --base origin/main --head HEAD --format agent` | The same decision content as one ~2-4KB JSON line for coding agents — a versioned contract documented in [docs/agent-format.md](agent-format.md). |
-| `qamap e2e plan . --base origin/main --head HEAD` | Suggest E2E runner, bootstrap steps, user flows, coverage targets, existing test evidence, and missing testability hooks for changed files. |
+| `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. |
+| `qamap qa . --base origin/main --head HEAD --format agent` | The same decision content as one compact JSON line for coding agents — a versioned contract documented in [docs/agent-format.md](agent-format.md). |
+| `qamap e2e plan . --base origin/main --head HEAD` | Derive change intent and QA scenarios, then map them to coverage, test evidence, testability gaps, and an automation adapter. |
 | `qamap e2e plan . --base origin/main --head HEAD --record-history` | Save a compact local run snapshot under `.qamap/runs/` while keeping JSON/Markdown output usable. |
 | `qamap e2e setup . --runner playwright` | Explicitly apply the accepted runner setup and create the first changed-flow E2E draft without overwriting existing files. |
 | `qamap e2e draft . --base origin/main --head HEAD --dry-run` | Preview generated Maestro, Playwright, or manual E2E drafts without writing files. |
@@ -90,7 +92,9 @@ For monorepos, pass `--workspace-root` when scanning a package. Package-local ch
 
 `qamap test-plan` turns changed file paths into a review-ready domain test checklist. It also discovers common validation commands from `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, Gradle files, and Maven `pom.xml`. Add `--include-working-tree` for local, uncommitted changes while iterating.
 
-`qamap e2e plan` turns changed file paths into a first-pass E2E testing plan. It detects whether a project looks like Expo/React Native, web, API/service, or CLI package, recommends a runner such as Maestro or Playwright, starts backend services with an API contract checklist, starts executable packages with a CLI command verification checklist, suggests bootstrap steps for repos with little or no test history, suggests domain language for the changed behavior, suggests candidate user flows, adds coverage targets, compares those targets with existing test-suite evidence when tests are present, flags API-dependent flows that need mock or fixture responses, and points out missing stable selectors such as `testID` or `data-testid` before anyone starts writing tests from a blank file.
+`qamap e2e plan` first reads behavior-bearing commits in the selected base/head range. Related `feat`, `fix`, `hotfix`, `perf`, and supporting `refactor` commits are grouped into change intents, then connected to added diff symbols. The result is an evidence-backed lifecycle and a set of runner-independent primary, failure, boundary, and state-transition scenarios. Low-confidence or working-tree-only intent remains review-required instead of becoming trusted regression policy.
+
+After that judgment, QAMap detects whether the target looks like Expo/React Native, web, API/service, CLI, or another repository shape and selects a Maestro, Playwright, or manual output adapter. The plan compares scenario targets with existing test evidence, identifies required mocks and fixtures, and reports missing stable selectors such as `testID` or `data-testid`. Runner detection is an implementation detail, not the first value shown to the user.
 
 The plan also includes an execution profile: detected start command, test command, Playwright `baseURL`, mobile app id, runner config files, env fixture files, confidence, and blockers. This keeps generated E2E drafts honest about whether they are runnable candidates or still review-only scaffolds.
 
@@ -100,7 +104,7 @@ When a repository does not already have the selected E2E runner, the plan includ
 
 When run at a monorepo root, the E2E plan also reports changed app/package targets. This helps a maintainer move from a broad workspace diff to scoped commands such as `qamap e2e plan services/listing --workspace-root . --base origin/main --head HEAD`, where package-specific runner detection and flow naming are usually sharper.
 
-Each candidate flow also includes a flow language brief: actor, trigger, goal, success signal, reviewer question, and edge cases. The brief keeps generated tests tied to product behavior rather than only changed file names.
+Each candidate flow also includes a flow language brief: actor, trigger, goal, success signal, reviewer question, and edge cases. Intent-backed flows additionally retain the original commits, ordered lifecycle, QA scenarios, confidence, and review requirement so generated tests can be traced to evidence rather than only changed file names.
 
 The bootstrap section answers what must happen before generated drafts can be treated as real regression coverage. For example, a testless web project can get required steps for Playwright setup, first draft generation, stable selector work, fixture/mock data, and missing validation evidence, plus recommended steps for `.qamap/manifest.yaml`, `.qamap/domains.yml`, `.qamap/flows.yml`, and local history recording.
 
@@ -207,6 +211,8 @@ Pass `--record-history` when you want QAMap to keep a compact local snapshot of 
 
 The draft result is meant to be useful as a PR artifact, not only as generated files. Markdown and JSON output include:
 
+- `changeAnalysis`: commit-backed intents, confidence, review requirements, source evidence, lifecycle stages, and runner-independent QA scenarios
+- intent-backed draft files retain `intentId`, `intentConfidence`, `lifecycle`, and `qaScenarios`; generated files include the same evidence as comments
 - `languageBrief`: actor, trigger, goal, success signal, reviewer question, and edge cases for each draft file
 - `promotionStatus`: whether the draft is a `commit-candidate`, `needs-review`, or `low-signal`
 - `runnableStatus`: whether the draft is a `runnable-candidate`, `near-runnable`, or `review-only`

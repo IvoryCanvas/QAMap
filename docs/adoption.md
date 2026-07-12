@@ -1,6 +1,6 @@
 # Adopting QAMap
 
-QAMap works best when teams treat it as the local QA pass for AI-assisted PRs, not as a replacement for review or security tooling.
+QAMap works best when teams treat it as the local QA design pass for any PR, not as a replacement for review or security tooling.
 
 ## First Run
 
@@ -16,7 +16,7 @@ For coding agents, request the compact machine-readable summary instead:
 pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD --format agent
 ```
 
-When the qa output looks useful, preview and then write the draft E2E files:
+First confirm the inferred commit intent, lifecycle, confidence, and runner-independent QA scenarios. When that judgment looks useful, preview and then write the adapter-specific draft files:
 
 ```sh
 pnpm dlx @ivorycanvas/qamap e2e draft . --base origin/main --head HEAD --dry-run
@@ -58,8 +58,8 @@ Start advisory, then tighten the gate once the findings are understood.
 
 | Phase | Command | Goal |
 | --- | --- | --- |
-| 1. PR QA draft | `qamap qa . --base origin/main --head HEAD` | Get the affected flow, suggested E2E/checklist draft, missing evidence, and PR checklist for a branch. |
-| 2. Agent handoff | `qamap qa . --base origin/main --head HEAD --format agent` | Give coding agents the same decision content as compact JSON instead of a long report. |
+| 1. PR QA design | `qamap qa . --base origin/main --head HEAD` | Get commit-backed intent, behavior lifecycle, QA scenarios, affected flows, and missing evidence. |
+| 2. Agent handoff | `qamap qa . --base origin/main --head HEAD --format agent` | Give coding agents the same intent and scenario evidence as compact JSON instead of a long report. |
 | 3. E2E preview | `qamap e2e draft . --base origin/main --head HEAD --dry-run` | Preview generated draft paths, readiness, action items, and blockers before writing files. |
 | 4. E2E apply | `qamap e2e draft . --base origin/main --head HEAD` | Write draft files once the preview looks useful enough to review. |
 | 5. QA memory | `qamap manifest init .` (from the default branch) | Create `.qamap/manifest.yaml` so future PR recommendations reuse reviewed team QA language. |
@@ -188,11 +188,13 @@ On the guardrails side, QAMap is not trying to replace the larger security ecosy
 
 ## Why This Is Different From Recorders And Generators
 
-Recorders such as browser or mobile test studios are useful when you already know the flow to exercise. QAMap starts one step earlier: it asks what the PR changed, which repo-owned QA memory applies, and what test artifact should exist before merge.
+Recorders such as browser or mobile test studios are useful when you already know the flow to exercise. QAMap starts one step earlier: it asks what the PR commits intended to change, which lifecycle and risk axes follow from the diff, which repo-owned QA memory applies, and what test artifact should exist before merge.
 
 A good QAMap result should answer:
 
-- which product flow changed
+- which commit-backed behavior intent changed, with confidence and review requirements
+- which trigger, condition, action, state change, side effect, and observable outcome form its lifecycle
+- which primary, failure, boundary, and state-transition QA scenarios follow from that lifecycle
 - which manifest domain, flow, and checks caused the recommendation
 - which draft test file was generated or previewed
 - which success, failure, edge, contract, or visual cases the draft covers
@@ -201,7 +203,7 @@ A good QAMap result should answer:
 
 That is the product bet: one human correction to the repo-local manifest should improve future PR recommendations without another LLM prompt.
 
-You do not need a manifest to start. Without one, QAMap uses the PR diff, package signals, routes, selectors, runner config, and existing tests. Add a manifest only when the team wants durable QA language that improves future recommendations.
+You do not need a manifest to start. Without one, QAMap uses commit subjects and bodies, the PR diff, package signals, routes, selectors, runner config, and existing tests. Add a manifest only when the team wants durable QA language that improves future recommendations.
 
 ## What QAMap Is For
 
@@ -211,9 +213,9 @@ QAMap is intentionally small:
 - static by default: it does not execute scanned project code
 - no-token by default: it does not call an LLM API
 - verification-focused: it tells reviewers what evidence is missing, not how to style code
-- PR QA skill output: `qamap qa` turns a branch into a PR-ready affected-flow summary, suggested E2E/checklist draft, missing evidence list, and copyable checklist
+- PR QA skill output: `qamap qa` turns a branch into change intent, behavior lifecycle, QA scenarios, affected-flow evidence, optional automation drafts, and a copyable checklist
 - packaged agent skill: `skills/qamap-pr-qa/SKILL.md` gives coding agents a compact PR QA workflow for running QAMap before handoff
-- domain-aware E2E drafting: it turns branch changes into flow language, draft specs, readiness summaries, and action items
+- intent-aware E2E drafting: it derives runner-independent QA first, then compiles the selected path into Playwright, Maestro, or manual artifacts
 - repo-local verification base: shared manifests can be committed, while generated run history stays ignored by default
 - context-aware baseline generation: manifest init can use repo-local context, ADRs, goals, agent instructions, harness files, skills, and runbooks as advisory bootstrap signals
 - harness/skill role hints: instruction-derived context is classified as agent skill, harness config, workflow lifecycle, verification rubric, safety policy, release policy, or test runner context
@@ -224,5 +226,4 @@ QAMap is intentionally small:
 It is built for teams using AI coding agents, MCP-powered tools, or any workflow where an agent can read, edit, test, commit, or open pull requests.
 
 For PR verification, QAMap treats the repository itself as the working base: committed manifests hold durable team language, ignored local history holds generated run observations, and the current branch diff supplies what changed now.
-
 

@@ -15,20 +15,31 @@ The output should be specific enough to paste into a PR comment:
 ```txt
 # QAMap QA Draft
 
+At a Glance
+- Change intent: Submit checkout and persist the confirmed order [high]
+- Behavior lifecycle: trigger: Submit checkout -> side-effect: Create order -> observable-outcome: Show order confirmation
+- Affected behavior: Submit checkout and persist the confirmed order
+
+Change Intent Evidence
+- Commit: feat: submit checkout and persist the confirmed order
+- Critical scenario: Submit checkout and persist the confirmed order
+  - Assert: order confirmation is visible and persisted
+- Recommended scenario: Failure, timeout, and retry handling
+
 Summary
 - Project: Web
-- Recommended runner: Playwright
+- Automation adapter: Playwright
 - Manifest: not found; using repo signals and PR diff only
 - Stage: almost runnable (3 of 4)
 
 PR Comment Draft
-- Affected flow: Checkout UI smoke flow
+- Affected flow: Submit checkout and persist the confirmed order
 - User journey: Customer -> Open route /checkout -> Complete checkout with realistic form data
 - Success signal: confirmation state is visible after submit
 - Changed files: src/pages/checkout/index.tsx
 
 Suggested E2E / QA Draft
-- tests/e2e/checkout-ui-smoke-flow.spec.ts: near runnable
+- tests/e2e/submit-checkout-and-persist-the-confirmed-order.spec.ts: near runnable
 - Open route /checkout.
 - Fill checkout email.
 - Submit checkout.
@@ -139,7 +150,7 @@ flows:
 
 ```txt
 Project: Web
-Recommended runner: Playwright
+Automation adapter: Playwright
 Execution profile: high
 Start command: pnpm run dev
 Test command: pnpm run test:e2e
@@ -224,7 +235,7 @@ For an Expo or React Native change, QAMap should recommend Maestro and carry mob
 
 ```txt
 Project: Expo / React Native
-Recommended runner: Maestro
+Automation adapter: Maestro
 
 Flow: Ink Drawing UI smoke flow
 Actor: User
@@ -269,7 +280,7 @@ For backend changes such as `src/v1/listing/utils.ts`, QAMap should not invent a
 
 ```txt
 Project: API / service
-Recommended runner: Manual
+Automation adapter: Manual
 
 Flow: Listing API contract smoke checklist
 Actor: API consumer or upstream service
@@ -296,7 +307,7 @@ For an npm package that exposes `package.json` bin entries, QAMap should not inv
 
 ```txt
 Project: CLI
-Recommended runner: Manual
+Automation adapter: Manual
 
 Flow: CLI command verification checklist
 Actor: CLI user or maintainer
@@ -460,9 +471,12 @@ Related Changed Files
 Good QAMap output should answer these questions quickly:
 
 - What behavior did this branch probably change?
+- Which commits and diff symbols support that intent, and how confident is the inference?
+- What trigger, condition, state change, side effect, and observable outcome form its lifecycle?
+- Which primary, failure, boundary, and state-transition checks follow from that lifecycle?
 - What does the team call that behavior?
 - Who or what exercises it?
-- Which runner or checklist is the right first shape?
+- Which existing automation adapter can compile the selected QA scenario?
 - Which setup, selector, fixture, or validation gap blocks this from becoming real regression coverage?
 
 If the output only says "make an E2E test" without these answers, it is not ready for the current release bar.

@@ -11,7 +11,7 @@ QAMap keeps major and minor changes deliberately rare during `0.x` development.
 - Risky minor work should ship through `alpha`, `beta`, and `rc` prereleases before the final minor.
 - Do not pre-allocate a minor version to every roadmap phase. Define the next minor release bar and continue compatible work as patches until that bar is met.
 
-The next minor release is earned when QAMap can complete one supported diff-to-evidence vertical slice: identify affected behavior, compile deterministic QA, execute it explicitly in temporary space, and report normalized evidence without modifying the target repository.
+Version `0.4.0` is earned by the first commit-to-intent-to-scenario vertical slice: behavior-bearing commits and diff symbols become an evidence-backed lifecycle and concrete runner-independent QA, then existing Playwright, Maestro, or manual adapters compile the result. The next minor is reserved for explicit temporary execution and normalized evidence without modifying the target repository.
 
 Version `1.0.0` requires a stable public contract and external adoption, not implementation volume alone. CLI commands, exit codes, machine output, manifest migration, adapter compatibility, no-LLM/no-upload guarantees, and release operations must be dependable. Repository stars are useful social proof, but repeated use in unrelated repositories and reported QA value are stronger release evidence.
 

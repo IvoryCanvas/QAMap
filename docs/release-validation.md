@@ -1,5 +1,19 @@
 # Release Validation
 
+## 0.4.0 - 2026-07-12
+
+Validated as the first intent-first QA design release. The release contract starts with behavior-bearing commits and diff evidence, reconstructs an ordered behavior lifecycle, proposes runner-independent QA scenarios, and only then compiles an optional automation draft:
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm test` | 139/139 passing |
+| `pnpm bench:ci` | 12/12 synthetic PR targets pass; dedicated web and mobile lifecycle targets require commit intent, ordered lifecycle phases, failure/boundary/state QA, observable success text, and commit-backed Behavior Graph evidence |
+| Coverage | Lines 86.80%, branches 83.37%, functions 94.86% |
+| Change Intent coverage | Lines 94.76%, branches 88.57%, functions 98.04% |
+| `npm publish --dry-run --access public` | Passed for `@ivorycanvas/qamap@0.4.0`; 129 files, 813.8 kB packed |
+| Intent-first output | Markdown, JSON, agent output, Behavior Graph, and generated drafts preserve confidence, commit evidence, lifecycle, and QA scenarios before automation-adapter guidance |
+| Read-only safety | Public regression coverage uses synthetic repositories; optional local smoke validation runs from temporary copies and does not modify target repositories |
+
 ## 0.3.5 - 2026-07-11
 
 Validated as a manifest-feedback reliability patch:
@@ -83,7 +97,9 @@ For each target, record:
 
 - command used
 - base/head refs or working-tree mode
-- recommended runner
+- inferred change intent, confidence, commit evidence, and review requirement
+- lifecycle and runner-independent QA scenario quality
+- selected automation adapter
 - generated flow language brief quality
 - draft readiness summary
 - draft self-check status and blockers
@@ -140,7 +156,9 @@ node dist/cli.js e2e draft <package> --workspace-root <repo-root> --base <base> 
 
 The E2E plan should show:
 
-- runner recommendation with clear evidence
+- change intent with commit and diff evidence, confidence, and review requirement
+- ordered behavior lifecycle and concrete primary, failure, boundary, and state-transition QA scenarios
+- automation adapter selection after the runner-independent QA sections
 - execution profile with start command, test command, base URL or app id when discoverable, confidence, and blockers
 - runner setup proposal with install commands, explicit `qamap e2e setup` acceptance command, files to create/update, and next commands when the repo lacks an E2E runner
 - setup output that reports the first generated changed-flow draft file after the accepted runner setup is applied
@@ -151,6 +169,7 @@ The E2E plan should show:
 
 The E2E draft should show:
 
+- intent evidence, lifecycle, and QA scenario comments inside generated artifacts
 - `verification-manifest` as the draft source when a matched manifest flow is strong enough
 - manifest evidence comments inside generated drafts
 - external `--manifest <file>` previews that let teams test generated manifest quality without writing `.qamap/manifest.yaml` into target repos
@@ -170,9 +189,11 @@ The QA draft should show:
 
 - no-write PR comment/checklist output from `qamap qa`
 - no cloud and no LLM token positioning in the output
+- change intent and lifecycle before automation setup
+- primary, failure, boundary, and state-transition QA scenarios when evidence supports them
 - affected flow language with changed files and reviewer question
 - suggested E2E or manual checklist path
-- runner recommendation inherited from the E2E planner
+- automation adapter inherited from the E2E planner
 - missing fixture, selector, assertion, runner, validation, or manifest evidence
 - PR checklist items that can be pasted into a pull request
 - optional manifest repair path when a manifest-backed recommendation is wrong
@@ -198,6 +219,9 @@ The manifest commands should show:
 The public demo must prove the product shape, not only command execution. Before promoting a release, run or update a small demo where a realistic PR diff produces a concrete E2E starting point:
 
 - The output names the affected product feature and user flow in domain language.
+- The output shows the behavior-bearing commit evidence, confidence, and review requirement behind the inferred intent.
+- The output orders trigger, condition, action, state change, side effect, and observable outcome before selecting a runner.
+- The output proposes concrete primary, failure, boundary, and state-transition QA where evidence supports them.
 - The output names the draft file that would be created or previewed.
 - The draft includes route or screen entry, realistic actions, and at least one meaningful assertion.
 - The report explains why the test was recommended from changed files and manifest evidence.
@@ -213,11 +237,12 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 
 | Target | Fixture-backed coverage | Expected output |
 | --- | --- | --- |
+| Commit intent and lifecycle | `change intent clusters related commits into one evidence-backed lifecycle`; `change intent keeps unrelated feature commits separate`; `change intent ignores release-only commit metadata`; `E2E planning promotes commit intent before runner-specific draft generation` | Related feature commits become one evidence-backed intent; unrelated features remain separate; release-only changes do not become product intent; lifecycle and QA scenarios appear before Playwright or Maestro compilation; generic `primary journey` and `smoke flow` titles are suppressed when evidence supports a concrete name. |
 | Manifest-free QA skill entrypoint | `qa command emits a PR comment draft without requiring a manifest` | `qamap qa` works without `.qamap/manifest.yaml`, emits a local-first PR QA draft, names affected flow, changed files, suggested E2E/checklist path, missing evidence, PR checklist, agent handoff, and says manifest is optional upgrade rather than a first-use gate. |
 | Packaged PR QA skill template | `package metadata includes the portable PR QA skill template` | npm package metadata includes `skills`, and `skills/qamap-pr-qa/SKILL.md` contains the local PR QA workflow, `qamap qa` command, and manifest repair guidance. |
 | Verification manifest loop | `manifest init creates a baseline verification manifest`; `manifest init keeps Expo app file domains specific`; `manifest init captures advisory instruction context`; `manifest bootstrap produces concrete PR E2E draft from repo QA memory`; `e2e draft can use an external verification manifest for read-only adoption preview`; `manifest matches explain e2e and verify recommendations`; `manifest validate reports missing and stale manifest policy` | Generated `.qamap/manifest.yaml` includes `$schema`, domains, flows, anchors, checks, runner, source, and confidence; context preview reports repo-local instruction sources, role summaries, validation commands, safety rules, and diagnostics; validator reports missing/stale/duplicate policy; explain output maps branch changes to manifest domains/flows/checks; E2E drafts prefer `verification-manifest` sources with manifest evidence, route entry, detected input/action selectors, required checks, and manifest repair paths; external manifests can be passed with `--manifest` for read-only adoption smoke tests. |
-| Web app with Playwright routes | `generateE2ePlan matches committed core flow definitions`; `generateE2eDraft uses web selectors in Playwright specs`; `generateE2eDraft dry run previews files without writing drafts`; `generateE2eDraft asserts changed HTML success copy in Playwright specs`; `generateE2ePlan captures Playwright execution profile and self-check blockers`; `generateE2ePlan infers Playwright base URLs from dev scripts`; `generateE2eDraft supports Next app router route groups and concrete route hints`; `generateE2ePlan reads React Router object route paths`; `generateE2eDraft fills dynamic route params from concrete route hints`; `generateE2eDraft emits runnable Playwright role and input actions` | `Web` project profile, `playwright` runner, core-flow names such as `Checkout purchase`, route-aware Playwright drafts, dry-run preview status without filesystem writes, stable selector hints, changed HTML success copy assertions, execution profile, dev-script base URL hints, opt-in Playwright setup proposal, Next App Router route groups, React Router object paths, dynamic route params, draft self-check status, action items, and validation gaps. |
-| Expo / React Native mobile app | `generateE2ePlan recommends mobile flows for Expo changes`; `generateE2ePlan detects Maestro app ids from app config files`; `generateE2eDraft scopes entrypoint hints to each domain scenario`; `generateE2eDraft names changed component actions before generic primary journeys` | `Expo / React Native` project profile, `maestro` runner, app id and launch command hints from `app.json` or `app.config.*`, Maestro YAML drafts, `testID`/`accessibilityLabel` selector hints, action-specific scenario names such as `Listing Media Link Submit`, and mobile setup actions. |
+| Web app with Playwright routes | `generateE2ePlan matches committed core flow definitions`; `generateE2eDraft uses web selectors in Playwright specs`; `generateE2eDraft dry run previews files without writing drafts`; `generateE2eDraft asserts changed HTML success copy in Playwright specs`; `generateE2ePlan captures Playwright execution profile and self-check blockers`; `generateE2ePlan infers Playwright base URLs from dev scripts`; `generateE2eDraft supports Next app router route groups and concrete route hints`; `generateE2ePlan reads React Router object route paths`; `generateE2eDraft fills dynamic route params from concrete route hints`; `generateE2eDraft emits runnable Playwright role and input actions` | `Web` project profile, Playwright output adapter, intent-backed or core-flow names, route-aware drafts, dry-run preview status without filesystem writes, stable selector hints, changed HTML success copy assertions, execution profile, dev-script base URL hints, opt-in setup proposal, route groups, object paths, dynamic params, draft self-check status, action items, and validation gaps. |
+| Expo / React Native mobile app | `generateE2ePlan recommends mobile flows for Expo changes`; `generateE2ePlan detects Maestro app ids from app config files`; `generateE2eDraft scopes entrypoint hints to each domain scenario`; `generateE2eDraft names changed component actions before generic primary journeys` | `Expo / React Native` project profile, Maestro output adapter, app id and launch command hints from `app.json` or `app.config.*`, YAML drafts, `testID`/`accessibilityLabel` selector hints, and mobile setup actions after runner-independent QA intent. |
 | API or backend service | `generateE2ePlan detects API service projects and suggests contract checklists`; `generateE2ePlan detects Django service apps from a workspace root`; `generateE2ePlan names versioned API service paths with domain language`; `generateE2ePlan uses matched core flow names for API service contracts` | `API / service` project profile, manual contract checklist, Django/FastAPI-style service signals when present, domain-aware titles such as `Listing API contract`, API consumer actor, endpoint/handler/service-path trigger, service start/test command hints, and contract failure coverage. |
 | CLI package | `generateE2ePlan detects CLI packages and suggests command verification checklists` | `CLI` project profile from `package.json` bin entries, manual command verification checklist, CLI user or maintainer actor language, command invocation trigger, stdout/stderr/generated-file/exit-code success signal, valid and invalid argument coverage, and no required API fixture action unless the changed command path explicitly exposes network or fixture evidence. |
 | Design tokens and data catalogs | `generateE2ePlan detects design token packages and suggests artifact validation`; `generateE2ePlan detects data catalog repositories and suggests catalog verification` | `Design tokens` and `Data catalog` project profiles, manual artifact/catalog checklist, token or catalog actor language, schema/generated output/consumer fixture coverage, fixture readiness marked not needed for API mocks, and validation matrix rows that do not require browser/device selectors. |
@@ -239,7 +264,8 @@ Private repositories may be used as local, read-only diagnostics, but their raw 
 The release candidate must pass the fixture-backed suite, package dry-run, and read-only smoke protocol. Record only public synthetic evidence in this document or in release notes:
 
 - whether the generated flow names match the team's domain language
-- whether the recommended runner is plausible
+- whether commit evidence supports the inferred intent and lifecycle
+- whether the automation adapter is plausible without being mistaken for the product value
 - whether generated drafts identify the right actor, trigger, success signal, and edge cases
 - whether action items are concrete enough for a developer to convert into runnable tests
 - whether false positives are caused by missing manifests, weak selectors, or unsupported project structure

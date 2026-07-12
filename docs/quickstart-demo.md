@@ -145,10 +145,13 @@ Input
 ```txt
 Output
 - PR comment/checklist draft
+- commit-backed change intent and confidence
+- ordered behavior lifecycle
+- primary, failure, boundary, and state-transition QA scenarios
 - changed domain language
 - candidate user flow
 - manifest evidence when a repo-local flow/check matches
-- recommended runner
+- automation adapter selected after QA design
 - draft file path
 - flow language brief
 - runnable status
@@ -164,9 +167,13 @@ The result should not stop at "selector needed" or "fixture needed." A useful QA
 ```txt
 # QAMap QA Draft
 
+At a Glance
+- Change intent: Submit checkout and persist the confirmed order [high]
+- Behavior lifecycle: trigger: submit checkout -> side-effect: create order -> observable-outcome: show confirmation
+
 Summary
 - Project: Web
-- Recommended runner: Playwright
+- Automation adapter: Playwright
 - Manifest: .qamap/manifest.yaml
 - Stage: almost runnable (3 of 4)
 

@@ -896,13 +896,14 @@ function readValue(args: string[], index: number, flag: string): string {
 }
 
 function printStartHere(): void {
-  console.log(`QAMap ${VERSION} — local-first PR QA for AI-assisted changes.
+  console.log(`QAMap ${VERSION} — local zero-LLM PR QA design from commit intent and code diffs.
 
 Start here, from inside your repository, on the branch you want to check:
 
   qamap qa
-      What should this branch prove before merge? Prints the affected user
-      flow, recommended E2E runner, missing evidence, and a PR checklist.
+      What did this branch intend to change, and what should it prove before
+      merge? Prints behavior lifecycle, QA scenarios, affected flows, missing
+      evidence, and an optional automation adapter.
       The base branch defaults to origin/main (then main); override with
       --base <ref> --head <ref>.
 
@@ -925,7 +926,7 @@ Full command reference: qamap help`);
 function printHelp(): void {
   console.log(`QAMap ${VERSION}
 
-Local-first PR QA drafts and guardrails for AI-assisted changes.
+Local zero-LLM PR QA design, deterministic automation drafts, and repository guardrails.
 
 Usage:
   qamap scan [path] [--format <format>] [--fail-on <severity>] [--max-files <n>]
@@ -1018,7 +1019,7 @@ Examples:
 function printE2eHelp(): void {
   console.log(`QAMap ${VERSION}
 
-E2E planning for AI-assisted changes.
+Intent-first QA planning with optional Playwright, Maestro, or manual adapters.
 
 Usage:
   qamap e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>] [--output <file>]

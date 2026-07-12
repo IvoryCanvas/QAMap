@@ -68,10 +68,13 @@ If your agent supports symlinked skills, point its skill directory at `skills/qa
 
 ## What The Agent Should Do With The Output
 
-Use the `PR Comment Draft` section as review context:
+Use `Change Intent Evidence` and the `PR Comment Draft` as review context:
 
+- commit-backed intent, confidence, and whether human review is required
+- ordered behavior lifecycle
+- primary, failure, boundary, and state-transition QA scenarios
 - affected flow
-- recommended runner
+- automation adapter selected after QA design
 - draft E2E or checklist path
 - missing fixture, selector, assertion, runner, or validation evidence
 - PR checklist items

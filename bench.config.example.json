@@ -8,7 +8,14 @@
       "head": "<head-sha>",
       "expect": {
         "runner": "playwright",
-        "mustHaveBehaviorKinds": ["flow", "surface", "source", "assertion", "locator"],
+        "minChangeIntents": 1,
+        "minHighConfidenceIntents": 1,
+        "minCommitBehaviorNodes": 1,
+        "mustHaveBehaviorKinds": ["flow", "contract", "surface", "source", "assertion", "locator"],
+        "mustNameIntents": ["checkout"],
+        "mustIncludeLifecycle": ["submit", "confirmation"],
+        "mustIncludeQaScenarios": ["failure"],
+        "mustFindIntentEvidence": ["checkout"],
         "mustReachFiles": ["app/checkout/page.tsx"],
         "mustNameFlows": ["checkout"],
         "mustDraftFiles": ["checkout"],
@@ -17,7 +24,7 @@
         "mustFindSuccessSignals": ["Discount applied"],
         "maxBlankActions": 0,
         "maxGenericTitles": 0,
-        "maxAgentBytes": 4096
+        "maxAgentBytes": 8192
       }
     },
     {

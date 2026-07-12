@@ -4,14 +4,15 @@
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/qamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**A local, zero-LLM QA map for code changes. QAMap turns any PR diff into affected behavior, missing evidence, and deterministic E2E drafts. No cloud. No source upload. No token.**
+**A local, zero-LLM PR QA designer. QAMap turns commit intent and code diffs into evidence-backed behavior lifecycles, missing QA, and deterministic automation drafts. No cloud. No source upload. No token.**
 
-QAMap reads git changes, project structure, runner signals, selectors, and optional repo QA memory, then answers the question every reviewer asks: *"This PR looks plausible — which user flow could it break, and what should we verify before merge?"* It focuses on the judgment step ("what deserves testing"), not on competing with LLMs at writing test code.
+QAMap reads commit subjects and bodies, git changes, project structure, selectors, existing tests, and optional repo QA memory, then answers the question every reviewer asks: *"What behavior did this PR intend to change, how does that behavior move through the product, and what should we verify before merge?"* Playwright, Maestro, and manual checklists are output adapters after that judgment, not the product recommendation itself.
 
 ```txt
-PR diff
+PR commits + diff
   -> qamap qa
-  -> affected flows + missing evidence + PR checklist + E2E starter draft
+  -> change intent + behavior lifecycle + QA scenarios + missing evidence
+  -> optional Playwright / Maestro / manual draft
 
 Optional team memory (.qamap/manifest.yaml)
   -> sharper recommendations on every future PR
@@ -23,17 +24,19 @@ Optional team memory (.qamap/manifest.yaml)
 
 A real, unedited recording on a Next.js app with **zero committed tests**: `qamap qa` names the affected flow, `qamap e2e setup` writes the Playwright config and a starter spec, and `npm run test:e2e` finishes with `1 passed`. First-run assertions are smoke checks — the point is a runnable starting point, not finished coverage.
 
-Every report now opens with the verdict (trimmed real output):
+Every report opens with intent and behavior before automation tooling (trimmed output):
 
 ```txt
 ## At a Glance
 
-- Affected behavior: Checkout Submit
-- Verify before merge: ... this outcome is verified: visible text "Order confirmed" appears?
+- Change intent: Submit checkout and persist the confirmed order [high]
+- Behavior lifecycle: trigger: submit checkout -> side-effect: create order -> observable-outcome: show order confirmation
+- Affected behavior: Submit checkout and persist the confirmed order
+- Verify before merge: the confirmed order is visible and survives re-entry
 - Evidence found: changed file src/pages/checkout/index.tsx; route: /checkout (high); web-test-id: checkout-submit (...)
 - Proposed draft: `tests/e2e/checkout-submit.spec.ts` (near runnable)
-- Next command: `qamap e2e setup . --runner playwright`
 - Missing before trust: Add deterministic fixture or mock data for /api/checkout (...)
+- Automation adapter: Playwright
 ```
 
 ## Install & Quick Start
@@ -56,11 +59,12 @@ Stop re-explaining the same QA context to your agent on every PR:
 qamap qa --format agent
 ```
 
-One minified JSON object (`schema: qamap.qa`, ~2 KB for a small PR) with affected flows, draft paths, required evidence, and the PR checklist — the decision content of the full report at a fraction of the context cost. The shape is a documented, versioned contract: [agent format contract](docs/agent-format.md). To make agents run this themselves, run `qamap init --agent` once: it adds a Pre-PR QA section to `AGENTS.md` and installs the packaged skill ([skills/qamap-pr-qa/SKILL.md](skills/qamap-pr-qa/SKILL.md)) into `.claude/skills/`. Details: [agent skill guide](docs/agent-skill.md).
+One minified JSON object (`schema: qamap.qa`) with change intents, lifecycle stages, QA scenarios, affected flows, required evidence, and draft paths. It carries the decision content of the full report at a fraction of the context cost. The shape is a documented, versioned contract: [agent format contract](docs/agent-format.md). To make agents run this themselves, run `qamap init --agent` once: it adds a Pre-PR QA section to `AGENTS.md` and installs the packaged skill ([skills/qamap-pr-qa/SKILL.md](skills/qamap-pr-qa/SKILL.md)) into `.claude/skills/`. Details: [agent skill guide](docs/agent-skill.md).
 
 ## Why QAMap
 
-- **Judgment first, generation second.** LLMs write test code well; deciding *what deserves testing* for a given diff is the missing layer. QAMap fills it statically, deterministically, for free.
+- **Intent and lifecycle before runner choice.** QAMap groups behavior-bearing commits, connects them to diff symbols, and proposes success, failure, boundary, and state-transition QA before selecting an automation adapter.
+- **Judgment first, generation second.** Deciding *what deserves testing* for a given change is the missing layer. QAMap makes that judgment statically, deterministically, and locally for free.
 - **The repo remembers.** Team QA knowledge lives in `.qamap/manifest.yaml`, reviewed once and reused on every PR — instead of re-prompting an agent each session.
 - **Honest output.** Drafts state what blocks them from being trusted; changed endpoints are observed, never mocked away; generated specs never assert what cannot pass. Configuration, docs, generated artifacts, and changed tests stay in verification mode instead of fabricating a product-journey E2E.
 
@@ -69,15 +73,15 @@ Positioning against recorders, LLM test generation, and impact-analysis tools: [
 <details>
 <summary>한국어 소개</summary>
 
-QAMap는 AI 코딩 에이전트가 만든 PR을 리뷰하기 전에 로컬에서 실행하는 QA 초안 CLI입니다.
+QAMap는 PR을 리뷰하기 전에 로컬에서 실행하는 zero-LLM QA 설계 CLI입니다.
 
-PR diff와 repo 구조를 읽고 어떤 사용자 플로우가 영향받았는지, 어떤 E2E 또는 체크리스트가 필요한지, fixture/selector/assertion/runner/validation 근거 중 무엇이 부족한지 정리합니다. 클라우드나 LLM 토큰을 쓰지 않습니다.
+PR 커밋 의도와 diff, repo 구조를 읽고 변경 의도, 기능 생명주기, 정상·실패·경계·상태 전환 QA, 부족한 fixture/selector/assertion 근거를 정리합니다. 그 다음 기존 테스트 환경에 맞춰 Playwright, Maestro 또는 수동 체크리스트 초안을 제시합니다. 클라우드나 LLM 토큰을 쓰지 않습니다.
 
 ```sh
 pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
 
-에이전트에게 넘길 때는 `--format agent`를 붙이면 같은 판단 내용을 약 2KB의 JSON으로 받을 수 있어, 매 세션 repo 탐색에 토큰을 쓰지 않아도 됩니다.
+에이전트에게 넘길 때는 `--format agent`를 붙이면 같은 판단 내용을 압축된 JSON으로 받을 수 있어, 매 세션 repo 탐색에 토큰을 반복해서 쓰지 않아도 됩니다.
 
 목표는 거대한 QA 플랫폼이 아니라, 유지보수자가 매번 에이전트에게 프로젝트 맥락과 검증 방법을 다시 설명하느라 쓰는 시간을 줄여주는 작고 선명한 도구입니다. Manifest 없이 바로 시작하고, 반복해서 틀리는 추천은 `.qamap/manifest.yaml`에 팀의 QA 언어로 보정해 향후 PR 추천을 개선합니다.
 

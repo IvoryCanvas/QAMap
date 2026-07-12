@@ -5,16 +5,33 @@ QAMap is moving from deterministic PR-to-draft heuristics toward a local, change
 The target pipeline is:
 
 ```txt
-base/head diff
+commit range + base/head diff
+  -> change intent analysis
   -> analyzer adapters
   -> behavior graph
-  -> impact selection
-  -> deterministic QA scenarios
+  -> behavior lifecycle + impact selection
+  -> runner-independent QA scenarios
+  -> Playwright / Maestro / manual adapter
   -> explicit local execution
   -> normalized evidence and verdict
 ```
 
-The repository, not a model session, is the source of truth. Source code supplies observable structure, while `.qamap/manifest.yaml` supplies reviewed product intent that code alone cannot prove.
+The repository, not a model session, is the source of truth. Commit subjects and bodies provide author intent, source code supplies observable structure, and `.qamap/manifest.yaml` supplies reviewed product intent that commits and code alone cannot prove.
+
+## Change Intent
+
+`src/change-intent.ts` reads behavior-bearing commits in the selected base/head range and joins related `feat`, `fix`, `hotfix`, `perf`, and supporting `refactor` commits through normalized domain terms. Added diff symbols provide independent evidence for triggers, conditions, state changes, side effects, and observable outcomes.
+
+Each intent contains:
+
+- the original commit evidence and source scope;
+- an explicit confidence and `reviewRequired` flag;
+- an ordered behavior lifecycle;
+- runner-independent primary, failure, boundary, and state-transition QA scenarios.
+
+One richly evidenced squash commit can reach high confidence. A title without connected diff evidence cannot. Working-tree-only inference is always low confidence and review-required. Release, docs, style, CI, and test-only commits do not become product intents.
+
+The analysis is deterministic and local. It does not execute repository code, contact GitHub, upload source, or call an LLM.
 
 ## Behavior Graph
 
@@ -31,7 +48,7 @@ Initial node kinds cover:
 
 Initial edges describe containment, entrypoints, ordering, expected outcomes, fixture use, locators, implementation sources, and diff impact.
 
-Every inferred node must retain provenance. A node without a source, diff, selector, fixture, test, manifest, or named inference reason should not influence a QA verdict.
+Every inferred node must retain provenance. A node without a commit, source, diff, selector, fixture, test, manifest, or named inference reason should not influence a QA verdict.
 
 Node and edge ids are content-derived and stable. Re-running analysis against the same repository state must produce the same graph identity even when report timestamps differ.
 
@@ -40,6 +57,8 @@ Node and edge ids are content-derived and stable. Re-running analysis against th
 The first graph integration uses `qamap.inferred-flow-compat`. It translates the existing E2E flow observations into the new graph so the IR can be introduced without changing existing CLI recommendations.
 
 This adapter is a migration bridge, not the final analysis architecture. Framework adapters should gradually emit graph fragments directly, after which draft generation will consume the graph instead of the graph consuming completed drafts.
+
+`qamap.change-intent` is the first direct product adapter. It emits intent contracts, lifecycle actions/states/effects, scenario assertions, source links, and commit provenance before an automation runner is selected.
 
 ## Analyzer Adapters
 
@@ -102,11 +121,11 @@ Playwright, Maestro, and other tools are executor implementations. They are not 
 
 ## Migration Order
 
-1. Keep current CLI output stable while graph identity and adapter isolation mature.
+1. Derive change intent and runner-independent QA scenarios from commit and diff evidence.
 2. Move route, screen, endpoint, selector, fixture, and contract discovery into graph-producing adapters.
 3. Compare base and head graphs to select affected behavior rather than relying on file categories alone.
-4. Compile graph paths into deterministic QA scenarios.
+4. Compile selected graph paths through Playwright, Maestro, or manual adapters.
 5. Add explicit, temporary execution and normalized evidence.
 6. Add manifest accept, reject, and repair commands so reviewed outcomes improve later analysis.
 
-The next minor version is earned only when the complete diff-to-evidence vertical slice is usable for at least one supported stack. Internal graph work and backward-compatible adapter improvements remain patch releases during `0.x` development.
+Version `0.4.0` establishes the commit-to-intent-to-scenario slice for synthetic web and mobile lifecycle changes. The next minor is reserved for a policy-controlled scenario execution and normalized evidence slice; compatible analyzer and adapter improvements remain patch releases during `0.x` development.
