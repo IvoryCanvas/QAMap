@@ -2373,6 +2373,35 @@ function withTerminalPeriod(value: string): string {
 
 function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLanguageBrief {
   const actor = inferFlowActor(flow);
+  if (flow.intentId && flow.lifecycle && flow.lifecycle.length > 0) {
+    const trigger = flow.lifecycle.find((stage) => stage.kind === "trigger")?.label ?? `Start the changed ${flow.title} behavior.`;
+    const outcomes = flow.lifecycle
+      .filter((stage) => stage.kind === "observable-outcome")
+      .map((stage) => stripTerminalPunctuation(stage.label));
+    const effects = flow.lifecycle
+      .filter((stage) => stage.kind === "side-effect")
+      .map((stage) => stripTerminalPunctuation(stage.label));
+    const lifecycleSuccessSignal = outcomes.length > 0
+      ? outcomes.slice(0, 2).join("; ")
+      : effects.length > 0
+        ? `the intended side effect completes: ${effects.slice(0, 2).join("; ")}`
+        : "the observable result matches the commit intent";
+    const repositorySuccessSignal = inferFlowSuccessSignal(flow);
+    const successSignal = repositorySuccessSignal === "the changed journey reaches a visible, stable success state"
+      ? lifecycleSuccessSignal
+      : repositorySuccessSignal;
+    const scenarioEdges = (flow.qaScenarios ?? [])
+      .filter((scenario) => scenario.kind !== "primary")
+      .flatMap((scenario) => [scenario.title, ...scenario.edgeCases]);
+    return {
+      actor,
+      trigger,
+      goal: `Complete the intended behavior: ${flow.title}.`,
+      successSignal,
+      reviewQuestion: `Does ${flow.title} follow the inferred lifecycle and produce this outcome: ${successSignal}?`,
+      edgeCases: uniqueStrings(scenarioEdges).slice(0, 6),
+    };
+  }
   const trigger = inferFlowTrigger(flow);
   const goal = inferFlowGoal(flow);
   const successSignal = inferFlowSuccessSignal(flow);
@@ -7683,6 +7712,7 @@ function buildMaestroDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   lines.push(`# Base: ${plan.base}`);
   lines.push(`# Head: ${plan.head}`);
   appendDraftBriefComments(lines, flow, "maestro", "#");
+  appendIntentDraftComments(lines, flow, "#");
   appendExecutionProfileComments(lines, plan.executionProfile, "#");
   appendRunnerSetupProposalComments(lines, plan.runnerSetup, "#");
   lines.push("# Replace ${APP_ID} with the app id or export APP_ID before running Maestro.");
@@ -7783,6 +7813,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow, addedDiffText:
     lines.push(`// Intent: ${scenario.intent}`);
   }
   appendDraftBriefComments(lines, flow, "playwright", "//");
+  appendIntentDraftComments(lines, flow, "//");
   appendExecutionProfileComments(lines, plan.executionProfile, "//");
   appendRunnerSetupProposalComments(lines, plan.runnerSetup, "//");
   lines.push("");
@@ -7901,6 +7932,7 @@ function buildManualDraft(plan: E2ePlanResult, flow: E2eFlow): string {
   lines.push(`- Head: \`${plan.head}\``);
   lines.push("");
   appendManualDraftBrief(lines, flow, "manual");
+  appendManualIntentDraft(lines, flow);
   appendManualExecutionProfile(lines, plan.executionProfile);
   appendManualRunnerSetupProposal(lines, plan.runnerSetup);
   lines.push("");
@@ -8247,6 +8279,55 @@ function appendDraftBriefComments(
   lines.push(`${commentPrefix} - Human fixture inputs:`);
   for (const input of brief.humanFixtureInputs) {
     lines.push(`${commentPrefix}   - ${input}`);
+  }
+}
+
+function appendIntentDraftComments(lines: string[], flow: E2eFlow, commentPrefix: string): void {
+  if (!flow.intentId || !flow.lifecycle || !flow.qaScenarios) {
+    return;
+  }
+  lines.push("");
+  lines.push(`${commentPrefix} Change intent evidence:`);
+  lines.push(`${commentPrefix} - Intent id: ${flow.intentId}`);
+  lines.push(`${commentPrefix} - Confidence: ${flow.intentConfidence ?? "low"}`);
+  for (const evidence of (flow.intentEvidence ?? []).filter((item) => item.kind === "commit").slice(0, 5)) {
+    lines.push(`${commentPrefix} - Commit: ${evidence.value}`);
+  }
+  lines.push(`${commentPrefix} - Behavior lifecycle:`);
+  for (const stage of flow.lifecycle.slice(0, 10)) {
+    lines.push(`${commentPrefix}   - ${stage.kind}: ${stage.label}`);
+  }
+  lines.push(`${commentPrefix} - Runner-independent QA scenarios:`);
+  for (const scenario of flow.qaScenarios.slice(0, 4)) {
+    lines.push(`${commentPrefix}   - [${scenario.priority}] ${scenario.kind}: ${scenario.title}`);
+    for (const assertion of scenario.assertions.slice(0, 2)) {
+      lines.push(`${commentPrefix}     - Assert: ${assertion}`);
+    }
+  }
+}
+
+function appendManualIntentDraft(lines: string[], flow: E2eFlow): void {
+  if (!flow.intentId || !flow.lifecycle || !flow.qaScenarios) {
+    return;
+  }
+  lines.push("");
+  lines.push("## Change Intent Evidence");
+  lines.push("");
+  lines.push(`- Intent id: \`${flow.intentId}\``);
+  lines.push(`- Confidence: ${flow.intentConfidence ?? "low"}`);
+  for (const evidence of (flow.intentEvidence ?? []).filter((item) => item.kind === "commit").slice(0, 5)) {
+    lines.push(`- Commit: ${evidence.value}`);
+  }
+  lines.push("- Behavior lifecycle:");
+  for (const stage of flow.lifecycle.slice(0, 10)) {
+    lines.push(`  - ${stage.kind}: ${stage.label}`);
+  }
+  lines.push("- Runner-independent QA scenarios:");
+  for (const scenario of flow.qaScenarios.slice(0, 4)) {
+    lines.push(`  - [${scenario.priority}] ${scenario.kind}: ${scenario.title}`);
+    for (const assertion of scenario.assertions.slice(0, 2)) {
+      lines.push(`    - Assert: ${assertion}`);
+    }
   }
 }
 

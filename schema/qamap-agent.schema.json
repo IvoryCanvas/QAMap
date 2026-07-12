@@ -45,7 +45,7 @@
     "runner": {
       "type": "string",
       "enum": ["maestro", "playwright", "manual"],
-      "description": "Recommended E2E runner for this repository."
+      "description": "Automation output adapter selected after runner-independent QA intent analysis."
     },
     "manifest": {
       "type": ["string", "null"],

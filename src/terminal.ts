@@ -41,7 +41,7 @@ function colorizeLine(line: string): string {
   }
   let output = line;
   output = output.replace(
-    /^(- (?:Affected|Do next|Blocking(?: \d+)?|Base|Head|Project|Recommended runner|Manifest|Stage|Draft flows)):/,
+    /^(- (?:Affected|Change intent|Behavior lifecycle|Do next|Blocking(?: \d+)?|Base|Head|Project|Automation adapter|Recommended runner|Manifest|Stage|Draft flows)):/,
     `${BOLD}$1${RESET}:`,
   );
   output = output.replace(/\[(required|missing|error)\]/g, `${RED}[$1]${RESET}`);

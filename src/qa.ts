@@ -187,7 +187,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   const primaryIntent = result.changeAnalysis.intents[0];
   if (primaryIntent) {
     lines.push(`- Change intent: ${escapeMarkdownInline(primaryIntent.title)} [${primaryIntent.confidence}]`);
-    const lifecycle = primaryIntent.lifecycle.slice(0, 5).map((stage) => `${stage.kind}: ${stage.label}`).join(" -> ");
+    const lifecycle = summarizeIntentLifecycle(primaryIntent.lifecycle);
     if (lifecycle) {
       lines.push(`- Behavior lifecycle: ${escapeMarkdownInline(lifecycle)}`);
     }
@@ -389,6 +389,15 @@ function appendQaChangeIntentMarkdown(lines: string[], result: QaDraftResult): v
     }
     lines.push("");
   }
+}
+
+function summarizeIntentLifecycle(lifecycle: QaDraftResult["changeAnalysis"]["intents"][number]["lifecycle"]): string {
+  const preferredPhases = ["trigger", "condition", "state-change", "side-effect", "observable-outcome"];
+  const selected = preferredPhases
+    .map((phase) => lifecycle.find((stage) => stage.kind === phase))
+    .filter((stage): stage is NonNullable<typeof stage> => Boolean(stage));
+  const fallback = selected.length > 0 ? selected : lifecycle.slice(0, 5);
+  return fallback.map((stage) => `${stage.kind}: ${stage.label}`).join(" -> ");
 }
 
 function nextStepCommand(result: QaDraftResult): string {

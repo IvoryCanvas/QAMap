@@ -378,12 +378,12 @@ function buildCommitIntent(
 }
 
 function buildDiffOnlyIntent(changedFiles: string[], codeSignals: CodeBehaviorSignal[]): ChangeIntent | undefined {
-  const stageKinds = new Set(codeSignals.map((signal) => signal.kind));
-  if (codeSignals.length < 3 || stageKinds.size < 3) {
+  const lifecycle = lifecycleFromCodeSignals(codeSignals);
+  const stageKinds = new Set(lifecycle.map((stage) => stage.kind));
+  if (lifecycle.length < 3 || stageKinds.size < 3) {
     return undefined;
   }
   const files = uniqueStrings(codeSignals.map((signal) => signal.file)).slice(0, maxIntentFiles);
-  const lifecycle = lifecycleFromCodeSignals(codeSignals);
   const titleSubject = humanizeIdentifier(path.basename(files[0] ?? "working tree change").replace(/\.[^.]+$/, ""));
   const title = `${titleSubject} working-tree behavior`;
   const evidence = uniqueEvidence(codeSignals.slice(0, 12).map((signal) => ({
@@ -434,10 +434,14 @@ function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]):
       stages.push(createLifecycleStage("trigger", trigger, commit.seed ? "high" : "medium", evidence, []));
     }
     for (const clause of splitIntentClauses(commit.statement)) {
+      const label = sentenceLabel(clause);
+      if (isImplementationOnlyLifecycleStep(label)) {
+        continue;
+      }
       stages.push(
         createLifecycleStage(
           classifyLifecycleClause(clause),
-          sentenceLabel(clause),
+          label,
           commit.seed ? "high" : "medium",
           evidence,
           [],
@@ -450,6 +454,9 @@ function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]):
   for (const signal of signals) {
     if (stages.length >= maxLifecycleStages) {
       break;
+    }
+    if (isImplementationOnlyLifecycleStep(`${signal.label} ${signal.symbol}`)) {
+      continue;
     }
     const alreadyRepresented = stages.some((stage) =>
       stage.label.toLowerCase().includes(signal.symbol.toLowerCase()) ||
@@ -471,12 +478,14 @@ function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]):
 }
 
 function lifecycleFromCodeSignals(signals: CodeBehaviorSignal[]): BehaviorLifecycleStage[] {
-  const stages = signals.map((signal) => createLifecycleStage(signal.kind, signal.label, "low", [{
-    kind: "diff",
-    value: signal.label,
-    file: signal.file,
-    symbol: signal.symbol,
-  }], [signal.file]));
+  const stages = signals
+    .filter((signal) => !isImplementationOnlyLifecycleStep(`${signal.label} ${signal.symbol}`))
+    .map((signal) => createLifecycleStage(signal.kind, signal.label, "low", [{
+      kind: "diff",
+      value: signal.label,
+      file: signal.file,
+      symbol: signal.symbol,
+    }], [signal.file]));
   return orderLifecycleStages(uniqueLifecycleStages(stages)).slice(0, maxLifecycleStages);
 }
 
@@ -506,9 +515,7 @@ function buildIntentQaScenarios(
   evidence: ChangeIntentEvidence[],
 ): IntentQaScenario[] {
   const conditions = lifecycle.filter((stage) => stage.kind === "condition").map((stage) => stage.label);
-  const actions = lifecycle
-    .filter((stage) => !["condition", "observable-outcome"].includes(stage.kind))
-    .map((stage) => stage.label);
+  const actions = selectPrimaryLifecycleSteps(lifecycle);
   const outcomes = lifecycle.filter((stage) => stage.kind === "observable-outcome").map((stage) => assertionForStage(stage));
   const sideEffects = lifecycle.filter((stage) => stage.kind === "side-effect").map((stage) => assertionForStage(stage));
   const primary: IntentQaScenario = {
@@ -591,6 +598,33 @@ function buildIntentQaScenarios(
   }
 
   return uniqueScenarios(scenarios).slice(0, 4);
+}
+
+function selectPrimaryLifecycleSteps(lifecycle: BehaviorLifecycleStage[]): string[] {
+  const limits: Partial<Record<BehaviorLifecycleStageKind, number>> = {
+    trigger: 1,
+    action: 1,
+    "state-change": 2,
+    "side-effect": 2,
+  };
+  const counts = new Map<BehaviorLifecycleStageKind, number>();
+  const steps: string[] = [];
+  for (const stage of lifecycle) {
+    const limit = limits[stage.kind] ?? 0;
+    const count = counts.get(stage.kind) ?? 0;
+    if (limit === 0 || count >= limit || isImplementationOnlyLifecycleStep(stage.label)) {
+      continue;
+    }
+    counts.set(stage.kind, count + 1);
+    steps.push(stage.label);
+  }
+  return steps;
+}
+
+function isImplementationOnlyLifecycleStep(label: string): boolean {
+  const implementationNoun = "(?:helpers?|interfaces?|lookups?|modules?|types?|utilities)";
+  return new RegExp(`^(?:add|extract|move|refactor|rename)\\b.*\\b${implementationNoun}\\b`, "i").test(label) ||
+    new RegExp(`^(?:an?|the)\\b.*\\b${implementationNoun}\\.?$`, "i").test(label);
 }
 
 function makeScenario(

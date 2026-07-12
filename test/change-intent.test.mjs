@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -32,6 +32,13 @@ test("change intent clusters related commits into one evidence-backed lifecycle"
   await write(
     root,
     "src/reminder.ts",
+    "function reminderKey() { return 'digest'; }\nexport function resyncReminder() { setScheduledTime(); return notifications.schedule(); }\n",
+  );
+  commit(root, "refactor: extract digest reminder helper");
+
+  await write(
+    root,
+    "src/reminder.ts",
     "export function openLinkedReport() { return router.push('/reports/current'); }\n",
   );
   commit(root, "feat: open the linked report when the reminder is tapped");
@@ -43,12 +50,13 @@ test("change intent clusters related commits into one evidence-backed lifecycle"
   const intent = analysis.intents[0];
   assert.equal(intent.confidence, "high");
   assert.match(intent.title, /Schedule a digest reminder after report completion/i);
-  assert.equal(intent.commits.length, 3);
+  assert.equal(intent.commits.length, 4);
   assert.ok(intent.lifecycle.some((stage) => stage.kind === "trigger" && /after report completion/i.test(stage.label)));
   assert.ok(intent.lifecycle.some((stage) => stage.kind === "trigger" && /when the reminder is tapped/i.test(stage.label)));
   assert.ok(intent.lifecycle.some((stage) => stage.kind === "state-change" && /resync/i.test(stage.label)));
   assert.ok(intent.lifecycle.some((stage) => stage.kind === "side-effect" && /schedule/i.test(stage.label)));
   assert.ok(intent.lifecycle.some((stage) => stage.kind === "observable-outcome" && /open the linked report/i.test(stage.label)));
+  assert.equal(intent.lifecycle.some((stage) => /helper/i.test(stage.label)), false);
   assert.ok(intent.scenarios.some((scenario) => /calendar.*duplicate/i.test(scenario.title)));
   assert.ok(intent.scenarios.some((scenario) => /destination routing/i.test(scenario.title)));
   assert.ok(intent.evidence.some((item) => item.kind === "commit" && item.commit));
@@ -175,6 +183,12 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", dryRun: true });
   const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
   const agentSummary = JSON.parse(formatAgentQaDraft(qa));
+  const writtenDraft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: ".generated-e2e",
+  });
+  const spec = await readFile(path.join(root, writtenDraft.files[0].path), "utf8");
 
   assert.equal(plan.changeAnalysis.intents.length, 1);
   assert.match(plan.changeAnalysis.intents[0].title, /Submit account preferences/i);
@@ -183,6 +197,7 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.doesNotMatch(plan.flows[0].title, /primary journey|smoke flow/i);
   assert.ok(plan.flows[0].steps.some((step) => /persist the selected timezone/i.test(step)));
   assert.ok(plan.flows[0].steps.some((step) => /show saved preferences/i.test(step)));
+  assert.match(plan.flows[0].languageBrief.successSignal, /Preferences saved/i);
   assert.ok(plan.behaviorGraph.nodes.some((node) => node.kind === "contract" && node.label === plan.flows[0].title));
   assert.ok(plan.behaviorGraph.nodes.some((node) => node.evidence.some((item) => item.kind === "commit")));
   assert.equal(draft.files[0].source, "change-intent");
@@ -191,6 +206,9 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.match(agentSummary.intents[0].title, /Submit account preferences/i);
   assert.ok(agentSummary.intents[0].lifecycle.some((stage) => stage.phase === "state-change"));
   assert.ok(agentSummary.intents[0].scenarios.some((scenario) => /retry handling/i.test(scenario.title)));
+  assert.match(spec, /Change intent evidence:/);
+  assert.match(spec, /Behavior lifecycle:/);
+  assert.match(spec, /Failure, timeout, and retry handling/);
 });
 
 async function analyze(root, files) {
