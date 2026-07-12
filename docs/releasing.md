@@ -20,6 +20,7 @@ Version `1.0.0` requires a stable public contract and external adoption, not imp
 Before publishing, confirm:
 
 - `package.json` version matches the intended npm version.
+- The canonical release identifier is `vX.Y.Z` (for example, `v0.4.0`). The Git tag and GitHub Release title must match this identifier exactly.
 - `CHANGELOG.md` has a dated section for the version being published.
 - `README.md`, [adoption](adoption.md), [E2E examples](e2e-output-examples.md), and [release validation](release-validation.md) describe the current CLI behavior.
 - `pnpm run release:check` passes from a clean checkout.
@@ -93,11 +94,20 @@ Use a fresh shell or temporary directory for the smoke check when possible.
 After npm publish succeeds:
 
 ```sh
-git tag "v$VERSION"
-git push origin "v$VERSION"
+TAG="v$VERSION"
+git tag -a "$TAG" -m "$TAG"
+git push origin "$TAG"
 ```
 
-Create a GitHub Release for the tag with:
+Create a GitHub Release whose display title is exactly the tag:
+
+```sh
+gh release create "$TAG" --title "$TAG" --notes-file <release-notes.md>
+```
+
+Do not prefix the title with `QAMap` or `CodeWard`, and do not add a descriptive subtitle. Product positioning and highlights belong in the release notes body so the release list remains consistently sortable as `vX.Y.Z`.
+
+The release notes body should contain:
 
 - a concise release summary
 - the current `CHANGELOG.md` section
