@@ -15,6 +15,7 @@ src/features/checkout/submitCheckout.ts
 The reviewer wants to know:
 
 - Which user flow is affected?
+- Which diff hunk caused each QA scenario to be proposed?
 - Should this become a Playwright test, a manual checklist, or only a review note?
 - What blocks the generated draft from being trusted as regression coverage?
 
@@ -26,9 +27,9 @@ Run QAMap on the branch:
 pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
 
-`qa` is important for first contact. It lets maintainers preview the PR comment draft, affected flow, draft path, readiness, and blockers without writing files.
+`qa` is important for first contact. It lets maintainers review change intent, behavior lifecycle, scenario confidence, exact diff sources, and a PR checklist without writing files or selecting a test runner.
 
-When the team wants actual draft files:
+After the team accepts a scenario and wants executable coverage:
 
 ```sh
 pnpm dlx @ivorycanvas/qamap e2e draft . --base origin/main --head HEAD --dry-run
@@ -148,11 +149,12 @@ Output
 - commit-backed change intent and confidence
 - ordered behavior lifecycle
 - primary, failure, boundary, and state-transition QA scenarios
+- scenario-level confidence, review status, and exact commit or head-side `file:line` sources
 - changed domain language
 - candidate user flow
 - manifest evidence when a repo-local flow/check matches
-- automation adapter selected after QA design
-- draft file path
+- optional automation adapter selected after QA design
+- optional draft file path
 - flow language brief
 - runnable status
 - self-check status
@@ -160,7 +162,7 @@ Output
 - blockers that explain why a draft is not ready yet
 ```
 
-The result should not stop at "selector needed" or "fixture needed." A useful QAMap draft should say which flow changed, which test file would be generated, which checks it covers, why those checks were selected, and where to update the manifest if the recommendation is wrong.
+The result should not stop at "selector needed" or "fixture needed." A useful QAMap report should say which behavior changed, which scenarios follow, which exact hunk supports each scenario, what remains uncertain, and where to update the manifest if the recommendation is wrong. Automation comes after that review.
 
 ## Markdown Preview
 
@@ -168,29 +170,32 @@ The result should not stop at "selector needed" or "fixture needed." A useful QA
 # QAMap QA Draft
 
 At a Glance
-- Change intent: Submit checkout and persist the confirmed order [high]
-- Behavior lifecycle: trigger: submit checkout -> side-effect: create order -> observable-outcome: show confirmation
+- Change intent: Submit notification preferences and show the saved state [high]
+- Behavior lifecycle: trigger -> state-change -> side-effect -> observable-outcome
 
 Summary
 - Project: Web
-- Automation adapter: Playwright
 - Manifest: .qamap/manifest.yaml
-- Stage: almost runnable (3 of 4)
 
-PR Comment Draft
-- Affected flow: Checkout purchase
-- Suggested draft: tests/e2e/checkout-purchase.spec.ts
-- User journey: Customer -> Open route /checkout -> Complete checkout with realistic form data
-- Success signal: confirmation state is visible after submit
+QA scenarios
+- [critical] changed preference lifecycle [high]
+  - Source: src/pages/preferences.tsx:17, symbol onClick
+  - Assert: the saved state is visible
+- [recommended] failure, timeout, and retry handling [medium; review required]
+  - Source: src/pages/preferences.tsx:7, symbol fetch
+  - Assert: retries do not duplicate requests or side effects
 
-Missing evidence before trusting this PR
-- [required] fixture: Add deterministic payment/customer fixture data.
-- [recommended] selector: Confirm stable selectors for changed checkout controls.
+Evidence gaps in this QA proposal
+- [required] fixture: Add deterministic response data for /api/preferences.
 
 PR checklist
-- [ ] Review tests/e2e/checkout-purchase.spec.ts.
-- [ ] Confirm success and failed-response assertions.
+- [ ] Review each QA scenario and its diff source.
+- [ ] Confirm success and failed-response assertions for /api/preferences.
 - [ ] Run pnpm run test:e2e.
+
+Optional automation
+- Adapter candidate: Playwright
+- qamap e2e draft . --base origin/main --head HEAD
 ```
 
 ## Draft Shape

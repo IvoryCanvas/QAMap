@@ -32,7 +32,7 @@ Run this before writing a PR body or asking for review. Agents should prefer the
 pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD --format agent
 ```
 
-The result carries `flows[]` (draft path, runnable status, entry route, steps, selectors), `requiredEvidence[]`, `requiredBootstrap[]`, `prChecklist[]`, and `commands[]` under `schema: qamap.qa`.
+The result carries `intents[]` with scenario-level structured diff `sources`, `flows[]` (affected behavior, entry route, steps, selectors), `requiredEvidence[]`, optional `automation`, `prChecklist[]`, and `commands[]` under `schema: qamap.qa`.
 
 For a human-readable report, drop the flag; for installed projects write it to a file:
 
@@ -73,10 +73,10 @@ Use `Change Intent Evidence` and the `PR Comment Draft` as review context:
 - commit-backed intent, confidence, and whether human review is required
 - ordered behavior lifecycle
 - primary, failure, boundary, and state-transition QA scenarios
+- the strongest commit or `file:line` source for every proposed scenario
 - affected flow
-- automation adapter selected after QA design
-- draft E2E or checklist path
-- missing fixture, selector, assertion, runner, or validation evidence
+- missing fixture, selector, or assertion evidence
+- optional automation adapter selected only after QA design
 - PR checklist items
 
 If the command says a generated recommendation is wrong, do not keep re-prompting the agent with the same context. Update the repo-local manifest after human review:

@@ -48,6 +48,8 @@ Each target can declare:
 | `mustIncludeLifecycle` | Trigger, condition, action, state, effect, or outcome terms that must survive in the ordered lifecycle. |
 | `mustIncludeQaScenarios` | Failure, boundary, state-transition, or primary QA terms that must be proposed before runner compilation. |
 | `mustFindIntentEvidence` | Commit or diff terms that must remain attached to intent provenance. |
+| `mustTraceScenarioFiles` | Changed files that must appear in at least one scenario's exact head-side diff source. |
+| `maxUntracedCriticalScenarios` | Maximum critical scenarios without a diff source carrying a file and line number. Lifecycle fixtures keep this at zero. |
 | `mustReachFiles` | Files that the selected flows must reach. |
 | `mustNameFlows` | Product terms that must appear in a user-facing flow title. |
 | `mustNotNameFlows` | Misleading flow-title terms that must not be emitted. |
@@ -77,7 +79,7 @@ node scripts/bench.mjs --baseline bench-results/<file>.json
 
 When both files exist, `pnpm bench` prefers the gitignored local config. CI always passes `--config bench.config.json --assert`, so private paths cannot affect the public quality gate.
 
-Saved results include intent titles, lifecycle and scenario terms, flow titles, draft paths, recall gaps, readiness, agent payload size, and timing. Use a saved baseline to see heuristic movement, but treat the committed expectation contract as the merge gate.
+Saved results include intent titles, lifecycle and scenario terms, scenario trace coverage, flow titles, draft paths, recall gaps, readiness, agent payload size, and timing. Use a saved baseline to see heuristic movement, but treat the committed expectation contract as the merge gate.
 
 Every benchmark target also enforces the Behavior Graph base contract: graph schema version 1, at least one graph flow for every planned flow, at least one impacted node for a non-empty diff, and no edge whose endpoint is missing. The table reports `graph n/i` as total nodes versus impacted nodes. These checks keep the graph connected to real PR analysis while framework-specific adapters are introduced incrementally.
 

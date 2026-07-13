@@ -18,25 +18,32 @@ Optional team memory (.qamap/manifest.yaml)
   -> sharper recommendations on every future PR
 ```
 
-## 30-Second Demo
+## 30-Second QA Pass
 
-![QAMap: zero tests to a passing E2E in three commands](docs/assets/qamap-30s-demo.gif)
+Run one read-only command on a branch. A manifest and test runner are not required:
 
-A real, unedited recording on a Next.js app with **zero committed tests**: `qamap qa` names the affected flow, `qamap e2e setup` writes the Playwright config and a starter spec, and `npm run test:e2e` finishes with `1 passed`. First-run assertions are smoke checks — the point is a runnable starting point, not finished coverage.
+```sh
+pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
+```
 
-Every report opens with intent and behavior before automation tooling (trimmed output):
+The report starts with the inferred behavior and keeps each proposed scenario connected to the commit or exact head-side diff line that caused it (trimmed from the committed lifecycle benchmark):
 
 ```txt
-## At a Glance
+Change intent: Submit notification preferences and show the saved state [high]
+Behavior lifecycle: trigger -> state-change -> side-effect -> observable-outcome
 
-- Change intent: Submit checkout and persist the confirmed order [high]
-- Behavior lifecycle: trigger: submit checkout -> side-effect: create order -> observable-outcome: show order confirmation
-- Affected behavior: Submit checkout and persist the confirmed order
-- Verify before merge: the confirmed order is visible and survives re-entry
-- Evidence found: changed file src/pages/checkout/index.tsx; route: /checkout (high); web-test-id: checkout-submit (...)
-- Proposed draft: `tests/e2e/checkout-submit.spec.ts` (near runnable)
-- Missing before trust: Add deterministic fixture or mock data for /api/checkout (...)
-- Automation adapter: Playwright
+QA scenarios:
+- [critical] changed preference lifecycle (confidence: high)
+  - Source: src/pages/preferences.tsx:17, symbol onClick
+  - Source: src/pages/preferences.tsx:8, symbol setSaved
+  - Assert: the saved state becomes observable
+- [recommended] failure, timeout, and retry handling (confidence: medium; review required)
+  - Source: src/pages/preferences.tsx:7, symbol fetch
+  - Assert: retries do not duplicate requests or side effects
+
+Optional automation:
+- Adapter candidate: Playwright
+- qamap e2e draft . --base origin/main --head HEAD
 ```
 
 ## Install & Quick Start
@@ -45,11 +52,13 @@ Requires Node.js 20 or newer. Inside a repository whose default branch is `origi
 
 ```sh
 pnpm dlx @ivorycanvas/qamap qa            # what should this branch prove before merge?
-pnpm dlx @ivorycanvas/qamap e2e setup . --runner playwright   # no tests yet? create config + starter spec
+pnpm dlx @ivorycanvas/qamap qa --format agent   # compact evidence for a coding agent or PR workflow
 pnpm dlx @ivorycanvas/qamap manifest init # optional: save reviewed team QA memory for sharper future runs
 ```
 
 Pass `--base <ref> --head <ref>` for anything non-standard. Run bare `qamap` for a start-here guide, `qamap help` for the full reference, and see the [command reference](docs/commands.md) for every command and output shape.
+
+After a reviewer accepts a scenario, automation is an explicit opt-in. `qamap e2e draft` can produce a Playwright, Maestro, or manual draft; `qamap e2e setup` proposes missing runner files only when the team chooses that adapter.
 
 ## For Coding Agents
 
@@ -59,7 +68,7 @@ Stop re-explaining the same QA context to your agent on every PR:
 qamap qa --format agent
 ```
 
-One minified JSON object (`schema: qamap.qa`) with change intents, lifecycle stages, QA scenarios, affected flows, required evidence, and draft paths. It carries the decision content of the full report at a fraction of the context cost. The shape is a documented, versioned contract: [agent format contract](docs/agent-format.md). To make agents run this themselves, run `qamap init --agent` once: it adds a Pre-PR QA section to `AGENTS.md` and installs the packaged skill ([skills/qamap-pr-qa/SKILL.md](skills/qamap-pr-qa/SKILL.md)) into `.claude/skills/`. Details: [agent skill guide](docs/agent-skill.md).
+One minified JSON object (`schema: qamap.qa`) with change intents, lifecycle stages, QA scenarios, structured diff sources, affected flows, and required evidence. It carries the decision content of the full report at a fraction of the context cost. The shape is a documented, versioned contract: [agent format contract](docs/agent-format.md). To make agents run this themselves, run `qamap init --agent` once: it adds a Pre-PR QA section to `AGENTS.md` and installs the packaged skill ([skills/qamap-pr-qa/SKILL.md](skills/qamap-pr-qa/SKILL.md)) into `.claude/skills/`. Details: [agent skill guide](docs/agent-skill.md).
 
 ## Why QAMap
 
