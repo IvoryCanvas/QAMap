@@ -7,6 +7,9 @@
 ### Added
 
 - Added head-side diff hunk provenance to change-intent evidence. Scenario sources can now identify renamed paths, exact line ranges, symbols, and hunk headers without uploading source or calling an LLM.
+- Added base-side evidence for removed lines and deleted files. Removed guards and validation now produce a source-linked critical QA scenario instead of disappearing from the change lifecycle.
+- Added `direct`, `supporting`, and `contextual` evidence relations. Context-only scenarios stay low-confidence and cannot be promoted to critical without a located diff source.
+- Capped the complete `qa --format agent` line at 8KB. Large PRs preserve the strongest evidence first and disclose total and omitted intent/flow counts plus compaction metadata.
 - Added scenario-level confidence and review requirements to Markdown, JSON, Behavior Graph evidence, and the additive `qamap.qa` v1 agent contract. Agent output keeps the existing string evidence field and adds compact structured `sources` for intent and scenario review.
 - Added benchmark trace contracts. The web and mobile lifecycle fixtures now fail CI when a critical QA scenario lacks an exact diff file and line source; the benchmark table reports scenario trace coverage.
 - Documented the repository collaboration contract for branch names, Conventional Commits, PR titles, assignment, labels, squash merges, and canonical `vX.Y.Z` release tags.

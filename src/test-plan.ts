@@ -693,10 +693,13 @@ export interface AddedDiffLine {
 export interface AddedDiffHunk {
   file: string;
   previousFile?: string;
+  baseStartLine?: number;
+  baseEndLine?: number;
   startLine: number;
   endLine: number;
   hunkHeader: string;
   lines: AddedDiffLine[];
+  removedLines?: AddedDiffLine[];
 }
 
 export type AddedDiffEvidence = Record<string, AddedDiffHunk[]>;
@@ -758,10 +761,11 @@ function mergeAddedDiffEvidence(byFile: AddedDiffEvidence, diffText: string, rel
   let currentFile: string | undefined;
   let previousFile: string | undefined;
   let currentHunk: AddedDiffHunk | undefined;
+  let baseLine = 0;
   let headLine = 0;
 
   const flushHunk = (): void => {
-    if (!currentHunk || currentHunk.lines.length === 0 || !currentFile) {
+    if (!currentHunk || (currentHunk.lines.length === 0 && (currentHunk.removedLines?.length ?? 0) === 0) || !currentFile) {
       currentHunk = undefined;
       return;
     }
@@ -771,22 +775,32 @@ function mergeAddedDiffEvidence(byFile: AddedDiffEvidence, diffText: string, rel
     }
     const existing = byFile[currentFile] ?? [];
     const existingLength = existing.reduce(
-      (total, hunk) => total + hunk.lines.reduce((sum, line) => sum + line.text.length + 1, 0),
+      (total, hunk) => total + [...hunk.lines, ...(hunk.removedLines ?? [])]
+        .reduce((sum, line) => sum + line.text.length + 1, 0),
       0,
     );
     if (existingLength < maxAddedTextPerFile) {
       const remaining = maxAddedTextPerFile - existingLength;
       let includedLength = 0;
-      const lines = currentHunk.lines.filter((line) => {
+      const candidateLines = [
+        ...currentHunk.lines.map((line) => ({ ...line, side: "head" as const })),
+        ...(currentHunk.removedLines ?? []).map((line) => ({ ...line, side: "base" as const })),
+      ].sort((left, right) => left.line - right.line);
+      const included = candidateLines.filter((line) => {
         includedLength += line.text.length + 1;
         return includedLength <= remaining;
       });
-      if (lines.length > 0) {
+      const lines = included.filter((line) => line.side === "head").map(({ line, text }) => ({ line, text }));
+      const removedLines = included.filter((line) => line.side === "base").map(({ line, text }) => ({ line, text }));
+      if (lines.length > 0 || removedLines.length > 0) {
         existing.push({
           ...currentHunk,
-          startLine: lines[0].line,
-          endLine: lines.at(-1)?.line ?? lines[0].line,
+          baseStartLine: removedLines[0]?.line ?? currentHunk.baseStartLine,
+          baseEndLine: removedLines.at(-1)?.line ?? currentHunk.baseEndLine,
+          startLine: lines[0]?.line ?? currentHunk.startLine,
+          endLine: lines.at(-1)?.line ?? currentHunk.endLine,
           lines,
+          removedLines,
         });
         byFile[currentFile] = existing;
       }
@@ -813,7 +827,7 @@ function mergeAddedDiffEvidence(byFile: AddedDiffEvidence, diffText: string, rel
       flushHunk();
       const rawPath = line.replace(/^\+\+\+ /, "");
       if (rawPath === "/dev/null") {
-        currentFile = undefined;
+        currentFile = previousFile;
         continue;
       }
       const filePath = rawPath.replace(/^b\//, "");
@@ -822,18 +836,22 @@ function mergeAddedDiffEvidence(byFile: AddedDiffEvidence, diffText: string, rel
     }
     if (line.startsWith("@@ ")) {
       flushHunk();
-      const match = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
+      const match = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
       if (!currentFile || !match) {
         continue;
       }
-      headLine = Number.parseInt(match[1], 10);
+      baseLine = Number.parseInt(match[1], 10);
+      headLine = Number.parseInt(match[3], 10);
       currentHunk = {
         file: currentFile,
         previousFile: previousFile && previousFile !== currentFile ? previousFile : undefined,
+        baseStartLine: baseLine,
+        baseEndLine: baseLine,
         startLine: headLine,
         endLine: headLine,
         hunkHeader: line,
         lines: [],
+        removedLines: [],
       };
       continue;
     }
@@ -846,7 +864,14 @@ function mergeAddedDiffEvidence(byFile: AddedDiffEvidence, diffText: string, rel
       headLine += 1;
       continue;
     }
+    if (line.startsWith("-") && !line.startsWith("---")) {
+      currentHunk.removedLines?.push({ line: baseLine, text: line.slice(1) });
+      currentHunk.baseEndLine = baseLine;
+      baseLine += 1;
+      continue;
+    }
     if (!line.startsWith("-") && !line.startsWith("\\")) {
+      baseLine += 1;
       headLine += 1;
     }
   }
@@ -859,7 +884,7 @@ async function getChangedFiles(
   head: string,
   includeWorkingTree: boolean,
 ): Promise<TestPlanChangedFile[]> {
-  const { stdout } = await git(root, ["diff", "--name-status", "--diff-filter=ACMRTUXB", `${base}...${head}`]);
+  const { stdout } = await git(root, ["diff", "--name-status", "--diff-filter=ACDMRTUXB", `${base}...${head}`]);
   const committedChanges = parseChangedFiles(stdout);
   if (!includeWorkingTree) {
     return committedChanges;
@@ -869,7 +894,7 @@ async function getChangedFiles(
 }
 
 async function getWorkingTreeChangedFiles(root: string): Promise<TestPlanChangedFile[]> {
-  const { stdout: trackedStdout } = await git(root, ["diff", "--name-status", "--diff-filter=ACMRTUXB", "HEAD"]);
+  const { stdout: trackedStdout } = await git(root, ["diff", "--name-status", "--diff-filter=ACDMRTUXB", "HEAD"]);
   const { stdout: untrackedStdout } = await git(root, ["ls-files", "--others", "--exclude-standard"]);
   return [
     ...parseChangedFiles(trackedStdout),

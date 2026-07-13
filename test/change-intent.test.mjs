@@ -39,6 +39,115 @@ test("diff evidence preserves renamed paths and head-side hunk locations", async
   assert.equal(hunk.endLine, 4);
   assert.match(hunk.hunkHeader, /^@@ /);
   assert.match(hunk.lines[0].text, /onSubmitPreferences/);
+  assert.deepEqual(hunk.removedLines, []);
+});
+
+test("diff evidence traces removed guards to base-side critical QA", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "src/profile.ts",
+    [
+      "export function saveProfile(user, input) {",
+      "  validatePermission(user);",
+      "  validateProfile(input);",
+      "  return persistProfile(input);",
+      "}",
+    ].join("\n") + "\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/profile-save");
+  await write(
+    root,
+    "src/profile.ts",
+    [
+      "export function saveProfile(user, input) {",
+      "  return persistProfile(input);",
+      "}",
+    ].join("\n") + "\n",
+  );
+  commit(root, "fix: simplify profile save behavior");
+
+  const evidence = await collectAddedDiffEvidence(root, { base: "main", head: "HEAD" });
+  const hunk = evidence["src/profile.ts"][0];
+  const analysis = await analyze(root, ["src/profile.ts"]);
+  const scenario = analysis.intents[0].scenarios.find((item) => /removed guard or validation/i.test(item.title));
+
+  assert.deepEqual(hunk.removedLines.map((line) => line.line), [2, 3]);
+  assert.ok(scenario);
+  assert.equal(scenario.priority, "critical");
+  assert.equal(scenario.confidence, "medium");
+  assert.ok(scenario.evidence.every((item) => item.side === "base"));
+  assert.ok(scenario.evidence.every((item) => item.relation === "direct"));
+  assert.ok(scenario.evidence.some((item) => item.startLine === 2 && /permission/i.test(item.symbol)));
+});
+
+test("diff evidence preserves a fully deleted validation file", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "src/legacy-guard.ts",
+    "export function validateLegacyPermission(user) { return user.isAllowed; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/remove-legacy-guard");
+  await rm(path.join(root, "src/legacy-guard.ts"));
+  commit(root, "fix: remove legacy authorization guard");
+
+  const evidence = await collectAddedDiffEvidence(root, { base: "main", head: "HEAD" });
+  const analysis = await analyze(root, ["src/legacy-guard.ts"]);
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const scenario = analysis.intents[0].scenarios.find((item) => /removed guard or validation/i.test(item.title));
+
+  assert.equal(evidence["src/legacy-guard.ts"][0].lines.length, 0);
+  assert.equal(evidence["src/legacy-guard.ts"][0].removedLines[0].line, 1);
+  assert.equal(scenario?.priority, "critical");
+  assert.ok(scenario?.evidence.some((item) => item.side === "base" && item.file === "src/legacy-guard.ts"));
+  assert.ok(plan.changedFiles.some((file) => file.status === "D" && file.path === "src/legacy-guard.ts"));
+  assert.ok(plan.changeAnalysis.intents[0].scenarios.some((item) => /removed guard or validation/i.test(item.title)));
+});
+
+test("removed app configuration guards produce environment QA instead of identity QA", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "app.config.ts",
+    "const assertProductionReleaseConfig = () => validateProductionEnv();\nassertProductionReleaseConfig();\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/release-config");
+  await write(
+    root,
+    "app.config.ts",
+    "const assertReleaseConfig = () => validateEnvironmentMatrix();\nassertReleaseConfig();\n",
+  );
+  commit(root, "fix: support QA and production release configuration");
+
+  const analysis = await analyze(root, ["app.config.ts"]);
+  const configScenario = analysis.intents[0].scenarios.find((item) => /configuration or release guard/i.test(item.title));
+
+  assert.ok(configScenario);
+  assert.equal(configScenario.priority, "critical");
+  assert.ok(configScenario.assertions.some((assertion) => /endpoints, channel, and application identity/i.test(assertion)));
+  assert.equal(analysis.intents[0].scenarios.some((item) => /unauthorized access/i.test(item.edgeCases.join(" "))), false);
+});
+
+test("context-only scenario evidence stays review-only and non-critical", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/settings.ts", "export const settingsLabel = 'Account';\n");
+  commit(root, "benchmark baseline");
+  branch(root, "fix/settings-redirect");
+  await write(root, "src/settings.ts", "export const settingsLabel = 'Profile';\n");
+  commit(root, "fix: redirect account after settings update");
+
+  const analysis = await analyze(root, ["src/settings.ts"]);
+  const scenario = analysis.intents[0].scenarios.find((item) => /destination routing/i.test(item.title));
+
+  assert.ok(scenario);
+  assert.equal(scenario.priority, "recommended");
+  assert.equal(scenario.confidence, "low");
+  assert.equal(scenario.reviewRequired, true);
+  assert.ok(scenario.evidence.every((item) => item.relation === "contextual"));
 });
 
 test("change intent clusters related commits into one evidence-backed lifecycle", async (t) => {
@@ -267,6 +376,8 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.ok(agentSummary.intents[0].omittedScenarioCount > 0);
   const agentCalendarScenario = agentSummary.intents[0].scenarios.find((scenario) => /calendar/i.test(scenario.title));
   assert.match(agentCalendarScenario.sources[0].symbol, /timezone/i);
+  assert.equal(agentCalendarScenario.sources[0].relation, "direct");
+  assert.equal(agentCalendarScenario.sources[0].side, "head");
   assert.ok(agentSummary.intents[0].scenarios.every((scenario) => scenario.confidence));
   assert.ok(agentSummary.intents[0].scenarios.every((scenario) => scenario.sources.length > 0));
   assert.match(qaMarkdown, /Source: `src\/pages\/preferences\.tsx:\d+` symbol/);
@@ -276,6 +387,36 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.match(spec, /Change intent evidence:/);
   assert.match(spec, /Behavior lifecycle:/);
   assert.match(spec, /Failure, timeout, and retry handling/);
+
+  const oversizedQa = structuredClone(qa);
+  oversizedQa.changeAnalysis.intents = Array.from({ length: 12 }, (_, index) => ({
+    ...structuredClone(qa.changeAnalysis.intents[0]),
+    title: `${qa.changeAnalysis.intents[0].title} ${index} ${"intent".repeat(40)}`,
+  }));
+  oversizedQa.flows = Array.from({ length: 20 }, (_, index) => ({
+    ...structuredClone(qa.flows[0]),
+    title: `${qa.flows[0].title} ${index} ${"flow".repeat(40)}`,
+    changedFiles: Array.from({ length: 12 }, (__, fileIndex) => `src/${"nested/".repeat(20)}file-${fileIndex}.tsx`),
+    draftSteps: Array.from({ length: 12 }, (__, stepIndex) => `Step ${stepIndex} ${"detail ".repeat(50)}`),
+    selectorHints: Array.from({ length: 12 }, (__, selectorIndex) => `[data-testid="${"selector".repeat(20)}-${selectorIndex}"]`),
+  }));
+  const compactAgentOutput = formatAgentQaDraft(oversizedQa);
+  const compactAgentSummary = JSON.parse(compactAgentOutput);
+  assert.ok(Buffer.byteLength(compactAgentOutput) <= 8 * 1024);
+  assert.equal(compactAgentSummary.intentCount, 12);
+  assert.equal(compactAgentSummary.flowCount, 20);
+  assert.equal(compactAgentSummary.omittedIntentCount, 12 - compactAgentSummary.intents.length);
+  assert.equal(compactAgentSummary.omittedFlowCount, 20 - compactAgentSummary.flows.length);
+  assert.ok(compactAgentSummary.compaction);
+
+  const pathologicalQa = structuredClone(oversizedQa);
+  pathologicalQa.base = `refs/heads/${"base-segment/".repeat(1000)}`;
+  pathologicalQa.head = `refs/heads/${"head-segment/".repeat(1000)}`;
+  pathologicalQa.manifestPath = `${"manifest/".repeat(1000)}qamap.yaml`;
+  const boundedAgentOutput = formatAgentQaDraft(pathologicalQa);
+  const boundedAgentSummary = JSON.parse(boundedAgentOutput);
+  assert.ok(Buffer.byteLength(boundedAgentOutput) <= 8 * 1024);
+  assert.equal(boundedAgentSummary.schema.name, "qamap.qa");
 });
 
 async function analyze(root, files) {

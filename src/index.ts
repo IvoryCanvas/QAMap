@@ -130,6 +130,7 @@ export type {
   ChangeIntentConfidence,
   ChangeIntentEvidence,
   ChangeIntentEvidenceKind,
+  ChangeIntentEvidenceRelation,
   IntentQaScenario,
   IntentQaScenarioKind,
   IntentQaScenarioPriority,

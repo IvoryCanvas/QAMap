@@ -47,6 +47,7 @@ export interface BehaviorEvidence {
   previousFile?: string;
   symbol?: string;
   commit?: string;
+  relation?: "direct" | "supporting" | "contextual";
   side?: "base" | "head";
   startLine?: number;
   endLine?: number;
@@ -636,7 +637,7 @@ function strongerConfidence(left: BehaviorConfidence, right: BehaviorConfidence)
 function uniqueEvidence(items: BehaviorEvidence[]): BehaviorEvidence[] {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = `${item.kind}\u0000${item.value}\u0000${item.file ?? ""}\u0000${item.startLine ?? ""}\u0000${item.endLine ?? ""}`;
+    const key = `${item.kind}\u0000${item.relation ?? ""}\u0000${item.side ?? ""}\u0000${item.value}\u0000${item.file ?? ""}\u0000${item.startLine ?? ""}\u0000${item.endLine ?? ""}`;
     if (seen.has(key)) {
       return false;
     }

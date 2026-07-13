@@ -106,11 +106,15 @@ function scoreTarget(target, plan, qa, durationMs) {
   );
   const qaScenarios = plan.changeAnalysis.intents.flatMap((intent) => intent.scenarios);
   const locatedQaScenarios = qaScenarios.filter((scenario) =>
-    scenario.evidence.some((item) => item.kind === "diff" && item.file && item.startLine !== undefined)
+    scenario.evidence.some((item) =>
+      item.kind === "diff" && item.file && item.startLine !== undefined && item.relation !== "contextual"
+    )
   );
   const scenarioSourceFiles = [...new Set(locatedQaScenarios.flatMap((scenario) =>
     scenario.evidence
-      .filter((item) => item.kind === "diff" && item.file && item.startLine !== undefined)
+      .filter((item) =>
+        item.kind === "diff" && item.file && item.startLine !== undefined && item.relation !== "contextual"
+      )
       .map((item) => normalizePath(item.file))
   ))];
   const mustName = expect.mustNameFlows ?? [];
@@ -136,7 +140,9 @@ function scoreTarget(target, plan, qa, durationMs) {
     scenarioTrace: qaScenarios.length > 0 ? `${locatedQaScenarios.length}/${qaScenarios.length}` : null,
     untracedCriticalScenarios: qaScenarios.filter((scenario) =>
       scenario.priority === "critical" &&
-      !scenario.evidence.some((item) => item.kind === "diff" && item.file && item.startLine !== undefined)
+      !scenario.evidence.some((item) =>
+        item.kind === "diff" && item.file && item.startLine !== undefined && item.relation !== "contextual"
+      )
     ).length,
     scenarioSourceFiles,
     intentEvidence: plan.changeAnalysis.intents.flatMap((intent) =>

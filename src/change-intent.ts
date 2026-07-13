@@ -8,6 +8,7 @@ const execFileAsync = promisify(execFile);
 
 export type ChangeIntentConfidence = "low" | "medium" | "high";
 export type ChangeIntentEvidenceKind = "commit" | "diff" | "source";
+export type ChangeIntentEvidenceRelation = "direct" | "supporting" | "contextual";
 export type BehaviorLifecycleStageKind =
   | "trigger"
   | "condition"
@@ -25,6 +26,7 @@ export interface ChangeIntentEvidence {
   file?: string;
   previousFile?: string;
   symbol?: string;
+  relation?: ChangeIntentEvidenceRelation;
   side?: "base" | "head";
   startLine?: number;
   endLine?: number;
@@ -367,6 +369,7 @@ function buildCommitIntent(
       kind: "commit" as const,
       value: commit.subject,
       commit: commit.sha,
+      relation: "contextual" as const,
     })),
     ...relevantSignals.slice(0, 12).map((signal) => ({
       ...signal.evidence,
@@ -442,7 +445,12 @@ function selectIntentFiles(
 function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]): BehaviorLifecycleStage[] {
   const stages: BehaviorLifecycleStage[] = [];
   for (const commit of commits) {
-    const evidence: ChangeIntentEvidence[] = [{ kind: "commit", value: commit.subject, commit: commit.sha }];
+    const evidence: ChangeIntentEvidence[] = [{
+      kind: "commit",
+      value: commit.subject,
+      commit: commit.sha,
+      relation: "contextual",
+    }];
     for (const trigger of extractTriggerPhrases(commit.statement)) {
       stages.push(createLifecycleStage("trigger", trigger, commit.seed ? "high" : "medium", evidence, []));
     }
@@ -523,10 +531,11 @@ function buildIntentQaScenarios(
   const outcomes = lifecycle.filter((stage) => stage.kind === "observable-outcome").map((stage) => assertionForStage(stage));
   const sideEffects = lifecycle.filter((stage) => stage.kind === "side-effect").map((stage) => assertionForStage(stage));
   const primaryEvidence = lifecycleEvidence(lifecycle, evidence);
+  const primaryHasActionableEvidence = hasActionableLocatedDiffEvidence(primaryEvidence);
   const primary: IntentQaScenario = {
     id: stableId("scenario", `${intentId}:primary`),
     kind: "primary",
-    priority: "critical",
+    priority: primaryHasActionableEvidence ? "critical" : "recommended",
     title,
     rationale: "Commit and diff evidence describe this changed behavior lifecycle; verify the complete observable path before merge.",
     setup: conditions.length > 0 ? conditions : ["Prepare representative pre-change and changed-branch state."],
@@ -535,7 +544,7 @@ function buildIntentQaScenarios(
     edgeCases: [],
     evidence: primaryEvidence.slice(0, 8),
     confidence,
-    reviewRequired: confidence !== "high" || !hasLocatedDiffEvidence(primaryEvidence),
+    reviewRequired: confidence !== "high" || !primaryHasActionableEvidence,
   };
   if (primary.assertions.length === 0) {
     primary.assertions.push("Verify the externally observable result matches the commit intent.");
@@ -543,6 +552,38 @@ function buildIntentQaScenarios(
 
   const scenarios = [primary];
   const searchable = `${title} ${keywords.join(" ")} ${lifecycle.map((stage) => stage.label).join(" ")}`.toLowerCase();
+
+  const removedGuardEvidence = evidence.filter((item) =>
+    item.kind === "diff" &&
+    item.side === "base" &&
+    item.relation === "direct" &&
+    /guard|validat|permission|authoriz|authent|allowed|denied|protected/i.test(`${item.symbol ?? ""} ${item.value}`)
+  );
+  const removedConfigurationGuardEvidence = removedGuardEvidence.filter(isConfigurationGuardEvidence);
+  const removedAccessGuardEvidence = removedGuardEvidence.filter((item) => !isConfigurationGuardEvidence(item));
+  if (removedConfigurationGuardEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "changed-configuration-guard", "failure", "critical", "Changed configuration or release guard", [
+      "Prepare the supported local, development, QA, and production configuration variants.",
+      "Prepare invalid release values that the previous guard rejected.",
+    ], [
+      "Build or evaluate each supported environment through the changed configuration path.",
+      "Repeat with production endpoints, channels, or identifiers in a non-production build and with invalid production values.",
+    ], [
+      "Verify every supported environment resolves to its intended endpoints, channel, and application identity.",
+      "Verify invalid or unsafe release configuration remains rejected by an intentional replacement guard.",
+    ], ["QA using production services", "Wrong update channel", "Missing environment value"], removedConfigurationGuardEvidence));
+  }
+  if (removedAccessGuardEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "removed-guard", "failure", "critical", "Removed guard or validation behavior", [
+      "Prepare valid, invalid, unauthorized, and previously rejected inputs or identities.",
+    ], [
+      "Repeat the changed behavior for each state that the removed guard previously handled.",
+      "Attempt the same operation through every affected entry point.",
+    ], [
+      "Verify invalid or unauthorized behavior remains blocked by an intentional replacement.",
+      "Verify valid behavior still succeeds without bypassing required validation.",
+    ], ["Removed validation", "Unauthorized access", "Alternative entry point"], removedAccessGuardEvidence));
+  }
 
   if (/schedul|reminder|calendar|\bdate\b|\btime\b|daily|tomorrow|timezone/.test(searchable)) {
     scenarios.push(makeScenario(intentId, "calendar-boundary", "boundary", "critical", "Scheduling, calendar, and duplicate boundary", [
@@ -639,15 +680,21 @@ function scenarioEvidenceFor(
       return item.kind === "diff" && pattern.test(searchable) && !excludePattern?.test(searchable);
     },
   );
-  return uniqueEvidence([
-    ...matching,
-    ...matchingDiff,
-    ...(matching.length === 0 ? fallback : []),
-  ]).slice(0, 6);
+  return uniqueEvidence([...matching, ...matchingDiff]).slice(0, 6);
 }
 
-function hasLocatedDiffEvidence(evidence: ChangeIntentEvidence[]): boolean {
-  return evidence.some((item) => item.kind === "diff" && item.file && item.startLine !== undefined);
+function hasActionableLocatedDiffEvidence(evidence: ChangeIntentEvidence[]): boolean {
+  return evidence.some((item) =>
+    item.kind === "diff" &&
+    item.file &&
+    item.startLine !== undefined &&
+    item.relation !== "contextual"
+  );
+}
+
+function isConfigurationGuardEvidence(evidence: ChangeIntentEvidence): boolean {
+  return /(?:^|\/)(?:app|build|release|env|eas|expo|vite|webpack|rollup)?[.-]?config\.[^/]+$/i.test(evidence.file ?? "") ||
+    /release|build|environment|\benv\b|config/i.test(`${evidence.symbol ?? ""} ${evidence.value}`);
 }
 
 function selectPrimaryLifecycleSteps(lifecycle: BehaviorLifecycleStage[]): string[] {
@@ -689,11 +736,11 @@ function makeScenario(
   edgeCases: string[],
   evidence: ChangeIntentEvidence[],
 ): IntentQaScenario {
-  const preciseEvidence = hasLocatedDiffEvidence(evidence);
+  const preciseEvidence = hasActionableLocatedDiffEvidence(evidence);
   return {
     id: stableId("scenario", `${intentId}:${key}`),
     kind,
-    priority,
+    priority: preciseEvidence ? priority : "recommended",
     title,
     rationale: "Deterministic lifecycle patterns indicate this failure or boundary axis is easy to miss in review.",
     setup,
@@ -739,30 +786,47 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
       continue;
     }
     for (const hunk of hunks) {
-      for (const line of hunk.lines) {
-        const calendarMatch = line.text.match(
-          /(timezone|scheduledAt|\bschedule\w*\b|\breminder\w*\b|\bcalendar\b|\btomorrow\b|\bdaily\b)/i,
-        );
-        if (calendarMatch) {
-          evidence.push(diffRiskEvidence(
-            file,
-            hunk,
-            line.line,
-            calendarMatch[1],
-            `Changed line contains calendar or scheduling evidence for ${calendarMatch[1]}.`,
-          ));
-        }
-        const routingMatch = line.text.match(
-          /(payload|deep.?link|destination|redirect|router\.push|navigate\w*)/i,
-        );
-        if (routingMatch && !/navigation\.setoptions/i.test(line.text)) {
-          evidence.push(diffRiskEvidence(
-            file,
-            hunk,
-            line.line,
-            routingMatch[1],
-            `Changed line contains entry or routing evidence for ${routingMatch[1]}.`,
-          ));
+      for (const [side, lines] of [["head", hunk.lines], ["base", hunk.removedLines ?? []]] as const) {
+        for (const line of lines) {
+          const calendarMatch = line.text.match(
+            /(timezone|scheduledAt|\bschedule\w*\b|\breminder\w*\b|\bcalendar\b|\btomorrow\b|\bdaily\b)/i,
+          );
+          if (calendarMatch) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              calendarMatch[1],
+              `${side === "base" ? "Removed" : "Changed"} line contains calendar or scheduling evidence for ${calendarMatch[1]}.`,
+              side,
+            ));
+          }
+          const routingMatch = line.text.match(
+            /(payload|deep.?link|destination|redirect|router\.push|navigate\w*)/i,
+          );
+          if (routingMatch && !/navigation\.setoptions/i.test(line.text)) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              routingMatch[1],
+              `${side === "base" ? "Removed" : "Changed"} line contains entry or routing evidence for ${routingMatch[1]}.`,
+              side,
+            ));
+          }
+          const guardMatch = line.text.match(
+            /(guard\w*|validat\w*|permission\w*|authoriz\w*|authenticat\w*|isAllowed|isDenied|protected)/i,
+          );
+          if (side === "base" && guardMatch) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              guardMatch[1],
+              `Removed line contains guard or validation evidence for ${guardMatch[1]}.`,
+              side,
+            ));
+          }
         }
       }
     }
@@ -776,6 +840,7 @@ function diffRiskEvidence(
   line: number,
   symbol: string,
   value: string,
+  side: "base" | "head",
 ): ChangeIntentEvidence {
   return {
     kind: "diff",
@@ -783,7 +848,8 @@ function diffRiskEvidence(
     file,
     previousFile: hunk.previousFile,
     symbol,
-    side: "head",
+    relation: "direct",
+    side,
     startLine: line,
     endLine: line,
     hunkHeader: hunk.hunkHeader,
@@ -842,6 +908,7 @@ function codeSignalEvidence(
     file,
     previousFile: hunk?.previousFile,
     symbol,
+    relation: "supporting",
     side: hunk ? "head" : undefined,
     startLine: line,
     endLine: line,
@@ -953,6 +1020,7 @@ function confidenceForIntent(
   const phaseCount = new Set(lifecycle.map((stage) => stage.kind)).size;
   if (
     phaseCount >= 3 &&
+    signals.length >= 1 &&
     (seedCount >= 2 || (seedCount === 1 && phaseCount >= 4 && signals.length >= 2))
   ) {
     return "high";
@@ -1065,7 +1133,7 @@ function uniqueScenarios(scenarios: IntentQaScenario[]): IntentQaScenario[] {
 function uniqueEvidence(evidence: ChangeIntentEvidence[]): ChangeIntentEvidence[] {
   const seen = new Set<string>();
   return evidence.filter((item) => {
-    const key = `${item.kind}:${item.commit ?? ""}:${item.file ?? ""}:${item.startLine ?? ""}:${item.endLine ?? ""}:${item.symbol ?? ""}:${item.value}`;
+    const key = `${item.kind}:${item.relation ?? ""}:${item.side ?? ""}:${item.commit ?? ""}:${item.file ?? ""}:${item.startLine ?? ""}:${item.endLine ?? ""}:${item.symbol ?? ""}:${item.value}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

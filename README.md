@@ -26,7 +26,7 @@ Run one read-only command on a branch. A manifest and test runner are not requir
 pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
 ```
 
-The report starts with the inferred behavior and keeps each proposed scenario connected to the commit or exact head-side diff line that caused it (trimmed from the committed lifecycle benchmark):
+The report starts with the inferred behavior and keeps each proposed scenario connected to the commit or exact base/head diff line that caused it. Removed guards and validation remain visible as base-side evidence; each source is labeled `direct`, `supporting`, or `contextual` (trimmed from the committed lifecycle benchmark):
 
 ```txt
 Change intent: Submit notification preferences and show the saved state [high]
@@ -34,11 +34,11 @@ Behavior lifecycle: trigger -> state-change -> side-effect -> observable-outcome
 
 QA scenarios:
 - [critical] changed preference lifecycle (confidence: high)
-  - Source: src/pages/preferences.tsx:17, symbol onClick
-  - Source: src/pages/preferences.tsx:8, symbol setSaved
+  - Source: src/pages/preferences.tsx:17, symbol onClick [supporting, head]
+  - Source: src/pages/preferences.tsx:8, symbol setSaved [supporting, head]
   - Assert: the saved state becomes observable
 - [recommended] failure, timeout, and retry handling (confidence: medium; review required)
-  - Source: src/pages/preferences.tsx:7, symbol fetch
+  - Source: src/pages/preferences.tsx:7, symbol fetch [supporting, head]
   - Assert: retries do not duplicate requests or side effects
 
 Optional automation:
@@ -68,7 +68,7 @@ Stop re-explaining the same QA context to your agent on every PR:
 qamap qa --format agent
 ```
 
-One minified JSON object (`schema: qamap.qa`) with change intents, lifecycle stages, QA scenarios, structured diff sources, affected flows, and required evidence. It carries the decision content of the full report at a fraction of the context cost. The shape is a documented, versioned contract: [agent format contract](docs/agent-format.md). To make agents run this themselves, run `qamap init --agent` once: it adds a Pre-PR QA section to `AGENTS.md` and installs the packaged skill ([skills/qamap-pr-qa/SKILL.md](skills/qamap-pr-qa/SKILL.md)) into `.claude/skills/`. Details: [agent skill guide](docs/agent-skill.md).
+One minified JSON object (`schema: qamap.qa`) with change intents, lifecycle stages, QA scenarios, structured diff sources, affected flows, and required evidence. The complete line stays at or below 8KB; total and omitted intent/flow counts remain visible when lower-priority detail is compacted. It carries the decision content of the full report at a fraction of the context cost. The shape is a documented, versioned contract: [agent format contract](docs/agent-format.md). To make agents run this themselves, run `qamap init --agent` once: it adds a Pre-PR QA section to `AGENTS.md` and installs the packaged skill ([skills/qamap-pr-qa/SKILL.md](skills/qamap-pr-qa/SKILL.md)) into `.claude/skills/`. Details: [agent skill guide](docs/agent-skill.md).
 
 ## Why QAMap
 

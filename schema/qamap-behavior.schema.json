@@ -109,6 +109,10 @@
           "type": "string",
           "minLength": 1
         },
+        "relation": {
+          "type": "string",
+          "enum": ["direct", "supporting", "contextual"]
+        },
         "side": {
           "type": "string",
           "enum": ["base", "head"]

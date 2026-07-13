@@ -6930,7 +6930,12 @@ function collectSchemaViolations(schema, value, location = "$", rootSchema = sch
   const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
   if (types.length > 0) {
     const actual = value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
-    if (!types.includes(actual)) {
+    const matches = types.some((type) =>
+      type === actual ||
+      (type === "integer" && typeof value === "number" && Number.isInteger(value)) ||
+      (type === "number" && typeof value === "number")
+    );
+    if (!matches) {
       violations.push(`${location}: expected ${types.join("|")}, got ${actual}`);
       return violations;
     }

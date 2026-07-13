@@ -199,6 +199,7 @@ function toBehaviorEvidence(evidence: ChangeIntentEvidence): BehaviorEvidence {
       kind: "commit",
       value: evidence.commit ? `${evidence.commit.slice(0, 12)} ${evidence.value}` : evidence.value,
       commit: evidence.commit,
+      relation: evidence.relation,
     };
   }
   return {
@@ -207,6 +208,7 @@ function toBehaviorEvidence(evidence: ChangeIntentEvidence): BehaviorEvidence {
     file: evidence.file,
     previousFile: evidence.previousFile,
     symbol: evidence.symbol,
+    relation: evidence.relation,
     side: evidence.side,
     startLine: evidence.startLine,
     endLine: evidence.endLine,

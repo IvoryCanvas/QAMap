@@ -16,6 +16,7 @@
         "file": { "type": "string" },
         "previousFile": { "type": "string" },
         "symbol": { "type": "string" },
+        "relation": { "type": "string", "enum": ["direct", "supporting", "contextual"] },
         "side": { "type": "string", "enum": ["base", "head"] },
         "startLine": { "type": "integer", "minimum": 0 },
         "endLine": { "type": "integer", "minimum": 0 },
@@ -148,6 +149,16 @@
         }
       }
     },
+    "intentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total inferred intents before compact output capping."
+    },
+    "omittedIntentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Intents omitted from the compact payload."
+    },
     "firstDraftCommand": {
       "type": "string",
       "description": "Deprecated v1 field retained for compatibility. New output uses the opt-in automation object instead of promoting runner setup as the default QA action."
@@ -214,6 +225,25 @@
             "description": "Short reasons and repository facts behind the mapping (capped)."
           }
         }
+      }
+    },
+    "flowCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total affected flows before compact output capping."
+    },
+    "omittedFlowCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Flows omitted from the compact payload."
+    },
+    "compaction": {
+      "type": "object",
+      "description": "Present when QAMap reduced lower-priority detail to keep the complete line at or below 8KB.",
+      "properties": {
+        "maxBytes": { "type": "integer", "minimum": 1 },
+        "originalBytes": { "type": "integer", "minimum": 1 },
+        "emergency": { "type": "boolean" }
       }
     },
     "requiredEvidence": {

@@ -93,6 +93,7 @@ test("behavior graph JSON schema stays aligned with runtime enums", async () => 
   assert.deepEqual(schema.$defs.nodeKind.enum, behaviorNodeKinds);
   assert.deepEqual(schema.$defs.edgeKind.enum, behaviorEdgeKinds);
   assert.deepEqual(schema.$defs.evidenceKind.enum, behaviorEvidenceKinds);
+  assert.deepEqual(schema.$defs.evidence.properties.relation.enum, ["direct", "supporting", "contextual"]);
   assert.ok(schema.required.includes("$schema"));
 });
 
@@ -101,6 +102,7 @@ test("change intent adapter preserves commit lifecycle and QA assertions", async
     kind: "commit",
     value: "feat: schedule a digest reminder after report completion",
     commit: "1234567890abcdef",
+    relation: "contextual",
   };
   const analysis = {
     base: "main",
@@ -177,6 +179,7 @@ test("change intent adapter preserves commit lifecycle and QA assertions", async
   assert.ok(graph.summary.byKind.effect >= 1);
   assert.ok(graph.summary.byKind.assertion >= 2);
   assert.ok(graph.nodes.some((node) => node.evidence.some((evidence) => evidence.kind === "commit")));
+  assert.ok(graph.nodes.some((node) => node.evidence.some((evidence) => evidence.relation === "contextual")));
   assert.ok(graph.edges.some((edge) => edge.kind === "precedes"));
   assert.ok(graph.edges.some((edge) => edge.kind === "expects"));
   const ids = new Set(graph.nodes.map((node) => node.id));

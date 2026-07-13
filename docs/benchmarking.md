@@ -48,8 +48,8 @@ Each target can declare:
 | `mustIncludeLifecycle` | Trigger, condition, action, state, effect, or outcome terms that must survive in the ordered lifecycle. |
 | `mustIncludeQaScenarios` | Failure, boundary, state-transition, or primary QA terms that must be proposed before runner compilation. |
 | `mustFindIntentEvidence` | Commit or diff terms that must remain attached to intent provenance. |
-| `mustTraceScenarioFiles` | Changed files that must appear in at least one scenario's exact head-side diff source. |
-| `maxUntracedCriticalScenarios` | Maximum critical scenarios without a diff source carrying a file and line number. Lifecycle fixtures keep this at zero. |
+| `mustTraceScenarioFiles` | Changed files that must appear in at least one scenario's exact direct/supporting base- or head-side diff source. |
+| `maxUntracedCriticalScenarios` | Maximum critical scenarios without a direct/supporting diff source carrying a file and line number. Contextual commit evidence cannot satisfy this contract; lifecycle fixtures keep it at zero. |
 | `mustReachFiles` | Files that the selected flows must reach. |
 | `mustNameFlows` | Product terms that must appear in a user-facing flow title. |
 | `mustNotNameFlows` | Misleading flow-title terms that must not be emitted. |
@@ -63,7 +63,7 @@ Each target can declare:
 | `mustRecommendCommands` | Commands the setup or validation path must expose. |
 | `maxBlankActions` | Maximum malformed or empty draft steps; public fixtures keep this at zero. |
 | `maxGenericTitles` | Maximum titles ending in generic `primary journey` or `smoke flow` wording. |
-| `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. |
+| `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. Production output also has a global 8KB ceiling and discloses omitted intent/flow counts. |
 
 Set `manifestBaseline: true` on a committed fixture to generate its manifest from the base snapshot into the benchmark temp directory, then pass that external manifest to analysis of the head commit. The fixture repository is never modified by this step. This protects the feedback loop itself: a baseline must affect the next PR, not merely serialize valid YAML.
 

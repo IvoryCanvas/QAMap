@@ -2,20 +2,20 @@
 
 ## 0.4.1 - 2026-07-13
 
-Validated as an evidence-first QA patch. A proposed scenario now exposes the commit or exact head-side diff file, line, symbol, and hunk that caused it; runner adoption remains an explicit step after review:
+Validated as an evidence-first QA patch. A proposed scenario now exposes the commit or exact base/head diff file, line, symbol, hunk, and direct/supporting/contextual relation that caused it. Removed guards remain visible as base-side critical evidence, contextual-only scenarios cannot become critical, and runner adoption remains an explicit step after review:
 
 | Gate | Current result |
 | --- | --- |
 | `pnpm release:check` | Passed end to end |
-| `pnpm test` | 142/142 passing |
+| `pnpm test` | 146/146 passing |
 | `pnpm scan` | 0 findings |
 | `pnpm bench:ci` | 12/12 synthetic PR targets pass; web and mobile lifecycle scenarios both retain 4/4 exact diff traces |
-| Coverage | Lines 87.27%, branches 83.82%, functions 95.15% |
-| Agent payload | Evidence-rich lifecycle fixtures remain compact at 5,121 and 5,433 bytes, below their 8KB contracts |
-| Package preview | `pnpm pack --dry-run` and `npm publish --dry-run --access public` pass for `@ivorycanvas/qamap@0.4.1`; 129 files, 820.7 kB packed |
-| Read-only repository smoke | Four clean local repositories covered a tested mobile branch, a web workspace branch, a testless configuration release, and a no-diff branch; target worktrees remained unchanged |
+| Coverage | Lines 87.49%, branches 83.99%, functions 95.20% |
+| Agent payload | Evidence-rich lifecycle fixtures are 5,288 and 5,659 bytes; a large real mobile branch compacts from 10,873 to 8,111 bytes while disclosing omitted counts |
+| Package preview | `pnpm pack --dry-run` and `npm publish --dry-run --access public` pass for `@ivorycanvas/qamap@0.4.1`; 129 files, 825.5 kB packed |
+| Read-only repository smoke | A large mobile branch and a web workspace branch were rechecked after base-side evidence and output compaction; both target worktrees remained unchanged |
 
-The tested mobile branch produced three high-confidence intents and five visible scenarios, all with exact diff locations. The testless configuration release stayed in configuration verification without proposing a runner. The no-diff branch returned zero flows, zero required evidence, and no automation handoff. A release-shaped web branch had no behavior-bearing commit intent and therefore remained on broader review-only flow inference; this is an explicit remaining precision limit rather than promoted confidence.
+The large mobile branch retained zero untraced critical scenarios. A removed release guard was tied to its exact base-side line and translated into local/development/QA/production configuration checks rather than an unrelated user-authorization scenario. Its agent payload reports 44 total intents, 2 retained intents, and 42 omitted intents within 8,111 bytes. The release-shaped web branch still had no behavior-bearing commit intent and therefore emitted four broader review-only flows with zero critical scenarios; this remains an explicit precision limit rather than promoted confidence.
 
 ## 0.4.0 - 2026-07-12
 

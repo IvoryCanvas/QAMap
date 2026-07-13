@@ -108,6 +108,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
 }
 
 const agentListLimit = 6;
+const agentPayloadByteLimit = 8 * 1024 - 1;
 
 function truncateForAgent(value: string, maxLength = 140): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
@@ -131,6 +132,8 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
     manifest: result.manifestPath ?? null,
     readiness: { score: result.readiness.score, level: result.readiness.level },
     testSuite: { present: result.testSuite.hasTestSuite, files: result.testSuite.testFileCount },
+    intentCount: result.changeAnalysis.intents.length,
+    omittedIntentCount: Math.max(0, result.changeAnalysis.intents.length - 3),
     intents: result.changeAnalysis.intents.slice(0, 3).map((intent) => ({
       title: truncateForAgent(intent.title, 100),
       confidence: intent.confidence,
@@ -162,14 +165,16 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
           setupCommand: result.runnerSetup.status === "proposed" ? result.runnerSetup.setupCommand : undefined,
         }
       : undefined,
+    flowCount: result.flows.length,
+    omittedFlowCount: Math.max(0, result.flows.length - agentListLimit),
     flows: result.flows.slice(0, agentListLimit).map((flow) => ({
       title: truncateForAgent(flow.title, 80),
-      source: flow.source,
-      draft: flow.draftPath,
+      source: truncateForAgent(flow.source, 60),
+      draft: truncateForAgent(flow.draftPath, 140),
       runnable: flow.runnableStatus,
       verificationMode: flow.verificationMode,
-      entry: flow.entrypointHints[0],
-      changedFiles: flow.changedFiles.slice(0, 4),
+      entry: flow.entrypointHints[0] ? truncateForAgent(flow.entrypointHints[0], 140) : undefined,
+      changedFiles: flow.changedFiles.slice(0, 4).map((file) => truncateForAgent(file, 140)),
       reviewQuestion: flow.userJourney?.reviewQuestion
         ? truncateForAgent(flow.userJourney.reviewQuestion, 180)
         : undefined,
@@ -178,16 +183,131 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
         : undefined,
       steps: flow.draftSteps.slice(0, agentListLimit).map((step) => truncateForAgent(step)),
       selectors: flow.selectorHints.slice(0, 5).map((selector) => truncateForAgent(selector, 100)),
-      existingEvidence: flow.existingEvidencePaths.length > 0 ? flow.existingEvidencePaths.slice(0, 4) : undefined,
+      existingEvidence: flow.existingEvidencePaths.length > 0
+        ? flow.existingEvidencePaths.slice(0, 4).map((file) => truncateForAgent(file, 140))
+        : undefined,
       evidence: flow.why.slice(0, 2).map((reason) => truncateForAgent(reason)),
     })),
     requiredEvidence,
     recommendedEvidenceCount: result.missingEvidence.filter((item) => item.priority === "recommended").length,
     requiredBootstrap,
     prChecklist: result.prChecklist.slice(0, agentListLimit).map((item) => truncateForAgent(item)),
-    commands: result.suggestedCommands.slice(0, 4),
+    commands: result.suggestedCommands.slice(0, 4).map((command) => truncateForAgent(command, 180)),
   };
-  return `${JSON.stringify(summary)}\n`;
+  return `${serializeAgentSummary(summary)}\n`;
+}
+
+interface AgentSummaryShape {
+  [key: string]: unknown;
+  intents: Array<{
+    lifecycle: unknown[];
+    scenarioCount?: number;
+    omittedScenarioCount?: number;
+    scenarios: Array<{ assertions: string[] }>;
+  }>;
+  flows: Array<{
+    changedFiles: string[];
+    steps: string[];
+    selectors: string[];
+    existingEvidence?: string[];
+    evidence: string[];
+  }>;
+  requiredEvidence: unknown[];
+  requiredBootstrap: unknown[];
+  prChecklist: string[];
+  commands: string[];
+}
+
+function serializeAgentSummary(summary: AgentSummaryShape): string {
+  const payload = JSON.stringify(summary);
+  if (Buffer.byteLength(payload) <= agentPayloadByteLimit) {
+    return payload;
+  }
+
+  const compact = {
+    ...summary,
+    intents: summary.intents.slice(0, 2).map((intent) => ({
+      ...intent,
+      lifecycle: intent.lifecycle.slice(0, 4),
+      scenarios: intent.scenarios.slice(0, 2).map((scenario) => ({
+        ...scenario,
+        assertions: scenario.assertions.slice(0, 1),
+      })),
+    })),
+    flows: summary.flows.slice(0, 3).map((flow) => ({
+      ...flow,
+      changedFiles: flow.changedFiles.slice(0, 2),
+      steps: flow.steps.slice(0, 3),
+      selectors: flow.selectors.slice(0, 2),
+      existingEvidence: flow.existingEvidence?.slice(0, 2),
+      evidence: flow.evidence.slice(0, 1),
+    })),
+    omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - Math.min(2, summary.intents.length)),
+    omittedFlowCount: Math.max(0, numericCount(summary.flowCount) - Math.min(3, summary.flows.length)),
+    requiredEvidence: summary.requiredEvidence.slice(0, 5),
+    requiredBootstrap: summary.requiredBootstrap.slice(0, 2),
+    prChecklist: summary.prChecklist.slice(0, 4),
+    commands: summary.commands.slice(0, 3),
+    compaction: { maxBytes: agentPayloadByteLimit, originalBytes: Buffer.byteLength(payload) },
+  };
+  const compactPayload = JSON.stringify(compact);
+  if (Buffer.byteLength(compactPayload) <= agentPayloadByteLimit) {
+    return compactPayload;
+  }
+
+  const minimalIntents = compact.intents.slice(0, 1).map((intent) => ({
+    ...intent,
+    lifecycle: intent.lifecycle.slice(0, 3),
+    omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
+    scenarios: intent.scenarios.slice(0, 1),
+  }));
+  const minimalFlows = compact.flows.slice(0, 1).map((flow) => ({
+    ...flow,
+    steps: flow.steps.slice(0, 2),
+    selectors: flow.selectors.slice(0, 1),
+    existingEvidence: flow.existingEvidence?.slice(0, 1),
+  }));
+  const minimalPayload = JSON.stringify({
+    ...compact,
+    omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - minimalIntents.length),
+    intents: minimalIntents,
+    omittedFlowCount: Math.max(0, numericCount(summary.flowCount) - minimalFlows.length),
+    flows: minimalFlows,
+    requiredEvidence: compact.requiredEvidence.slice(0, 3),
+    requiredBootstrap: compact.requiredBootstrap.slice(0, 1),
+    prChecklist: compact.prChecklist.slice(0, 2),
+    commands: compact.commands.slice(0, 2),
+  });
+  if (Buffer.byteLength(minimalPayload) <= agentPayloadByteLimit) {
+    return minimalPayload;
+  }
+
+  return JSON.stringify({
+    schema: summary.schema,
+    base: truncateForAgent(String(summary.base ?? ""), 180),
+    head: truncateForAgent(String(summary.head ?? ""), 180),
+    project: summary.project,
+    runner: summary.runner,
+    manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 180) : null,
+    readiness: summary.readiness,
+    testSuite: summary.testSuite,
+    intentCount: summary.intentCount,
+    omittedIntentCount: summary.intentCount,
+    intents: [],
+    flowCount: summary.flowCount,
+    omittedFlowCount: summary.flowCount,
+    flows: [],
+    requiredEvidence: [],
+    recommendedEvidenceCount: summary.recommendedEvidenceCount,
+    requiredBootstrap: [],
+    prChecklist: [],
+    commands: [],
+    compaction: { maxBytes: agentPayloadByteLimit, originalBytes: Buffer.byteLength(payload), emergency: true },
+  });
+}
+
+function numericCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
 
 function formatAgentEvidenceSource(evidence: ChangeIntentEvidence): Record<string, string | number> {
@@ -199,6 +319,7 @@ function formatAgentEvidenceSource(evidence: ChangeIntentEvidence): Record<strin
   if (evidence.file) source.file = evidence.file;
   if (evidence.previousFile) source.previousFile = evidence.previousFile;
   if (evidence.symbol) source.symbol = evidence.symbol;
+  if (evidence.relation) source.relation = evidence.relation;
   if (evidence.side) source.side = evidence.side;
   if (evidence.startLine !== undefined) source.startLine = evidence.startLine;
   if (evidence.endLine !== undefined) source.endLine = evidence.endLine;
@@ -215,8 +336,9 @@ function strongestEvidence(evidence: ChangeIntentEvidence[], limit: number): Cha
 }
 
 function evidenceStrength(evidence: ChangeIntentEvidence): number {
-  if (evidence.kind === "diff" && evidence.file && evidence.startLine !== undefined) return 3;
-  if (evidence.kind === "diff" && evidence.file) return 2;
+  const relationScore = evidence.relation === "direct" ? 2 : evidence.relation === "supporting" ? 1 : 0;
+  if (evidence.kind === "diff" && evidence.file && evidence.startLine !== undefined) return 4 + relationScore;
+  if (evidence.kind === "diff" && evidence.file) return 2 + relationScore;
   if (evidence.commit) return 1;
   return 0;
 }
@@ -451,7 +573,8 @@ function formatEvidenceReference(evidence: ChangeIntentEvidence): string {
       : `:${evidence.startLine}`;
   const location = evidence.file ? `\`${escapeMarkdownInline(evidence.file)}${lineRange}\`` : evidence.kind;
   const symbol = evidence.symbol ? ` symbol \`${escapeMarkdownInline(evidence.symbol)}\`` : "";
-  return `${location}${symbol}`;
+  const qualifiers = [evidence.relation, evidence.side].filter(Boolean).join(", ");
+  return `${location}${symbol}${qualifiers ? ` [${qualifiers}]` : ""}`;
 }
 
 function summarizeIntentLifecycle(lifecycle: QaDraftResult["changeAnalysis"]["intents"][number]["lifecycle"]): string {
