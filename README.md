@@ -4,6 +4,8 @@
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/qamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+![QAMap: local PR QA design from commits and diffs](docs/assets/qamap-cover.png)
+
 **A local, zero-LLM PR QA designer. QAMap turns commit intent and code diffs into evidence-backed behavior lifecycles, missing QA, and deterministic automation drafts. No cloud. No source upload. No token.**
 
 QAMap reads commit subjects and bodies, git changes, project structure, selectors, existing tests, and optional repo QA memory, then answers the question every reviewer asks: *"What behavior did this PR intend to change, how does that behavior move through the product, and what should we verify before merge?"* Playwright, Maestro, and manual checklists are output adapters after that judgment, not the product recommendation itself.

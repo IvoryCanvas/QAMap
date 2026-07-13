@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">QAMap</title>
+  <desc id="description">A local PR QA workflow from commits and diffs to behavior and QA evidence.</desc>
+  <rect width="1280" height="640" fill="#07111f"/>
+  <rect x="40" y="40" width="1200" height="560" rx="24" fill="none" stroke="#27466e" stroke-width="2"/>
+
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="112" y="150" fill="#eef5ff" font-size="74" font-weight="700">QAMap</text>
+    <text x="116" y="208" fill="#32c4f5" font-size="30">Find what a change needs to prove.</text>
+    <text x="116" y="258" fill="#a9bddb" font-size="23">Local PR QA design from commits and diffs.</text>
+
+    <g transform="translate(116 306)">
+      <rect width="142" height="36" rx="18" fill="#103e38"/>
+      <text x="71" y="24" fill="#56e0b0" font-family="Menlo, Monaco, monospace" font-size="16" text-anchor="middle">LOCAL</text>
+      <rect x="160" width="162" height="36" rx="18" fill="#173b5a"/>
+      <text x="241" y="24" fill="#50caff" font-family="Menlo, Monaco, monospace" font-size="16" text-anchor="middle">ZERO LLM</text>
+      <rect x="340" width="192" height="36" rx="18" fill="#4e3610"/>
+      <text x="436" y="24" fill="#ffbf38" font-family="Menlo, Monaco, monospace" font-size="16" text-anchor="middle">OPEN SOURCE</text>
+    </g>
+
+    <g transform="translate(114 422)">
+      <rect x="0" y="0" width="238" height="92" rx="12" fill="#0d1a2d" stroke="#315277" stroke-width="2"/>
+      <text x="28" y="37" fill="#eef5ff" font-family="Menlo, Monaco, monospace" font-size="19">commit + diff</text>
+      <text x="28" y="65" fill="#8fa8c8" font-size="16">intent evidence</text>
+
+      <path d="M260 46H332" fill="none" stroke="#4a87b7" stroke-width="3"/>
+      <path d="M322 35L336 46L322 57" fill="none" stroke="#4a87b7" stroke-width="3"/>
+
+      <rect x="354" y="0" width="238" height="92" rx="12" fill="#0d1a2d" stroke="#315277" stroke-width="2"/>
+      <text x="382" y="37" fill="#eef5ff" font-family="Menlo, Monaco, monospace" font-size="19">behavior flow</text>
+      <text x="382" y="65" fill="#8fa8c8" font-size="16">what changed</text>
+
+      <path d="M614 46H686" fill="none" stroke="#4a87b7" stroke-width="3"/>
+      <path d="M676 35L690 46L676 57" fill="none" stroke="#4a87b7" stroke-width="3"/>
+
+      <rect x="708" y="0" width="238" height="92" rx="12" fill="#0d1a2d" stroke="#315277" stroke-width="2"/>
+      <text x="736" y="37" fill="#eef5ff" font-family="Menlo, Monaco, monospace" font-size="19">QA evidence</text>
+      <text x="736" y="65" fill="#8fa8c8" font-size="16">what to verify</text>
+    </g>
+
+    <g transform="translate(946 139)">
+      <path d="M0 40V84C0 115 18 134 48 144" fill="none" stroke="#19bef2" stroke-width="7" stroke-linecap="round"/>
+      <path d="M94 40V84C94 115 76 134 48 144" fill="none" stroke="#19bef2" stroke-width="7" stroke-linecap="round"/>
+      <path d="M47 40V144" fill="none" stroke="#19bef2" stroke-width="7" stroke-linecap="round"/>
+      <path d="M48 144V179" fill="none" stroke="#19bef2" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="0" cy="29" r="17" fill="#07111f" stroke="#19bef2" stroke-width="7"/>
+      <circle cx="47" cy="29" r="17" fill="#07111f" stroke="#19bef2" stroke-width="7"/>
+      <circle cx="94" cy="29" r="17" fill="#07111f" stroke="#19bef2" stroke-width="7"/>
+      <circle cx="48" cy="144" r="17" fill="#07111f" stroke="#19bef2" stroke-width="7"/>
+      <circle cx="48" cy="211" r="35" fill="#07111f" stroke="#ffb414" stroke-width="8"/>
+      <path d="M29 211L43 225L68 197" fill="none" stroke="#ffb414" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+
+    <text x="806" y="538" fill="#c8d8ed" font-family="Menlo, Monaco, monospace" font-size="20">github.com/IvoryCanvas/qamap</text>
+  </g>
+</svg>
