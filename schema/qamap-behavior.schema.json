@@ -96,6 +96,38 @@
         "file": {
           "type": "string",
           "minLength": 1
+        },
+        "previousFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relation": {
+          "type": "string",
+          "enum": ["direct", "supporting", "contextual"]
+        },
+        "side": {
+          "type": "string",
+          "enum": ["base", "head"]
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hunkHeader": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },

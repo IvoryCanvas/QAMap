@@ -2,12 +2,13 @@ import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { TestPlanChangedFile } from "./test-plan.js";
+import type { AddedDiffEvidence, AddedDiffHunk, TestPlanChangedFile } from "./test-plan.js";
 
 const execFileAsync = promisify(execFile);
 
 export type ChangeIntentConfidence = "low" | "medium" | "high";
 export type ChangeIntentEvidenceKind = "commit" | "diff" | "source";
+export type ChangeIntentEvidenceRelation = "direct" | "supporting" | "contextual";
 export type BehaviorLifecycleStageKind =
   | "trigger"
   | "condition"
@@ -23,7 +24,13 @@ export interface ChangeIntentEvidence {
   value: string;
   commit?: string;
   file?: string;
+  previousFile?: string;
   symbol?: string;
+  relation?: ChangeIntentEvidenceRelation;
+  side?: "base" | "head";
+  startLine?: number;
+  endLine?: number;
+  hunkHeader?: string;
 }
 
 export interface ChangeIntentCommit {
@@ -55,6 +62,8 @@ export interface IntentQaScenario {
   assertions: string[];
   edgeCases: string[];
   evidence: ChangeIntentEvidence[];
+  confidence?: ChangeIntentConfidence;
+  reviewRequired?: boolean;
 }
 
 export interface ChangeIntent {
@@ -87,6 +96,7 @@ export interface ChangeIntentAnalysisOptions {
   includeWorkingTree?: boolean;
   changedFiles: TestPlanChangedFile[];
   addedDiffText?: Record<string, string>;
+  addedDiffEvidence?: AddedDiffEvidence;
 }
 
 interface ParsedCommit extends ChangeIntentCommit {
@@ -100,6 +110,7 @@ interface CodeBehaviorSignal {
   label: string;
   file: string;
   symbol: string;
+  evidence: ChangeIntentEvidence;
 }
 
 const behavioralCommitTypes = new Set(["feat", "feature", "fix", "hotfix", "perf"]);
@@ -172,11 +183,20 @@ export async function analyzeChangeIntents(
   const diagnostics: string[] = [];
   const commits = await collectCommitEvidence(gitRoot, options.base, options.head, relativeRoot, diagnostics);
   const parsedCommits = commits.map(parseCommit);
-  const codeSignals = collectCodeBehaviorSignals(options.addedDiffText ?? {});
+  const codeSignals = collectCodeBehaviorSignals(options.addedDiffText ?? {}, options.addedDiffEvidence ?? {});
+  const riskEvidence = collectDiffRiskEvidence(options.addedDiffEvidence ?? {});
   const changedFiles = options.changedFiles.map((file) => file.path);
   const commitClusters = clusterBehaviorCommits(parsedCommits);
   const intents = commitClusters.map((cluster, index) =>
-    buildCommitIntent(cluster, index, commitClusters.length, changedFiles, options.addedDiffText ?? {}, codeSignals),
+    buildCommitIntent(
+      cluster,
+      index,
+      commitClusters.length,
+      changedFiles,
+      options.addedDiffText ?? {},
+      codeSignals,
+      riskEvidence,
+    ),
   );
 
   if (intents.length === 0 && (options.includeWorkingTree ?? false)) {
@@ -335,10 +355,12 @@ function buildCommitIntent(
   changedFiles: string[],
   addedDiffText: Record<string, string>,
   codeSignals: CodeBehaviorSignal[],
+  riskEvidence: ChangeIntentEvidence[],
 ): ChangeIntent {
   const keywords = uniqueStrings(commits.flatMap((commit) => commit.keywords));
   const files = selectIntentFiles(keywords, changedFiles, addedDiffText, clusterCount);
   const relevantSignals = codeSignals.filter((signal) => files.includes(signal.file));
+  const relevantRiskEvidence = riskEvidence.filter((item) => item.file && files.includes(item.file));
   const lifecycle = buildLifecycle(commits, relevantSignals);
   const confidence = confidenceForIntent(commits, lifecycle, relevantSignals);
   const title = sentenceTitle(commits.find((commit) => commit.seed)?.statement ?? commits[0].statement);
@@ -347,13 +369,12 @@ function buildCommitIntent(
       kind: "commit" as const,
       value: commit.subject,
       commit: commit.sha,
+      relation: "contextual" as const,
     })),
     ...relevantSignals.slice(0, 12).map((signal) => ({
-      kind: "diff" as const,
-      value: signal.label,
-      file: signal.file,
-      symbol: signal.symbol,
+      ...signal.evidence,
     })),
+    ...relevantRiskEvidence.slice(0, 8),
   ]);
   const id = stableId("intent", `${index}:${commits.map((commit) => commit.sha).join(":")}:${title}`);
   const summary = commits
@@ -361,7 +382,7 @@ function buildCommitIntent(
     .filter(Boolean)
     .slice(0, 4)
     .join("; ");
-  const scenarios = buildIntentQaScenarios(id, title, lifecycle, keywords, evidence);
+  const scenarios = buildIntentQaScenarios(id, title, lifecycle, keywords, evidence, confidence);
   return {
     id,
     title,
@@ -386,12 +407,7 @@ function buildDiffOnlyIntent(changedFiles: string[], codeSignals: CodeBehaviorSi
   const files = uniqueStrings(codeSignals.map((signal) => signal.file)).slice(0, maxIntentFiles);
   const titleSubject = humanizeIdentifier(path.basename(files[0] ?? "working tree change").replace(/\.[^.]+$/, ""));
   const title = `${titleSubject} working-tree behavior`;
-  const evidence = uniqueEvidence(codeSignals.slice(0, 12).map((signal) => ({
-    kind: "diff" as const,
-    value: signal.label,
-    file: signal.file,
-    symbol: signal.symbol,
-  })));
+  const evidence = uniqueEvidence(codeSignals.slice(0, 12).map((signal) => signal.evidence));
   const id = stableId("intent", `working-tree:${files.join(":")}`);
   const keywords = extractKeywords(codeSignals.map((signal) => `${signal.symbol} ${signal.label}`).join(" "));
   return {
@@ -404,7 +420,7 @@ function buildDiffOnlyIntent(changedFiles: string[], codeSignals: CodeBehaviorSi
     keywords,
     evidence,
     lifecycle,
-    scenarios: buildIntentQaScenarios(id, title, lifecycle, keywords, evidence),
+    scenarios: buildIntentQaScenarios(id, title, lifecycle, keywords, evidence, "low"),
     reviewRequired: true,
   };
 }
@@ -429,7 +445,12 @@ function selectIntentFiles(
 function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]): BehaviorLifecycleStage[] {
   const stages: BehaviorLifecycleStage[] = [];
   for (const commit of commits) {
-    const evidence: ChangeIntentEvidence[] = [{ kind: "commit", value: commit.subject, commit: commit.sha }];
+    const evidence: ChangeIntentEvidence[] = [{
+      kind: "commit",
+      value: commit.subject,
+      commit: commit.sha,
+      relation: "contextual",
+    }];
     for (const trigger of extractTriggerPhrases(commit.statement)) {
       stages.push(createLifecycleStage("trigger", trigger, commit.seed ? "high" : "medium", evidence, []));
     }
@@ -465,12 +486,7 @@ function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]):
     if (alreadyRepresented) {
       continue;
     }
-    stages.push(createLifecycleStage(signal.kind, signal.label, "medium", [{
-      kind: "diff",
-      value: signal.label,
-      file: signal.file,
-      symbol: signal.symbol,
-    }], [signal.file]));
+    stages.push(createLifecycleStage(signal.kind, signal.label, "medium", [signal.evidence], [signal.file]));
     existingKinds.add(signal.kind);
   }
 
@@ -480,12 +496,7 @@ function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]):
 function lifecycleFromCodeSignals(signals: CodeBehaviorSignal[]): BehaviorLifecycleStage[] {
   const stages = signals
     .filter((signal) => !isImplementationOnlyLifecycleStep(`${signal.label} ${signal.symbol}`))
-    .map((signal) => createLifecycleStage(signal.kind, signal.label, "low", [{
-      kind: "diff",
-      value: signal.label,
-      file: signal.file,
-      symbol: signal.symbol,
-    }], [signal.file]));
+    .map((signal) => createLifecycleStage(signal.kind, signal.label, "low", [signal.evidence], [signal.file]));
   return orderLifecycleStages(uniqueLifecycleStages(stages)).slice(0, maxLifecycleStages);
 }
 
@@ -513,22 +524,27 @@ function buildIntentQaScenarios(
   lifecycle: BehaviorLifecycleStage[],
   keywords: string[],
   evidence: ChangeIntentEvidence[],
+  confidence: ChangeIntentConfidence,
 ): IntentQaScenario[] {
   const conditions = lifecycle.filter((stage) => stage.kind === "condition").map((stage) => stage.label);
   const actions = selectPrimaryLifecycleSteps(lifecycle);
   const outcomes = lifecycle.filter((stage) => stage.kind === "observable-outcome").map((stage) => assertionForStage(stage));
   const sideEffects = lifecycle.filter((stage) => stage.kind === "side-effect").map((stage) => assertionForStage(stage));
+  const primaryEvidence = lifecycleEvidence(lifecycle, evidence);
+  const primaryHasActionableEvidence = hasActionableLocatedDiffEvidence(primaryEvidence);
   const primary: IntentQaScenario = {
     id: stableId("scenario", `${intentId}:primary`),
     kind: "primary",
-    priority: "critical",
+    priority: primaryHasActionableEvidence ? "critical" : "recommended",
     title,
     rationale: "Commit and diff evidence describe this changed behavior lifecycle; verify the complete observable path before merge.",
     setup: conditions.length > 0 ? conditions : ["Prepare representative pre-change and changed-branch state."],
     steps: actions.length > 0 ? actions : lifecycle.map((stage) => stage.label),
     assertions: outcomes.length > 0 ? outcomes : sideEffects.slice(0, 2),
     edgeCases: [],
-    evidence: evidence.slice(0, 8),
+    evidence: primaryEvidence.slice(0, 8),
+    confidence,
+    reviewRequired: confidence !== "high" || !primaryHasActionableEvidence,
   };
   if (primary.assertions.length === 0) {
     primary.assertions.push("Verify the externally observable result matches the commit intent.");
@@ -537,7 +553,39 @@ function buildIntentQaScenarios(
   const scenarios = [primary];
   const searchable = `${title} ${keywords.join(" ")} ${lifecycle.map((stage) => stage.label).join(" ")}`.toLowerCase();
 
-  if (/schedul|reminder|notification|calendar|date|time|daily|tomorrow/.test(searchable)) {
+  const removedGuardEvidence = evidence.filter((item) =>
+    item.kind === "diff" &&
+    item.side === "base" &&
+    item.relation === "direct" &&
+    /guard|validat|permission|authoriz|authent|allowed|denied|protected/i.test(`${item.symbol ?? ""} ${item.value}`)
+  );
+  const removedConfigurationGuardEvidence = removedGuardEvidence.filter(isConfigurationGuardEvidence);
+  const removedAccessGuardEvidence = removedGuardEvidence.filter((item) => !isConfigurationGuardEvidence(item));
+  if (removedConfigurationGuardEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "changed-configuration-guard", "failure", "critical", "Changed configuration or release guard", [
+      "Prepare the supported local, development, QA, and production configuration variants.",
+      "Prepare invalid release values that the previous guard rejected.",
+    ], [
+      "Build or evaluate each supported environment through the changed configuration path.",
+      "Repeat with production endpoints, channels, or identifiers in a non-production build and with invalid production values.",
+    ], [
+      "Verify every supported environment resolves to its intended endpoints, channel, and application identity.",
+      "Verify invalid or unsafe release configuration remains rejected by an intentional replacement guard.",
+    ], ["QA using production services", "Wrong update channel", "Missing environment value"], removedConfigurationGuardEvidence));
+  }
+  if (removedAccessGuardEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "removed-guard", "failure", "critical", "Removed guard or validation behavior", [
+      "Prepare valid, invalid, unauthorized, and previously rejected inputs or identities.",
+    ], [
+      "Repeat the changed behavior for each state that the removed guard previously handled.",
+      "Attempt the same operation through every affected entry point.",
+    ], [
+      "Verify invalid or unauthorized behavior remains blocked by an intentional replacement.",
+      "Verify valid behavior still succeeds without bypassing required validation.",
+    ], ["Removed validation", "Unauthorized access", "Alternative entry point"], removedAccessGuardEvidence));
+  }
+
+  if (/schedul|reminder|calendar|\bdate\b|\btime\b|daily|tomorrow|timezone/.test(searchable)) {
     scenarios.push(makeScenario(intentId, "calendar-boundary", "boundary", "critical", "Scheduling, calendar, and duplicate boundary", [
       "Prepare records near day, month, and timezone boundaries.",
     ], [
@@ -546,7 +594,7 @@ function buildIntentQaScenarios(
     ], [
       "Verify the calculated date and time remain correct across boundaries.",
       "Verify stale or duplicate schedules are replaced, preserved, or rejected intentionally.",
-    ], ["Timezone change", "Day rollover", "Duplicate invocation"], evidence));
+    ], ["Timezone change", "Day rollover", "Duplicate invocation"], scenarioEvidenceFor(lifecycle, evidence, /schedul|reminder|calendar|\bdate\b|\btime\b|daily|tomorrow|timezone/i)));
   }
 
   if (/toggle|enable|disable|permission|authoriz|auth|guard/.test(searchable)) {
@@ -558,10 +606,11 @@ function buildIntentQaScenarios(
     ], [
       "Verify no protected side effect occurs while blocked.",
       "Verify re-enabling produces one correct side effect without stale state.",
-    ], ["Permission denied", "Feature disabled", "State restored"], evidence));
+    ], ["Permission denied", "Feature disabled", "State restored"], scenarioEvidenceFor(lifecycle, evidence, /toggle|enable|disable|permission|authoriz|auth|guard/i)));
   }
 
-  if (/tap|open|navigat|redirect|route|deep.?link|payload|destination/.test(searchable)) {
+  const entryRoutingSearchable = searchable.replaceAll("navigation.setoptions", "");
+  if (/tap|open|navigat|redirect|route|deep.?link|payload|destination/.test(entryRoutingSearchable)) {
     scenarios.push(makeScenario(intentId, "entry-routing", "failure", "critical", "Entry payload and destination routing", [
       "Prepare valid, missing, and stale entry payloads.",
     ], [
@@ -570,7 +619,12 @@ function buildIntentQaScenarios(
     ], [
       "Verify a valid payload opens the matching destination and state.",
       "Verify invalid context fails safely without opening unrelated data.",
-    ], ["Missing payload", "Stale identifier", "Repeated entry"], evidence));
+    ], ["Missing payload", "Stale identifier", "Repeated entry"], scenarioEvidenceFor(
+      lifecycle,
+      evidence,
+      /tap|open|navigat|redirect|route|deep.?link|payload|destination/i,
+      /navigation\.setoptions/i,
+    )));
   }
 
   if (/fetch|request|network|endpoint|api|mutation|response|timeout/.test(searchable)) {
@@ -582,7 +636,7 @@ function buildIntentQaScenarios(
     ], [
       "Verify each response produces the intended visible or persisted state.",
       "Verify retries do not duplicate requests or side effects.",
-    ], ["Unauthorized", "Timeout", "Server error", "Duplicate retry"], evidence));
+    ], ["Unauthorized", "Timeout", "Server error", "Duplicate retry"], scenarioEvidenceFor(lifecycle, evidence, /fetch|request|network|endpoint|api|mutation|response|timeout/i)));
   }
 
   if (/sync|persist|storage|cache|reload|re.?entry|save|store/.test(searchable)) {
@@ -594,10 +648,53 @@ function buildIntentQaScenarios(
     ], [
       "Verify the latest state survives or is invalidated intentionally.",
       "Verify stale state cannot overwrite the changed result.",
-    ], ["Stale cache", "App restart", "Repeated synchronization"], evidence));
+    ], ["Stale cache", "App restart", "Repeated synchronization"], scenarioEvidenceFor(lifecycle, evidence, /sync|persist|storage|cache|reload|re.?entry|save|store/i)));
   }
 
   return uniqueScenarios(scenarios).slice(0, 4);
+}
+
+function lifecycleEvidence(
+  lifecycle: BehaviorLifecycleStage[],
+  fallback: ChangeIntentEvidence[],
+): ChangeIntentEvidence[] {
+  const evidence = uniqueEvidence(lifecycle.flatMap((stage) => stage.evidence));
+  return evidence.length > 0 ? evidence : fallback;
+}
+
+function scenarioEvidenceFor(
+  lifecycle: BehaviorLifecycleStage[],
+  fallback: ChangeIntentEvidence[],
+  pattern: RegExp,
+  excludePattern?: RegExp,
+): ChangeIntentEvidence[] {
+  const matching = lifecycle
+    .filter((stage) => {
+      const searchable = `${stage.label} ${stage.evidence.map((item) => item.symbol ?? item.value).join(" ")}`;
+      return pattern.test(searchable) && !excludePattern?.test(searchable);
+    })
+    .flatMap((stage) => stage.evidence);
+  const matchingDiff = fallback.filter(
+    (item) => {
+      const searchable = `${item.symbol ?? ""} ${item.value}`;
+      return item.kind === "diff" && pattern.test(searchable) && !excludePattern?.test(searchable);
+    },
+  );
+  return uniqueEvidence([...matching, ...matchingDiff]).slice(0, 6);
+}
+
+function hasActionableLocatedDiffEvidence(evidence: ChangeIntentEvidence[]): boolean {
+  return evidence.some((item) =>
+    item.kind === "diff" &&
+    item.file &&
+    item.startLine !== undefined &&
+    item.relation !== "contextual"
+  );
+}
+
+function isConfigurationGuardEvidence(evidence: ChangeIntentEvidence): boolean {
+  return /(?:^|\/)(?:app|build|release|env|eas|expo|vite|webpack|rollup)?[.-]?config\.[^/]+$/i.test(evidence.file ?? "") ||
+    /release|build|environment|\benv\b|config/i.test(`${evidence.symbol ?? ""} ${evidence.value}`);
 }
 
 function selectPrimaryLifecycleSteps(lifecycle: BehaviorLifecycleStage[]): string[] {
@@ -639,10 +736,11 @@ function makeScenario(
   edgeCases: string[],
   evidence: ChangeIntentEvidence[],
 ): IntentQaScenario {
+  const preciseEvidence = hasActionableLocatedDiffEvidence(evidence);
   return {
     id: stableId("scenario", `${intentId}:${key}`),
     kind,
-    priority,
+    priority: preciseEvidence ? priority : "recommended",
     title,
     rationale: "Deterministic lifecycle patterns indicate this failure or boundary axis is easy to miss in review.",
     setup,
@@ -650,33 +748,172 @@ function makeScenario(
     assertions,
     edgeCases,
     evidence: evidence.slice(0, 6),
+    confidence: preciseEvidence ? "medium" : "low",
+    reviewRequired: true,
   };
 }
 
-function collectCodeBehaviorSignals(addedDiffText: Record<string, string>): CodeBehaviorSignal[] {
+function collectCodeBehaviorSignals(
+  addedDiffText: Record<string, string>,
+  addedDiffEvidence: AddedDiffEvidence,
+): CodeBehaviorSignal[] {
   const signals: CodeBehaviorSignal[] = [];
-  for (const [file, text] of Object.entries(addedDiffText)) {
+  const locatedFiles = new Set<string>();
+  for (const [file, hunks] of Object.entries(addedDiffEvidence)) {
     if (!isBehaviorBearingFile(file)) {
       continue;
     }
-    for (const match of text.matchAll(/\b(on[A-Z][A-Za-z0-9_]*)\b/g)) {
-      const symbol = match[1];
-      signals.push({ kind: "trigger", label: `Handle ${humanizeIdentifier(symbol)}.`, file, symbol });
-    }
-    for (const match of text.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)?)\s*\(/g)) {
-      const symbol = match[1];
-      const leaf = symbol.split(".").at(-1) ?? symbol;
-      if (ignoredCallNames.has(leaf) || leaf.length < 3) {
-        continue;
+    locatedFiles.add(file);
+    for (const hunk of hunks) {
+      for (const line of hunk.lines) {
+        collectCodeBehaviorSignalsFromText(signals, file, line.text, hunk, line.line);
       }
-      const kind = lifecycleKindForIdentifier(symbol);
-      if (!kind) {
-        continue;
-      }
-      signals.push({ kind, label: codeSignalLabel(kind, symbol), file, symbol });
     }
   }
+  for (const [file, text] of Object.entries(addedDiffText)) {
+    if (!isBehaviorBearingFile(file) || locatedFiles.has(file)) {
+      continue;
+    }
+    collectCodeBehaviorSignalsFromText(signals, file, text);
+  }
   return uniqueCodeSignals(signals).slice(0, maxSignals);
+}
+
+function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIntentEvidence[] {
+  const evidence: ChangeIntentEvidence[] = [];
+  for (const [file, hunks] of Object.entries(addedDiffEvidence)) {
+    if (!isBehaviorBearingFile(file)) {
+      continue;
+    }
+    for (const hunk of hunks) {
+      for (const [side, lines] of [["head", hunk.lines], ["base", hunk.removedLines ?? []]] as const) {
+        for (const line of lines) {
+          const calendarMatch = line.text.match(
+            /(timezone|scheduledAt|\bschedule\w*\b|\breminder\w*\b|\bcalendar\b|\btomorrow\b|\bdaily\b)/i,
+          );
+          if (calendarMatch) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              calendarMatch[1],
+              `${side === "base" ? "Removed" : "Changed"} line contains calendar or scheduling evidence for ${calendarMatch[1]}.`,
+              side,
+            ));
+          }
+          const routingMatch = line.text.match(
+            /(payload|deep.?link|destination|redirect|router\.push|navigate\w*)/i,
+          );
+          if (routingMatch && !/navigation\.setoptions/i.test(line.text)) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              routingMatch[1],
+              `${side === "base" ? "Removed" : "Changed"} line contains entry or routing evidence for ${routingMatch[1]}.`,
+              side,
+            ));
+          }
+          const guardMatch = line.text.match(
+            /(guard\w*|validat\w*|permission\w*|authoriz\w*|authenticat\w*|isAllowed|isDenied|protected)/i,
+          );
+          if (side === "base" && guardMatch) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              guardMatch[1],
+              `Removed line contains guard or validation evidence for ${guardMatch[1]}.`,
+              side,
+            ));
+          }
+        }
+      }
+    }
+  }
+  return uniqueEvidence(evidence);
+}
+
+function diffRiskEvidence(
+  file: string,
+  hunk: AddedDiffHunk,
+  line: number,
+  symbol: string,
+  value: string,
+  side: "base" | "head",
+): ChangeIntentEvidence {
+  return {
+    kind: "diff",
+    value,
+    file,
+    previousFile: hunk.previousFile,
+    symbol,
+    relation: "direct",
+    side,
+    startLine: line,
+    endLine: line,
+    hunkHeader: hunk.hunkHeader,
+  };
+}
+
+function collectCodeBehaviorSignalsFromText(
+  signals: CodeBehaviorSignal[],
+  file: string,
+  text: string,
+  hunk?: AddedDiffHunk,
+  line?: number,
+): void {
+  for (const match of text.matchAll(/\b(on[A-Z][A-Za-z0-9_]*)\b/g)) {
+    const symbol = match[1];
+    const label = `Handle ${humanizeIdentifier(symbol)}.`;
+    signals.push({
+      kind: "trigger",
+      label,
+      file,
+      symbol,
+      evidence: codeSignalEvidence(label, file, symbol, hunk, line),
+    });
+  }
+  for (const match of text.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)?)\s*\(/g)) {
+    const symbol = match[1];
+    const leaf = symbol.split(".").at(-1) ?? symbol;
+    if (ignoredCallNames.has(leaf) || leaf.length < 3) {
+      continue;
+    }
+    const kind = lifecycleKindForIdentifier(symbol);
+    if (!kind) {
+      continue;
+    }
+    const label = codeSignalLabel(kind, symbol);
+    signals.push({
+      kind,
+      label,
+      file,
+      symbol,
+      evidence: codeSignalEvidence(label, file, symbol, hunk, line),
+    });
+  }
+}
+
+function codeSignalEvidence(
+  value: string,
+  file: string,
+  symbol: string,
+  hunk?: AddedDiffHunk,
+  line?: number,
+): ChangeIntentEvidence {
+  return {
+    kind: "diff",
+    value,
+    file,
+    previousFile: hunk?.previousFile,
+    symbol,
+    relation: "supporting",
+    side: hunk ? "head" : undefined,
+    startLine: line,
+    endLine: line,
+    hunkHeader: hunk?.hunkHeader,
+  };
 }
 
 function lifecycleKindForIdentifier(identifier: string): BehaviorLifecycleStageKind | undefined {
@@ -783,6 +1020,7 @@ function confidenceForIntent(
   const phaseCount = new Set(lifecycle.map((stage) => stage.kind)).size;
   if (
     phaseCount >= 3 &&
+    signals.length >= 1 &&
     (seedCount >= 2 || (seedCount === 1 && phaseCount >= 4 && signals.length >= 2))
   ) {
     return "high";
@@ -895,7 +1133,7 @@ function uniqueScenarios(scenarios: IntentQaScenario[]): IntentQaScenario[] {
 function uniqueEvidence(evidence: ChangeIntentEvidence[]): ChangeIntentEvidence[] {
   const seen = new Set<string>();
   return evidence.filter((item) => {
-    const key = `${item.kind}:${item.commit ?? ""}:${item.file ?? ""}:${item.symbol ?? ""}:${item.value}`;
+    const key = `${item.kind}:${item.relation ?? ""}:${item.side ?? ""}:${item.commit ?? ""}:${item.file ?? ""}:${item.startLine ?? ""}:${item.endLine ?? ""}:${item.symbol ?? ""}:${item.value}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

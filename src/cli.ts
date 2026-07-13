@@ -907,9 +907,13 @@ Start here, from inside your repository, on the branch you want to check:
       The base branch defaults to origin/main (then main); override with
       --base <ref> --head <ref>.
 
-  qamap e2e setup . --runner playwright
-      No tests yet? Create the runner config plus a first runnable starter
-      spec for the changed flow, then run it with: npm run test:e2e
+  qamap qa --format agent
+      Print the same QA judgment as compact JSON, including scenario-level
+      file and line sources, for an agent or PR workflow.
+
+  qamap e2e draft . --base origin/main --head HEAD
+      Optional: after accepting a QA scenario, preview or create an automation
+      draft. Runner setup remains an explicit team choice.
 
   qamap manifest init
       Save reviewed team QA language to .qamap/manifest.yaml so future

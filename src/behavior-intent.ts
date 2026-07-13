@@ -165,6 +165,8 @@ function buildChangeIntentFragment(
             scenarioKind: scenario.kind,
             scenarioTitle: scenario.title,
             priority: scenario.priority,
+            scenarioConfidence: scenario.confidence ?? "low",
+            reviewRequired: scenario.reviewRequired ?? true,
           },
           impact: impactFiles.length > 0
             ? { kind: "propagated", changedFiles: uniqueStrings(impactFiles) }
@@ -196,12 +198,21 @@ function toBehaviorEvidence(evidence: ChangeIntentEvidence): BehaviorEvidence {
     return {
       kind: "commit",
       value: evidence.commit ? `${evidence.commit.slice(0, 12)} ${evidence.value}` : evidence.value,
+      commit: evidence.commit,
+      relation: evidence.relation,
     };
   }
   return {
     kind: evidence.kind,
     value: evidence.symbol ? `${evidence.symbol}: ${evidence.value}` : evidence.value,
     file: evidence.file,
+    previousFile: evidence.previousFile,
+    symbol: evidence.symbol,
+    relation: evidence.relation,
+    side: evidence.side,
+    startLine: evidence.startLine,
+    endLine: evidence.endLine,
+    hunkHeader: evidence.hunkHeader,
   };
 }
 

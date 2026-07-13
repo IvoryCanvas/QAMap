@@ -1,7 +1,7 @@
 {
   "name": "@ivorycanvas/qamap",
-  "version": "0.4.0",
-  "description": "Local zero-LLM PR QA designer that turns commit intent and diffs into behavior lifecycles, QA scenarios, and deterministic automation drafts.",
+  "version": "0.4.1",
+  "description": "Local zero-LLM PR QA designer that maps commit intent and diffs to traceable behavior lifecycles, QA scenarios, and optional automation drafts.",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
   "bin": {

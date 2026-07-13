@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.4.1 - 2026-07-13
+
+### Added
+
+- Added head-side diff hunk provenance to change-intent evidence. Scenario sources can now identify renamed paths, exact line ranges, symbols, and hunk headers without uploading source or calling an LLM.
+- Added base-side evidence for removed lines and deleted files. Removed guards and validation now produce a source-linked critical QA scenario instead of disappearing from the change lifecycle.
+- Added `direct`, `supporting`, and `contextual` evidence relations. Context-only scenarios stay low-confidence and cannot be promoted to critical without a located diff source.
+- Capped the complete `qa --format agent` line at 8KB. Large PRs preserve the strongest evidence first and disclose total and omitted intent/flow counts plus compaction metadata.
+- Added scenario-level confidence and review requirements to Markdown, JSON, Behavior Graph evidence, and the additive `qamap.qa` v1 agent contract. Agent output keeps the existing string evidence field and adds compact structured `sources` for intent and scenario review.
+- Added benchmark trace contracts. The web and mobile lifecycle fixtures now fail CI when a critical QA scenario lacks an exact diff file and line source; the benchmark table reports scenario trace coverage.
+- Documented the repository collaboration contract for branch names, Conventional Commits, PR titles, assignment, labels, squash merges, and canonical `vX.Y.Z` release tags.
+
+### Changed
+
+- `qamap qa` now keeps Playwright, Maestro, and manual setup in a final opt-in automation section. The primary report focuses on change intent, behavior lifecycle, scenario rationale, evidence locations, uncertainty, and PR review actions; missing runner setup is no longer presented as required QA evidence.
+- The README, quick start, agent skill, agent schema contract, output examples, and benchmark guide now describe the evidence-first QA loop. Install and first-run guidance starts with `qa` and `qa --format agent`; E2E draft and setup commands follow only after a scenario and adapter are accepted.
+
+### Fixed
+
+- Structured agent evidence no longer discards file, symbol, line, rename, or hunk provenance when compacting change-intent results.
+- Test-light repositories no longer receive runner installation as the default next step from `qamap qa`; repository validation remains prominent and executable draft generation remains available through explicit `qamap e2e` commands.
+- State updates no longer fabricate scheduling QA because `date` matched inside `update`, and `navigation.setOptions` no longer fabricates destination-routing QA. A branch with no diff now returns no affected flow or automation handoff from `qamap qa` instead of inventing an app-launch smoke flow.
+
 ## 0.4.0 - 2026-07-12
 
 ### Added

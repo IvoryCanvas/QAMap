@@ -19,7 +19,12 @@ import {
   evaluateFlowCoverageEvidence,
   summarizeTestSuiteInventory,
 } from "./test-evidence.js";
-import { collectAddedDiffText, generateTestPlan } from "./test-plan.js";
+import {
+  addedDiffTextFromEvidence,
+  collectAddedDiffEvidence,
+  collectAddedDiffText,
+  generateTestPlan,
+} from "./test-plan.js";
 import type { TestPlanChangedFile, TestPlanOptions, TestPlanResult } from "./test-plan.js";
 import type { DomainLanguageSummary, DomainScenarioSuggestion } from "./domain-language.js";
 import type { MatchedDomain } from "./domains.js";
@@ -505,12 +510,13 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
   const domains = matchDomains(domainManifest, matchableChangedFiles);
   const verificationManifest = await loadVerificationManifest(coreFlowRoot, { manifestPath: options.manifestPath });
   const verificationManifestMatches = matchVerificationManifest(verificationManifest, matchableChangedFiles);
-  const addedDiffText = await collectAddedDiffText(root, {
+  const addedDiffEvidence = await collectAddedDiffEvidence(root, {
     base: testPlan.base,
     head: testPlan.head,
     workspaceRoot: testPlan.workspaceRoot,
     includeWorkingTree: options.includeWorkingTree,
   });
+  const addedDiffText = addedDiffTextFromEvidence(addedDiffEvidence);
   const changeAnalysis = await analyzeChangeIntents(root, {
     base: testPlan.base,
     head: testPlan.head,
@@ -518,6 +524,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     includeWorkingTree: options.includeWorkingTree,
     changedFiles: testPlan.changedFiles,
     addedDiffText,
+    addedDiffEvidence,
   });
   const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows, domains, addedDiffText);
   const workspaceTargets = await buildWorkspaceTargets(root, testPlan);

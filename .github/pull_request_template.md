@@ -19,3 +19,11 @@
 ## Maintainer Notes
 
 <!-- Anything reviewers should know before merging. -->
+
+## Collaboration Checklist
+
+- [ ] The branch uses an allowed prefix and contains no coding-agent product name.
+- [ ] The PR title follows `Type: imperative summary`.
+- [ ] `@ivory-code` is assigned, or assignment is left for a maintainer when permissions do not allow it.
+- [ ] Exactly one `type:` label and only relevant `area:` labels are applied.
+- [ ] The PR is intended to be squash-merged after required checks pass.

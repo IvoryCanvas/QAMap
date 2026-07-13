@@ -34,28 +34,28 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
    ```
 
 4. Read and verify intent before generating code. In agent format:
-   - `intents[]` — commit/diff evidence, confidence, `reviewRequired`, ordered lifecycle, and primary/failure/boundary/state-transition scenarios.
+   - `intents[]` — commit/diff evidence, confidence, `reviewRequired`, ordered lifecycle, and primary/failure/boundary/state-transition scenarios. Read each scenario's structured `sources` before accepting it; a diff source carries `file`, head-side line numbers, symbol, and hunk.
    - If `reviewRequired` is true or the lifecycle conflicts with the PR, ask a human to confirm the intended behavior before promoting a draft.
    - `flows[]` — affected flows with `draft` path, `runnable` status, entry route, capped steps, and selectors.
    - `requiredEvidence[]` — evidence that must exist before the PR can be trusted; `recommendedEvidenceCount` for the rest.
-   - `requiredBootstrap[]` — setup steps that block trusting generated drafts.
+   - `requiredBootstrap[]` — non-runner repository context that still needs clarification.
+   - `automation` — an optional adapter handoff. It is not required to use the QA judgment.
    - `prChecklist[]` and `commands[]` — checklist lines and validation commands for the handoff.
 
-5. If the intent is credible and QAMap prints `First E2E Draft Bootstrap`, create the starter draft instead of stopping at broad QA notes:
+5. Only after a human or team accepts the scenario and automation adapter, create or preview executable coverage:
 
    ```sh
-   pnpm exec qamap e2e setup . --runner <runner>
+   pnpm exec qamap e2e draft . --base <base> --head HEAD
    ```
 
-   Use the exact create command from the output when it differs.
-   `firstDraftCommand` is present only when the repo has no test suite; run it to create the first starter draft. In markdown format, start from `At a Glance` and `Change Intent Evidence`, then read the PR comment, missing evidence, and checklist sections.
+   If the selected adapter is absent, inspect and explicitly accept the `automation.setupCommand` proposal. Never install a runner merely because QAMap detected a web or mobile surface.
 6. Include the useful parts in the PR body, review note, or handoff summary.
 
 ## Output Rules
 
 - Treat QAMap output as QA planning evidence, not proof that browser, device, API, or manual QA passed.
-- Preserve change intent, confidence, lifecycle, QA scenarios, affected flow, suggested E2E/checklist path, missing evidence, and validation command in the handoff.
-- Prefer creating the suggested starter E2E draft over only reporting that a draft is needed.
+- Preserve change intent, confidence, lifecycle, QA scenarios, their strongest file/line sources, affected flow, missing evidence, and validation command in the handoff.
+- Keep automation optional until the scenario and its evidence have been reviewed.
 - Treat Playwright, Maestro, and manual output as adapters after QA design. Do not let runner selection replace review of the inferred intent and scenarios.
 - If the output is `review only` or `near runnable`, explain what blocks it from becoming trusted regression evidence.
 - If `qamap qa` says no manifest was found, do not stop. The first run is allowed to be manifest-free.
@@ -79,6 +79,7 @@ QAMap QA
 - Change intent and confidence:
 - Behavior lifecycle:
 - Required QA scenarios:
+- Scenario source files/lines:
 - Affected flow:
 - Suggested E2E/checklist:
 - Missing evidence:

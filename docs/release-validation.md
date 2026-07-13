@@ -1,5 +1,22 @@
 # Release Validation
 
+## 0.4.1 - 2026-07-13
+
+Validated as an evidence-first QA patch. A proposed scenario now exposes the commit or exact base/head diff file, line, symbol, hunk, and direct/supporting/contextual relation that caused it. Removed guards remain visible as base-side critical evidence, contextual-only scenarios cannot become critical, and runner adoption remains an explicit step after review:
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 146/146 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 12/12 synthetic PR targets pass; web and mobile lifecycle scenarios both retain 4/4 exact diff traces |
+| Coverage | Lines 87.49%, branches 83.99%, functions 95.20% |
+| Agent payload | Evidence-rich lifecycle fixtures are 5,288 and 5,659 bytes; a large real mobile branch compacts from 10,873 to 8,111 bytes while disclosing omitted counts |
+| Package preview | `pnpm pack --dry-run` and `npm publish --dry-run --access public` pass for `@ivorycanvas/qamap@0.4.1`; 129 files, 825.5 kB packed |
+| Read-only repository smoke | A large mobile branch and a web workspace branch were rechecked after base-side evidence and output compaction; both target worktrees remained unchanged |
+
+The large mobile branch retained zero untraced critical scenarios. A removed release guard was tied to its exact base-side line and translated into local/development/QA/production configuration checks rather than an unrelated user-authorization scenario. Its agent payload reports 44 total intents, 2 retained intents, and 42 omitted intents within 8,111 bytes. The release-shaped web branch still had no behavior-bearing commit intent and therefore emitted four broader review-only flows with zero critical scenarios; this remains an explicit precision limit rather than promoted confidence.
+
 ## 0.4.0 - 2026-07-12
 
 Validated as the first intent-first QA design release. The release contract starts with behavior-bearing commits and diff evidence, reconstructs an ordered behavior lifecycle, proposes runner-independent QA scenarios, and only then compiles an optional automation draft:

@@ -104,6 +104,19 @@ function scoreTarget(target, plan, qa, durationMs) {
       `${scenario.priority} ${scenario.kind}: ${scenario.title} ${scenario.assertions.join(" ")}`
     )
   );
+  const qaScenarios = plan.changeAnalysis.intents.flatMap((intent) => intent.scenarios);
+  const locatedQaScenarios = qaScenarios.filter((scenario) =>
+    scenario.evidence.some((item) =>
+      item.kind === "diff" && item.file && item.startLine !== undefined && item.relation !== "contextual"
+    )
+  );
+  const scenarioSourceFiles = [...new Set(locatedQaScenarios.flatMap((scenario) =>
+    scenario.evidence
+      .filter((item) =>
+        item.kind === "diff" && item.file && item.startLine !== undefined && item.relation !== "contextual"
+      )
+      .map((item) => normalizePath(item.file))
+  ))];
   const mustName = expect.mustNameFlows ?? [];
   const named = mustName.filter((name) => includesTerm(flowTitles, name));
 
@@ -122,6 +135,16 @@ function scoreTarget(target, plan, qa, durationMs) {
     intentTitles,
     intentLifecycle,
     intentScenarios,
+    qaScenarios: qaScenarios.length,
+    locatedQaScenarios: locatedQaScenarios.length,
+    scenarioTrace: qaScenarios.length > 0 ? `${locatedQaScenarios.length}/${qaScenarios.length}` : null,
+    untracedCriticalScenarios: qaScenarios.filter((scenario) =>
+      scenario.priority === "critical" &&
+      !scenario.evidence.some((item) =>
+        item.kind === "diff" && item.file && item.startLine !== undefined && item.relation !== "contextual"
+      )
+    ).length,
+    scenarioSourceFiles,
     intentEvidence: plan.changeAnalysis.intents.flatMap((intent) =>
       intent.evidence.map((evidence) => evidence.value)
     ),
@@ -219,6 +242,15 @@ function evaluateContract(expect, result, plan, qa) {
   appendMissingTerms(failures, "intent lifecycle", result.intentLifecycle, expect.mustIncludeLifecycle);
   appendMissingTerms(failures, "intent QA scenario", result.intentScenarios, expect.mustIncludeQaScenarios);
   appendMissingTerms(failures, "intent evidence", result.intentEvidence, expect.mustFindIntentEvidence);
+  appendMissingTerms(failures, "scenario source file", result.scenarioSourceFiles, expect.mustTraceScenarioFiles);
+  if (
+    expect.maxUntracedCriticalScenarios !== undefined &&
+    result.untracedCriticalScenarios > expect.maxUntracedCriticalScenarios
+  ) {
+    failures.push(
+      `untraced critical scenarios ${result.untracedCriticalScenarios} exceed ${expect.maxUntracedCriticalScenarios}`,
+    );
+  }
 
   if (expect.runner && result.runner !== expect.runner) {
     failures.push(`runner expected ${expect.runner}, got ${result.runner}`);
@@ -378,6 +410,7 @@ function printTable(rows) {
     ["manifestFlowMatches", 8],
     ["behaviorGraph", 9],
     ["changeIntents", 7],
+    ["scenarioTrace", 8],
     ["blankActions", 6],
     ["genericTitles", 8],
     ["mustReachRecall", 10],
@@ -433,6 +466,7 @@ function shortLabel(key) {
     manifestFlowMatches: "manifest",
     behaviorGraph: "graph n/i",
     changeIntents: "intents",
+    scenarioTrace: "trace",
     blankActions: "blank",
     genericTitles: "generic",
     mustReachRecall: "reach",

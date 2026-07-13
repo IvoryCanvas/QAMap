@@ -330,30 +330,17 @@ The manual draft should name concrete command evidence:
 
 ## Test-Light Project
 
-When a project has little or no E2E setup, QAMap should move the user toward a concrete starter draft, not just a task list:
+When a project has little or no E2E setup, `qamap qa` still returns the same runner-independent QA judgment. Runner setup remains an explicit team choice:
 
 ```txt
-## First E2E Draft Bootstrap
+## Optional Automation
 
-QAMap did not find committed test files for this target. The next step is to create the first runnable starter draft, not to stop at a checklist.
+The QA judgment above does not require adopting this adapter.
 
-- Recommended first runner: Playwright
-- Create command: `qamap e2e setup . --runner playwright`
-- Install command: `pnpm add -D @playwright/test`
-- Draft files QAMap can create:
-  - `playwright.config.ts`
-  - `tests/e2e/`
-  - `tests/e2e/checkout-primary-journey.spec.ts`
-- Files to update: `package.json`
-
-Bootstrap summary:
-4 required bootstrap steps must be resolved before generated E2E drafts should be treated as regression coverage.
-
-Required:
-- Configure Playwright before making drafts required
-- Create the first changed-flow E2E draft
-- Add deterministic fixture or mock responses
-- Add stable selectors for changed UI surfaces
+- Adapter candidate: Playwright
+- Draft target: `tests/e2e/checkout-primary-journey.spec.ts`
+- Preview or create a draft: `qamap e2e draft . --base main --head HEAD`
+- If the team accepts this adapter, inspect its setup proposal: `qamap e2e setup . --runner playwright`
 ```
 
 Draft action items should make the next developer action explicit:

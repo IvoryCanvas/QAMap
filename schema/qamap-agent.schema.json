@@ -5,6 +5,25 @@
   "description": "The single-line JSON object printed by `qamap qa --format agent`. Within schema version 1, fields are only ever added — existing fields are never removed or retyped. A breaking change bumps schema.version to 2.",
   "type": "object",
   "additionalProperties": true,
+  "definitions": {
+    "evidenceSource": {
+      "type": "object",
+      "required": ["kind", "reason"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["commit", "diff", "source"] },
+        "reason": { "type": "string" },
+        "commit": { "type": "string" },
+        "file": { "type": "string" },
+        "previousFile": { "type": "string" },
+        "symbol": { "type": "string" },
+        "relation": { "type": "string", "enum": ["direct", "supporting", "contextual"] },
+        "side": { "type": "string", "enum": ["base", "head"] },
+        "startLine": { "type": "integer", "minimum": 0 },
+        "endLine": { "type": "integer", "minimum": 0 },
+        "hunk": { "type": "string" }
+      }
+    }
+  },
   "required": [
     "schema",
     "base",
@@ -82,6 +101,17 @@
           "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
           "reviewRequired": { "type": "boolean" },
           "evidence": { "type": "array", "items": { "type": "string" } },
+          "sources": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/evidenceSource" },
+            "description": "Structured commit and diff locations behind the intent (capped)."
+          },
+          "scenarioCount": { "type": "integer", "minimum": 0 },
+          "omittedScenarioCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of lower-ranked scenarios omitted from the compact payload. Use the human or JSON format when non-zero."
+          },
           "lifecycle": {
             "type": "array",
             "items": {
@@ -105,6 +135,13 @@
                 "priority": { "type": "string", "enum": ["critical", "recommended"] },
                 "kind": { "type": "string", "enum": ["primary", "failure", "boundary", "state-transition"] },
                 "title": { "type": "string" },
+                "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+                "reviewRequired": { "type": "boolean" },
+                "sources": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/evidenceSource" },
+                  "description": "The strongest diff or commit locations that caused this scenario to be proposed (capped)."
+                },
                 "assertions": { "type": "array", "items": { "type": "string" } }
               }
             }
@@ -112,9 +149,31 @@
         }
       }
     },
+    "intentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total inferred intents before compact output capping."
+    },
+    "omittedIntentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Intents omitted from the compact payload."
+    },
     "firstDraftCommand": {
       "type": "string",
-      "description": "One command that creates the first E2E draft. Only present when the repository has no test suite and the diff reaches a product journey."
+      "description": "Deprecated v1 field retained for compatibility. New output uses the opt-in automation object instead of promoting runner setup as the default QA action."
+    },
+    "automation": {
+      "type": "object",
+      "description": "Optional adapter handoff after a reviewer accepts the QA scenario. It is not required to use the QA judgment.",
+      "required": ["optIn", "adapter", "setupStatus", "draftCommand"],
+      "properties": {
+        "optIn": { "const": true },
+        "adapter": { "type": "string", "enum": ["maestro", "playwright", "manual"] },
+        "setupStatus": { "type": "string", "enum": ["ready", "proposed", "not-applicable"] },
+        "draftCommand": { "type": "string" },
+        "setupCommand": { "type": "string" }
+      }
     },
     "flows": {
       "type": "array",
@@ -168,6 +227,25 @@
         }
       }
     },
+    "flowCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total affected flows before compact output capping."
+    },
+    "omittedFlowCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Flows omitted from the compact payload."
+    },
+    "compaction": {
+      "type": "object",
+      "description": "Present when QAMap reduced lower-priority detail to keep the complete line at or below 8KB.",
+      "properties": {
+        "maxBytes": { "type": "integer", "minimum": 1 },
+        "originalBytes": { "type": "integer", "minimum": 1 },
+        "emergency": { "type": "boolean" }
+      }
+    },
     "requiredEvidence": {
       "type": "array",
       "description": "QA evidence the change still needs before merge (required priority only, capped at 8).",
@@ -188,7 +266,7 @@
     },
     "requiredBootstrap": {
       "type": "array",
-      "description": "Setup steps that must happen before drafts can be treated as regression coverage (capped at 3).",
+      "description": "Non-runner repository context steps (capped at 3). Runner adoption is exposed separately under the opt-in automation object.",
       "items": {
         "type": "object",
         "required": ["title", "action"],

@@ -5274,13 +5274,14 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.match(markdown, /- Verify before merge: /);
   assert.match(markdown, /visible text "Order confirmed" appears/);
   assert.match(markdown, /- Evidence found: /);
-  assert.match(markdown, /- Proposed draft: `/);
-  assert.match(markdown, /- Next command: `/);
-  assert.match(markdown, /- Missing before trust/);
+  assert.match(markdown, /- QA proposal: /);
+  assert.match(markdown, /- Repository validation: `/);
+  assert.match(markdown, /- QA proposal gap/);
   assert.match(markdown, /Manifest: not found; using repo signals and PR diff only/);
   assert.match(markdown, /PR Comment Draft/);
   assert.match(markdown, /Affected Flow/);
-  assert.match(markdown, /Suggested E2E \/ QA Draft/);
+  assert.match(markdown, /Suggested QA Scenarios/);
+  assert.match(markdown, /## Optional Automation/);
   assert.match(markdown, /PR Checklist/);
   assert.match(markdown, /No cloud\. No LLM token/);
 
@@ -5311,6 +5312,9 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.equal(typeof agentSummary.readiness.score, "number");
   assert.equal(Array.isArray(agentSummary.requiredEvidence), true);
   assert.equal(Array.isArray(agentSummary.prChecklist), true);
+  assert.equal(agentSummary.firstDraftCommand, undefined);
+  assert.equal(agentSummary.automation.optIn, true);
+  assert.equal(agentSummary.automation.adapter, "playwright");
   assert.equal(agentOutput.trim().includes("\n"), false);
   assert.equal(agentOutput.length < 4096, true);
 
@@ -5828,7 +5832,7 @@ test("package metadata includes the portable PR QA skill template", async () => 
   assert.match(skillText, /Manifest Repair/);
 });
 
-test("qa command points testless repositories at first E2E draft creation", async () => {
+test("qa command keeps runner setup opt-in for testless repositories", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, "src/app/checkout"), { recursive: true });
@@ -5884,16 +5888,39 @@ test("qa command points testless repositories at first E2E draft creation", asyn
 
   assert.equal(qa.testSuite.hasTestSuite, false);
   assert.equal(qa.runner, "playwright");
-  assert.match(markdown, /## First E2E Draft Bootstrap/);
-  assert.match(markdown, /create the first runnable starter draft/);
-  assert.match(markdown, /Recommended first runner: Playwright/);
-  assert.match(markdown, /Create command: `qamap e2e setup \. --runner playwright`/);
-  assert.match(markdown, /Draft files QAMap can create:/);
-  assert.match(markdown, /playwright\.config\.ts/);
+  assert.doesNotMatch(markdown, /## First E2E Draft Bootstrap|Install command/);
+  assert.match(markdown, /## Optional Automation/);
+  assert.match(markdown, /does not require adopting this adapter/);
+  assert.match(markdown, /Adapter candidate: Playwright/);
+  assert.match(markdown, /inspect its setup proposal: `qamap e2e setup \. --runner playwright`/);
+  assert.match(markdown, /Draft target: `tests\/e2e\/checkout-apply-coupon\.spec\.ts`/);
   assert.match(markdown, /tests\/e2e\/checkout-apply-coupon\.spec\.ts/);
   assert.match(markdown, /Checkout Apply Coupon/);
   assert.match(markdown, /SAVE10/);
   assert.match(markdown, /Apply coupon/);
+});
+
+test("qa command does not fabricate a launch flow when the branch has no diff", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ scripts: { dev: "vite" }, dependencies: { react: "^19.0.0", vite: "^7.0.0" } }),
+  );
+  await writeFile(path.join(root, "src.tsx"), "export function App() { return <main>Ready</main>; }\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "baseline app"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const markdown = formatMarkdownQaDraft(qa);
+  const agent = JSON.parse(formatAgentQaDraft(qa));
+
+  assert.equal(qa.flows.length, 0);
+  assert.equal(qa.missingEvidence.length, 0);
+  assert.equal(agent.automation, undefined);
+  assert.match(markdown, /no changed flow candidate was generated/i);
+  assert.doesNotMatch(markdown, /App launch smoke flow|## Optional Automation/);
 });
 
 test("api service fallback uses contract smoke instead of app launch", async () => {
@@ -6814,6 +6841,9 @@ test("initAgentSetup creates AGENTS.md, installs the packaged skill, and stays i
   assert.match(agents, /<!-- qamap:agent:start -->/);
   assert.match(agents, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
   assert.match(agents, /requiredEvidence/);
+  assert.match(agents, /intents\[\]\.scenarios\[\]\.sources/);
+  assert.match(agents, /Treat `automation` as opt-in/);
+  assert.doesNotMatch(agents, /firstDraftCommand/);
   const skill = await readFile(path.join(root, ".claude", "skills", "qamap-pr-qa", "SKILL.md"), "utf8");
   assert.match(skill, /name: qamap-pr-qa/);
   await stat(path.join(root, "qamap.config.json"));
@@ -6883,14 +6913,29 @@ test("generateAgentContext reflects npm scripts and repository boundaries", asyn
 
 // Minimal JSON Schema (draft-07 subset) checker used to keep
 // schema/qamap-agent.schema.json honest against real output. Supports the
-// keywords that schema actually uses: type, const, enum, required,
-// properties, items, minimum, maximum.
-function collectSchemaViolations(schema, value, location = "$") {
+// keywords that schema actually uses: local $ref, type, const, enum,
+// required, properties, items, minimum, maximum.
+function collectSchemaViolations(schema, value, location = "$", rootSchema = schema) {
+  if (schema.$ref) {
+    const resolved = schema.$ref
+      .replace(/^#\//, "")
+      .split("/")
+      .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
+      .reduce((current, part) => current?.[part], rootSchema);
+    return resolved
+      ? collectSchemaViolations(resolved, value, location, rootSchema)
+      : [`${location}: unresolved schema reference ${schema.$ref}`];
+  }
   const violations = [];
   const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
   if (types.length > 0) {
     const actual = value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
-    if (!types.includes(actual)) {
+    const matches = types.some((type) =>
+      type === actual ||
+      (type === "integer" && typeof value === "number" && Number.isInteger(value)) ||
+      (type === "number" && typeof value === "number")
+    );
+    if (!matches) {
       violations.push(`${location}: expected ${types.join("|")}, got ${actual}`);
       return violations;
     }
@@ -6915,13 +6960,13 @@ function collectSchemaViolations(schema, value, location = "$") {
     }
     for (const [key, child] of Object.entries(schema.properties ?? {})) {
       if (key in value && value[key] !== undefined) {
-        violations.push(...collectSchemaViolations(child, value[key], `${location}.${key}`));
+        violations.push(...collectSchemaViolations(child, value[key], `${location}.${key}`, rootSchema));
       }
     }
   }
   if (Array.isArray(value) && schema.items) {
     for (const [index, item] of value.entries()) {
-      violations.push(...collectSchemaViolations(schema.items, item, `${location}[${index}]`));
+      violations.push(...collectSchemaViolations(schema.items, item, `${location}[${index}]`, rootSchema));
     }
   }
   return violations;

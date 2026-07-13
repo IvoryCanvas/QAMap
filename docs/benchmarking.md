@@ -48,6 +48,8 @@ Each target can declare:
 | `mustIncludeLifecycle` | Trigger, condition, action, state, effect, or outcome terms that must survive in the ordered lifecycle. |
 | `mustIncludeQaScenarios` | Failure, boundary, state-transition, or primary QA terms that must be proposed before runner compilation. |
 | `mustFindIntentEvidence` | Commit or diff terms that must remain attached to intent provenance. |
+| `mustTraceScenarioFiles` | Changed files that must appear in at least one scenario's exact direct/supporting base- or head-side diff source. |
+| `maxUntracedCriticalScenarios` | Maximum critical scenarios without a direct/supporting diff source carrying a file and line number. Contextual commit evidence cannot satisfy this contract; lifecycle fixtures keep it at zero. |
 | `mustReachFiles` | Files that the selected flows must reach. |
 | `mustNameFlows` | Product terms that must appear in a user-facing flow title. |
 | `mustNotNameFlows` | Misleading flow-title terms that must not be emitted. |
@@ -61,7 +63,7 @@ Each target can declare:
 | `mustRecommendCommands` | Commands the setup or validation path must expose. |
 | `maxBlankActions` | Maximum malformed or empty draft steps; public fixtures keep this at zero. |
 | `maxGenericTitles` | Maximum titles ending in generic `primary journey` or `smoke flow` wording. |
-| `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. |
+| `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. Production output also has a global 8KB ceiling and discloses omitted intent/flow counts. |
 
 Set `manifestBaseline: true` on a committed fixture to generate its manifest from the base snapshot into the benchmark temp directory, then pass that external manifest to analysis of the head commit. The fixture repository is never modified by this step. This protects the feedback loop itself: a baseline must affect the next PR, not merely serialize valid YAML.
 
@@ -77,7 +79,7 @@ node scripts/bench.mjs --baseline bench-results/<file>.json
 
 When both files exist, `pnpm bench` prefers the gitignored local config. CI always passes `--config bench.config.json --assert`, so private paths cannot affect the public quality gate.
 
-Saved results include intent titles, lifecycle and scenario terms, flow titles, draft paths, recall gaps, readiness, agent payload size, and timing. Use a saved baseline to see heuristic movement, but treat the committed expectation contract as the merge gate.
+Saved results include intent titles, lifecycle and scenario terms, scenario trace coverage, flow titles, draft paths, recall gaps, readiness, agent payload size, and timing. Use a saved baseline to see heuristic movement, but treat the committed expectation contract as the merge gate.
 
 Every benchmark target also enforces the Behavior Graph base contract: graph schema version 1, at least one graph flow for every planned flow, at least one impacted node for a non-empty diff, and no edge whose endpoint is missing. The table reports `graph n/i` as total nodes versus impacted nodes. These checks keep the graph connected to real PR analysis while framework-specific adapters are introduced incrementally.
 
