@@ -1,5 +1,22 @@
 # Release Validation
 
+## 0.4.3 - 2026-07-14
+
+Validated as an evidence-routed QA-to-automation patch. Intent-backed scenarios are selected from exact diff evidence before an adapter is chosen, and every selected scenario carries a receipt that states whether its setup, action, and assertion were compiled, partially mapped, left uncompiled, or retained for review only:
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 148/148 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 12/12 synthetic PR targets pass; both lifecycle fixtures preserve 4/4 exact diff traces and 4/4 scenario automation receipts |
+| Coverage | Lines 87.64%, branches 84.19%, functions 95.32% |
+| Required QA honesty | Required scenarios that are only partially mapped or not compiled lower readiness and remain explicit blockers instead of being hidden behind a syntactically valid draft |
+| Failure-path safety | A positive fixture compiles repository-backed failure setup, action, and outcome evidence; a negative control proves an unrelated stable selector is not reused |
+| Package preview | `pnpm pack --dry-run` and `npm publish --dry-run --access public` pass for `@ivorycanvas/qamap@0.4.3`; 134 files, 914.2 kB packed |
+
+This patch does not add product-specific payment, order, or upload rules. The shared engine ranks scenarios from runner-independent evidence relations and only compiles a failure path when the repository exposes a compatible endpoint boundary, related action selector, and observable outcome. Review-only and incomplete mappings remain visible to humans and agents rather than being presented as runnable E2E coverage.
+
 ## 0.4.2 - 2026-07-13
 
 Validated as an automation-readiness honesty patch. Benchmark contracts now fail when QAMap finds a plausible flow but emits a draft that cannot be tried, and generated Playwright failure paths require a repository-observed endpoint, stable action, and visible failure outcome before QAMap writes executable steps:

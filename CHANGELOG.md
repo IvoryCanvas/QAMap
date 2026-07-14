@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.4.3 - 2026-07-14
+
+### Added
+
+- Added evidence-ranked QA scenario routing. Each intent-backed scenario is now classified as `required`, `recommended`, or `review-only` from its priority, confidence, review requirement, and exact diff sources instead of treating every inferred path as equally actionable.
+- Added scenario-level automation receipts to human, JSON, and agent output. QAMap reports whether each selected scenario was `compiled`, `partial`, `not-compiled`, or `review-only`, including mapped step and assertion counts plus a concrete blocker when automation is incomplete.
+- Added benchmark contracts for selected-to-compiled coverage so public fixtures fail CI when required QA is proposed without a traceable automation handoff.
+
+### Changed
+
+- E2E readiness now includes required scenario compilation gaps. A syntactically valid draft cannot be promoted as runnable evidence when a required QA scenario was omitted or only partially mapped.
+- Playwright failure-path generation now requires an unchanged mockable endpoint boundary, an action selector related to the changed flow, and a repository-observed failure outcome before it emits executable setup, action, and assertion steps.
+- Contributor guidance now requires domain-neutral product rules, positive evidence combinations, negative controls, and unrelated fixture coverage before a specialized inference can enter the shared engine.
+
+### Fixed
+
+- Unrelated controls can no longer be reused merely because they are the first stable selector near a changed endpoint.
+- Maestro automation receipts now reflect commands and assertions that were actually generated instead of assuming coverage from the selected runner alone.
+
 ## 0.4.2 - 2026-07-13
 
 ### Added
