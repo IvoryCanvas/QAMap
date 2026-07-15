@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.4.4 - 2026-07-15
+
+### Added
+
+- Added conservative diff-only change intent for committed branches whose commit text does not express a usable behavior intent. Connected trigger, state, side-effect, and observable outcome evidence remains review-required instead of being discarded.
+- Added framework-neutral conditional-state extraction for React and Vue changes, including changed actions, conditional outcomes, destination parameters, and Unicode selector terms.
+- Added public React and Vue conditional-state benchmarks plus a presentation-only negative control. Benchmark contracts can now reject QA scenarios that must not be inferred.
+- Added a tested `skills` CLI installation path for the packaged `qamap-pr-qa` project skill.
+
+### Changed
+
+- Agent output now stays below 4KB and preserves at least the highest-priority intent, routed scenarios, affected flow, source, and omitted counts when compacted.
+- Low-confidence diff-only scenarios remain recommendations until stronger intent evidence promotes them; they no longer become required automation blockers merely because a diff hunk has a location.
+- One-off skill commands use an explicit npm execution environment so they do not invoke Corepack or rewrite a target repository's package-manager metadata.
+- Selector fallback now prefers diff-added, step-related controls and observable copy. Generic exploratory checks remain coverage guidance instead of executable happy-path steps.
+
+### Fixed
+
+- Generated drafts no longer pass by asserting only the document body or by reusing the clicked control as proof of success. Missing outcomes produce an explicit review-only `test.fixme` marker.
+- Generic UI copy such as `Request access`, `Open billing`, or an existing `subscription` symbol no longer fabricates network, external-entry, or payment setup without supporting diff evidence.
+- Vue templates, computed labels, React handlers, multiline visible text, and exact token overlap now produce more stable action and outcome selectors.
+- Risk-specific scenarios are ranked ahead of generic conditional-state suggestions, so calendar, routing, and network failure checks are not silently dropped by the scenario cap.
+
 ## 0.4.3 - 2026-07-14
 
 ### Added

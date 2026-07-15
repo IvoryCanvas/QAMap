@@ -8,7 +8,7 @@
 
 **A local, zero-LLM PR QA designer. QAMap turns commit intent and code diffs into evidence-backed behavior lifecycles, missing QA, and deterministic automation drafts. No cloud. No source upload. No token.**
 
-QAMap reads commit subjects and bodies, git changes, project structure, selectors, existing tests, and optional repo QA memory, then answers the question every reviewer asks: *"What behavior did this PR intend to change, how does that behavior move through the product, and what should we verify before merge?"* Playwright, Maestro, and manual checklists are output adapters after that judgment, not the product recommendation itself.
+QAMap reads commit subjects and bodies, git changes, project structure, selectors, existing tests, and optional repo QA memory, then answers the question every reviewer asks: *"What behavior did this PR intend to change, how does that behavior move through the product, and what should we verify before merge?"* When commit text is not descriptive, connected diff evidence can still produce a conservative, review-required intent. Playwright, Maestro, and manual checklists are output adapters after that judgment, not the product recommendation itself.
 
 ```txt
 PR commits + diff
@@ -25,7 +25,7 @@ Optional team memory (.qamap/manifest.yaml)
 Run one read-only command on a branch. A manifest and test runner are not required:
 
 ```sh
-pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
+npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD
 ```
 
 The report starts with the inferred behavior and keeps each proposed scenario connected to the commit or exact base/head diff line that caused it. Removed guards and validation remain visible as base-side evidence; each source is labeled `direct`, `supporting`, or `contextual`. QAMap then shows two separate receipts: why the scenario was routed as `required`, `recommended`, or `review-only`, and whether the E2E adapter compiled it fully, partially, or not at all (trimmed from the committed lifecycle benchmark):
@@ -59,9 +59,9 @@ Optional automation:
 Requires Node.js 20 or newer. Inside a repository whose default branch is `origin/main` (or `main`), the base is inferred automatically:
 
 ```sh
-pnpm dlx @ivorycanvas/qamap qa            # what should this branch prove before merge?
-pnpm dlx @ivorycanvas/qamap qa --format agent   # compact evidence for a coding agent or PR workflow
-pnpm dlx @ivorycanvas/qamap manifest init # optional: save reviewed team QA memory for sharper future runs
+npx --yes @ivorycanvas/qamap@latest qa            # what should this branch prove before merge?
+npx --yes @ivorycanvas/qamap@latest qa --format agent   # compact evidence for a coding agent or PR workflow
+npx --yes @ivorycanvas/qamap@latest manifest init # optional: save reviewed team QA memory for sharper future runs
 ```
 
 Pass `--base <ref> --head <ref>` for anything non-standard. Run bare `qamap` for a start-here guide, `qamap help` for the full reference, and see the [command reference](docs/commands.md) for every command and output shape.
@@ -76,7 +76,15 @@ Stop re-explaining the same QA context to your agent on every PR:
 qamap qa --format agent
 ```
 
-One minified JSON object (`schema: qamap.qa`) with change intents, lifecycle stages, QA scenarios, structured diff sources, affected flows, and required evidence. The complete line stays at or below 8KB; total and omitted intent/flow counts remain visible when lower-priority detail is compacted. It carries the decision content of the full report at a fraction of the context cost. The shape is a documented, versioned contract: [agent format contract](docs/agent-format.md). To make agents run this themselves, run `qamap init --agent` once: it adds a Pre-PR QA section to `AGENTS.md` and installs the packaged skill ([skills/qamap-pr-qa/SKILL.md](skills/qamap-pr-qa/SKILL.md)) into `.claude/skills/`. Details: [agent skill guide](docs/agent-skill.md).
+One minified JSON object (`schema: qamap.qa`) with change intents, lifecycle stages, QA scenarios, structured diff sources, affected flows, and required evidence. The complete line stays below 4KB; compacted payloads retain the highest-priority intent, scenarios, affected flow, and omitted counts instead of collapsing to an empty summary. It carries the decision content of the full report at a fraction of the context cost. The shape is a documented, versioned contract: [agent format contract](docs/agent-format.md).
+
+To make agents run this themselves, run `qamap init --agent` once, or install the portable project skill through the `skills` CLI:
+
+```sh
+npx --yes skills add IvoryCanvas/qamap --skill qamap-pr-qa
+```
+
+The built-in setup adds a Pre-PR QA section to `AGENTS.md` and installs the packaged skill ([skills/qamap-pr-qa/SKILL.md](skills/qamap-pr-qa/SKILL.md)) into the supported project skill directory. Details: [agent skill guide](docs/agent-skill.md).
 
 ## Why QAMap
 
@@ -96,7 +104,7 @@ QAMap는 PR을 리뷰하기 전에 로컬에서 실행하는 zero-LLM QA 설계 
 PR 커밋 의도와 diff, repo 구조를 읽고 변경 의도, 기능 생명주기, 정상·실패·경계·상태 전환 QA, 부족한 fixture/selector/assertion 근거를 정리합니다. 그 다음 기존 테스트 환경에 맞춰 Playwright, Maestro 또는 수동 체크리스트 초안을 제시합니다. 클라우드나 LLM 토큰을 쓰지 않습니다.
 
 ```sh
-pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
+npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD
 ```
 
 에이전트에게 넘길 때는 `--format agent`를 붙이면 같은 판단 내용을 압축된 JSON으로 받을 수 있어, 매 세션 repo 탐색에 토큰을 반복해서 쓰지 않아도 됩니다.

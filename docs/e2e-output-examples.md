@@ -7,7 +7,7 @@ These examples show the shape of QAMap output that should be good enough for the
 First contact should work without a manifest:
 
 ```sh
-pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD
+npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD
 ```
 
 The output should be specific enough to paste into a PR comment. This excerpt uses the committed web preferences lifecycle benchmark; it deliberately keeps the current compiler gaps visible:

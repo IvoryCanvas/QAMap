@@ -17,7 +17,7 @@ pnpm exec qamap manifest explain . --base origin/main --head HEAD
 pnpm exec qamap e2e draft . --base origin/main --head HEAD --dry-run
 ```
 
-Use `pnpm dlx @ivorycanvas/qamap ...` for one-off runs without installing QAMap into the target repository.
+Use `npx --yes @ivorycanvas/qamap@latest ...` for one-off human runs without installing QAMap into the target repository. Packaged agent skills use an explicit `npm exec --package` form so they do not invoke the target repository's package manager or Corepack metadata flow.
 
 ## Reading The Output
 

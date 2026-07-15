@@ -29,10 +29,10 @@ After that, agents that read `AGENTS.md` or project skills will run the QA pass 
 Run this before writing a PR body or asking for review. Agents should prefer the compact agent format — one minified JSON object (about 2 KB for a typical small PR) instead of a long report:
 
 ```sh
-pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD --format agent
+npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa . --base origin/main --head HEAD --format agent
 ```
 
-The result carries `intents[]` with scenario-level structured diff `sources`, `flows[]` (affected behavior, entry route, steps, selectors), `requiredEvidence[]`, optional `automation`, `prChecklist[]`, and `commands[]` under `schema: qamap.qa`.
+The result carries `intents[]` with scenario-level structured diff `sources`, `flows[]` (affected behavior, entry route, steps, selectors), `requiredEvidence[]`, optional `automation`, `prChecklist[]`, and `commands[]` under `schema: qamap.qa`. The one-off command uses npm directly so an agent does not trigger Corepack or rewrite the target repository's `packageManager` metadata.
 
 For a human-readable report, drop the flag; for installed projects write it to a file:
 
@@ -49,6 +49,14 @@ QAMap ships a portable skill template at:
 ```txt
 skills/qamap-pr-qa/SKILL.md
 ```
+
+Install it as a project skill with the `skills` CLI:
+
+```sh
+npx --yes skills add IvoryCanvas/qamap --skill qamap-pr-qa
+```
+
+This path is useful when a team already manages reusable agent skills through `skills-lock.json`. QAMap also keeps `qamap init --agent` for repositories that want the `AGENTS.md`, config, and packaged-skill setup in one idempotent command.
 
 Use it when an agent surface supports local skill folders, instruction folders, or reusable workflow prompts. The template is intentionally vendor-neutral: it tells an agent when to run `qamap qa`, how to pick a base branch, what sections to copy into the PR, and when to suggest manifest repair.
 
@@ -91,7 +99,7 @@ Then edit `.qamap/manifest.yaml` so future branches can reuse the corrected team
 
 ```txt
 Before finalizing a PR, run:
-pnpm dlx @ivorycanvas/qamap qa . --base origin/main --head HEAD --format agent
+npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa . --base origin/main --head HEAD --format agent
 
 Paste the affected flow, suggested E2E/checklist, missing evidence, and PR checklist into the PR body or review note.
 If the recommendation is wrong, ask the maintainer which manifest domain, flow, anchor, or check should be corrected.

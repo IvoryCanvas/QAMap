@@ -15,6 +15,8 @@ The command fails when any target violates its declared expectations. The initia
 - a web app with no tests;
 - a web app with Playwright and an existing mock handler;
 - Vue and SvelteKit web changes with framework-native route files;
+- equivalent React and Vue conditional-state changes that must recover a changed action and observable outcome despite different syntax;
+- a presentation-only React condition that must not create behavioral state-transition QA;
 - a web preferences change that must become submit, persistence, request-failure, and re-entry QA instead of a generic journey;
 - a mobile reminder change that must become scheduling, calendar, duplicate, resynchronization, and entry-routing QA;
 - an Expo app with Maestro;
@@ -47,6 +49,7 @@ Each target can declare:
 | `mustNotNameIntents` | Misleading terms that must not appear in inferred intent titles. |
 | `mustIncludeLifecycle` | Trigger, condition, action, state, effect, or outcome terms that must survive in the ordered lifecycle. |
 | `mustIncludeQaScenarios` | Failure, boundary, state-transition, or primary QA terms that must be proposed before runner compilation. |
+| `mustNotIncludeQaScenarios` | QA scenario terms that would be false positives for the fixture and must not be proposed. |
 | `mustFindIntentEvidence` | Commit or diff terms that must remain attached to intent provenance. |
 | `mustTraceScenarioFiles` | Changed files that must appear in at least one scenario's exact direct/supporting base- or head-side diff source. |
 | `maxUntracedCriticalScenarios` | Maximum critical scenarios without a direct/supporting diff source carrying a file and line number. Contextual commit evidence cannot satisfy this contract; lifecycle fixtures keep it at zero. |
@@ -68,7 +71,7 @@ Each target can declare:
 | `mustRecommendCommands` | Commands the setup or validation path must expose. |
 | `maxBlankActions` | Maximum malformed or empty draft steps; public fixtures keep this at zero. |
 | `maxGenericTitles` | Maximum titles ending in generic `primary journey` or `smoke flow` wording. |
-| `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. Production output also has a global 8KB ceiling and discloses omitted intent/flow counts. |
+| `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. Production output has a global 4KB ceiling and preserves the highest-priority retained intent/flow plus omitted counts. |
 | `minReadinessScore` | Minimum aggregate draft-readiness score after self-check, TODO, required-action, and execution-blocker penalties. |
 | `allowedReadinessLevels` | Accepted aggregate levels: `ready`, `near-runnable`, `needs-work`, or `blocked`. Use this to prevent a semantically plausible but unusable draft from satisfying the contract. |
 | `minTryableDrafts` | Minimum files classified as `runnable-candidate` or `near-runnable`. |
@@ -107,5 +110,7 @@ When a real repository produces a poor recommendation:
 4. Fix the inference and keep the fixture as permanent regression evidence.
 
 Any new production heuristic must be exercised by at least two unrelated positive domains and one negative or false-positive control. Domain vocabulary belongs in synthetic fixtures, not in shared inference rules.
+
+Cross-framework fixtures are semantic controls, not a claim that QAMap has separate product logic for each UI library. The same user-visible change is expressed through different syntax so a shared inference rule must survive both, while the negative control proves that merely seeing a condition is not enough to invent QA. Because every fixture is small, public, and deterministic, a regression can be reproduced without private source, network services, or a working application environment.
 
 Do not copy repository names, proprietary code, domain language, file paths, credentials, production data, or raw smoke output into a public fixture. Reduce the behavior to neutral synthetic vocabulary and keep private diagnostics outside the repository.

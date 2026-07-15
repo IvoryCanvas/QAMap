@@ -1,5 +1,26 @@
 # Release Validation
 
+## 0.4.4 - 2026-07-15
+
+Validated as a cross-framework evidence and honest-draft patch. QAMap now recovers conservative change intent from connected diff behavior even when commit text is not descriptive, maps React and Vue conditional states to changed actions and observable outcomes, and keeps unsupported outcomes review-only instead of generating a green smoke assertion:
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 152/152 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 15/15 synthetic PR targets pass; React and Vue conditional-state positives recover actions/outcomes while a presentation-only negative control rejects behavioral state QA |
+| Coverage | Lines 88.04%, branches 84.32%, functions 95.50% |
+| Change Intent coverage | Lines 97.97%, branches 91.82%, functions 99.30% |
+| Agent payload | Global output stays below 4KB; complex web and mobile lifecycle fixtures retain intent/scenario/flow context in 3,172 and 3,133 bytes instead of falling back to an empty emergency summary |
+| One-off repository safety | The documented npm execution command left an isolated repository's `package.json` hash unchanged and created no lockfile or package-manager metadata |
+| Skill compatibility | The public repository was discovered by the `skills` CLI and `qamap-pr-qa` installed as a project skill in an isolated home/project |
+| Package preview | `pnpm pack --dry-run` and `npm pack --dry-run` pass for `@ivorycanvas/qamap@0.4.4`; 134 files, 924.1 kB packed |
+
+The React and Vue fixtures are not product-specific framework rules. They express equivalent conditional user behavior through different syntax, while the negative control proves that a presentation condition alone cannot create lifecycle QA. Benchmarks materialize temporary Git repositories, do not install fixture dependencies, and do not execute fixture applications.
+
+Low-confidence diff-only intent remains review-required and recommended. Located lines alone do not promote it to a required blocker. When a repository exposes a stable action and observable failure outcome, QAMap can still compile a separate Playwright failure scenario; when an outcome is absent, the draft emits `test.fixme` rather than treating the clicked control or document body as proof of success.
+
 ## 0.4.3 - 2026-07-14
 
 Validated as an evidence-routed QA-to-automation patch. Intent-backed scenarios are selected from exact diff evidence before an adapter is chosen, and every selected scenario carries a receipt that states whether its setup, action, and assertion were compiled, partially mapped, left uncompiled, or retained for review only:

@@ -15,10 +15,10 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
 2. Run QAMap from the repository root. Prefer the compact agent format — it carries the same decision content as the markdown report in a fraction of the tokens:
 
    ```sh
-   pnpm dlx @ivorycanvas/qamap qa . --base <base> --head HEAD --format agent
+   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa . --base <base> --head HEAD --format agent
    ```
 
-   For an installed project, prefer:
+   This one-off form runs outside the target repository's package-manager contract, so it does not invoke Corepack or add a `packageManager` field. For a project that already installs QAMap, prefer its local binary, for example:
 
    ```sh
    pnpm exec qamap qa . --base <base> --head HEAD --format agent
@@ -30,7 +30,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
 3. If the repository is a monorepo and the changed files are clearly inside one package, run a scoped pass too:
 
    ```sh
-   pnpm dlx @ivorycanvas/qamap qa <package-path> --workspace-root . --base <base> --head HEAD
+   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa <package-path> --workspace-root . --base <base> --head HEAD
    ```
 
 4. Read and verify intent before generating code. In agent format:
@@ -45,7 +45,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
 5. Only after a human or team accepts the scenario and automation adapter, create or preview executable coverage:
 
    ```sh
-   pnpm exec qamap e2e draft . --base <base> --head HEAD
+   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap e2e draft . --base <base> --head HEAD
    ```
 
    If the selected adapter is absent, inspect and explicitly accept the `automation.setupCommand` proposal. Never install a runner merely because QAMap detected a web or mobile surface.
@@ -67,7 +67,7 @@ When the recommendation is wrong or too broad, do not repeatedly re-prompt for t
 If the team accepts QAMap for ongoing use, suggest this follow-up:
 
 ```sh
-pnpm exec qamap manifest init .
+npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap manifest init .
 ```
 
 Then humans should review `.qamap/manifest.yaml` and keep only durable team QA language.

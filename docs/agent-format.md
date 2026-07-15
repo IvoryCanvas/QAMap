@@ -1,6 +1,6 @@
 # Agent Format Contract
 
-`qamap qa --format agent` prints one compact line of JSON designed to be pasted into a coding agent's context instead of the full markdown report. The complete line is capped at 8KB. When the uncapped result would be larger, QAMap preserves the strongest evidence and reports total and omitted counts instead of silently overflowing the context budget. This page is the contract for that output: what the fields mean, what an agent may rely on, and how the format is allowed to change.
+`qamap qa --format agent` prints one compact line of JSON designed to be pasted into a coding agent's context instead of the full markdown report. The complete line stays below 4KB. When the uncapped result would be larger, QAMap preserves the strongest intent, routed scenarios, affected flow, and total/omitted counts instead of silently overflowing the context budget. This page is the contract for that output: what the fields mean, what an agent may rely on, and how the format is allowed to change.
 
 ```sh
 qamap qa . --base origin/main --head HEAD --format agent
@@ -44,7 +44,7 @@ The intended loop for a coding agent:
 | `automation` | object? | Explicitly optional adapter handoff: `optIn`, `adapter`, `setupStatus`, `draftCommand`, and optional `setupCommand`. Use it only after the QA scenario is accepted. |
 | `flowCount`, `omittedFlowCount` | number | Total affected flows and the count omitted from the compact payload. |
 | `flows` | array | Affected user flows, most relevant first (capped). Each has `title`, `source`, backward-compatible `draft`, optional `runnable`, `entry`, and `verificationMode`, plus `changedFiles`, `reviewQuestion`, `successSignal`, `steps`, `selectors`, short `evidence` reasons, and compact `scenarioAutomation` entries (`id`, `decision`, `status`). Test-only changes expose `existingEvidence`; configuration, docs, generated artifacts, and changed tests use `verificationMode`. |
-| `compaction` | object | Present only when lower-priority detail was reduced to keep the complete line within 8KB. Carries `maxBytes` and the uncapped `originalBytes`. |
+| `compaction` | object | Present only when lower-priority detail was reduced to keep the complete line below 4KB. Carries `maxBytes`, the uncapped `originalBytes`, and `lean: true` when the smallest evidence-preserving shape was used. |
 | `requiredEvidence` | array | Required-priority QA evidence still missing, capped at 8: `flow`, `kind`, `title`. |
 | `recommendedEvidenceCount` | number | How many recommended-priority items were omitted; run without `--format agent` to see them. |
 | `requiredBootstrap` | array | Non-runner repository context steps (capped at 3): `title`, `action`. Runner setup is represented only under `automation`. |
