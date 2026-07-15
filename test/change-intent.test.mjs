@@ -297,6 +297,46 @@ test("change intent marks connected working-tree signals as review-required diff
   assert.equal(analysis.intents[0].evidence.some((item) => item.symbol === "async"), false);
 });
 
+test("change intent falls back to committed diff signals when commit text is not behavior-bearing", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/pages/billing.tsx", "export function Billing() { return null; }\n");
+  commit(root, "benchmark baseline");
+  branch(root, "fix/billing-summary");
+  await write(
+    root,
+    "src/pages/billing.tsx",
+    [
+      "export function Billing() {",
+      '  const [status, setStatus] = useState("");',
+      "  async function openBilling() {",
+      '    const response = await fetch("/api/billing/summary");',
+      '    setStatus(response.ok ? "Billing loaded" : "Could not load billing");',
+      "  }",
+      '  return <button onClick={openBilling}>Open billing</button>;',
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "load billing summary");
+
+  const analysis = await analyze(root, ["src/pages/billing.tsx"]);
+  const intent = analysis.intents[0];
+  const networkScenario = intent?.scenarios.find((scenario) => /failure, timeout, and retry/i.test(scenario.title));
+
+  assert.equal(analysis.source, "diff-only");
+  assert.equal(analysis.intents.length, 1);
+  assert.equal(intent.commits.length, 0);
+  assert.equal(intent.confidence, "low");
+  assert.equal(intent.reviewRequired, true);
+  assert.match(intent.summary, /commit text did not express a usable intent/i);
+  assert.ok(intent.lifecycle.some((stage) => stage.kind === "trigger"));
+  assert.ok(intent.lifecycle.some((stage) => stage.kind === "state-change"));
+  assert.ok(intent.lifecycle.some((stage) => stage.kind === "side-effect"));
+  assert.equal(intent.scenarios.find((scenario) => scenario.kind === "primary")?.priority, "recommended");
+  assert.ok(networkScenario);
+  assert.equal(routeQaScenario(networkScenario).decision, "recommended");
+  assert.equal(intent.scenarios.some((scenario) => /entry payload/i.test(scenario.title)), false);
+});
+
 test("E2E planning promotes commit intent before runner-specific draft generation", async (t) => {
   const root = await makeRepo(t);
   await write(
@@ -415,11 +455,13 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   }));
   const compactAgentOutput = formatAgentQaDraft(oversizedQa);
   const compactAgentSummary = JSON.parse(compactAgentOutput);
-  assert.ok(Buffer.byteLength(compactAgentOutput) <= 8 * 1024);
+  assert.ok(Buffer.byteLength(compactAgentOutput) <= 4 * 1024);
   assert.equal(compactAgentSummary.intentCount, 12);
   assert.equal(compactAgentSummary.flowCount, 20);
   assert.equal(compactAgentSummary.omittedIntentCount, 12 - compactAgentSummary.intents.length);
   assert.equal(compactAgentSummary.omittedFlowCount, 20 - compactAgentSummary.flows.length);
+  assert.ok(compactAgentSummary.intents.length > 0);
+  assert.ok(compactAgentSummary.flows.length > 0);
   assert.ok(compactAgentSummary.compaction);
 
   const pathologicalQa = structuredClone(oversizedQa);
@@ -428,8 +470,10 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   pathologicalQa.manifestPath = `${"manifest/".repeat(1000)}qamap.yaml`;
   const boundedAgentOutput = formatAgentQaDraft(pathologicalQa);
   const boundedAgentSummary = JSON.parse(boundedAgentOutput);
-  assert.ok(Buffer.byteLength(boundedAgentOutput) <= 8 * 1024);
+  assert.ok(Buffer.byteLength(boundedAgentOutput) <= 4 * 1024);
   assert.equal(boundedAgentSummary.schema.name, "qamap.qa");
+  assert.ok(boundedAgentSummary.intents.length > 0);
+  assert.ok(boundedAgentSummary.flows.length > 0);
 });
 
 test("evidence-routed failure QA becomes a separate partial Playwright scenario without domain rules", async (t) => {
@@ -559,6 +603,163 @@ test("evidence-routed failure QA does not reuse an unrelated action selector", a
 
   const spec = await readFile(path.join(root, file.path), "utf8");
   assert.doesNotMatch(spec, /Routed QA scenario:/);
+});
+
+test("Vue conditional actions retain changed UI evidence without unrelated payment setup", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { vue: "3.5.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await write(
+    root,
+    "src/pages/documents.vue",
+    [
+      "<script setup lang=\"ts\">",
+      "import { ref } from 'vue';",
+      "const subscriptionPlan = 'archived';",
+      "const isImportReady = ref(false);",
+      "</script>",
+      "<template><main><h1>Documents</h1><p>Choose a document</p></main></template>",
+    ].join("\n"),
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/document-import");
+
+  await write(
+    root,
+    "src/pages/documents.vue",
+    [
+      "<script setup lang=\"ts\">",
+      "import { computed, ref } from 'vue';",
+      "const subscriptionPlan = 'archived';",
+      "const isImportReady = ref(false);",
+      "const isImportComplete = ref(false);",
+      "const actionLabel = computed(() => isImportReady.value ? 'Import document' : 'Request access');",
+      "function startImport() {",
+      "  if (!isImportReady.value) return;",
+      "  const params = new URLSearchParams({ source: 'documents' });",
+      "  isImportComplete.value = true;",
+      "  window.location.href = `/documents/imported?${params.toString()}`;",
+      "}",
+      "</script>",
+      "<template>",
+      "  <main>",
+      "    <h1>Documents</h1>",
+      "    <button type=\"button\" @click=\"startImport\">{{ actionLabel }}</button>",
+      "    <p v-if=\"isImportComplete\">Document imported</p>",
+      "  </main>",
+      "</template>",
+    ].join("\n"),
+  );
+  commit(root, "feat: import document and show completion state");
+
+  const analysis = await analyze(root, ["src/pages/documents.vue"]);
+  assert.ok(
+    analysis.intents[0].lifecycle.some((stage) => /document imported/i.test(stage.label)),
+    JSON.stringify({ lifecycle: analysis.intents[0].lifecycle, evidence: analysis.intents[0].evidence }),
+  );
+  assert.ok(analysis.intents[0].scenarios.some((scenario) => /conditional state and fallback/i.test(scenario.title)));
+  assert.ok(analysis.intents[0].scenarios.some((scenario) => /destination path and query parameters/i.test(scenario.title)));
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const selectors = plan.flows.flatMap((flow) => flow.selectors.map((selector) => selector.value));
+  const setupTitles = plan.flows.flatMap((flow) => flow.setupHints.map((hint) => hint.title));
+  assert.ok(selectors.includes("Import document"));
+  assert.ok(selectors.includes("Request access"));
+  assert.ok(selectors.includes("Document imported"));
+  assert.equal(setupTitles.some((title) => /payment sandbox/i.test(title)), false);
+
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".generated-e2e" });
+  const file = draft.files.find((candidate) => candidate.source === "change-intent");
+  assert.ok(file);
+  const spec = await readFile(path.join(root, file.path), "utf8");
+  assert.match(spec, /page\.getByRole\("button", \{ name: "Import document" \}\)\.click\(\)/);
+  assert.match(spec, /page\.getByText\("Document imported"\)/);
+  assert.doesNotMatch(spec, /page\.locator\("body"\)/);
+});
+
+test("React conditional UI produces state QA from changed behavior evidence", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { react: "19.0.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await write(
+    root,
+    "src/pages/notifications.tsx",
+    "export function NotificationsPage() { return <main><h1>Notifications</h1></main>; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/notification-ready-state");
+
+  await write(
+    root,
+    "src/pages/notifications.tsx",
+    [
+      "export function NotificationsPage() {",
+      "  const [isNotificationReady, setNotificationReady] = useState(false);",
+      "  function sendNotification() { setNotificationReady(true); }",
+      "  return <main>",
+      "    <h1>Notifications</h1>",
+      "    <button onClick={sendNotification}>Send notification</button>",
+      "    {isNotificationReady && <p>Notification queued</p>}",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "feat: send notification and show queued state");
+
+  const analysis = await analyze(root, ["src/pages/notifications.tsx"]);
+  const conditional = analysis.intents[0].scenarios.find((scenario) => /conditional state and fallback/i.test(scenario.title));
+  assert.ok(conditional);
+  assert.ok(conditional.evidence.some((item) => item.file === "src/pages/notifications.tsx" && item.startLine));
+
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".generated-e2e" });
+  const file = draft.files.find((candidate) => candidate.source === "change-intent");
+  assert.ok(file);
+  const spec = await readFile(path.join(root, file.path), "utf8");
+  assert.match(spec, /page\.getByRole\("button", \{ name: "Send notification" \}\)\.click\(\)/);
+  assert.match(spec, /page\.getByText\("Notification queued"\)/);
+});
+
+test("presentation-only conditions do not become lifecycle QA scenarios", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "src/components/Banner.tsx",
+    "export function Banner() { return <p>Account notice</p>; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "style/banner-theme");
+  await write(
+    root,
+    "src/components/Banner.tsx",
+    [
+      "export function Banner() {",
+      "  const shouldUseDarkText = true;",
+      "  return <p className={shouldUseDarkText ? 'text-dark' : 'text-light'}>Account notice</p>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "fix: preserve banner theme contrast");
+
+  const analysis = await analyze(root, ["src/components/Banner.tsx"]);
+  assert.equal(analysis.intents.length, 1);
+  assert.equal(
+    analysis.intents[0].scenarios.some((scenario) => /conditional state and fallback/i.test(scenario.title)),
+    false,
+  );
 });
 
 async function analyze(root, files) {

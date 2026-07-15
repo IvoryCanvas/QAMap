@@ -199,8 +199,8 @@ export async function analyzeChangeIntents(
     ),
   );
 
-  if (intents.length === 0 && (options.includeWorkingTree ?? false)) {
-    const diffIntent = buildDiffOnlyIntent(changedFiles, codeSignals);
+  if (intents.length === 0) {
+    const diffIntent = buildDiffOnlyIntent(changedFiles, codeSignals, options.includeWorkingTree ?? false);
     if (diffIntent) {
       intents.push(diffIntent);
     }
@@ -359,7 +359,10 @@ function buildCommitIntent(
 ): ChangeIntent {
   const keywords = uniqueStrings(commits.flatMap((commit) => commit.keywords));
   const files = selectIntentFiles(keywords, changedFiles, addedDiffText, clusterCount);
-  const relevantSignals = codeSignals.filter((signal) => files.includes(signal.file));
+  const relevantSignals = rankCodeSignalsForIntent(
+    codeSignals.filter((signal) => files.includes(signal.file)),
+    keywords,
+  );
   const relevantRiskEvidence = riskEvidence.filter((item) => item.file && files.includes(item.file));
   const lifecycle = buildLifecycle(commits, relevantSignals);
   const confidence = confidenceForIntent(commits, lifecycle, relevantSignals);
@@ -398,7 +401,11 @@ function buildCommitIntent(
   };
 }
 
-function buildDiffOnlyIntent(changedFiles: string[], codeSignals: CodeBehaviorSignal[]): ChangeIntent | undefined {
+function buildDiffOnlyIntent(
+  changedFiles: string[],
+  codeSignals: CodeBehaviorSignal[],
+  includesWorkingTree: boolean,
+): ChangeIntent | undefined {
   const lifecycle = lifecycleFromCodeSignals(codeSignals);
   const stageKinds = new Set(lifecycle.map((stage) => stage.kind));
   if (lifecycle.length < 3 || stageKinds.size < 3) {
@@ -406,14 +413,16 @@ function buildDiffOnlyIntent(changedFiles: string[], codeSignals: CodeBehaviorSi
   }
   const files = uniqueStrings(codeSignals.map((signal) => signal.file)).slice(0, maxIntentFiles);
   const titleSubject = humanizeIdentifier(path.basename(files[0] ?? "working tree change").replace(/\.[^.]+$/, ""));
-  const title = `${titleSubject} working-tree behavior`;
+  const title = `${titleSubject} ${includesWorkingTree ? "working-tree" : "changed"} behavior`;
   const evidence = uniqueEvidence(codeSignals.slice(0, 12).map((signal) => signal.evidence));
-  const id = stableId("intent", `working-tree:${files.join(":")}`);
+  const id = stableId("intent", `${includesWorkingTree ? "working-tree" : "diff"}:${files.join(":")}`);
   const keywords = extractKeywords(codeSignals.map((signal) => `${signal.symbol} ${signal.label}`).join(" "));
   return {
     id,
     title,
-    summary: "Inferred only from connected working-tree behavior signals; no commit intent was available.",
+    summary: includesWorkingTree
+      ? "Inferred only from connected working-tree behavior signals; no commit intent was available."
+      : "Inferred from connected changed-code behavior signals because commit text did not express a usable intent.",
     confidence: "low",
     commits: [],
     files: files.length > 0 ? files : changedFiles.slice(0, maxIntentFiles),
@@ -481,7 +490,7 @@ function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]):
     }
     const alreadyRepresented = stages.some((stage) =>
       stage.label.toLowerCase().includes(signal.symbol.toLowerCase()) ||
-      (existingKinds.has(signal.kind) && normalizedWords(stage.label).some((word) => normalizedWords(signal.label).includes(word))),
+      (stage.kind === signal.kind && lifecycleLabelsOverlap(stage.label, signal.label)),
     );
     if (alreadyRepresented) {
       continue;
@@ -528,14 +537,17 @@ function buildIntentQaScenarios(
 ): IntentQaScenario[] {
   const conditions = lifecycle.filter((stage) => stage.kind === "condition").map((stage) => stage.label);
   const actions = selectPrimaryLifecycleSteps(lifecycle);
-  const outcomes = lifecycle.filter((stage) => stage.kind === "observable-outcome").map((stage) => assertionForStage(stage));
+  const outcomeStages = lifecycle.filter((stage) => stage.kind === "observable-outcome");
+  const locatedOutcomeStages = outcomeStages.filter((stage) => hasActionableLocatedDiffEvidence(stage.evidence));
+  const outcomes = (locatedOutcomeStages.length > 0 ? locatedOutcomeStages : outcomeStages)
+    .map((stage) => assertionForStage(stage));
   const sideEffects = lifecycle.filter((stage) => stage.kind === "side-effect").map((stage) => assertionForStage(stage));
   const primaryEvidence = lifecycleEvidence(lifecycle, evidence);
   const primaryHasActionableEvidence = hasActionableLocatedDiffEvidence(primaryEvidence);
   const primary: IntentQaScenario = {
     id: stableId("scenario", `${intentId}:primary`),
     kind: "primary",
-    priority: primaryHasActionableEvidence ? "critical" : "recommended",
+    priority: primaryHasActionableEvidence && confidence !== "low" ? "critical" : "recommended",
     title,
     rationale: "Commit and diff evidence describe this changed behavior lifecycle; verify the complete observable path before merge.",
     setup: conditions.length > 0 ? conditions : ["Prepare representative pre-change and changed-branch state."],
@@ -585,6 +597,42 @@ function buildIntentQaScenarios(
     ], ["Removed validation", "Unauthorized access", "Alternative entry point"], removedAccessGuardEvidence));
   }
 
+  const changedConditionEvidence = scenarioEvidenceFor(
+    lifecycle,
+    evidence,
+    /\b(?:is|has|can|should|show|hide)[A-Z_\w]*|eligible|available|loaded|loading|empty|ready|selected/i,
+    /color|theme|style|class|layout|size|width|height|dark|light/i,
+  );
+  if (changedConditionEvidence.length > 0 && !/toggle|enable|disable|permission|authoriz|auth|guard/.test(searchable)) {
+    scenarios.push(makeScenario(intentId, "conditional-fallback", "state-transition", "recommended", "Changed conditional state and fallback", [
+      "Prepare the changed condition as true and false, including loading, unknown, or empty state when the diff exposes one.",
+    ], [
+      "Enter the affected surface for each changed condition branch.",
+      "Change the condition and re-enter the surface to expose stale branch state.",
+    ], [
+      "Verify each condition shows only its intended action and observable copy.",
+      "Verify the fallback branch does not leak the changed action or duplicate its side effects.",
+    ], ["Condition false", "Loading or unknown state", "Empty collection", "Re-entry"], changedConditionEvidence));
+  }
+
+  const destinationParameterEvidence = evidence.filter((item) =>
+    item.kind === "diff" &&
+    item.file &&
+    item.startLine !== undefined &&
+    /urlsearchparams|searchparams|query|location\.href|window\.location|destination|redirect/i.test(`${item.symbol ?? ""} ${item.value}`)
+  );
+  if (destinationParameterEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "destination-parameters", "boundary", "recommended", "Destination path and query parameters", [
+      "Prepare representative identifiers and conditionally included destination parameters.",
+    ], [
+      "Trigger the changed navigation for the primary state and each parameter branch supported by the diff.",
+      "Repeat the navigation with missing optional data and encoded values.",
+    ], [
+      "Verify the destination path and required query parameters match the changed source values.",
+      "Verify optional parameters appear only for their intended state and remain correctly encoded.",
+    ], ["Missing optional parameter", "Encoded value", "Repeated navigation"], destinationParameterEvidence));
+  }
+
   if (/schedul|reminder|calendar|\bdate\b|\btime\b|daily|tomorrow|timezone/.test(searchable)) {
     scenarios.push(makeScenario(intentId, "calendar-boundary", "boundary", "critical", "Scheduling, calendar, and duplicate boundary", [
       "Prepare records near day, month, and timezone boundaries.",
@@ -610,7 +658,13 @@ function buildIntentQaScenarios(
   }
 
   const entryRoutingSearchable = searchable.replaceAll("navigation.setoptions", "");
-  if (/tap|open|navigat|redirect|route|deep.?link|payload|destination/.test(entryRoutingSearchable)) {
+  const explicitOpenDestination = /\bopen\b[^.;]{0,80}\b(?:linked|destination|route|screen|page|detail|summary)\b/.test(
+    entryRoutingSearchable,
+  );
+  if (/navigat|redirect|route|deep.?link|payload|destination/.test(entryRoutingSearchable) || explicitOpenDestination) {
+    const routingEvidencePattern = explicitOpenDestination
+      ? /open|navigat|redirect|route|deep.?link|payload|destination/i
+      : /navigat|redirect|route|deep.?link|payload|destination/i;
     scenarios.push(makeScenario(intentId, "entry-routing", "failure", "critical", "Entry payload and destination routing", [
       "Prepare valid, missing, and stale entry payloads.",
     ], [
@@ -622,7 +676,7 @@ function buildIntentQaScenarios(
     ], ["Missing payload", "Stale identifier", "Repeated entry"], scenarioEvidenceFor(
       lifecycle,
       evidence,
-      /tap|open|navigat|redirect|route|deep.?link|payload|destination/i,
+      routingEvidencePattern,
       /navigation\.setoptions/i,
     )));
   }
@@ -651,7 +705,7 @@ function buildIntentQaScenarios(
     ], ["Stale cache", "App restart", "Repeated synchronization"], scenarioEvidenceFor(lifecycle, evidence, /sync|persist|storage|cache|reload|re.?entry|save|store/i)));
   }
 
-  return uniqueScenarios(scenarios).slice(0, 4);
+  return rankIntentQaScenarios(uniqueScenarios(scenarios)).slice(0, 5);
 }
 
 function lifecycleEvidence(
@@ -712,10 +766,34 @@ function selectPrimaryLifecycleSteps(lifecycle: BehaviorLifecycleStage[]): strin
     if (limit === 0 || count >= limit || isImplementationOnlyLifecycleStep(stage.label)) {
       continue;
     }
+    if (steps.some((step) => lifecycleStepsDescribeSameAction(step, stage.label))) {
+      continue;
+    }
     counts.set(stage.kind, count + 1);
     steps.push(stage.label);
   }
   return steps;
+}
+
+function lifecycleStepsDescribeSameAction(left: string, right: string): boolean {
+  const leftWords = meaningfulLifecycleWords(left);
+  const rightWords = new Set(meaningfulLifecycleWords(right));
+  return leftWords.some((word) => rightWords.has(word));
+}
+
+function lifecycleLabelsOverlap(left: string, right: string): boolean {
+  const leftWords = meaningfulLifecycleWords(left);
+  const rightWords = new Set(meaningfulLifecycleWords(right));
+  const overlap = leftWords.filter((word) => rightWords.has(word));
+  return overlap.length >= 2 || (leftWords.length === 1 && rightWords.size === 1 && overlap.length === 1);
+}
+
+function meaningfulLifecycleWords(value: string): string[] {
+  const ignored = new Set([
+    "activate", "action", "check", "complete", "execute", "handle", "invoke", "observe", "result", "run",
+    "show", "start", "state", "trigger", "verify",
+  ]);
+  return normalizedWords(value).filter((word) => word.length >= 4 && !ignored.has(word));
 }
 
 function isImplementationOnlyLifecycleStep(label: string): boolean {
@@ -802,7 +880,7 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
             ));
           }
           const routingMatch = line.text.match(
-            /(payload|deep.?link|destination|redirect|router\.push|navigate\w*)/i,
+            /(payload|deep.?link|destination|redirect|router\.push|navigate\w*|URLSearchParams|searchParams|location\.href|window\.location)/i,
           );
           if (routingMatch && !/navigation\.setoptions/i.test(line.text)) {
             evidence.push(diffRiskEvidence(
@@ -863,8 +941,56 @@ function collectCodeBehaviorSignalsFromText(
   hunk?: AddedDiffHunk,
   line?: number,
 ): void {
+  for (const match of text.matchAll(/(?:@click(?:\.\w+)*|v-on:click(?:\.\w+)*|onClick)\s*=\s*(?:["']|\{)\s*(?:this\.)?([A-Za-z_$][\w$]*)/g)) {
+    const symbol = match[1];
+    const label = `Trigger ${humanizeIdentifier(symbol)}.`;
+    signals.push({
+      kind: "trigger",
+      label,
+      file,
+      symbol,
+      evidence: codeSignalEvidence(label, file, symbol, hunk, line),
+    });
+  }
+  const conditionExpressions = [
+    ...[...text.matchAll(/v-(?:if|else-if)\s*=\s*["']([^"']+)["']/g)].map((match) => match[1]),
+    ...[...text.matchAll(/\bif\s*\(([^)]{1,240})\)/g)].map((match) => match[1]),
+    ...[...text.matchAll(/\{\s*((?:is|has|can|should|show|hide)[A-Z_][A-Za-z0-9_$]*(?:\.[A-Za-z0-9_$]+)?)\s*(?:&&|\?)/g)]
+      .map((match) => match[1]),
+  ];
+  for (const expression of conditionExpressions) {
+    const identifiers = expression.match(/\b(?:is|has|can|should|show|hide)[A-Z_][A-Za-z0-9_$]*/g) ?? [];
+    for (const symbol of identifiers) {
+      const label = `Check ${humanizeIdentifier(symbol)}.`;
+      signals.push({
+        kind: "condition",
+        label,
+        file,
+        symbol,
+        evidence: codeSignalEvidence(label, file, symbol, hunk, line),
+      });
+    }
+  }
+  const conditionalCopyMatches = [
+    ...text.matchAll(/v-(?:if|show)\s*=\s*["'][^"']+["'][^>]*>\s*([^<>{}\n]{2,120})\s*</g),
+    ...text.matchAll(/\{\s*(?:is|has|can|should|show|hide)[A-Z_][A-Za-z0-9_$]*(?:\.[A-Za-z0-9_$]+)?\s*&&\s*<[^>]+>\s*([^<>{}\n]{2,120})\s*</g),
+  ];
+  for (const match of conditionalCopyMatches) {
+    const visibleText = match[1].replace(/\s+/g, " ").trim();
+    const label = `Show ${visibleText}.`;
+    signals.push({
+      kind: "observable-outcome",
+      label,
+      file,
+      symbol: visibleText,
+      evidence: codeSignalEvidence(label, file, visibleText, hunk, line),
+    });
+  }
   for (const match of text.matchAll(/\b(on[A-Z][A-Za-z0-9_]*)\b/g)) {
     const symbol = match[1];
+    if (/^on(?:Click|Press|Submit|Change)$/.test(symbol)) {
+      continue;
+    }
     const label = `Handle ${humanizeIdentifier(symbol)}.`;
     signals.push({
       kind: "trigger",
@@ -876,6 +1002,10 @@ function collectCodeBehaviorSignalsFromText(
   }
   for (const match of text.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)?)\s*\(/g)) {
     const symbol = match[1];
+    const prefix = text.slice(0, match.index ?? 0);
+    if (/\b(?:function|class)\s+$/.test(prefix)) {
+      continue;
+    }
     const leaf = symbol.split(".").at(-1) ?? symbol;
     if (ignoredCallNames.has(leaf) || leaf.length < 3) {
       continue;
@@ -924,13 +1054,16 @@ function lifecycleKindForIdentifier(identifier: string): BehaviorLifecycleStageK
   if (/(?:navigate|redirect|router\.(?:push|replace)|openurl|openlink|show|display|preview|render)/.test(value)) {
     return "observable-outcome";
   }
-  if (/(?:schedule|notify|notification|request|fetch|mutate|post|send|emit|track|publish|upload|download)/.test(value)) {
-    return "side-effect";
-  }
   if (/(?:resync|sync|persist|store|save|update|set[A-Z_]|cache|write|delete|remove|cancel|invalidate)/i.test(identifier)) {
     return "state-change";
   }
-  if (/(?:permission|authorized|authenticated|enabled|disabled|validate|guard|can[A-Z_]|should[A-Z_])/i.test(identifier)) {
+  if (/(?:schedule|notify|notification|request|fetch|mutate|post|send|emit|track|publish|upload|download)/.test(value)) {
+    return "side-effect";
+  }
+  if (
+    /(?:permission|authorized|authenticated|enabled|disabled|validate|guard)/i.test(identifier) ||
+    /^(?:is|has|can|should|show|hide)[A-Z_]/.test(identifier)
+  ) {
     return "condition";
   }
   return undefined;
@@ -1057,6 +1190,21 @@ function normalizedWords(value: string): string[] {
     .filter(Boolean);
 }
 
+function rankCodeSignalsForIntent(signals: CodeBehaviorSignal[], keywords: string[]): CodeBehaviorSignal[] {
+  const keywordSet = new Set(keywords.map(normalizeToken));
+  const presentationOnly = /color|theme|style|class|layout|size|width|height|dark|light/i;
+  return signals
+    .map((signal, index) => {
+      const words = normalizedWords(`${signal.symbol} ${signal.label} ${signal.file}`).map(normalizeToken);
+      const overlap = words.filter((word) => keywordSet.has(word)).length;
+      const behaviorWeight = signal.kind === "trigger" || signal.kind === "observable-outcome" ? 3 : 0;
+      const presentationPenalty = presentationOnly.test(`${signal.symbol} ${signal.label}`) ? 4 : 0;
+      return { signal, index, score: overlap * 4 + behaviorWeight - presentationPenalty };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map(({ signal }) => signal);
+}
+
 function normalizeToken(value: string): string {
   let token = value.toLowerCase().replace(/[^a-z0-9가-힣]/g, "");
   if (/^schedul/.test(token)) return "schedule";
@@ -1130,6 +1278,38 @@ function uniqueScenarios(scenarios: IntentQaScenario[]): IntentQaScenario[] {
   });
 }
 
+function rankIntentQaScenarios(scenarios: IntentQaScenario[]): IntentQaScenario[] {
+  const kindRank: Record<IntentQaScenarioKind, number> = {
+    primary: 0,
+    failure: 1,
+    boundary: 2,
+    "state-transition": 3,
+  };
+  return scenarios
+    .map((scenario, index) => ({ scenario, index }))
+    .sort((left, right) => {
+      if (left.scenario.kind === "primary" || right.scenario.kind === "primary") {
+        if (left.scenario.kind === "primary" && right.scenario.kind === "primary") {
+          return left.index - right.index;
+        }
+        return left.scenario.kind === "primary" ? -1 : 1;
+      }
+      const priorityDifference = Number(left.scenario.priority !== "critical") -
+        Number(right.scenario.priority !== "critical");
+      if (priorityDifference !== 0) {
+        return priorityDifference;
+      }
+      const kindDifference = kindRank[left.scenario.kind] - kindRank[right.scenario.kind];
+      if (kindDifference !== 0) {
+        return kindDifference;
+      }
+      const leftDirectEvidence = left.scenario.evidence.filter((item) => item.relation === "direct").length;
+      const rightDirectEvidence = right.scenario.evidence.filter((item) => item.relation === "direct").length;
+      return rightDirectEvidence - leftDirectEvidence || left.index - right.index;
+    })
+    .map(({ scenario }) => scenario);
+}
+
 function uniqueEvidence(evidence: ChangeIntentEvidence[]): ChangeIntentEvidence[] {
   const seen = new Set<string>();
   return evidence.filter((item) => {
@@ -1190,7 +1370,8 @@ function changeIntentSource(
   signals: CodeBehaviorSignal[],
 ): ChangeIntentAnalysis["source"] {
   if (intents.length === 0) return "none";
-  if (commits.length > 0 && signals.length > 0) return "commits-and-diff";
-  if (commits.length > 0) return "commits";
+  const usesCommitIntent = intents.some((intent) => intent.commits.length > 0);
+  if (usesCommitIntent && commits.length > 0 && signals.length > 0) return "commits-and-diff";
+  if (usesCommitIntent && commits.length > 0) return "commits";
   return "diff-only";
 }

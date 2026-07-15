@@ -1,0 +1,11 @@
+{
+  "name": "benchmark-web-react-presentation-control",
+  "private": true,
+  "scripts": {
+    "dev": "vite"
+  },
+  "dependencies": {
+    "react": "19.0.0",
+    "vite": "7.0.0"
+  }
+}

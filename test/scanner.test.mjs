@@ -675,7 +675,9 @@ test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
   assert.match(uiDraft, /Loading, empty, error, and success states/);
   assert.match(uiDraft, /Validation gaps before this draft can be required/);
   assert.doesNotMatch(uiDraft, /TODO:/);
-  assert.match(uiDraft, /QAMap could not infer a stable Maestro selector/);
+  assert.match(uiDraft, /tapOn: \{ id: "record-mode-ink" \}/);
+  assert.match(uiDraft, /assertVisible: "Ink"/);
+  assert.doesNotMatch(uiDraft, /QAMap could not infer a stable Maestro selector/);
   assert.equal(cliPlan.recommendedRunner.name, "maestro");
   assert.equal(cliDraft.runner, "maestro");
   assert.ok(cliDraft.files.some((file) => file.source === "domain-language"));
@@ -2667,14 +2669,28 @@ test("fixture guidance names the mock handler file to extend and shapes mock pay
     output: "tests/e2e",
     runner: "playwright",
   });
-  const draftFile = draft.files.find((file) => file.fixtureReadinessStatus === "partial");
-  assert.ok(draftFile);
+  const draftFile = draft.files.find(
+    (file) =>
+      file.fixtureReadinessStatus === "partial" &&
+      file.qaScenarios?.some((scenario) => scenario.kind === "failure"),
+  );
+  assert.ok(
+    draftFile,
+    JSON.stringify(
+      draft.files.map((file) => ({
+        flow: file.flowTitle,
+        source: file.source,
+        fixture: file.fixtureReadinessStatus,
+        scenarios: file.qaScenarios?.map((scenario) => ({ kind: scenario.kind, title: scenario.title })),
+      })),
+    ),
+  );
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
   assert.match(spec, /invoices: "qamap-invoices"/);
   assert.match(spec, /total: "qamap-total"/);
   assert.match(spec, /Response shape keys reuse src\/mocks\/handlers\.ts/);
   assert.doesNotMatch(spec, /source: "qamap-draft"/);
-  assert.match(spec, /page\.unroute\("\*\*\/api\/(?:invoices|payments\/summary)"\)/);
+  assert.match(spec, /page\.route\("\*\*\/api\/(?:invoices|payments\/summary)"/);
   assert.match(spec, /status: 500/);
   assert.match(spec, /expect\(page\.getByText\("Could not load billing"\)\)\.toBeVisible\(\)/);
   assert.doesNotMatch(spec, /page\.locator\("body"\)/);
@@ -3054,21 +3070,25 @@ test("generateE2ePlan captures Playwright execution profile and self-check block
   assert.match(markdown, /## Execution Profile/);
   assert.match(markdown, /Start command: `pnpm run dev`/);
   assert.match(markdown, /Base URL: `http:\/\/127\.0\.0\.1:4173`/);
-  assert.equal(draftFile.runnableStatus, "near-runnable");
-  assert.equal(draftFile.selfCheck?.status, "warning");
+  assert.equal(draftFile.runnableStatus, "review-only");
+  assert.equal(draftFile.selfCheck?.status, "fail");
   assert.equal(
     draftFile.selfCheck?.checks.find((check) => check.name === "Domain assertions")?.status,
-    "warning",
+    "pass",
+  );
+  assert.equal(
+    draftFile.selfCheck?.checks.find((check) => check.name === "Compiled actions")?.status,
+    "fail",
   );
   assert.equal(draftFile.selfCheck?.blockers.some((blocker) => /Unresolved placeholders/.test(blocker)), false);
-  assert.equal(draft.readinessSummary.nearRunnable > 0, true);
-  assert.equal(draft.readinessSummary.selfCheckWarning > 0, true);
+  assert.equal(draft.readinessSummary.reviewOnly > 0, true);
+  assert.equal(draft.readinessSummary.selfCheckFail > 0, true);
   assert.equal(draft.readinessSummary.topBlockers.some((blocker) => /Unresolved placeholders/.test(blocker)), false);
   assert.deepEqual(draftFile.executionBlockers?.filter((blocker) => /Playwright|baseURL|start command/i.test(blocker)), []);
   assert.equal((draftFile.blockingValidationGapCount ?? 0) > 0, true);
   assert.deepEqual(draftFile.executionBlockers?.filter((blocker) => /validation gap/i.test(blocker)), []);
-  assert.match(formatMarkdownE2eDraft(draft), /Near-runnable files: 1/);
-  assert.match(formatMarkdownE2eDraft(draft), /Replace starter smoke assertions with domain assertions/);
+  assert.match(formatMarkdownE2eDraft(draft), /Review-only files: 1/);
+  assert.doesNotMatch(formatMarkdownE2eDraft(draft), /Replace starter smoke assertions with domain assertions/);
   assert.doesNotMatch(formatMarkdownE2eDraft(draft), /Replace TODO locators/);
   assert.match(formatMarkdownE2eDraft(draft), /## Draft Self Checks/);
   assert.match(formatMarkdownE2eDraft(draft), /Stage: [a-z ]+ \(\d of 4\) — readiness \d+\/100/);
@@ -3077,6 +3097,8 @@ test("generateE2ePlan captures Playwright execution profile and self-check block
   assert.match(spec, /Test command: pnpm run test:e2e/);
   assert.match(spec, /Base URL: http:\/\/127\.0\.0\.1:4173/);
   assert.match(spec, /page\.getByTestId\("profile-save"\)\.click\(\)/);
+  assert.match(spec, /test\.fixme\(true, "QAMap needs repository evidence for:/);
+  assert.doesNotMatch(spec, /page\.locator\("body"\)/);
   assert.doesNotMatch(spec, /\/\/ TODO: Complete the main Profile action/);
 });
 
@@ -3168,7 +3190,8 @@ test("generateE2ePlan infers Playwright base URLs from dev scripts", async () =>
   assert.match(setupDraftText, /test\("Settings Save"/);
   assert.match(setupDraftText, /page\.goto\("\/settings"\)/);
   assert.match(setupDraftText, /page\.getByLabel\("Save settings"\)\.click\(\)/);
-  assert.match(setupDraftText, /expect\(page\.getByRole\("button", \{ name: "Save settings" \}\)\)\.toBeVisible\(\)/);
+  assert.match(setupDraftText, /test\.fixme\(true, "QAMap needs repository evidence for:/);
+  assert.doesNotMatch(setupDraftText, /expect\(page\.getByRole\("button", \{ name: "Save settings" \}\)\)\.toBeVisible\(\)/);
   assert.match(setupDraftText, /Goal: Protect Settings Save by exercise Save with realistic data from the changed branch/);
   assert.doesNotMatch(setupDraftText, /TODO: Start from the normal entry point/);
   assert.doesNotMatch(setupDraftText, /test\.step\("Start from the normal entry point/);
@@ -3686,7 +3709,8 @@ test("generateE2ePlan matches committed core flow definitions", async () => {
   assert.match(spec, /await test\.step\("Verify declined payment recovery\.", async \(\) => \{/);
   assert.match(spec, /page\.goto\("\/checkout"\)/);
   assert.match(spec, /Step intent: Complete checkout with a valid payment method\./);
-  assert.match(spec, /page\.getByTestId\("checkout-submit"\)\.click\(\)/);
+  assert.match(spec, /page\.getByRole\("button", \{ name: "Complete checkout" \}\)\.click\(\)/);
+  assert.match(spec, /web-test-id: checkout-submit/);
 });
 
 test("generateE2ePlan uses committed domain manifests for language and draft routes", async () => {
@@ -5854,7 +5878,8 @@ test("package metadata includes the portable PR QA skill template", async () => 
 
   assert.ok(packageJson.files.includes("skills"));
   assert.match(skillText, /name: qamap-pr-qa/);
-  assert.match(skillText, /pnpm dlx @ivorycanvas\/qamap qa/);
+  assert.match(skillText, /npm exec --yes --registry=https:\/\/registry\.npmjs\.org --package=@ivorycanvas\/qamap@latest -- qamap qa/);
+  assert.doesNotMatch(skillText, /pnpm dlx/);
   assert.match(skillText, /Manifest Repair/);
 });
 

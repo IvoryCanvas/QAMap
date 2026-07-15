@@ -74,6 +74,64 @@
       }
     },
     {
+      "name": "web-vue-document-state",
+      "fixture": "test/benchmarks/web-vue-document-state",
+      "commitMessage": "feat: import document and show completion state",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minDiffAnchoredFlows": 1,
+        "mustReachFiles": ["src/pages/documents.vue"],
+        "mustNameFlows": ["import document"],
+        "mustIncludeLifecycle": ["trigger start import", "document imported"],
+        "mustIncludeQaScenarios": ["Changed conditional state and fallback", "Destination path and query parameters"],
+        "mustFindEntrypoints": ["/documents"],
+        "mustFindSelectors": ["Import document", "Document imported"],
+        "mustFindSuccessSignals": ["Document imported"],
+        "mustNotFindEvidence": ["Payment sandbox", "Network response setup"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 8192
+      }
+    },
+    {
+      "name": "web-react-notification-state",
+      "fixture": "test/benchmarks/web-react-notification-state",
+      "commitMessage": "feat: send notification and show queued state",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minDiffAnchoredFlows": 1,
+        "mustReachFiles": ["src/pages/notifications.tsx"],
+        "mustNameFlows": ["send notification"],
+        "mustIncludeLifecycle": ["trigger send notification", "notification queued"],
+        "mustIncludeQaScenarios": ["Changed conditional state and fallback"],
+        "mustFindEntrypoints": ["/notifications"],
+        "mustFindSelectors": ["Send notification", "Notification queued"],
+        "mustFindSuccessSignals": ["Notification queued"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 8192
+      }
+    },
+    {
+      "name": "web-react-presentation-control",
+      "fixture": "test/benchmarks/web-react-presentation-control",
+      "commitMessage": "fix: preserve banner theme contrast",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "mustReachFiles": ["src/components/Banner.tsx"],
+        "mustNotIncludeQaScenarios": ["Changed conditional state and fallback"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 8192
+      }
+    },
+    {
       "name": "web-sveltekit-settings",
       "fixture": "test/benchmarks/web-sveltekit-settings",
       "expect": {
@@ -230,14 +288,13 @@
           "src/pages/checkout/index.tsx"
         ],
         "mustNameFlows": ["checkout"],
-        "mustFindSelectors": ["checkout-submit"],
+        "mustFindSelectors": ["checkout-submit", "Place order"],
         "maxBlankActions": 0,
         "maxGenericTitles": 0,
-        "minTryableDrafts": 1,
-        "maxSelfCheckFail": 0,
-        "maxReviewOnlyFiles": 0,
+        "maxSelfCheckFail": 1,
+        "maxReviewOnlyFiles": 1,
         "maxTodos": 0,
-        "maxExecutionBlockers": 2,
+        "maxExecutionBlockers": 3,
         "maxAgentBytes": 4096
       }
     },

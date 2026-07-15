@@ -99,7 +99,8 @@ export type E2eSelectorKind =
   | "input-aria-label"
   | "placeholder"
   | "role-button"
-  | "role-link";
+  | "role-link"
+  | "click-text";
 
 export interface E2ePlanOptions extends TestPlanOptions {
   runner?: E2eRunnerName;
@@ -705,7 +706,7 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
   const runner = plan.recommendedRunner.name;
   const outputDirectory = path.resolve(root, options.output ?? defaultDraftOutputDirectory(runner));
   const draftLimit = options.maxDrafts && options.maxDrafts > 0 ? Math.floor(options.maxDrafts) : undefined;
-  const flows = (await buildDraftFlows(plan)).slice(0, draftLimit);
+  const flows = (await buildDraftFlows(plan, addedDiffText)).slice(0, draftLimit);
   const dryRun = options.dryRun ?? false;
 
   if (!dryRun) {
@@ -5175,7 +5176,7 @@ async function buildFlow(
     return undefined;
   }
   const coverage = candidate.coverage ?? buildCoverageTargets(candidate.kind, files, runner);
-  const setupHints = await inferFlowSetupHints(root, files, candidate.kind);
+  const setupHints = await inferFlowSetupHints(root, files, candidate.kind, addedDiffText);
   const interactionEvidenceApplies = !isVerificationOnlyKind(candidate.kind);
   const selectors = interactionEvidenceApplies
     ? await inferFlowSelectors(root, files, runner, addedDiffText)
@@ -5192,7 +5193,7 @@ async function buildFlow(
     setupHints,
     fixtureReadiness: await inferFlowFixtureReadiness(root, files, candidate.kind, setupHints, fixtureContext),
     selectors,
-    missingTestability: interactionEvidenceApplies ? await findFlowTestabilityGaps(root, files, runner) : [],
+    missingTestability: interactionEvidenceApplies ? await findFlowTestabilityGaps(root, files, runner, selectors) : [],
     intentId: candidate.intentId,
     intentConfidence: candidate.intentConfidence,
     intentEvidence: candidate.intentEvidence,
@@ -5293,7 +5294,12 @@ async function inferFlowEntrypoints(root: string, files: string[], runner: E2eRu
   return uniqueEntrypoints(entrypoints).slice(0, 6);
 }
 
-async function inferFlowSetupHints(root: string, files: string[], kind: E2eFlowKind): Promise<E2eSetupHint[]> {
+async function inferFlowSetupHints(
+  root: string,
+  files: string[],
+  kind: E2eFlowKind,
+  addedDiffText: Record<string, string> = {},
+): Promise<E2eSetupHint[]> {
   if (
     kind === "artifact" ||
     kind === "catalog" ||
@@ -5315,6 +5321,7 @@ async function inferFlowSetupHints(root: string, files: string[], kind: E2eFlowK
 
   const filesText = files.join("\n");
   const combinedText = `${filesText}\n${fileTexts.map((item) => item.text).join("\n")}`;
+  const changedText = files.map((file) => addedDiffText[file] ?? "").filter(Boolean).join("\n");
   const shouldUseContentSignals = kind !== "config" && kind !== "content" && kind !== "command";
   const signalText = shouldUseContentSignals ? combinedText : filesText;
   const matchingFiles = (pattern: RegExp) =>
@@ -5338,8 +5345,9 @@ async function inferFlowSetupHints(root: string, files: string[], kind: E2eFlowK
     );
   }
 
-  if (kind === "api" || /(?:fetch|axios|graphql|trpc|rpc|client|endpoint|request|response|msw|nock|mock|\/api\/)/i.test(signalText)) {
-    const networkFiles = matchingFiles(/api|client|endpoint|request|response|graphql|trpc|rpc|fetch|axios|msw|nock|mock/i);
+  const networkEvidence = /(?:fetch\s*\(|axios(?:\.|\s*\()|graphql|trpc|\brpc\b|apiClient|endpoint|msw|nock|\/api\/|(?:^|\/)(?:api|requests?|responses?|clients?|endpoints?)(?:\/|[-_.]|$))/im;
+  if (kind === "api" || networkEvidence.test(signalText)) {
+    const networkFiles = matchingFiles(networkEvidence);
     hints.push(
       setupHint(
         "network",
@@ -5377,7 +5385,14 @@ async function inferFlowSetupHints(root: string, files: string[], kind: E2eFlowK
     );
   }
 
-  if (/(?:payment|billing|checkout|purchase|subscription|invoice|settlement|stripe|iap|in-app-purchase|storekit|revenuecat)/i.test(signalText)) {
+  const paymentPathSignal = /(?:^|\/|[-_])(payment|billing|checkout|purchase|subscription|invoice|settlement)(?:\/|[-_.]|$)/i;
+  const paymentProviderSignal = /(?:stripe|\biap\b|in-app-purchase|storekit|revenuecat)/i;
+  const changedPaymentSignal = /(?:payment|billing|checkout|purchase|subscription|invoice|settlement)/i;
+  if (
+    paymentPathSignal.test(filesText) ||
+    paymentProviderSignal.test(signalText) ||
+    changedPaymentSignal.test(changedText)
+  ) {
     const paymentFiles = matchingFiles(/payment|billing|checkout|purchase|subscription|invoice|settlement|stripe|iap|in-app-purchase|storekit|revenuecat/i);
     hints.push(
       setupHint(
@@ -5709,7 +5724,8 @@ function isApiDependencyPath(file: string): boolean {
 }
 
 function hasApiDependencyText(text: string): boolean {
-  return /(?:fetch\(|axios\.|graphql|gql`|trpc\.|useQuery|useMutation|queryKey|apiClient|client\.(?:get|post|put|patch|delete)|\/api\/|endpoint|request|response)/i.test(text);
+  return /(?:fetch\s*\(|axios\.|graphql|gql`|trpc\.|useQuery|useMutation|queryKey|apiClient|client\.(?:get|post|put|patch|delete)|\/api\/|endpoint)/i.test(text) ||
+    /\b(?:request|response)[A-Z_][A-Za-z0-9_$]*/.test(text);
 }
 
 async function findApiEndpointHints(root: string, files: string[]): Promise<string[]> {
@@ -6179,8 +6195,16 @@ function stripKnownExtension(file: string): string {
   return file.replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|mdx?)$/i, "");
 }
 
-async function findFlowTestabilityGaps(root: string, files: string[], runner: E2eRunnerName): Promise<string[]> {
+async function findFlowTestabilityGaps(
+  root: string,
+  files: string[],
+  runner: E2eRunnerName,
+  selectors: E2eSelector[] = [],
+): Promise<string[]> {
   const gaps: string[] = [];
+  const selectorFiles = new Set(
+    selectors.filter(selectorCanDriveInteraction).map((selector) => selector.file),
+  );
   for (const file of files.slice(0, 8)) {
     if (!isUiImplementationFile(file)) {
       continue;
@@ -6189,11 +6213,19 @@ async function findFlowTestabilityGaps(root: string, files: string[], runner: E2
     if (!text) {
       continue;
     }
-    if (hasInteractiveUi(text) && !hasStableSelector(text, runner)) {
+    const delegatedToSelectorBearingComponent =
+      selectorFiles.size > 0 &&
+      !selectorFiles.has(file) &&
+      !hasNativeInteractiveUi(text);
+    if (hasInteractiveUi(text) && !hasStableSelector(text, runner) && !delegatedToSelectorBearingComponent) {
       gaps.push(`Add stable ${selectorName(runner)} selectors in ${file} for the controls this flow taps or types into.`);
     }
   }
   return uniqueStrings(gaps);
+}
+
+function hasNativeInteractiveUi(text: string): boolean {
+  return /<(?:button|input|textarea|select|Pressable|Touchable\w*|TextInput|Switch|Slider)\b/i.test(text);
 }
 
 async function buildGlobalTestabilityGaps(root: string, runner: E2eRunnerName): Promise<string[]> {
@@ -6768,15 +6800,18 @@ function dedupeFlows(flows: E2eFlow[]): E2eFlow[] {
   return deduped;
 }
 
-async function buildDraftFlows(plan: E2ePlanResult): Promise<DraftE2eFlow[]> {
+async function buildDraftFlows(
+  plan: E2ePlanResult,
+  addedDiffText: Record<string, string> = {},
+): Promise<DraftE2eFlow[]> {
   const baseFlows = plan.flows.length > 0 ? plan.flows : [buildFallbackFlow(plan)];
-  const manifestFlows = await buildManifestDraftFlows(plan, baseFlows);
+  const manifestFlows = await buildManifestDraftFlows(plan, baseFlows, addedDiffText);
   const domainScenarios = shouldUseDomainScenariosForDraft(plan) ? plan.domainLanguage.scenarios : [];
   const scenarioFlows = await Promise.all(
     domainScenarios
       .filter((scenario) => scenario.files.length > 0 || scenario.source === "core-flow")
       .slice(0, 4)
-      .map((scenario) => buildDomainScenarioDraftFlow(plan, scenario, baseFlows)),
+      .map((scenario) => buildDomainScenarioDraftFlow(plan, scenario, baseFlows, addedDiffText)),
   );
 
   if (manifestFlows.length === 0 && scenarioFlows.length === 0) {
@@ -6909,20 +6944,21 @@ function preferredDraftSource(left: DraftFlowSource | undefined, right: DraftFlo
 async function buildManifestDraftFlows(
   plan: E2ePlanResult,
   baseFlows: E2eFlow[],
+  addedDiffText: Record<string, string> = {},
 ): Promise<DraftE2eFlow[]> {
   const flowMatches = plan.verificationManifestMatches
     .filter((match) => match.kind === "flow")
     .slice(0, 4);
   const checkMatches = plan.verificationManifestMatches.filter((match) => match.kind === "check");
   const flowDrafts = await Promise.all(
-    flowMatches.map((match) => buildManifestDraftFlow(plan, match, checkMatches, baseFlows)),
+    flowMatches.map((match) => buildManifestDraftFlow(plan, match, checkMatches, baseFlows, addedDiffText)),
   );
   const flowMatchedFiles = new Set(flowMatches.flatMap((match) => match.matchedFiles));
   const domainDrafts = await Promise.all(
     plan.verificationManifestMatches
       .filter((match) => match.kind === "domain" && match.matchedFiles.some((file) => !flowMatchedFiles.has(file)))
       .slice(0, 4)
-      .map((match) => buildManifestDomainDraftFlow(plan, match, baseFlows)),
+      .map((match) => buildManifestDomainDraftFlow(plan, match, baseFlows, addedDiffText)),
   );
   return [...flowDrafts, ...domainDrafts.filter((flow): flow is DraftE2eFlow => Boolean(flow))].slice(0, 4);
 }
@@ -6931,6 +6967,7 @@ async function buildManifestDomainDraftFlow(
   plan: E2ePlanResult,
   match: VerificationManifestMatch,
   baseFlows: E2eFlow[],
+  addedDiffText: Record<string, string> = {},
 ): Promise<DraftE2eFlow | undefined> {
   const manifestFiles = normalizeScenarioFilesForRoot(plan, match.matchedFiles);
   const baseFlow = bestOverlappingBaseFlowForManifestMatch(manifestFiles, baseFlows);
@@ -6951,7 +6988,7 @@ async function buildManifestDomainDraftFlow(
     ]),
     selectors: uniqueSelectors([
       ...baseFlow.selectors,
-      ...(await inferFlowSelectors(plan.root, files, plan.recommendedRunner.name)),
+      ...(await inferFlowSelectors(plan.root, files, plan.recommendedRunner.name, addedDiffText)),
     ]),
     draftSource: "verification-manifest",
     manifestMatch: match,
@@ -6967,6 +7004,7 @@ async function buildManifestDraftFlow(
   match: VerificationManifestMatch,
   checkMatches: VerificationManifestMatch[],
   baseFlows: E2eFlow[],
+  addedDiffText: Record<string, string> = {},
 ): Promise<DraftE2eFlow> {
   const relatedChecks = checkMatches.filter((check) => check.id.startsWith(`${match.id}.`));
   const manifestFiles = normalizeScenarioFilesForRoot(plan, match.matchedFiles);
@@ -6983,29 +7021,30 @@ async function buildManifestDraftFlow(
   ]);
   const selectors = uniqueSelectors([
     ...filterSelectorsForFiles(baseFlows.flatMap((flow) => flow.selectors), files),
-    ...(await inferFlowSelectors(plan.root, files, runner)),
+    ...(await inferFlowSelectors(plan.root, files, runner, addedDiffText)),
   ]);
   const refinedSteps = refineManifestStepsForInferredSelectors(
     refineStepsForInferredSelectors(manifestSteps.length > 0 ? manifestSteps : (baseFlow?.steps ?? []), selectors),
     selectors,
   );
+  const executableSteps = refinedSteps.filter((step) => !isCoverageOnlyScenarioStep(step));
   const setupHints = uniqueSetupHints([
     ...filterSetupHintsForFiles(baseFlows.flatMap((flow) => flow.setupHints), files),
-    ...(await inferFlowSetupHints(plan.root, files, "domain")),
+    ...(await inferFlowSetupHints(plan.root, files, "domain", addedDiffText)),
   ]);
   const flow: Omit<DraftE2eFlow, "languageBrief"> = {
     kind: baseFlow?.kind ?? "domain",
     title: match.name,
     reason: match.reason,
     files,
-    steps: refinedSteps,
+    steps: executableSteps,
     coverage,
     coverageEvidence: baseFlow?.coverageEvidence ?? [],
     entrypoints,
     setupHints,
     fixtureReadiness: scenarioFixtureReadiness(baseFlow, setupHints),
     selectors,
-    missingTestability: await findFlowTestabilityGaps(plan.root, files, runner),
+    missingTestability: await findFlowTestabilityGaps(plan.root, files, runner, selectors),
     draftSource: "verification-manifest",
     manifestMatch: match,
     manifestCheckMatches: relatedChecks,
@@ -7122,6 +7161,7 @@ async function buildDomainScenarioDraftFlow(
   plan: E2ePlanResult,
   scenario: DomainScenarioSuggestion,
   baseFlows: E2eFlow[],
+  addedDiffText: Record<string, string> = {},
 ): Promise<DraftE2eFlow> {
   const coreFlow = matchedCoreFlowForScenario(plan, scenario);
   const baseFlow = bestBaseFlowForScenario(scenario, baseFlows);
@@ -7137,6 +7177,7 @@ async function buildDomainScenarioDraftFlow(
         ? scenarioFiles
         : (baseFlow?.files ?? []),
   ).slice(0, 20);
+  const matchedIntent = matchingChangeIntentForFiles(plan.changeAnalysis, files);
   const coverage = baseFlow?.coverage ?? buildCoverageTargets("domain", files, plan.recommendedRunner.name);
   const runner = plan.recommendedRunner.name;
   const entrypoints = uniqueEntrypoints([
@@ -7147,12 +7188,15 @@ async function buildDomainScenarioDraftFlow(
   ]);
   const selectors = uniqueSelectors([
     ...filterSelectorsForFiles(baseFlows.flatMap((flow) => flow.selectors), files),
-    ...(await inferFlowSelectors(plan.root, files, runner)),
+    ...(await inferFlowSelectors(plan.root, files, runner, addedDiffText)),
   ]);
   const refinedSteps = refineStepsForInferredSelectors(steps, selectors);
+  const executableSteps = refinedSteps.filter((step) => !isCoverageOnlyScenarioStep(step));
   const setupHints = uniqueSetupHints([
     ...filterSetupHintsForFiles(baseFlows.flatMap((flow) => flow.setupHints), files),
-    ...(shouldInferDomainScenarioSetupHints(baseFlow) ? await inferFlowSetupHints(plan.root, files, "domain") : []),
+    ...(shouldInferDomainScenarioSetupHints(baseFlow)
+      ? await inferFlowSetupHints(plan.root, files, "domain", addedDiffText)
+      : []),
   ]);
   const draftScenario = {
     ...scenario,
@@ -7165,14 +7209,19 @@ async function buildDomainScenarioDraftFlow(
     title,
     reason,
     files,
-    steps: refinedSteps,
+    steps: executableSteps,
     coverage,
     coverageEvidence: baseFlow?.coverageEvidence ?? [],
     entrypoints,
     setupHints,
     fixtureReadiness: scenarioFixtureReadiness(baseFlow, setupHints),
     selectors,
-    missingTestability: await findFlowTestabilityGaps(plan.root, files, runner),
+    missingTestability: await findFlowTestabilityGaps(plan.root, files, runner, selectors),
+    intentId: baseFlow?.intentId ?? matchedIntent?.id,
+    intentConfidence: baseFlow?.intentConfidence ?? matchedIntent?.confidence,
+    intentEvidence: baseFlow?.intentEvidence ?? matchedIntent?.evidence,
+    lifecycle: baseFlow?.lifecycle ?? matchedIntent?.lifecycle,
+    qaScenarios: baseFlow?.qaScenarios ?? matchedIntent?.scenarios,
     draftSource: scenario.source === "core-flow" ? "core-flow" : "domain-language",
     domainScenario: draftScenario,
     coreFlow,
@@ -7181,6 +7230,32 @@ async function buildDomainScenarioDraftFlow(
     ...flow,
     languageBrief: buildFlowLanguageBrief(flow),
   };
+}
+
+function matchingChangeIntentForFiles(
+  analysis: ChangeIntentAnalysis,
+  files: string[],
+): ChangeIntentAnalysis["intents"][number] | undefined {
+  const fileSet = new Set(files);
+  const confidenceRank: Record<ChangeIntentConfidence, number> = { high: 0, medium: 1, low: 2 };
+  return analysis.intents
+    .map((intent, index) => ({
+      intent,
+      index,
+      overlap: intent.files.filter((file) => fileSet.has(file)).length,
+    }))
+    .filter((candidate) => candidate.overlap > 0)
+    .sort((left, right) =>
+      right.overlap - left.overlap ||
+      confidenceRank[left.intent.confidence] - confidenceRank[right.intent.confidence] ||
+      left.index - right.index
+    )[0]?.intent;
+}
+
+function isCoverageOnlyScenarioStep(step: string): boolean {
+  return /^Try one (?:empty, blocked, rejected, or failed|failure, boundary, or recovery)\b/i.test(step) ||
+    /^Verify loading, empty, error, and success states when they are reachable\b/i.test(step) ||
+    /^Verify .+ shows the expected visible result\b/i.test(step);
 }
 
 function shouldInferDomainScenarioSetupHints(baseFlow: E2eFlow | undefined): boolean {
@@ -7664,10 +7739,18 @@ function evaluatePlaywrightDraftSelfCheck(
   const weakSmokeAssertions = content.match(/expect\(page\.locator\(["']body["']\)\)\.toBeVisible\(\)/g)?.length ?? 0;
   checks.push(draftSelfCheckItem(
     "Domain assertions",
-    weakSmokeAssertions === 0 ? "pass" : "warning",
+    weakSmokeAssertions === 0 ? "pass" : "fail",
     weakSmokeAssertions === 0
       ? "The draft does not rely on body-only smoke assertions."
-      : `${weakSmokeAssertions} body-only smoke assertion${weakSmokeAssertions === 1 ? "" : "s"} must be replaced with observable domain outcomes.`,
+      : `${weakSmokeAssertions} body-only smoke assertion${weakSmokeAssertions === 1 ? "" : "s"} cannot count as changed-behavior coverage.`,
+  ));
+  const uncompiledSteps = content.match(/QAMap could not infer a stable locator for this step/g)?.length ?? 0;
+  checks.push(draftSelfCheckItem(
+    "Compiled actions",
+    uncompiledSteps === 0 ? "pass" : "fail",
+    uncompiledSteps === 0
+      ? "Every emitted Playwright step has a deterministic locator or adapter instruction."
+      : `${uncompiledSteps} selected step${uncompiledSteps === 1 ? "" : "s"} remain explicitly skipped until repository evidence supplies a locator.`,
   ));
   checks.push(draftSelfCheckItem(
     "Execution profile",
@@ -8194,7 +8277,7 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
     }
     const testName = `${flow.title}: ${scenario.title}`.replaceAll('"', "'");
     const routePattern = playwrightMockRoutePattern(endpoint);
-    const status = failureResponseStatus(scenarioText);
+    const status = failureResponseStatus([scenario.title, ...scenario.steps].join(" "));
     drafts.push({
       scenarioId: scenario.id,
       mappedSteps: Math.min(1, scenario.steps.length),
@@ -9457,11 +9540,18 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
     return undefined;
   }
   if (isInputStep(step)) {
-    const matched = takePreferredSelector(selectors, (selector) => isInputSelector(selector) && selectorMatchesStep(selector, step));
+    const matched = takeBestSelectorForStep(
+      selectors,
+      step,
+      (selector) => isInputSelector(selector) && selectorMatchesStep(selector, step),
+    );
     if (matched) {
       return matched;
     }
-    const fallbackInput = takePreferredSelector(selectors, isInputSelector);
+    const fallbackInput = takePreferredSelector(
+      selectors,
+      (selector) => Boolean(selector.addedInDiff) && isInputSelector(selector),
+    );
     if (fallbackInput) {
       return fallbackInput;
     }
@@ -9470,24 +9560,36 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
     return undefined;
   }
   const diffGateForStep = isAssertionStep(step) || isVerificationStep(step)
-    ? selectorCanSupportAssertion
+    ? (selector: E2eSelector) => selectorCanSupportStepAssertion(selector, step)
     : selectorCanDriveInteraction;
-  const matched = takePreferredSelector(
+  const matched = takeBestSelectorForStep(
     selectors,
-    (selector) => !isInputSelector(selector) && selectorMatchesStep(selector, step),
-    diffGateForStep,
+    step,
+    (selector) =>
+      !isInputSelector(selector) &&
+      selectorMatchesStep(selector, step) &&
+      diffGateForStep(selector),
   );
   if (matched) {
     return matched;
   }
   if (isAssertionStep(step)) {
-    const assertion = takePreferredSelector(selectors, selectorCanSupportAssertion);
-    if (assertion) {
-      return assertion;
+    const assertionCandidates = selectors.filter(
+      (selector) =>
+        Boolean(selector.addedInDiff) &&
+        selector.kind === "visible-text" &&
+        selectorCanSupportAssertion(selector),
+    );
+    if (assertionCandidates.length === 1) {
+      const assertionIndex = selectors.indexOf(assertionCandidates[0]);
+      return selectors.splice(assertionIndex, 1)[0];
     }
   }
   if (canUsePrimarySelector(step)) {
-    const fallback = takePreferredSelector(selectors, selectorCanDriveInteraction);
+    const fallback = takePreferredSelector(
+      selectors,
+      (selector) => Boolean(selector.addedInDiff) && selectorCanDriveInteraction(selector),
+    );
     if (fallback) {
       return fallback;
     }
@@ -9496,8 +9598,41 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
 }
 
 function selectorMatchesStep(selector: E2eSelector, step: string): boolean {
-  const selectorText = selector.value.toLowerCase();
-  return keywordsForStep(step).some((keyword) => selectorText.includes(keyword));
+  return selectorStepMatchScore(selector, step) > 0;
+}
+
+function takeBestSelectorForStep(
+  selectors: E2eSelector[],
+  step: string,
+  predicate: (selector: E2eSelector) => boolean,
+): E2eSelector | undefined {
+  const ranked = selectors
+    .map((selector, index) => ({ selector, index }))
+    .filter(({ selector }) => predicate(selector))
+    .map(({ selector, index }) => ({
+      selector,
+      index,
+      score: selectorStepMatchScore(selector, step) + (selector.addedInDiff ? 2 : 0),
+    }))
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+  if (ranked.length === 0) {
+    return undefined;
+  }
+  return selectors.splice(ranked[0].index, 1)[0];
+}
+
+function selectorStepMatchScore(selector: E2eSelector, step: string): number {
+  const stepWords = keywordsForStep(step);
+  const selectorWords = keywordsForStep(selector.value);
+  return stepWords.reduce((score, stepWord) => {
+    if (selectorWords.includes(stepWord)) {
+      return score + 4;
+    }
+    if (selectorWords.some((selectorWord) => selectorWord.includes(stepWord) || stepWord.includes(selectorWord))) {
+      return score + 1;
+    }
+    return score;
+  }, 0);
 }
 
 function canUsePrimarySelector(step: string): boolean {
@@ -9514,6 +9649,16 @@ function selectorCanDriveInteraction(selector: E2eSelector): boolean {
 
 function selectorCanSupportAssertion(selector: E2eSelector): boolean {
   return selector.kind !== "placeholder" && !isPassiveControlLabel(selector.value);
+}
+
+function selectorCanSupportStepAssertion(selector: E2eSelector, step: string): boolean {
+  if (!selectorCanSupportAssertion(selector)) {
+    return false;
+  }
+  if (selector.kind === "visible-text") {
+    return true;
+  }
+  return /\b(?:button|link|control|field|input|action|selector|accessible|label|enabled|disabled|checked|selected)\b/i.test(step);
 }
 
 function isInputSelector(selector: E2eSelector): boolean {
@@ -9553,11 +9698,18 @@ function keywordsForStep(step: string): string[] {
     "into",
     "next",
     "after",
+    "변경",
+    "상태",
+    "화면",
+    "확인",
   ]);
   return step
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((part) => part.length >= 3 && !stopWords.has(part));
+    .toLocaleLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((part) => {
+      const minimumLength = /[^\x00-\x7F]/.test(part) ? 2 : 3;
+      return part.length >= minimumLength && !stopWords.has(part);
+    });
 }
 
 function maestroSelectorValue(selector: E2eSelector): string {
@@ -9831,8 +9983,8 @@ function normalizeManifestStepKey(value: string): string {
 function playwrightFallbackActionForStep(step: string): string[] {
   return [
     `// QAMap could not infer a stable locator for this step: ${step}`,
-    "// Keep this as a runnable smoke assertion, then replace it with a domain-specific locator when the app exposes one.",
-    'await expect(page.locator("body")).toBeVisible();',
+    "// Keep the draft review-only instead of allowing an unrelated smoke assertion to pass.",
+    `test.fixme(true, "QAMap needs repository evidence for: ${quoteJs(step)}");`,
   ];
 }
 
@@ -9861,7 +10013,7 @@ function isGestureStep(step: string): boolean {
 }
 
 function isInteractionStep(step: string): boolean {
-  return /^(?:choose|select|open|tap|click|create|save|submit|continue|complete|renew|apply|approve|confirm|send|fill|input|enter|type|provide|return|switch|exercise|activate)\b/i.test(step);
+  return /^(?:choose|select|open|tap|click|trigger|handle|create|save|submit|continue|complete|renew|apply|approve|confirm|send|fill|input|enter|type|provide|return|switch|exercise|activate)\b/i.test(step);
 }
 
 function isVerificationStep(step: string): boolean {
@@ -9903,6 +10055,7 @@ function extractSelectorsFromText(file: string, text: string, runner: E2eRunnerN
       ),
       ...withoutSelectorValueDuplicates(extractAttributeSelectors(file, text, ["aria-label"], "aria-label"), webInputSelectors),
       ...extractRoleSelectorsFromText(file, text),
+      ...extractInteractiveTextSelectors(file, text),
     );
   }
 
@@ -9961,9 +10114,9 @@ function extractTextNodeSelectors(file: string, text: string): E2eSelector[] {
     }
   }
 
-  const htmlTextNodeMatcher = /<(p|span|strong|em|small|label|li|output|h[1-6])\b[^>]*>\s*([^<>{}\n][^<>{}]*)\s*<\/\1>/g;
+  const htmlTextNodeMatcher = /<(p|span|strong|em|small|label|li|output|h[1-6]|div)\b[^>]*>([\s\S]{0,300}?)<\/\1>/g;
   for (const match of text.matchAll(htmlTextNodeMatcher)) {
-    const value = normalizeSelectorValue(match[2]);
+    const value = normalizeRenderedText(match[2]);
     if (value) {
       selectors.push({ kind: "visible-text", value, file });
     }
@@ -10001,7 +10154,76 @@ function extractRenderedStateSelectors(file: string, text: string): E2eSelector[
       }
     }
   }
+  const interpolatedNames = new Set(
+    [...text.matchAll(/\{\{?\s*([A-Za-z_$][\w$]*)\s*\}?\}/g)].map((match) => match[1]),
+  );
+  for (const name of interpolatedNames) {
+    for (const value of renderedLiteralValues(text, name)) {
+      selectors.push({ kind: "visible-text", value, file });
+    }
+  }
   return selectors;
+}
+
+function extractInteractiveTextSelectors(file: string, text: string): E2eSelector[] {
+  const selectors: E2eSelector[] = [];
+  const namedInteractive = /<(button|a|[A-Za-z][\w.-]*(?:Button|Link|NavLink))\b([^>]*)>([\s\S]{0,500}?)<\/\1>/gi;
+  const handledInteractive = /<([A-Za-z][\w.-]*)\b((?=[^>]*(?:(?:@click(?:\.\w+)*|v-on:click(?:\.\w+)*|onClick|href|to)\s*=))[^>]*)>([\s\S]{0,500}?)<\/\1>/g;
+  for (const match of [...text.matchAll(namedInteractive), ...text.matchAll(handledInteractive)]) {
+    const tag = match[1];
+    const attributes = match[2];
+    const body = match[3];
+    const normalizedTag = tag.toLowerCase();
+    const isButton = normalizedTag === "button" || normalizedTag.endsWith("button");
+    const isLink = normalizedTag === "a" || normalizedTag === "link" || normalizedTag === "navlink";
+    const hasClickHandler = /(?:^|\s)(?:@click(?:\.\w+)*|v-on:click(?:\.\w+)*|onClick)\s*=/.test(attributes);
+    const hasNavigationTarget = /(?:^|\s)(?:href|to)\s*=/.test(attributes);
+    if (!isButton && !isLink && !hasClickHandler && !hasNavigationTarget) {
+      continue;
+    }
+
+    const values = uniqueStrings([
+      normalizeRenderedText(body) ?? "",
+      ...[...body.matchAll(/\{\{?\s*([A-Za-z_$][\w$]*)\s*\}?\}/g)]
+        .flatMap((identifier) => renderedLiteralValues(text, identifier[1])),
+    ]).filter(isUsefulSelector);
+    const kind: E2eSelectorKind = isButton ? "role-button" : isLink ? "role-link" : "click-text";
+    for (const value of values) {
+      selectors.push({ kind, value, file });
+    }
+  }
+  return selectors;
+}
+
+function renderedLiteralValues(text: string, name: string): string[] {
+  const escapedName = escapeRegExp(name);
+  const expressions: string[] = [];
+  const method = new RegExp(`\\b${escapedName}\\s*\\(\\s*\\)\\s*\\{([\\s\\S]{0,800}?)\\n\\s*\\}`, "m").exec(text);
+  if (method?.[1]) {
+    expressions.push(method[1]);
+  }
+  const computed = new RegExp(
+    `\\b(?:const|let)\\s+${escapedName}\\s*=\\s*(?:computed\\(\\s*\\(\\s*\\)\\s*=>\\s*)?([^;\\n]{1,500})`,
+    "m",
+  ).exec(text);
+  if (computed?.[1]) {
+    expressions.push(computed[1]);
+  }
+
+  return uniqueStrings(
+    expressions.flatMap((expression) =>
+      [...expression.matchAll(/["'`]([^"'`\n]{2,120})["'`]/g)]
+        .map((match) => normalizeSelectorValue(match[1]) ?? "")
+        .filter((value) => Boolean(value) && isUsefulSelector(value))
+    ),
+  );
+}
+
+function normalizeRenderedText(value: string | undefined): string | undefined {
+  if (!value || /\{\{?|\}\}?/.test(value)) {
+    return undefined;
+  }
+  return normalizeSelectorValue(value.replace(/<[^>]+>/g, " "));
 }
 
 function extractRoleSelectorsFromText(file: string, text: string): E2eSelector[] {
@@ -10281,7 +10503,10 @@ function selectorRank(kind: E2eSelectorKind): number {
   if (kind === "role-button" || kind === "role-link") {
     return 3;
   }
-  return 4;
+  if (kind === "click-text") {
+    return 4;
+  }
+  return 5;
 }
 
 function slugify(value: string): string {

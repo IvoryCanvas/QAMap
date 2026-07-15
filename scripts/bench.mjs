@@ -272,6 +272,7 @@ function evaluateContract(expect, result, plan, qa) {
   appendUnexpectedTerms(failures, "intent title", result.intentTitles, expect.mustNotNameIntents);
   appendMissingTerms(failures, "intent lifecycle", result.intentLifecycle, expect.mustIncludeLifecycle);
   appendMissingTerms(failures, "intent QA scenario", result.intentScenarios, expect.mustIncludeQaScenarios);
+  appendUnexpectedTerms(failures, "intent QA scenario", result.intentScenarios, expect.mustNotIncludeQaScenarios);
   appendMissingTerms(failures, "intent evidence", result.intentEvidence, expect.mustFindIntentEvidence);
   appendMissingTerms(failures, "scenario source file", result.scenarioSourceFiles, expect.mustTraceScenarioFiles);
   if (

@@ -111,7 +111,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
 }
 
 const agentListLimit = 6;
-const agentPayloadByteLimit = 8 * 1024 - 1;
+const agentPayloadByteLimit = 4 * 1024 - 1;
 
 function truncateForAgent(value: string, maxLength = 140): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
@@ -241,16 +241,39 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
 interface AgentSummaryShape {
   [key: string]: unknown;
   intents: Array<{
+    title?: unknown;
+    confidence?: unknown;
+    reviewRequired?: unknown;
+    sources?: unknown[];
     lifecycle: unknown[];
     scenarioCount?: number;
     omittedScenarioCount?: number;
-    scenarios: Array<{ assertions: string[] }>;
+    scenarios: Array<{
+      id?: unknown;
+      priority?: unknown;
+      kind?: unknown;
+      title?: unknown;
+      confidence?: unknown;
+      sources?: unknown[];
+      assertions: string[];
+      routing?: { decision?: unknown };
+      automation?: { status?: unknown; blocker?: string };
+    }>;
   }>;
   flows: Array<{
+    title?: unknown;
+    source?: unknown;
+    draft?: unknown;
+    runnable?: unknown;
+    verificationMode?: unknown;
+    entry?: unknown;
+    reviewQuestion?: unknown;
+    successSignal?: unknown;
     changedFiles: string[];
     steps: string[];
     selectors: string[];
     existingEvidence?: string[];
+    scenarioAutomation?: unknown[];
     evidence: string[];
   }>;
   requiredEvidence: unknown[];
@@ -321,6 +344,65 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
   });
   if (Buffer.byteLength(minimalPayload) <= agentPayloadByteLimit) {
     return minimalPayload;
+  }
+
+  const leanIntents = compact.intents.slice(0, 1).map((intent) => ({
+    title: intent.title,
+    confidence: intent.confidence,
+    reviewRequired: intent.reviewRequired,
+    sources: intent.sources?.slice(0, 1),
+    lifecycle: intent.lifecycle.slice(0, 3),
+    scenarioCount: intent.scenarioCount,
+    omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 2),
+    scenarios: intent.scenarios.slice(0, 2).map((scenario) => ({
+      id: scenario.id,
+      priority: scenario.priority,
+      kind: scenario.kind,
+      title: scenario.title,
+      confidence: scenario.confidence,
+      sources: scenario.sources?.slice(0, 1),
+      routing: scenario.routing ? { decision: scenario.routing.decision } : undefined,
+      automation: scenario.automation
+        ? { status: scenario.automation.status }
+        : undefined,
+    })),
+  }));
+  const leanFlows = compact.flows.slice(0, 1).map((flow) => ({
+    title: flow.title,
+    source: flow.source,
+    draft: flow.draft,
+    runnable: flow.runnable,
+    verificationMode: flow.verificationMode,
+    entry: flow.entry,
+    changedFiles: flow.changedFiles.slice(0, 1),
+    successSignal: flow.successSignal,
+    selectors: flow.selectors.slice(0, 1),
+  }));
+  const leanPayload = JSON.stringify({
+    schema: summary.schema,
+    base: truncateForAgent(String(summary.base ?? ""), 120),
+    head: truncateForAgent(String(summary.head ?? ""), 120),
+    project: summary.project,
+    runner: summary.runner,
+    manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 120) : null,
+    readiness: summary.readiness,
+    scenarioCoverage: summary.scenarioCoverage,
+    testSuite: summary.testSuite,
+    intentCount: summary.intentCount,
+    omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - leanIntents.length),
+    intents: leanIntents,
+    flowCount: summary.flowCount,
+    omittedFlowCount: Math.max(0, numericCount(summary.flowCount) - leanFlows.length),
+    flows: leanFlows,
+    requiredEvidence: compact.requiredEvidence.slice(0, 1),
+    recommendedEvidenceCount: summary.recommendedEvidenceCount,
+    requiredBootstrap: [],
+    prChecklist: compact.prChecklist.slice(0, 1),
+    commands: compact.commands.slice(0, 1),
+    compaction: { maxBytes: agentPayloadByteLimit, originalBytes: Buffer.byteLength(payload), lean: true },
+  });
+  if (Buffer.byteLength(leanPayload) <= agentPayloadByteLimit) {
+    return leanPayload;
   }
 
   return JSON.stringify({
