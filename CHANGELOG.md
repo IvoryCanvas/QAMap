@@ -17,6 +17,7 @@
 - Low-confidence diff-only scenarios remain recommendations until stronger intent evidence promotes them; they no longer become required automation blockers merely because a diff hunk has a location.
 - One-off skill commands use an explicit npm execution environment so they do not invoke Corepack or rewrite a target repository's package-manager metadata.
 - Selector fallback now prefers diff-added, step-related controls and observable copy. Generic exploratory checks remain coverage guidance instead of executable happy-path steps.
+- The README now leads with a real packaged-CLI routing demo and separates scenario priority from automation compilation status before introducing runners or manifests.
 
 ### Fixed
 
