@@ -5505,6 +5505,9 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.match(markdown, /visible text "Order confirmed" appears/);
   assert.match(markdown, /- Evidence found: /);
   assert.match(markdown, /- QA proposal: /);
+  assert.match(markdown, /QA analysis: completed independently of runner setup/);
+  assert.match(markdown, /Automation stage:/);
+  assert.match(markdown, /QA analysis and scenario routing do not require the optional automation runner/);
   assert.match(markdown, /- Repository validation: `/);
   assert.match(markdown, /- QA proposal gap/);
   assert.match(markdown, /Manifest: not found; using repo signals and PR diff only/);
@@ -5665,6 +5668,67 @@ test("generateE2ePlan reaches consuming surfaces when only a shared component ch
   assert.ok(uiFlow.files.includes("components/Button.tsx"));
   assert.match(uiFlow.reason, /through imports: components\/Button\.tsx -> app\/cart\/page\.tsx/);
   assert.ok(uiFlow.entrypoints.some((entrypoint) => entrypoint.value === "/cart"));
+});
+
+test("change-intent views retain reverse-import route entrypoints", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/views/review"), { recursive: true });
+  await mkdir(path.join(root, "app"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: { dev: "next dev" },
+      dependencies: { next: "^15.0.0", react: "^19.0.0" },
+    }),
+  );
+  await writeFile(
+    path.join(root, "tsconfig.json"),
+    [
+      "{",
+      "  // Path aliases must remain strings, not look like block comments.",
+      '  "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["./src/*"], }, },',
+      '  "include": ["**/*.ts", "**/*.tsx"],',
+      "}",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "src/views/review/ReviewView.tsx"),
+    "export function ReviewView() { return <main>Preview</main>; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/views/review/index.ts"),
+    "export { ReviewView } from './ReviewView';\n",
+  );
+  await writeFile(
+    path.join(root, "app/page.tsx"),
+    "import { ReviewView } from '@/views/review';\nexport default function Page() { return <ReviewView />; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/review-mode"]);
+  await writeFile(
+    path.join(root, "src/views/review/ReviewView.tsx"),
+    [
+      "export function ReviewView() {",
+      "  const [mode, setMode] = useState('compare');",
+      "  return <main><button onClick={() => setMode('usage')}>Usage</button><p>{mode}</p></main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: add component review mode"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const flow = plan.flows.find((candidate) => candidate.intentId);
+
+  assert.ok(flow);
+  assert.ok(flow.files.includes("src/views/review/ReviewView.tsx"));
+  assert.ok(flow.files.includes("app/page.tsx"));
+  assert.ok(flow.entrypoints.some((entrypoint) => entrypoint.kind === "route" && entrypoint.value === "/"));
+  assert.match(flow.reason, /Reverse imports reach .*ReviewView\.tsx -> src\/views\/review\/index\.ts -> app\/page\.tsx/);
 });
 
 test("verification manifest flows match when changed files are imported by anchored files", async () => {
@@ -6119,6 +6183,10 @@ test("qa command keeps runner setup opt-in for testless repositories", async () 
 
   assert.equal(qa.testSuite.hasTestSuite, false);
   assert.equal(qa.runner, "playwright");
+  assert.equal(
+    qa.flows.flatMap((flow) => flow.executionBlockers ?? []).some((blocker) => /No Playwright config/i.test(blocker)),
+    false,
+  );
   assert.doesNotMatch(markdown, /## First E2E Draft Bootstrap|Install command/);
   assert.match(markdown, /## Optional Automation/);
   assert.match(markdown, /does not require adopting this adapter/);

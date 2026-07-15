@@ -529,7 +529,15 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
       );
     }
   }
-  if (result.readiness.requiredScenarios + result.readiness.recommendedScenarios + result.readiness.reviewOnlyScenarios > 0) {
+  const routedScenarios = result.readiness.requiredScenarios +
+    result.readiness.recommendedScenarios +
+    result.readiness.reviewOnlyScenarios;
+  lines.push(
+    routedScenarios > 0
+      ? `- QA analysis: completed independently of runner setup; ${routedScenarios} diff-backed scenario${routedScenarios === 1 ? "" : "s"} routed for review.`
+      : `- QA analysis: completed independently of runner setup; ${result.flows.length} affected flow${result.flows.length === 1 ? "" : "s"} mapped for review.`,
+  );
+  if (routedScenarios > 0) {
     lines.push(
       `- Scenario routing: ${result.readiness.requiredScenarios} required, ` +
         `${result.readiness.recommendedScenarios} recommended, ${result.readiness.reviewOnlyScenarios} review-only.`,
@@ -548,7 +556,8 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push(`- Change scope: ${result.includeWorkingTree ? "committed and uncommitted working-tree changes" : "committed branch changes only"}`);
   lines.push(`- Project: ${formatProjectType(result.project)}`);
   lines.push(`- Manifest: ${result.manifestPath ? `\`${escapeMarkdownInline(result.manifestPath)}\`` : "not found; using repo signals and PR diff only"}`);
-  lines.push(`- Stage: ${formatDraftReadinessStage(result.readiness)}`);
+  lines.push(`- Automation stage: ${formatDraftReadinessStage(result.readiness)}`);
+  lines.push("- QA analysis and scenario routing do not require the optional automation runner to be installed.");
   lines.push(`- Draft flows: ${result.flows.length}`);
   lines.push("");
 

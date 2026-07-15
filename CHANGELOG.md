@@ -14,6 +14,10 @@
 
 ### Changed
 
+- QA routing now analyzes every behavior-bearing file in the full branch diff even when its commit subject is release-shaped or otherwise non-behavioral. Commit subjects label intent; they no longer define the analysis boundary.
+- Runner setup is reported as an optional automation prerequisite instead of an execution blocker for the runner-independent QA judgment and scenario-routing stages.
+- Low-confidence diff intent now composes with repository-derived action scenarios when that produces a more concrete draft, while broad multi-risk changes retain one evidence-rich lifecycle for deterministic compilers.
+- Selector evidence is sampled across changed files and control types so one large component or registry cannot crowd routes, outcomes, and actionable controls out of the draft.
 - Agent output now stays below 4KB and preserves at least the highest-priority intent, routed scenarios, affected flow, source, and omitted counts when compacted.
 - Low-confidence diff-only scenarios remain recommendations until stronger intent evidence promotes them; they no longer become required automation blockers merely because a diff hunk has a location.
 - One-off skill commands use an explicit npm execution environment so they do not invoke Corepack or rewrite a target repository's package-manager metadata.
@@ -24,6 +28,10 @@
 
 ### Fixed
 
+- Commit clusters now use each commit's actual changed files, ignore shared Conventional Commit scope as product evidence, and analyze residual behavior files that were previously hidden behind unrelated commit titles.
+- Reverse-import analysis now parses JSONC path aliases without treating strings such as `@/*` and `**/*.ts` as comments, restoring changed-component propagation to real route surfaces.
+- URL-backed UI state now produces restoration, reload, default cleanup, and invalid-value fallback QA when the diff reads and writes the same query key.
+- Share and media lifecycle evidence can compile deterministic Playwright scenarios for native completion, cancellation, clipboard fallback, play, pause, completion, and restart without requiring a pre-existing Playwright setup.
 - Generated drafts no longer pass by asserting only the document body or by reusing the clicked control as proof of success. Missing outcomes produce an explicit review-only `test.fixme` marker.
 - Generic UI copy such as `Request access`, `Open billing`, or an existing `subscription` symbol no longer fabricates network, external-entry, or payment setup without supporting diff evidence.
 - Vue templates, computed labels, React handlers, multiline visible text, and exact token overlap now produce more stable action and outcome selectors.

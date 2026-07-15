@@ -4757,7 +4757,7 @@ function isRoutableSurfaceFile(file: string): boolean {
   return (
     /(?:^|\/)app\/.*(?:^|\/)?page\.[cm]?[jt]sx?$/i.test(file) ||
     /(?:^|\/)pages\/(?!api\/).+\.(?:[cm]?[jt]sx?|vue|svelte)$/i.test(file) ||
-    /(?:^|\/)(?:screens|views)\/.+\.(?:[cm]?[jt]sx?|vue|svelte)$/i.test(file) ||
+    /(?:^|\/)screens\/.+\.(?:[cm]?[jt]sx?|vue|svelte)$/i.test(file) ||
     /(?:^|\/)routes\/(?!api\/).+\.(?:[cm]?[jt]sx?|vue|svelte)$/i.test(file)
   );
 }
@@ -5020,17 +5020,25 @@ function buildFlowCandidates(
     });
   }
 
-  return prioritizeChangeIntentCandidates(changeAnalysis, candidates, projectType);
+  return prioritizeChangeIntentCandidates(changeAnalysis, candidates, projectType, importImpacts);
 }
 
 function prioritizeChangeIntentCandidates(
   analysis: ChangeIntentAnalysis | undefined,
   heuristicCandidates: FlowCandidate[],
   projectType: E2eProjectType,
+  importImpacts: ImportImpact[] = [],
 ): FlowCandidate[] {
   const intentCandidates = (analysis?.intents ?? [])
-    .filter((intent) => intent.confidence !== "low" && intent.files.length > 0)
+    .filter((intent) => intent.files.length > 0 && (
+      intent.confidence !== "low" ||
+      intent.evidence.some((item) =>
+        item.kind === "diff" && item.file && item.startLine !== undefined && item.relation !== "contextual"
+      )
+    ))
     .map((intent): FlowCandidate => {
+      const relatedImportImpacts = importImpacts.filter((impact) => intent.files.includes(impact.changedFile));
+      const impactedSurfaces = relatedImportImpacts.map((impact) => impact.surface);
       const primaryScenario = intent.scenarios.find((scenario) => scenario.kind === "primary") ?? intent.scenarios[0];
       const steps = uniqueStrings([
         ...(primaryScenario?.steps ?? intent.lifecycle.map((stage) => stage.label)),
@@ -5039,8 +5047,13 @@ function prioritizeChangeIntentCandidates(
       return {
         kind: intentFlowKind(intent, projectType),
         title: intent.title,
-        reason: `Commit and diff evidence support this ${intent.confidence}-confidence change intent. ${intent.summary}`,
-        files: intent.files,
+        reason: (intent.confidence === "low"
+          ? `Located diff evidence supports this review-required change intent even though commit text was not behavior-bearing. ${intent.summary}`
+          : `Commit and diff evidence support this ${intent.confidence}-confidence change intent. ${intent.summary}`) +
+            (relatedImportImpacts.length > 0
+              ? ` Reverse imports reach ${relatedImportImpacts.slice(0, 3).map(describeImportChain).join("; ")}.`
+              : ""),
+        files: uniqueStrings([...intent.files, ...impactedSurfaces]),
         steps,
         coverage: intent.scenarios.map((scenario) => ({
           title: scenario.title,
@@ -5191,7 +5204,14 @@ async function buildFlow(
     coverageEvidence: evaluateFlowCoverageEvidence({ title: candidate.title, files, coverage }, testSuiteInventory),
     entrypoints: interactionEvidenceApplies ? await inferFlowEntrypoints(root, files, runner) : [],
     setupHints,
-    fixtureReadiness: await inferFlowFixtureReadiness(root, files, candidate.kind, setupHints, fixtureContext),
+    fixtureReadiness: await inferFlowFixtureReadiness(
+      root,
+      files,
+      candidate.kind,
+      setupHints,
+      fixtureContext,
+      addedDiffText,
+    ),
     selectors,
     missingTestability: interactionEvidenceApplies ? await findFlowTestabilityGaps(root, files, runner, selectors) : [],
     intentId: candidate.intentId,
@@ -5324,6 +5344,7 @@ async function inferFlowSetupHints(
   const changedText = files.map((file) => addedDiffText[file] ?? "").filter(Boolean).join("\n");
   const shouldUseContentSignals = kind !== "config" && kind !== "content" && kind !== "command";
   const signalText = shouldUseContentSignals ? combinedText : filesText;
+  const changedSignalText = `${filesText}\n${changedText}`;
   const matchingFiles = (pattern: RegExp) =>
     uniqueStrings([
       ...files.filter((file) => pattern.test(file)),
@@ -5331,9 +5352,12 @@ async function inferFlowSetupHints(
         ? fileTexts.filter((item) => pattern.test(item.text)).map((item) => item.file)
         : []),
     ]).slice(0, maxFilesPerFlow);
+  const matchingChangedFiles = (pattern: RegExp) =>
+    uniqueStrings(files.filter((file) => pattern.test(file) || pattern.test(addedDiffText[file] ?? "")))
+      .slice(0, maxFilesPerFlow);
 
-  if (/(?:^|\/|[-_])(auth|session|login|logout|permission|permissions|guard|guards|token|jwt)(?:\/|[-_.]|$)/i.test(signalText)) {
-    const authFiles = matchingFiles(/auth|session|login|logout|permission|guard|token|jwt/i);
+  if (/(?:^|\/|[-_])(auth|session|login|logout|permission|permissions|guard|guards|token|jwt)(?:\/|[-_.]|$)/i.test(changedSignalText)) {
+    const authFiles = matchingChangedFiles(/auth|session|login|logout|permission|guard|token|jwt/i);
     hints.push(
       setupHint(
         "auth",
@@ -5346,8 +5370,9 @@ async function inferFlowSetupHints(
   }
 
   const networkEvidence = /(?:fetch\s*\(|axios(?:\.|\s*\()|graphql|trpc|\brpc\b|apiClient|endpoint|msw|nock|\/api\/|(?:^|\/)(?:api|requests?|responses?|clients?|endpoints?)(?:\/|[-_.]|$))/im;
-  if (kind === "api" || networkEvidence.test(signalText)) {
-    const networkFiles = matchingFiles(networkEvidence);
+  const networkSignalText = kind === "api" ? signalText : changedSignalText;
+  if (kind === "api" || networkEvidence.test(networkSignalText)) {
+    const networkFiles = kind === "api" ? matchingFiles(networkEvidence) : matchingChangedFiles(networkEvidence);
     hints.push(
       setupHint(
         "network",
@@ -5359,8 +5384,9 @@ async function inferFlowSetupHints(
     );
   }
 
-  if (/(?:fixture|fixtures|factory|factories|seed|seeds|mock|mocks|faker|test-data|testData)/i.test(signalText)) {
-    const fixtureFiles = matchingFiles(/fixture|factory|seed|mock|faker|test-data|testData/i);
+  const fixtureEvidence = /(?:\b(?:fixture|fixtures|factory|factories|mock|mocks|faker|msw|nock|test-data)\b|\b(?:fixture|mock|seed)(?:Data|Response|Handler|Factory|Record)s?\b)/i;
+  if (fixtureEvidence.test(changedSignalText)) {
+    const fixtureFiles = matchingChangedFiles(fixtureEvidence);
     hints.push(
       setupHint(
         "fixture",
@@ -5372,8 +5398,8 @@ async function inferFlowSetupHints(
     );
   }
 
-  if (/(?:\.env|environment|process\.env|feature-?flag|experiments?|remoteConfig|config|eas\.json|app\.config)/i.test(signalText)) {
-    const environmentFiles = matchingFiles(/\.env|environment|process\.env|feature-?flag|experiment|remoteConfig|config|eas\.json|app\.config/i);
+  if (/(?:\.env|environment|process\.env|feature-?flag|experiments?|remoteConfig|config|eas\.json|app\.config)/i.test(changedSignalText)) {
+    const environmentFiles = matchingChangedFiles(/\.env|environment|process\.env|feature-?flag|experiment|remoteConfig|config|eas\.json|app\.config/i);
     hints.push(
       setupHint(
         "environment",
@@ -5405,8 +5431,8 @@ async function inferFlowSetupHints(
     );
   }
 
-  if (kind === "state" || /(?:store|state|cache|provider|context|atom|selector|reducer|storage|localStorage|AsyncStorage)/i.test(signalText)) {
-    const stateFiles = matchingFiles(/store|state|cache|provider|context|atom|selector|reducer|storage|localStorage|AsyncStorage/i);
+  if (kind === "state" || /(?:store|state|cache|provider|context|atom|selector|reducer|storage|localStorage|AsyncStorage)/i.test(changedSignalText)) {
+    const stateFiles = matchingChangedFiles(/store|state|cache|provider|context|atom|selector|reducer|storage|localStorage|AsyncStorage/i);
     hints.push(
       setupHint(
         "state",
@@ -5488,6 +5514,7 @@ async function inferFlowFixtureReadiness(
   kind: E2eFlowKind,
   setupHints: E2eSetupHint[],
   context: FixtureReadinessContext,
+  addedDiffText: Record<string, string> = {},
 ): Promise<E2eFixtureReadiness> {
   if (kind === "test-evidence" || kind === "documentation" || kind === "generated-artifact") {
     return {
@@ -5538,6 +5565,10 @@ async function inferFlowFixtureReadiness(
   }
 
   const apiSignals = await findApiDependencySignals(root, files, kind, setupHints);
+  const changedApiSignals = files.filter((file) => {
+    const changedText = addedDiffText[file] ?? "";
+    return isApiDependencyPath(file) || (changedText.length > 0 && hasApiDependencyText(changedText));
+  });
   const apiEndpoints = uniqueStrings([
     ...(await findApiEndpointHints(root, uniqueStrings([...files, ...apiSignals]))),
     ...context.changedBackendFiles.flatMap(apiEndpointFromBackendFile),
@@ -5552,6 +5583,23 @@ async function inferFlowFixtureReadiness(
       backendSignals: [],
       mockSignals: [],
       nextActions: [],
+    };
+  }
+
+  const hasChangedResponseBoundary = changedApiSignals.length > 0 ||
+    setupHints.some((hint) => hint.kind === "network" || hint.kind === "payment");
+  if (!hasChangedResponseBoundary) {
+    return {
+      status: "partial",
+      reason: "The surrounding surface has an existing API dependency, but the selected diff does not change its response boundary.",
+      apiSignals,
+      apiEndpoints,
+      backendSignals: [],
+      mockSignals: [],
+      nextActions: [
+        "Use the existing QA environment or fixture only for selected scenarios that actually traverse the unchanged API dependency.",
+        "Do not block local state, navigation, media, sharing, or access-boundary QA on unrelated response fixtures.",
+      ],
     };
   }
 
@@ -5932,7 +5980,45 @@ async function inferFlowSelectors(
       selectors.push(addedText && addedText.includes(selector.value) ? { ...selector, addedInDiff: true } : selector);
     }
   }
-  return uniqueSelectors(selectors).slice(0, 12);
+  return selectRepresentativeSelectors(selectors, 12);
+}
+
+function selectRepresentativeSelectors(selectors: E2eSelector[], limit: number): E2eSelector[] {
+  const byFile = new Map<string, E2eSelector[]>();
+  for (const selector of uniqueSelectors(selectors)) {
+    const fileSelectors = byFile.get(selector.file) ?? [];
+    fileSelectors.push(selector);
+    byFile.set(selector.file, fileSelectors);
+  }
+  for (const fileSelectors of byFile.values()) {
+    fileSelectors.sort((left, right) => selectorEvidenceScore(right) - selectorEvidenceScore(left));
+  }
+
+  const selected: E2eSelector[] = [];
+  let depth = 0;
+  while (selected.length < limit) {
+    let added = false;
+    for (const fileSelectors of byFile.values()) {
+      const selector = fileSelectors[depth];
+      if (!selector) continue;
+      selected.push(selector);
+      added = true;
+      if (selected.length >= limit) break;
+    }
+    if (!added) break;
+    depth += 1;
+  }
+  return selected;
+}
+
+function selectorEvidenceScore(selector: E2eSelector): number {
+  let score = selector.addedInDiff ? 30 : 0;
+  if (/test-id/.test(selector.kind)) score += 40;
+  if (isInputSelector(selector)) score += 25;
+  if (selectorCanDriveInteraction(selector)) score += 20;
+  if (selector.kind === "visible-text") score += isVisibleSuccessOutcome(selector.value) ? 18 : 8;
+  if (/^(?:number|label|chevron|bold|white|_blank|#[0-9a-f]{3,8})$/i.test(selector.value)) score -= 50;
+  return score;
 }
 
 function entrypointsFromPath(file: string, runner: E2eRunnerName): E2eEntrypoint[] {
@@ -6860,6 +6946,13 @@ function shouldUseDomainScenariosForDraft(plan: E2ePlanResult): boolean {
   if (isLowSignalVerificationOnlyChange(files) || isConfigurationOnlyChange(files)) {
     return false;
   }
+  const intentFlows = plan.flows.filter((flow) => Boolean(flow.intentId));
+  if (intentFlows.some((flow) => flow.intentConfidence !== "low")) {
+    return false;
+  }
+  if (intentFlows.some((flow) => (flow.qaScenarios?.length ?? 0) > 4)) {
+    return false;
+  }
   if (plan.changeAnalysis.intents.some((intent) => intent.confidence !== "low")) {
     return false;
   }
@@ -7610,7 +7703,10 @@ function draftExecutionBlockers(
   scenarioAutomation: E2eScenarioAutomationReceipt[] = [],
 ): string[] {
   const verificationOnly = isVerificationOnlyFlow(flow);
-  const blockers = verificationOnly ? [] : [...plan.executionProfile.blockers];
+  const runnerGap = runnerSetupGap(plan, runner);
+  const blockers = verificationOnly
+    ? []
+    : remainingExecutionProfileBlockers(plan.executionProfile.blockers, runnerGap);
   if (!verificationOnly && runner !== "manual" && flow.entrypoints.length === 0) {
     blockers.push("No runnable route, screen, or command entrypoint was inferred for this flow.");
   }
@@ -8238,7 +8334,7 @@ interface PlaywrightRoutedScenarioDraft {
 }
 
 function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenarioDraft[] {
-  const routeEntrypoint = primaryRouteEntrypoint(flow);
+  const routeEntrypoint = preferredPublicRouteEntrypoint(flow) ?? primaryRouteEntrypoint(flow);
   if (!routeEntrypoint) {
     return [];
   }
@@ -8246,15 +8342,28 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
   if (routeDraft.params.length > 0) {
     return [];
   }
-  const endpoint = playwrightFailureMockEndpoint(flow);
-  if (!endpoint) {
-    return [];
-  }
 
   const drafts: PlaywrightRoutedScenarioDraft[] = [];
   for (const scenario of flow.qaScenarios ?? []) {
     const selection = routeQaScenario(scenario);
-    if (scenario.kind !== "failure" || selection.decision === "review-only") {
+    if (selection.decision === "review-only") {
+      continue;
+    }
+    const shareDraft = playwrightShareScenarioDraft(flow, scenario, routeDraft);
+    if (shareDraft) {
+      drafts.push(shareDraft);
+      continue;
+    }
+    const mediaDraft = playwrightMediaScenarioDraft(flow, scenario, routeDraft);
+    if (mediaDraft) {
+      drafts.push(mediaDraft);
+      continue;
+    }
+    if (scenario.kind !== "failure") {
+      continue;
+    }
+    const endpoint = playwrightFailureMockEndpoint(flow);
+    if (!endpoint) {
       continue;
     }
     const scenarioText = [scenario.title, ...scenario.steps, ...scenario.edgeCases].join(" ");
@@ -8299,6 +8408,138 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
     });
   }
   return drafts;
+}
+
+function preferredPublicRouteEntrypoint(flow: E2eFlow): E2eEntrypoint | undefined {
+  return flow.entrypoints.find((entrypoint) =>
+    entrypoint.kind === "route" && /(?:^|\/)public(?:\/|$)/i.test(entrypoint.value)
+  );
+}
+
+function playwrightShareScenarioDraft(
+  flow: E2eFlow,
+  scenario: IntentQaScenario,
+  routeDraft: PlaywrightRouteDraft,
+): PlaywrightRoutedScenarioDraft | undefined {
+  if (!/share completion, cancellation, and fallback/i.test(scenario.title)) {
+    return undefined;
+  }
+  const actionSelector = flow.selectors.find((selector) =>
+    selectorCanDriveInteraction(selector) && /\b(?:share|copy)\b|(?:공유|복사)/i.test(selector.value)
+  );
+  if (!actionSelector) {
+    return undefined;
+  }
+  const locator = playwrightLocator(actionSelector);
+  const testName = `${flow.title}: ${scenario.title}`.replaceAll('"', "'");
+  return {
+    scenarioId: scenario.id,
+    mappedSteps: scenario.steps.length,
+    mappedAssertions: scenario.assertions.length,
+    lines: [
+      `test("${testName}", async ({ page }) => {`,
+      "  await page.addInitScript(() => {",
+      "    (window as any).__qamapShareState = { shared: null, copied: null };",
+      "    Object.defineProperty(navigator, \"share\", {",
+      "      configurable: true,",
+      "      value: async (payload: unknown) => { (window as any).__qamapShareState.shared = payload; },",
+      "    });",
+      "    Object.defineProperty(navigator, \"clipboard\", {",
+      "      configurable: true,",
+      "      value: { writeText: async (value: string) => { (window as any).__qamapShareState.copied = value; } },",
+      "    });",
+      "  });",
+      `  await page.goto(${playwrightRouteExpressionWithQuery(routeDraft, "qamap_probe=share-source")});`,
+      `  await ${locator}.click();`,
+      "  const sharedUrl = await page.evaluate(() => (window as any).__qamapShareState.shared?.url as string | undefined);",
+      "  expect(sharedUrl).toBeTruthy();",
+      "  expect(sharedUrl).not.toContain(\"qamap_probe\");",
+      "",
+      "  await page.evaluate(() => {",
+      "    (window as any).__qamapShareState.shared = null;",
+      "    (window as any).__qamapShareState.copied = null;",
+      "    Object.defineProperty(navigator, \"share\", {",
+      "      configurable: true,",
+      "      value: async () => { throw new DOMException(\"cancelled\", \"AbortError\"); },",
+      "    });",
+      "  });",
+      `  await ${locator}.click();`,
+      "  expect(await page.evaluate(() => (window as any).__qamapShareState.copied)).toBeNull();",
+      "",
+      "  await page.evaluate(() => {",
+      "    (window as any).__qamapShareState.copied = null;",
+      "    Object.defineProperty(navigator, \"share\", { configurable: true, value: undefined });",
+      "  });",
+      `  await ${locator}.click();`,
+      "  const copiedUrl = await page.evaluate(() => (window as any).__qamapShareState.copied as string | null);",
+      "  expect(copiedUrl).toBeTruthy();",
+      "  expect(copiedUrl).not.toContain(\"qamap_probe\");",
+      "});",
+    ],
+  };
+}
+
+function playwrightMediaScenarioDraft(
+  flow: E2eFlow,
+  scenario: IntentQaScenario,
+  routeDraft: PlaywrightRouteDraft,
+): PlaywrightRoutedScenarioDraft | undefined {
+  if (!/media start, stop, completion, and restart state/i.test(scenario.title)) {
+    return undefined;
+  }
+  const labels = uniqueStrings(flow.selectors
+    .filter((selector) =>
+      selector.kind === "role-button" && /\b(?:audio|listen|media|pause|play|stop)\b|(?:듣기|멈춤|재생|정지)/i.test(selector.value)
+    )
+    .map((selector) => selector.value))
+    .slice(0, 4);
+  if (labels.length === 0) {
+    return undefined;
+  }
+  const labelPattern = labels.map((label) => escapeRegExp(label).replaceAll("/", "\\/")).join("|");
+  const testName = `${flow.title}: ${scenario.title}`.replaceAll('"', "'");
+  return {
+    scenarioId: scenario.id,
+    mappedSteps: scenario.steps.length,
+    mappedAssertions: scenario.assertions.length,
+    lines: [
+      `test("${testName}", async ({ page }) => {`,
+      "  await page.addInitScript(() => {",
+      "    const state = { playing: false, playCount: 0, pauseCount: 0 };",
+      "    (window as any).__qamapMediaState = state;",
+      "    Object.defineProperty(HTMLMediaElement.prototype, \"paused\", {",
+      "      configurable: true,",
+      "      get: () => !state.playing,",
+      "    });",
+      "    Object.defineProperty(HTMLMediaElement.prototype, \"play\", {",
+      "      configurable: true,",
+      "      value: async () => { state.playing = true; state.playCount += 1; },",
+      "    });",
+      "    Object.defineProperty(HTMLMediaElement.prototype, \"pause\", {",
+      "      configurable: true,",
+      "      value: () => { state.playing = false; state.pauseCount += 1; },",
+      "    });",
+      "  });",
+      `  await page.goto(${routeDraft.expression});`,
+      `  const mediaControl = page.getByRole("button", { name: /^(?:${labelPattern})$/ });`,
+      "  const initialLabel = (await mediaControl.textContent())?.trim();",
+      "  await mediaControl.click();",
+      "  await expect.poll(() => page.evaluate(() => (window as any).__qamapMediaState.playCount)).toBe(1);",
+      "  await mediaControl.click();",
+      "  await expect.poll(() => page.evaluate(() => (window as any).__qamapMediaState.pauseCount)).toBe(1);",
+      "  if (initialLabel) await expect(mediaControl).toHaveText(initialLabel);",
+      "  await mediaControl.click();",
+      "  await page.evaluate(() => { (window as any).__qamapMediaState.playing = false; });",
+      "  await page.locator(\"audio, video\").first().dispatchEvent(\"ended\");",
+      "  if (initialLabel) await expect(mediaControl).toHaveText(initialLabel);",
+      "});",
+    ],
+  };
+}
+
+function playwrightRouteExpressionWithQuery(routeDraft: PlaywrightRouteDraft, query: string): string {
+  const route = JSON.parse(routeDraft.expression) as string;
+  return JSON.stringify(`${route}${route.includes("?") ? "&" : "?"}${query}`);
 }
 
 function routedScenarioSelector(
@@ -10056,6 +10297,7 @@ function extractSelectorsFromText(file: string, text: string, runner: E2eRunnerN
       ...withoutSelectorValueDuplicates(extractAttributeSelectors(file, text, ["aria-label"], "aria-label"), webInputSelectors),
       ...extractRoleSelectorsFromText(file, text),
       ...extractInteractiveTextSelectors(file, text),
+      ...extractOptionControlSelectors(file, text),
     );
   }
 
@@ -10186,10 +10428,38 @@ function extractInteractiveTextSelectors(file: string, text: string): E2eSelecto
       normalizeRenderedText(body) ?? "",
       ...[...body.matchAll(/\{\{?\s*([A-Za-z_$][\w$]*)\s*\}?\}/g)]
         .flatMap((identifier) => renderedLiteralValues(text, identifier[1])),
+      ...[...body.matchAll(/["'`]([^"'`\n]{2,80})["'`]/g)]
+        .map((literal) => normalizeSelectorValue(literal[1]) ?? ""),
     ]).filter(isUsefulSelector);
     const kind: E2eSelectorKind = isButton ? "role-button" : isLink ? "role-link" : "click-text";
     for (const value of values) {
       selectors.push({ kind, value, file });
+    }
+  }
+  return selectors;
+}
+
+function extractOptionControlSelectors(file: string, text: string): E2eSelector[] {
+  const selectors: E2eSelector[] = [];
+  const names = new Set([...text.matchAll(
+    /<(?:Segmented|Tabs?|TabList|ToggleGroup|RadioGroup)\b[^>]*\boptions\s*=\s*\{\s*([A-Za-z_$][\w$]*)\s*\}/g,
+  )].map((match) => match[1]));
+  for (const declaration of text.matchAll(/\b(?:const|let)\s+([A-Za-z_$][\w$]*)\b/g)) {
+    if (/(?:view|tab|option|mode|segment)s?$/i.test(declaration[1])) {
+      names.add(declaration[1]);
+    }
+  }
+  for (const name of names) {
+    const declaration = new RegExp(
+      `\\b(?:const|let)\\s+${escapeRegExp(name)}\\b[^=]{0,240}=\\s*(?:[^?;]{0,240}\\?\\s*)?\\[([\\s\\S]{0,4000}?)\\]\\s*(?::|;)`,
+      "m",
+    ).exec(text);
+    if (!declaration?.[1]) continue;
+    for (const label of declaration[1].matchAll(/\blabel\s*:\s*(?:"([^"]+)"|'([^']+)'|`([^`]+)`)/g)) {
+      const value = normalizeSelectorValue(label[1] ?? label[2] ?? label[3]);
+      if (value && isUsefulSelector(value)) {
+        selectors.push({ kind: "role-button", value, file });
+      }
     }
   }
   return selectors;

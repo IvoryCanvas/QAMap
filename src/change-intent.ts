@@ -37,6 +37,7 @@ export interface ChangeIntentCommit {
   sha: string;
   subject: string;
   body?: string;
+  files?: string[];
   conventionalType?: string;
   scope?: string;
   statement: string;
@@ -119,7 +120,8 @@ const ignoredCommitTypes = new Set(["build", "chore", "ci", "docs", "release", "
 const maxCommits = 50;
 const maxIntentFiles = 20;
 const maxLifecycleStages = 12;
-const maxSignals = 40;
+const maxQaScenariosPerIntent = 10;
+const maxSignals = 96;
 
 const stopWords = new Set([
   "a",
@@ -187,20 +189,33 @@ export async function analyzeChangeIntents(
   const riskEvidence = collectDiffRiskEvidence(options.addedDiffEvidence ?? {});
   const changedFiles = options.changedFiles.map((file) => file.path);
   const commitClusters = clusterBehaviorCommits(parsedCommits);
-  const intents = commitClusters.map((cluster, index) =>
-    buildCommitIntent(
-      cluster,
-      index,
-      commitClusters.length,
-      changedFiles,
-      options.addedDiffText ?? {},
-      codeSignals,
-      riskEvidence,
-    ),
-  );
+  const intents = commitClusters
+    .map((cluster, index) =>
+      buildCommitIntent(
+        cluster,
+        index,
+        commitClusters.length,
+        changedFiles,
+        options.addedDiffText ?? {},
+        codeSignals,
+        riskEvidence,
+      )
+    )
+    .filter((intent) => intent.files.length > 0);
 
-  if (intents.length === 0) {
-    const diffIntent = buildDiffOnlyIntent(changedFiles, codeSignals, options.includeWorkingTree ?? false);
+  const coveredFiles = new Set(intents.flatMap((intent) => intent.files));
+  const residualFiles = changedFiles.filter((file) => isBehaviorBearingFile(file) && !coveredFiles.has(file));
+  if (residualFiles.length > 0) {
+    const residualFileSet = new Set(residualFiles);
+    const diffIntent = buildDiffOnlyIntent(
+      residualFiles,
+      codeSignals.filter((signal) => residualFileSet.has(signal.file)),
+      riskEvidence.filter((evidence) => {
+        const file = evidence.file ?? evidence.previousFile;
+        return file !== undefined && residualFileSet.has(file);
+      }),
+      options.includeWorkingTree ?? false,
+    );
     if (diffIntent) {
       intents.push(diffIntent);
     }
@@ -236,7 +251,8 @@ async function collectCommitEvidence(
     "--reverse",
     "--no-merges",
     `--max-count=${maxCommits}`,
-    "--format=%H%x1f%s%x1f%b%x1e",
+    "--name-only",
+    "--format=%x1e%H%x1f%s%x1f%b%x1f",
     `${base}..${head}`,
   ];
   if (relativeRoot) {
@@ -248,7 +264,7 @@ async function collectCommitEvidence(
       .split("\u001e")
       .map((record) => record.trim())
       .filter(Boolean)
-      .map(parseCommitRecord)
+      .map((record) => parseCommitRecord(record, relativeRoot))
       .filter((commit) => !/^merge\b/i.test(commit.subject));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -257,14 +273,28 @@ async function collectCommitEvidence(
   }
 }
 
-function parseCommitRecord(record: string): ChangeIntentCommit {
-  const [sha = "", subject = "", body = ""] = record.split("\u001f");
+function parseCommitRecord(record: string, relativeRoot: string): ChangeIntentCommit {
+  const [sha = "", subject = "", body = "", fileBlock = ""] = record.split("\u001f");
+  const files = uniqueStrings(
+    fileBlock
+      .split(/\r?\n/)
+      .map((file) => scopeCommitFile(toPosixPath(file.trim()), relativeRoot))
+      .filter((file): file is string => Boolean(file)),
+  );
   return {
     sha: sha.trim(),
     subject: subject.trim(),
     body: body.trim() || undefined,
+    files,
     statement: subject.trim(),
   };
+}
+
+function scopeCommitFile(file: string, relativeRoot: string): string | undefined {
+  if (!file) return undefined;
+  if (!relativeRoot) return file;
+  const prefix = `${relativeRoot}/`;
+  return file.startsWith(prefix) ? file.slice(prefix.length) : undefined;
 }
 
 function parseCommit(commit: ChangeIntentCommit): ParsedCommit {
@@ -341,11 +371,23 @@ function clusterBehaviorCommits(commits: ParsedCommit[]): ParsedCommit[][] {
 }
 
 function commitsShareIntent(left: ParsedCommit, right: ParsedCommit): boolean {
-  if (left.scope && right.scope && normalizeToken(left.scope) === normalizeToken(right.scope)) {
+  const rightKeywords = new Set(right.keywords);
+  const scopeTokens = new Set(
+    [left.scope, right.scope]
+      .filter((scope): scope is string => Boolean(scope))
+      .map(normalizeToken),
+  );
+  const sharedKeywords = left.keywords.filter((keyword) =>
+    rightKeywords.has(keyword) && keyword.length >= 4 && !scopeTokens.has(keyword)
+  );
+  if (sharedKeywords.length > 0) {
     return true;
   }
-  const rightKeywords = new Set(right.keywords);
-  return left.keywords.some((keyword) => rightKeywords.has(keyword) && keyword.length >= 4);
+
+  // Conventional scopes often name an entire package (for example `web` or
+  // `app`), not one user intent. Scope equality must not merge unrelated
+  // feature commits by itself.
+  return false;
 }
 
 function buildCommitIntent(
@@ -358,7 +400,13 @@ function buildCommitIntent(
   riskEvidence: ChangeIntentEvidence[],
 ): ChangeIntent {
   const keywords = uniqueStrings(commits.flatMap((commit) => commit.keywords));
-  const files = selectIntentFiles(keywords, changedFiles, addedDiffText, clusterCount);
+  const files = selectIntentFiles(
+    keywords,
+    changedFiles,
+    addedDiffText,
+    clusterCount,
+    uniqueStrings(commits.flatMap((commit) => commit.files ?? [])),
+  );
   const relevantSignals = rankCodeSignalsForIntent(
     codeSignals.filter((signal) => files.includes(signal.file)),
     keywords,
@@ -366,7 +414,10 @@ function buildCommitIntent(
   const relevantRiskEvidence = riskEvidence.filter((item) => item.file && files.includes(item.file));
   const lifecycle = buildLifecycle(commits, relevantSignals);
   const confidence = confidenceForIntent(commits, lifecycle, relevantSignals);
-  const title = sentenceTitle(commits.find((commit) => commit.seed)?.statement ?? commits[0].statement);
+  const titleCommit = commits.find((commit) => commit.conventionalType === "feat" || commit.conventionalType === "feature") ??
+    commits.find((commit) => commit.seed) ??
+    commits[0];
+  const title = sentenceTitle(titleCommit.statement);
   const evidence = uniqueEvidence([
     ...commits.map((commit) => ({
       kind: "commit" as const,
@@ -377,7 +428,7 @@ function buildCommitIntent(
     ...relevantSignals.slice(0, 12).map((signal) => ({
       ...signal.evidence,
     })),
-    ...relevantRiskEvidence.slice(0, 8),
+    ...selectRiskEvidence(relevantRiskEvidence, 12),
   ]);
   const id = stableId("intent", `${index}:${commits.map((commit) => commit.sha).join(":")}:${title}`);
   const summary = commits
@@ -404,6 +455,7 @@ function buildCommitIntent(
 function buildDiffOnlyIntent(
   changedFiles: string[],
   codeSignals: CodeBehaviorSignal[],
+  riskEvidence: ChangeIntentEvidence[],
   includesWorkingTree: boolean,
 ): ChangeIntent | undefined {
   const lifecycle = lifecycleFromCodeSignals(codeSignals);
@@ -412,11 +464,17 @@ function buildDiffOnlyIntent(
     return undefined;
   }
   const files = uniqueStrings(codeSignals.map((signal) => signal.file)).slice(0, maxIntentFiles);
-  const titleSubject = humanizeIdentifier(path.basename(files[0] ?? "working tree change").replace(/\.[^.]+$/, ""));
+  const titleSubject = diffIntentSubject(files[0]);
   const title = `${titleSubject} ${includesWorkingTree ? "working-tree" : "changed"} behavior`;
-  const evidence = uniqueEvidence(codeSignals.slice(0, 12).map((signal) => signal.evidence));
+  const evidence = uniqueEvidence([
+    ...codeSignals.slice(0, 16).map((signal) => signal.evidence),
+    ...selectRiskEvidence(riskEvidence, 24),
+  ]);
   const id = stableId("intent", `${includesWorkingTree ? "working-tree" : "diff"}:${files.join(":")}`);
-  const keywords = extractKeywords(codeSignals.map((signal) => `${signal.symbol} ${signal.label}`).join(" "));
+  const keywords = extractKeywords([
+    ...codeSignals.map((signal) => `${signal.symbol} ${signal.label}`),
+    ...riskEvidence.map((item) => `${item.symbol ?? ""} ${item.value}`),
+  ].join(" "));
   return {
     id,
     title,
@@ -434,13 +492,28 @@ function buildDiffOnlyIntent(
   };
 }
 
+function diffIntentSubject(file: string | undefined): string {
+  if (!file) return "Working tree";
+  const extensionless = path.basename(file).replace(/\.[^.]+$/, "");
+  const subject = /^(?:index|page|route)$/i.test(extensionless)
+    ? path.basename(path.dirname(file))
+    : extensionless;
+  return humanizeIdentifier(subject || "changed behavior");
+}
+
 function selectIntentFiles(
   keywords: string[],
   changedFiles: string[],
   addedDiffText: Record<string, string>,
   clusterCount: number,
+  commitFiles: string[],
 ): string[] {
   const behaviorFiles = changedFiles.filter(isBehaviorBearingFile);
+  const changedSet = new Set(behaviorFiles);
+  const commitChangedFiles = commitFiles.filter((file) => changedSet.has(file));
+  if (commitChangedFiles.length > 0) {
+    return commitChangedFiles.slice(0, maxIntentFiles);
+  }
   if (clusterCount === 1) {
     return behaviorFiles.slice(0, maxIntentFiles);
   }
@@ -448,7 +521,7 @@ function selectIntentFiles(
     const searchable = `${file} ${addedDiffText[file] ?? ""}`.toLowerCase();
     return keywords.some((keyword) => searchable.includes(keyword));
   });
-  return (matched.length > 0 ? matched : behaviorFiles).slice(0, maxIntentFiles);
+  return matched.slice(0, maxIntentFiles);
 }
 
 function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]): BehaviorLifecycleStage[] {
@@ -480,11 +553,7 @@ function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]):
     }
   }
 
-  const existingKinds = new Set(stages.map((stage) => stage.kind));
   for (const signal of signals) {
-    if (stages.length >= maxLifecycleStages) {
-      break;
-    }
     if (isImplementationOnlyLifecycleStep(`${signal.label} ${signal.symbol}`)) {
       continue;
     }
@@ -496,17 +565,47 @@ function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]):
       continue;
     }
     stages.push(createLifecycleStage(signal.kind, signal.label, "medium", [signal.evidence], [signal.file]));
-    existingKinds.add(signal.kind);
   }
 
-  return orderLifecycleStages(uniqueLifecycleStages(stages)).slice(0, maxLifecycleStages);
+  return limitLifecycleStages(stages);
 }
 
 function lifecycleFromCodeSignals(signals: CodeBehaviorSignal[]): BehaviorLifecycleStage[] {
   const stages = signals
     .filter((signal) => !isImplementationOnlyLifecycleStep(`${signal.label} ${signal.symbol}`))
     .map((signal) => createLifecycleStage(signal.kind, signal.label, "low", [signal.evidence], [signal.file]));
-  return orderLifecycleStages(uniqueLifecycleStages(stages)).slice(0, maxLifecycleStages);
+  return limitLifecycleStages(stages);
+}
+
+function limitLifecycleStages(stages: BehaviorLifecycleStage[]): BehaviorLifecycleStage[] {
+  const unique = uniqueLifecycleStages(stages);
+  const selected: BehaviorLifecycleStage[] = [];
+  const selectedIds = new Set<string>();
+  const orderedKinds: BehaviorLifecycleStageKind[] = [
+    "trigger",
+    "condition",
+    "action",
+    "state-change",
+    "side-effect",
+    "observable-outcome",
+  ];
+
+  // Large UI files can expose dozens of click handlers before a later service
+  // contributes the state change or observable outcome. Preserve lifecycle
+  // diversity before filling the remaining budget in source order.
+  for (const kind of orderedKinds) {
+    for (const stage of unique.filter((candidate) => candidate.kind === kind).slice(0, 2)) {
+      selected.push(stage);
+      selectedIds.add(stage.id);
+    }
+  }
+  for (const stage of unique) {
+    if (selected.length >= maxLifecycleStages) break;
+    if (selectedIds.has(stage.id)) continue;
+    selected.push(stage);
+  }
+
+  return orderLifecycleStages(selected).slice(0, maxLifecycleStages);
 }
 
 function createLifecycleStage(
@@ -597,6 +696,24 @@ function buildIntentQaScenarios(
     ], ["Removed validation", "Unauthorized access", "Alternative entry point"], removedAccessGuardEvidence));
   }
 
+  const changedAccessEvidence = evidence.filter((item) =>
+    item.kind === "diff" &&
+    item.side === "head" &&
+    item.relation === "direct" &&
+    /public access|protected access|unauthenticated|authentication boundary/i.test(item.value)
+  );
+  if (changedAccessEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "access-boundary", "failure", "recommended", "Public and protected entry access", [
+      "Prepare authenticated and unauthenticated sessions for every changed entry path.",
+    ], [
+      "Open each changed public path without a session and repeat with an authenticated session.",
+      "Open the matching protected path without a session.",
+    ], [
+      "Verify public pages and their required assets remain available without authentication.",
+      "Verify protected pages still require the intended authentication boundary.",
+    ], ["Public asset request", "Expired session", "Direct protected deep link"], changedAccessEvidence));
+  }
+
   const changedConditionEvidence = scenarioEvidenceFor(
     lifecycle,
     evidence,
@@ -621,7 +738,44 @@ function buildIntentQaScenarios(
     item.startLine !== undefined &&
     /urlsearchparams|searchparams|query|location\.href|window\.location|destination|redirect/i.test(`${item.symbol ?? ""} ${item.value}`)
   );
-  if (destinationParameterEvidence.length > 0) {
+  const queryEvidenceByKey = new Map<string, ChangeIntentEvidence[]>();
+  for (const item of destinationParameterEvidence) {
+    if (item.side && item.side !== "head") continue;
+    const key = item.value.match(/query parameter "([^"]+)"/i)?.[1];
+    if (!key) continue;
+    const items = queryEvidenceByKey.get(key) ?? [];
+    items.push(item);
+    queryEvidenceByKey.set(key, items);
+  }
+  const synchronizedQueryKeys = [...queryEvidenceByKey.entries()]
+    .filter(([, items]) =>
+      items.some((item) => /\breads query parameter\b/i.test(item.value)) &&
+      items.some((item) => /\b(?:writes|removes) query parameter\b/i.test(item.value))
+    )
+    .map(([key]) => key);
+  if (synchronizedQueryKeys.length > 0) {
+    const synchronizedFiles = new Set(synchronizedQueryKeys.flatMap((key) =>
+      (queryEvidenceByKey.get(key) ?? []).map((item) => item.file).filter((file): file is string => Boolean(file))
+    ));
+    const urlStateEvidence = uniqueEvidence([
+      ...synchronizedQueryKeys.flatMap((key) => queryEvidenceByKey.get(key) ?? []),
+      ...evidence.filter((item) =>
+        item.side === "head" &&
+        Boolean(item.file && synchronizedFiles.has(item.file)) &&
+        /allowed UI state values/i.test(item.value)
+      ),
+    ]);
+    scenarios.push(makeScenario(intentId, "url-backed-state", "state-transition", "recommended", "URL-backed state restoration and fallback", [
+      `Prepare valid, missing, and invalid values for ${synchronizedQueryKeys.map((key) => `"${key}"`).join(", ")}.`,
+    ], [
+      "Open the affected surface directly with each valid URL-backed state and reload it.",
+      "Change the state through the UI, return to the default state, and then open an invalid value.",
+    ], [
+      "Verify direct entry and reload restore the selected state while UI changes update the URL.",
+      "Verify the default state removes optional URL state and invalid values fall back safely.",
+    ], ["Missing parameter", "Invalid value", "Reload", "Back and forward navigation"], urlStateEvidence));
+  }
+  if (destinationParameterEvidence.length > 0 && synchronizedQueryKeys.length === 0) {
     scenarios.push(makeScenario(intentId, "destination-parameters", "boundary", "recommended", "Destination path and query parameters", [
       "Prepare representative identifiers and conditionally included destination parameters.",
     ], [
@@ -693,6 +847,75 @@ function buildIntentQaScenarios(
     ], ["Unauthorized", "Timeout", "Server error", "Duplicate retry"], scenarioEvidenceFor(lifecycle, evidence, /fetch|request|network|endpoint|api|mutation|response|timeout/i)));
   }
 
+  const shareEvidence = scenarioEvidenceFor(
+    lifecycle,
+    evidence,
+    /navigator\.share|navigator\.clipboard|\bclipboard\b|\baborterror\b|(?:^|[\s.])(?:share|copy)(?:\s|\(|\.|$)/i,
+  );
+  if (hasActionableLocatedDiffEvidence(shareEvidence)) {
+    scenarios.push(makeScenario(intentId, "share-fallback", "failure", "recommended", "Share completion, cancellation, and fallback", [
+      "Prepare a device with native sharing, a cancelled share, and an environment without native sharing.",
+    ], [
+      "Trigger the changed share action in each capability state.",
+      "Inspect the exact destination passed to native sharing or the fallback clipboard action.",
+    ], [
+      "Verify completion feedback appears only after a completed share or successful fallback.",
+      "Verify cancellation stays silent and fallback copies the intended canonical destination without leaking unrelated context.",
+    ], ["User cancels the share sheet", "Native sharing unavailable", "Clipboard write fails", "Unrelated query context"], shareEvidence));
+  }
+
+  const mediaEvidence = scenarioEvidenceFor(
+    lifecycle,
+    evidence,
+    /<audio\b|<video\b|\bhtmlmediaelement\b|(?:^|[\s.])(?:audio|video|media|play|pause|ended|currenttime)(?:\s|\(|\.|$)/i,
+  );
+  if (hasActionableLocatedDiffEvidence(mediaEvidence)) {
+    scenarios.push(makeScenario(intentId, "media-state", "state-transition", "recommended", "Media start, stop, completion, and restart state", [
+      "Prepare a loadable media source and a blocked or failed playback state.",
+    ], [
+      "Start playback, stop it, start again, and let it reach completion.",
+      "Repeat when playback is rejected or the media cannot load.",
+    ], [
+      "Verify visible controls reflect the real playback state after every transition.",
+      "Verify completion and failure leave the control in a recoverable state without duplicate playback.",
+    ], ["Playback permission rejected", "Media load failure", "Repeated start", "Natural completion"], mediaEvidence));
+  }
+
+  const availabilityEvidence = evidence.filter((item) =>
+    item.kind === "diff" &&
+    item.side === "head" &&
+    item.relation === "direct" &&
+    /availability window|exposure window|expiry boundary/i.test(item.value)
+  );
+  if (availabilityEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "availability-window", "boundary", "recommended", "Availability window boundaries", [
+      "Prepare times immediately before, at, during, and immediately after the changed availability window.",
+    ], [
+      "Enter the affected surface at each boundary time.",
+      "Repeat through direct navigation and the normal product entry point.",
+    ], [
+      "Verify the feature is unavailable before the start and after the end.",
+      "Verify the feature is available at the documented inclusive boundaries without timezone drift.",
+    ], ["One second before start", "Exact start", "Exact end", "One second after end", "Timezone offset"], availabilityEvidence));
+  }
+
+  const scopedStorageEvidence = scenarioEvidenceFor(
+    lifecycle,
+    evidence,
+    /sessionstorage|localstorage|\.setitem|\.removeitem|persisted context/i,
+  );
+  if (scopedStorageEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "scoped-storage", "state-transition", "recommended", "Scoped persisted context isolation and cleanup", [
+      "Prepare two distinct entity or user contexts plus invalid and stale stored data.",
+    ], [
+      "Capture context for the first identity, then enter and complete the second identity flow.",
+      "Complete the matching first flow and re-enter it afterward.",
+    ], [
+      "Verify stored context is consumed only by its matching identity and malformed data is ignored safely.",
+      "Verify successful completion clears only the matching context and stale context cannot leak into a later flow.",
+    ], ["Mismatched identity", "Malformed storage", "Repeated completion", "Second tab or re-entry"], scopedStorageEvidence));
+  }
+
   if (/sync|persist|storage|cache|reload|re.?entry|save|store/.test(searchable)) {
     scenarios.push(makeScenario(intentId, "state-reentry", "state-transition", "recommended", "Re-entry and stale state recovery", [
       "Prepare current and stale persisted state.",
@@ -705,7 +928,7 @@ function buildIntentQaScenarios(
     ], ["Stale cache", "App restart", "Repeated synchronization"], scenarioEvidenceFor(lifecycle, evidence, /sync|persist|storage|cache|reload|re.?entry|save|store/i)));
   }
 
-  return rankIntentQaScenarios(uniqueScenarios(scenarios)).slice(0, 5);
+  return rankIntentQaScenarios(uniqueScenarios(scenarios)).slice(0, maxQaScenariosPerIntent);
 }
 
 function lifecycleEvidence(
@@ -854,7 +1077,42 @@ function collectCodeBehaviorSignals(
     }
     collectCodeBehaviorSignalsFromText(signals, file, text);
   }
-  return uniqueCodeSignals(signals).slice(0, maxSignals);
+  return selectCodeSignals(signals);
+}
+
+function selectCodeSignals(signals: CodeBehaviorSignal[]): CodeBehaviorSignal[] {
+  const unique = uniqueCodeSignals(signals);
+  const selected: CodeBehaviorSignal[] = [];
+  const selectedKeys = new Set<string>();
+  const files = uniqueStrings(unique.map((signal) => signal.file));
+  const kinds: BehaviorLifecycleStageKind[] = [
+    "trigger",
+    "condition",
+    "state-change",
+    "side-effect",
+    "observable-outcome",
+    "action",
+  ];
+
+  // Give every changed behavior file a chance to contribute each lifecycle
+  // kind before a single large component consumes the global signal budget.
+  for (const file of files) {
+    for (const kind of kinds) {
+      const signal = unique.find((candidate) => candidate.file === file && candidate.kind === kind);
+      if (!signal) continue;
+      const key = `${signal.kind}:${signal.file}:${signal.symbol}`;
+      selected.push(signal);
+      selectedKeys.add(key);
+      if (selected.length >= maxSignals) return selected;
+    }
+  }
+  for (const signal of unique) {
+    const key = `${signal.kind}:${signal.file}:${signal.symbol}`;
+    if (selectedKeys.has(key)) continue;
+    selected.push(signal);
+    if (selected.length >= maxSignals) break;
+  }
+  return selected;
 }
 
 function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIntentEvidence[] {
@@ -882,26 +1140,111 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
           const routingMatch = line.text.match(
             /(payload|deep.?link|destination|redirect|router\.push|navigate\w*|URLSearchParams|searchParams|location\.href|window\.location)/i,
           );
-          if (routingMatch && !/navigation\.setoptions/i.test(line.text)) {
+          const queryOperation = line.text.match(
+            /\b((?:params|queryParams|searchParams)|[A-Za-z_$][\w$]*\.searchParams)\.(get|set|delete)\(\s*["'`]([^"'`]+)["'`]/i,
+          );
+          if ((routingMatch || queryOperation) && !/navigation\.setoptions/i.test(line.text)) {
+            const queryDescription = queryOperation
+              ? `${side === "base" ? "Removed" : "Changed"} line ${queryOperation[2] === "get" ? "reads" : queryOperation[2] === "set" ? "writes" : "removes"} query parameter "${queryOperation[3]}".`
+              : `${side === "base" ? "Removed" : "Changed"} line contains entry or routing evidence for ${routingMatch![1]}.`;
             evidence.push(diffRiskEvidence(
               file,
               hunk,
               line.line,
-              routingMatch[1],
-              `${side === "base" ? "Removed" : "Changed"} line contains entry or routing evidence for ${routingMatch[1]}.`,
+              queryOperation ? `${queryOperation[1]}.${queryOperation[2]}(${queryOperation[3]})` : routingMatch![1],
+              queryDescription,
               side,
             ));
+          }
+          const allowedStateMatch = line.text.match(
+            /\b(?:const|function)\s+([A-Za-z_$][\w$]*)[^=]*=(?:[^=]|=(?!=))*?\b([A-Za-z_$][\w$]*)\s*===\s*["'`]([^"'`]+)["'`](?:\s*\|\|\s*\2\s*===\s*["'`]([^"'`]+)["'`])+/,
+          );
+          if (allowedStateMatch) {
+            const values = uniqueStrings([...line.text.matchAll(/===\s*["'`]([^"'`]+)["'`]/g)].map((match) => match[1]));
+            if (values.length > 1) {
+              evidence.push(diffRiskEvidence(
+                file,
+                hunk,
+                line.line,
+                allowedStateMatch[1],
+                `${side === "base" ? "Removed" : "Changed"} line declares allowed UI state values: ${values.join(", ")}.`,
+                side,
+              ));
+            }
           }
           const guardMatch = line.text.match(
             /(guard\w*|validat\w*|permission\w*|authoriz\w*|authenticat\w*|isAllowed|isDenied|protected)/i,
           );
-          if (side === "base" && guardMatch) {
+          if (guardMatch) {
             evidence.push(diffRiskEvidence(
               file,
               hunk,
               line.line,
               guardMatch[1],
-              `Removed line contains guard or validation evidence for ${guardMatch[1]}.`,
+              `${side === "base" ? "Removed" : "Changed"} line contains guard or validation evidence for ${guardMatch[1]}.`,
+              side,
+            ));
+          }
+          const accessMatch = line.text.match(
+            /(PUBLIC_[A-Z0-9_]*(?:PATH|ROUTE|ASSET)|(?:unauthenticated|public|protected)[A-Za-z0-9_]*(?:Path|Route|Asset)|NextResponse\.next|login redirect)/,
+          );
+          if (accessMatch) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              accessMatch[1],
+              `${side === "base" ? "Removed" : "Changed"} line contains ${/public|nextresponse\.next/i.test(accessMatch[1]) ? "public access" : "protected access"} boundary evidence for ${accessMatch[1]}.`,
+              side,
+            ));
+          }
+          const availabilityMatch = line.text.match(
+            /\b(startAt|endAt|startsAt|endsAt|availableFrom|availableUntil|expiresAt|exposureWindow|availabilityWindow)\b/i,
+          );
+          if (availabilityMatch) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              availabilityMatch[1],
+              `${side === "base" ? "Removed" : "Changed"} line contains availability window or expiry boundary evidence for ${availabilityMatch[1]}.`,
+              side,
+            ));
+          }
+          const storageMatch = line.text.match(
+            /(sessionStorage|localStorage|AsyncStorage|\.setItem\b|\.removeItem\b)/i,
+          );
+          if (storageMatch) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              storageMatch[1],
+              `${side === "base" ? "Removed" : "Changed"} line contains persisted context lifecycle evidence for ${storageMatch[1]}.`,
+              side,
+            ));
+          }
+          const shareSymbol = sharingCapabilitySymbol(line.text);
+          if (shareSymbol) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              shareSymbol,
+              `${side === "base" ? "Removed" : "Changed"} line contains sharing capability or fallback evidence for ${shareSymbol}.`,
+              side,
+            ));
+          }
+          const mediaMatch = line.text.match(
+            /(<audio\b|<video\b|\.play\b|\.pause\b|\bended\b|currentTime)/i,
+          );
+          if (mediaMatch) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              mediaMatch[1],
+              `${side === "base" ? "Removed" : "Changed"} line contains media state transition evidence for ${mediaMatch[1]}.`,
               side,
             ));
           }
@@ -910,6 +1253,42 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
     }
   }
   return uniqueEvidence(evidence);
+}
+
+function sharingCapabilitySymbol(text: string): string | undefined {
+  if (/^\s*import\b/.test(text)) {
+    return undefined;
+  }
+  const match = text.match(
+    /(navigator\.share|navigator\.clipboard|clipboard\.writeText|document\.execCommand\s*\(\s*["']copy["']|AbortError|(?:^|[.\s])(share|copy)\s*\()/i,
+  );
+  return match?.[1]?.trim().replace(/^\./, "") || match?.[2];
+}
+
+function selectRiskEvidence(evidence: ChangeIntentEvidence[], limit: number): ChangeIntentEvidence[] {
+  const unique = uniqueEvidence(evidence);
+  const selected: ChangeIntentEvidence[] = [];
+  const selectedKeys = new Set<string>();
+  const files = uniqueStrings(unique.map((item) => item.file ?? "").filter(Boolean));
+
+  for (const file of files) {
+    const item = unique.find((candidate) => candidate.file === file);
+    if (!item) continue;
+    selected.push(item);
+    selectedKeys.add(evidenceSelectionKey(item));
+    if (selected.length >= limit) return selected;
+  }
+  for (const item of unique) {
+    const key = evidenceSelectionKey(item);
+    if (selectedKeys.has(key)) continue;
+    selected.push(item);
+    if (selected.length >= limit) break;
+  }
+  return selected;
+}
+
+function evidenceSelectionKey(evidence: ChangeIntentEvidence): string {
+  return `${evidence.file ?? ""}:${evidence.side ?? ""}:${evidence.startLine ?? ""}:${evidence.symbol ?? ""}:${evidence.value}`;
 }
 
 function diffRiskEvidence(
@@ -944,6 +1323,19 @@ function collectCodeBehaviorSignalsFromText(
   for (const match of text.matchAll(/(?:@click(?:\.\w+)*|v-on:click(?:\.\w+)*|onClick)\s*=\s*(?:["']|\{)\s*(?:this\.)?([A-Za-z_$][\w$]*)/g)) {
     const symbol = match[1];
     const label = `Trigger ${humanizeIdentifier(symbol)}.`;
+    signals.push({
+      kind: "trigger",
+      label,
+      file,
+      symbol,
+      evidence: codeSignalEvidence(label, file, symbol, hunk, line),
+    });
+  }
+  for (const match of text.matchAll(
+    /\b(?:onClick|onPress|onSubmit|onChange|onEnded)\s*=\s*\{\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)?\s*=>\s*(?:\{[^}\n]*?)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/g,
+  )) {
+    const symbol = match[1];
+    const label = `Trigger ${humanizeIdentifier(symbol.split(".").at(-1) ?? symbol)}.`;
     signals.push({
       kind: "trigger",
       label,
@@ -1000,7 +1392,7 @@ function collectCodeBehaviorSignalsFromText(
       evidence: codeSignalEvidence(label, file, symbol, hunk, line),
     });
   }
-  for (const match of text.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)?)\s*\(/g)) {
+  for (const match of text.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*\(/g)) {
     const symbol = match[1];
     const prefix = text.slice(0, match.index ?? 0);
     if (/\b(?:function|class)\s+$/.test(prefix)) {
@@ -1048,21 +1440,24 @@ function codeSignalEvidence(
 
 function lifecycleKindForIdentifier(identifier: string): BehaviorLifecycleStageKind | undefined {
   const value = identifier.toLowerCase();
-  if (/^(?:on|handle)(?:press|click|submit|change|complete|open|response|message|select|toggle)/.test(value)) {
+  const leaf = identifier.split(".").at(-1) ?? identifier;
+  const leafValue = leaf.toLowerCase();
+  if (/^(?:on|handle)(?:press|click|submit|change|complete|open|response|message|select|toggle)/.test(leafValue)) {
     return "trigger";
   }
-  if (/(?:navigate|redirect|router\.(?:push|replace)|openurl|openlink|show|display|preview|render)/.test(value)) {
+  if (/(?:navigate|redirect|router\.(?:push|replace)|openurl|openlink)/.test(value) || /(?:show|display|preview|render)/.test(leafValue)) {
     return "observable-outcome";
   }
-  if (/(?:resync|sync|persist|store|save|update|set[A-Z_]|cache|write|delete|remove|cancel|invalidate)/i.test(identifier)) {
+  if (/(?:sessionstorage|localstorage|asyncstorage)/.test(value) ||
+    /^(?:resync|sync|persist|store|save|update|set[A-Z_]|cache|write|delete|remove|clear|reset|cancel|invalidate|pause)/i.test(leaf)) {
     return "state-change";
   }
-  if (/(?:schedule|notify|notification|request|fetch|mutate|post|send|emit|track|publish|upload|download)/.test(value)) {
+  if (/(?:clipboard)/.test(value) || /(?:schedule|notify|notification|request|fetch|mutate|post|send|emit|track|publish|upload|download|share|copy|play)/.test(leafValue)) {
     return "side-effect";
   }
   if (
-    /(?:permission|authorized|authenticated|enabled|disabled|validate|guard)/i.test(identifier) ||
-    /^(?:is|has|can|should|show|hide)[A-Z_]/.test(identifier)
+    /(?:permission|authorized|authenticated|enabled|disabled|validate|guard)/i.test(leaf) ||
+    /^(?:is|has|can|should|show|hide)[A-Z_]/.test(leaf)
   ) {
     return "condition";
   }
@@ -1224,7 +1619,8 @@ function isBehaviorBearingFile(file: string): boolean {
   return !(
     /(?:^|\/)(?:docs?|test|tests|__tests__|fixtures?|snapshots?|coverage|dist|build)\//i.test(file) ||
     /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|CHANGELOG\.md|README\.md)$/i.test(file) ||
-    /\.(?:md|mdx|snap|map)$/i.test(file)
+    /\.(?:md|mdx|snap|map)$/i.test(file) ||
+    /\.(?:avif|bmp|gif|ico|jpe?g|png|webp|svg|mp3|m4a|ogg|wav|woff2?|ttf|otf|eot|pdf|zip|gz|br)$/i.test(file)
   );
 }
 
