@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import ts from "typescript";
 import { analyzeChangeIntents } from "../dist/change-intent.js";
 import { generateE2eDraft, generateE2ePlan } from "../dist/e2e.js";
 import { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "../dist/qa.js";
@@ -232,6 +233,150 @@ test("change intent keeps unrelated feature commits separate", async (t) => {
   assert.ok(analysis.intents.every((intent) => intent.files.length === 1));
 });
 
+test("a broad conventional scope does not merge unrelated product intents", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/share.ts", "export const shareState = 'idle';\n");
+  await write(root, "src/preferences.ts", "export const timezone = 'UTC';\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/web-bundle");
+
+  await write(root, "src/share.ts", "export function shareReport() { return navigator.share({ url: '/report' }); }\n");
+  commit(root, "feat(web): share the current report");
+  await write(root, "src/preferences.ts", "export function saveTimezone() { return persistTimezone('UTC'); }\n");
+  commit(root, "feat(web): save account timezone preferences");
+
+  const analysis = await analyze(root, ["src/share.ts", "src/preferences.ts"]);
+
+  assert.equal(analysis.intents.length, 2);
+  assert.ok(analysis.intents.some((intent) => /Share the current report/i.test(intent.title)));
+  assert.ok(analysis.intents.some((intent) => /Save account timezone preferences/i.test(intent.title)));
+});
+
+test("a related feature title remains primary when an earlier fix shares its diff", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/review.tsx", "export function Review() { return null; }\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/review-view");
+
+  await write(root, "src/review.tsx", "export function Review() { return <main>Ready</main>; }\n");
+  commit(root, "fix(web): prepare review UI artifacts");
+  await write(
+    root,
+    "src/review.tsx",
+    "export function Review() { const [view, setView] = useState('compare'); return <button onClick={() => setView('usage')}>{view}</button>; }\n",
+  );
+  commit(root, "feat(web): add component review view");
+
+  const analysis = await analyze(root, ["src/review.tsx"]);
+
+  assert.equal(analysis.intents.length, 1);
+  assert.match(analysis.intents[0].title, /Add component review view/i);
+  assert.equal(analysis.intents[0].commits.length, 2);
+});
+
+test("behavior hidden in a chore commit remains covered beside a feature intent", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/share.ts", "export const shareState = 'idle';\n");
+  await write(root, "src/pages/public-entry.tsx", "export function PublicEntry() { return null; }\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/mixed-release");
+
+  await write(
+    root,
+    "src/share.ts",
+    "export async function shareReport() { await navigator.share({ url: '/report' }); showToast('Shared'); }\n",
+  );
+  commit(root, "feat: share the current report");
+
+  await write(
+    root,
+    "src/pages/public-entry.tsx",
+    [
+      "export function PublicEntry({ router, ready }) {",
+      "  function openPublicEntry() {",
+      "    if (!ready) return;",
+      "    window.sessionStorage.setItem('public-entry', 'opened');",
+      "    router.push('/public/entry');",
+      "    showToast('Public entry opened');",
+      "  }",
+      "  return <button onClick={openPublicEntry}>Open public entry</button>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "chore(web): prepare 3.0.0 release");
+
+  const analysis = await analyze(root, ["src/share.ts", "src/pages/public-entry.tsx"]);
+
+  assert.equal(analysis.source, "commits-and-diff");
+  assert.equal(analysis.intents.length, 2);
+  assert.ok(analysis.intents.some((intent) => intent.commits.length > 0 && intent.files.includes("src/share.ts")));
+  assert.ok(analysis.intents.some((intent) =>
+    intent.commits.length === 0 && intent.files.includes("src/pages/public-entry.tsx")
+  ));
+});
+
+test("static assets do not crowd behavior source out of commit intent evidence", async (t) => {
+  const root = await makeRepo(t);
+  const assetFiles = Array.from({ length: 24 }, (_, index) => `public/preview/asset-${index}.svg`);
+  for (const file of assetFiles) {
+    await write(root, file, `<svg><title>${file}</title></svg>\n`);
+  }
+  await write(root, "src/pages/preview.tsx", "export function Preview() { return null; }\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/public-preview");
+  for (const [index, file] of assetFiles.entries()) {
+    await write(root, file, `<svg><title>updated-${index}</title></svg>\n`);
+  }
+  await write(
+    root,
+    "src/pages/preview.tsx",
+    [
+      "export function Preview({ router }) {",
+      "  async function handleShare() { await navigator.share({ url: '/public/preview' }); }",
+      "  function openPreview() { router.push('/public/preview'); showToast('Preview opened'); }",
+      "  return <button onClick={openPreview}>Open preview</button>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "feat: open the public preview after sharing");
+
+  const analysis = await analyze(root, [...assetFiles, "src/pages/preview.tsx"]);
+  const intent = analysis.intents[0];
+
+  assert.ok(intent.files.includes("src/pages/preview.tsx"));
+  assert.equal(intent.files.some((file) => file.endsWith(".svg")), false);
+  assert.ok(intent.evidence.some((item) => item.kind === "diff" && item.file === "src/pages/preview.tsx"));
+});
+
+test("share icons and playground names do not fabricate share or media lifecycle QA", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/playground.tsx", "export function Playground() { return null; }\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/component-review");
+  await write(
+    root,
+    "src/playground.tsx",
+    [
+      "import { Share } from './icons';",
+      "export function PlaygroundReview() {",
+      "  const [view, setView] = useState('preview');",
+      "  return <main>",
+      "    <button onClick={() => setView('usage')}>Usage review</button>",
+      "    <IconButton icon={<Share />} aria-label='Share icon preview' />",
+      "    <p>{view}</p>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "feat: add playground component review view");
+
+  const analysis = await analyze(root, ["src/playground.tsx"]);
+  const titles = analysis.intents.flatMap((intent) => intent.scenarios.map((scenario) => scenario.title));
+
+  assert.equal(titles.some((title) => /Share completion/i.test(title)), false);
+  assert.equal(titles.some((title) => /Media start/i.test(title)), false);
+});
+
 test("change intent ignores release-only commit metadata", async (t) => {
   const root = await makeRepo(t);
   await write(root, "package.json", '{"name":"fixture","version":"1.0.0"}\n');
@@ -335,6 +480,177 @@ test("change intent falls back to committed diff signals when commit text is not
   assert.ok(networkScenario);
   assert.equal(routeQaScenario(networkScenario).decision, "recommended");
   assert.equal(intent.scenarios.some((scenario) => /entry payload/i.test(scenario.title)), false);
+});
+
+test("release-shaped web changes recover diff-first sharing, access, time, media, and storage QA", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({ scripts: { dev: "vite" }, dependencies: { react: "19.0.0", vite: "7.0.0" } }),
+  );
+  await write(root, "src/components/PreviewLanding/index.tsx", "export function PreviewLanding() { return null; }\n");
+  await write(root, "src/lib/availability.ts", "export const isAvailable = () => false;\n");
+  await write(root, "src/lib/scopedContext.ts", "export const captureContext = () => {};\n");
+  await write(root, "src/middleware.ts", "export function middleware() { return requireLogin(); }\n");
+  await write(root, "src/pages/public/preview.tsx", "export function PublicPreview() { return null; }\n");
+  commit(root, "benchmark baseline");
+  branch(root, "chore/web-release");
+
+  await write(
+    root,
+    "src/components/PreviewLanding/index.tsx",
+    [
+      "export function PreviewLanding({ onOpen }) {",
+      "  const audioRef = useRef(null);",
+      "  async function handleShare() {",
+      "    try {",
+      "      await navigator.share({ url: getCanonicalShareUrl(window.location.origin) });",
+      "    } catch {",
+      "      await navigator.clipboard.writeText(getCanonicalShareUrl(window.location.origin));",
+      "    }",
+      "  }",
+      "  async function handlePlayback() {",
+      "    if (audioRef.current?.paused) await audioRef.current.play();",
+      "    else audioRef.current?.pause();",
+      "  }",
+      "  function resetPlayback() { audioRef.current.currentTime = 0; }",
+      "  return <main>",
+      "    <audio ref={audioRef} onEnded={() => resetPlayback()} />",
+      "    <button onClick={handlePlayback}>Preview audio</button>",
+      "    <button onClick={handleShare}>Share preview</button>",
+      "    <button onClick={() => onOpen('preview')}>Open preview</button>",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "src/lib/availability.ts",
+    [
+      "export const PREVIEW_WINDOW = {",
+      "  startAt: '2026-08-01T00:00:00Z',",
+      "  endAt: '2026-08-31T23:59:59Z',",
+      "};",
+      "export const isAvailable = (now) => now >= Date.parse(PREVIEW_WINDOW.startAt) && now <= Date.parse(PREVIEW_WINDOW.endAt);",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "src/lib/scopedContext.ts",
+    [
+      "export function captureContext(id) { window.sessionStorage.setItem('preview-context', id); }",
+      "export function clearContext(id) {",
+      "  if (window.sessionStorage.getItem('preview-context') === id) window.sessionStorage.removeItem('preview-context');",
+      "}",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "src/middleware.ts",
+    [
+      "const PUBLIC_ASSET_PATHS = ['/preview-assets/'];",
+      "export function middleware(request) {",
+      "  if (PUBLIC_ASSET_PATHS.some((prefix) => request.path.startsWith(prefix))) return NextResponse.next();",
+      "  return requireLogin(request);",
+      "}",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "src/pages/public/preview.tsx",
+    [
+      "export function PublicPreview({ router }) {",
+      "  function openItem(id) {",
+      "    const params = new URLSearchParams({ source: 'preview' });",
+      "    router.push(`/public/items/${id}?${params.toString()}`);",
+      "  }",
+      "  return <PreviewLanding onOpen={openItem} />;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "chore(web): prepare 2.4.0 release");
+
+  const files = [
+    "src/components/PreviewLanding/index.tsx",
+    "src/lib/availability.ts",
+    "src/lib/scopedContext.ts",
+    "src/middleware.ts",
+    "src/pages/public/preview.tsx",
+  ];
+  const analysis = await analyze(root, files);
+  const intent = analysis.intents[0];
+  const titles = intent.scenarios.map((scenario) => scenario.title);
+
+  assert.equal(analysis.source, "diff-only");
+  assert.match(intent.title, /Preview Landing changed behavior/i);
+  assert.ok(titles.some((title) => /Share completion, cancellation, and fallback/i.test(title)));
+  assert.ok(titles.some((title) => /Public and protected entry access/i.test(title)), JSON.stringify(titles));
+  assert.ok(titles.some((title) => /Availability window boundaries/i.test(title)));
+  assert.ok(titles.some((title) => /Media start, stop, completion, and restart state/i.test(title)));
+  assert.ok(titles.some((title) => /Scoped persisted context isolation and cleanup/i.test(title)));
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((candidate) => candidate.intentId === intent.id);
+  assert.ok(flow);
+  assert.equal(flow.fixtureReadiness.status, "not-needed");
+  assert.ok(flow.qaScenarios.some((scenario) => /Share completion/i.test(scenario.title)));
+
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".generated-e2e" });
+  const file = draft.files.find((candidate) => candidate.source === "change-intent");
+  assert.ok(file);
+  const shareReceipt = file.scenarioAutomation.find((receipt) => /Share completion/i.test(receipt.title));
+  const mediaReceipt = file.scenarioAutomation.find((receipt) => /Media start/i.test(receipt.title));
+  assert.equal(shareReceipt?.status, "compiled");
+  assert.equal(mediaReceipt?.status, "compiled");
+  const spec = await readFile(path.join(root, file.path), "utf8");
+  assert.match(spec, /__qamapShareState/);
+  assert.match(spec, /__qamapMediaState/);
+  assert.match(spec, /qamap_probe=share-source/);
+  const transpiled = ts.transpileModule(spec, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+    reportDiagnostics: true,
+  });
+  const syntaxErrors = (transpiled.diagnostics ?? []).filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error);
+  assert.deepEqual(syntaxErrors, []);
+});
+
+test("release-shaped account changes promote located diff intent without a test runner", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({ scripts: { dev: "vite" }, dependencies: { react: "19.0.0", vite: "7.0.0" } }),
+  );
+  await write(root, "src/pages/preferences.tsx", "export function Preferences() { return null; }\n");
+  commit(root, "benchmark baseline");
+  branch(root, "chore/account-release");
+  await write(
+    root,
+    "src/pages/preferences.tsx",
+    [
+      "export function Preferences({ router }) {",
+      "  function savePreferences() {",
+      "    window.localStorage.setItem('timezone', 'UTC');",
+      "    showToast('Preferences saved');",
+      "    router.replace('/account?tab=preferences');",
+      "  }",
+      "  return <button onClick={() => savePreferences()}>Save preferences</button>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "chore: prepare account release");
+
+  const analysis = await analyze(root, ["src/pages/preferences.tsx"]);
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((candidate) => candidate.intentId === analysis.intents[0]?.id);
+
+  assert.equal(analysis.source, "diff-only");
+  assert.equal(analysis.intents.length, 1);
+  assert.ok(flow);
+  assert.equal(flow.intentConfidence, "low");
+  assert.equal(flow.fixtureReadiness.status, "not-needed");
+  assert.ok(flow.qaScenarios.some((scenario) => /persisted context|re-entry/i.test(scenario.title)));
 });
 
 test("E2E planning promotes commit intent before runner-specific draft generation", async (t) => {
@@ -731,6 +1047,77 @@ test("React conditional UI produces state QA from changed behavior evidence", as
   const spec = await readFile(path.join(root, file.path), "utf8");
   assert.match(spec, /page\.getByRole\("button", \{ name: "Send notification" \}\)\.click\(\)/);
   assert.match(spec, /page\.getByText\("Notification queued"\)/);
+});
+
+test("URL-backed UI modes become restoration QA with representative controls", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite" },
+      dependencies: { react: "19.0.0", vite: "7.0.0" },
+    }),
+  );
+  await write(
+    root,
+    "src/pages/review.tsx",
+    "export function ReviewPage() { return <main><h1>Component review</h1></main>; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/review-modes");
+
+  await write(
+    root,
+    "src/pages/review.tsx",
+    [
+      "const isMode = (value) => value === 'preview' || value === 'compare' || value === 'usage';",
+      "const modes = [",
+      "  { value: 'preview', label: 'Preview' },",
+      "  { value: 'compare', label: 'Compare' },",
+      "  { value: 'usage', label: 'Usage' },",
+      "];",
+      "export function ReviewPage() {",
+      "  const [mode, setMode] = useState('preview');",
+      "  useEffect(() => {",
+      "    const params = new URLSearchParams(window.location.search);",
+      "    const requestedMode = params.get('mode');",
+      "    if (isMode(requestedMode)) setMode(requestedMode);",
+      "  }, []);",
+      "  useEffect(() => {",
+      "    const url = new URL(window.location.href);",
+      "    if (mode === 'preview') url.searchParams.delete('mode');",
+      "    else url.searchParams.set('mode', mode);",
+      "    window.history.replaceState(null, '', url);",
+      "  }, [mode]);",
+      "  return <main>",
+      "    <h1>Component review</h1>",
+      "    <Segmented options={modes} value={mode} onChange={setMode} />",
+      "    {mode === 'compare' && <h2>Compare changes</h2>}",
+      "    {mode === 'usage' && <h2>Usage examples</h2>}",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "feat: add URL-backed component review modes");
+
+  const analysis = await analyze(root, ["src/pages/review.tsx"]);
+  const urlState = analysis.intents[0].scenarios.find((scenario) => /URL-backed state restoration/i.test(scenario.title));
+  assert.ok(urlState);
+  assert.ok(urlState.evidence.some((item) => /reads query parameter "mode"/i.test(item.value)));
+  assert.ok(urlState.evidence.some((item) => /writes query parameter "mode"/i.test(item.value)));
+  assert.ok(urlState.evidence.some((item) => /removes query parameter "mode"/i.test(item.value)));
+  assert.ok(urlState.evidence.some((item) => /preview, compare, usage/i.test(item.value)));
+  assert.equal(
+    analysis.intents[0].scenarios.some((scenario) => /Destination path and query parameters/i.test(scenario.title)),
+    false,
+  );
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const selectors = plan.flows.flatMap((flow) => flow.selectors.map((selector) => selector.value));
+  assert.ok(selectors.includes("Preview"));
+  assert.ok(selectors.includes("Compare"));
+  assert.ok(selectors.includes("Usage"));
 });
 
 test("presentation-only conditions do not become lifecycle QA scenarios", async (t) => {

@@ -263,8 +263,7 @@ async function readTsconfigPaths(root: string): Promise<TsconfigPaths> {
       continue;
     }
     try {
-      const withoutComments = raw.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/,\s*([}\]])/g, "$1");
-      const parsed = JSON.parse(withoutComments) as {
+      const parsed = JSON.parse(stripJsonCommentsAndTrailingCommas(raw)) as {
         compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> };
       };
       const baseUrl = normalizeRelativePath(parsed.compilerOptions?.baseUrl ?? "");
@@ -283,6 +282,99 @@ async function readTsconfigPaths(root: string): Promise<TsconfigPaths> {
     }
   }
   return empty;
+}
+
+function stripJsonCommentsAndTrailingCommas(raw: string): string {
+  let withoutComments = "";
+  let inString = false;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index];
+    const next = raw[index + 1];
+    if (lineComment) {
+      if (char === "\n" || char === "\r") {
+        lineComment = false;
+        withoutComments += char;
+      } else {
+        withoutComments += " ";
+      }
+      continue;
+    }
+    if (blockComment) {
+      if (char === "*" && next === "/") {
+        blockComment = false;
+        withoutComments += "  ";
+        index += 1;
+      } else {
+        withoutComments += char === "\n" || char === "\r" ? char : " ";
+      }
+      continue;
+    }
+    if (inString) {
+      withoutComments += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      withoutComments += char;
+      continue;
+    }
+    if (char === "/" && next === "/") {
+      lineComment = true;
+      withoutComments += "  ";
+      index += 1;
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      blockComment = true;
+      withoutComments += "  ";
+      index += 1;
+      continue;
+    }
+    withoutComments += char;
+  }
+
+  let result = "";
+  inString = false;
+  escaped = false;
+  for (let index = 0; index < withoutComments.length; index += 1) {
+    const char = withoutComments[index];
+    if (inString) {
+      result += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      result += char;
+      continue;
+    }
+    if (char === ",") {
+      let cursor = index + 1;
+      while (/\s/.test(withoutComments[cursor] ?? "")) cursor += 1;
+      if (withoutComments[cursor] === "}" || withoutComments[cursor] === "]") {
+        continue;
+      }
+    }
+    result += char;
+  }
+  return result;
 }
 
 function resolveImportSpecifier(
