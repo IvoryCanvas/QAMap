@@ -16,6 +16,7 @@ The output should be specific enough to paste into a PR comment. This excerpt us
 # QAMap QA Draft
 
 At a Glance
+- Product QA execution: not run; static analysis and draft mapping only
 - Change intent: Submit notification preferences and show the saved state [high]
 - Behavior lifecycle: trigger: submit preferences -> state-change: update saved state -> side-effect: invoke fetch -> observable-outcome: show saved state
 - Affected behavior: Submit notification preferences and show the saved state
@@ -24,11 +25,11 @@ Change Intent Evidence
 - Commit: feat: submit notification preferences, persist the selected timezone, and show the saved state after the request completes
 - Critical scenario: Submit notification preferences and show the saved state
   - Routing: required; 3 supporting diff hunks
-  - E2E mapping: partial; steps 0/3, assertions 1/1
+  - E2E draft mapping: partially mapped (not executed); steps 0/3, assertions 1/1
   - Assert: the saved state becomes observable
 - Recommended scenario: Failure, timeout, and retry handling
   - Routing: recommended; 1 supporting diff hunk
-  - E2E mapping: not compiled; no deterministic failure compiler matched all required evidence
+  - E2E draft mapping: not mapped; no deterministic failure compiler matched all required evidence
 
 Summary
 - Project: Web
@@ -36,7 +37,7 @@ Summary
 - Manifest: not found; using repo signals and PR diff only
 - Stage: setup needed (1 of 4); readiness 37/100
 - Scenario routing: 2 required, 2 recommended, 0 review-only
-- E2E mapping: 0 compiled, 1 partial, 3 not compiled
+- E2E draft mapping: 0 fully mapped, 1 partially mapped, 3 not mapped; no tests executed
 
 PR Comment Draft
 - Affected flow: Submit notification preferences and show the saved state
@@ -50,15 +51,15 @@ Suggested E2E / QA Draft
 - Submit notification preferences.
 - Assert visible text "Preferences saved" appears.
 
-Scenario automation receipts
-- [required] Submit notification preferences and show the saved state: partial (steps 0/3, assertions 1/1)
+Scenario draft mapping receipts
+- [required] Submit notification preferences and show the saved state: partially mapped (not executed) (steps 0/3, assertions 1/1)
   - Blocker: three selected action steps remain outside executable coverage
-- [recommended] Failure, timeout, and retry handling: not compiled (steps 0/2, assertions 0/2)
+- [recommended] Failure, timeout, and retry handling: not mapped (steps 0/2, assertions 0/2)
   - Blocker: no deterministic failure compiler matched an entrypoint, action, fixture boundary, and observable outcome
 
 Missing evidence before trusting this PR
 - [required] fixture: Add deterministic fixture or mock data for /api/preferences.
-- [required] assertion: Compile required QA scenarios into executable coverage.
+- [required] assertion: Map required QA scenarios into executable draft coverage.
 
 PR checklist
 - [ ] Review the generated draft path.
@@ -66,7 +67,7 @@ PR checklist
 - [ ] Run local validation: pnpm run test:e2e
 ```
 
-The counts above describe static compilation, not execution. `compiled` means the selected steps and assertions were mapped to concrete runner code. Only an explicit validation command can turn that draft into pass or fail evidence.
+The counts above describe static draft mapping, not execution. The compatible machine value `compiled` means the selected steps and assertions were mapped to concrete runner code. Only a separate, explicit validation command can turn that draft into pass or fail evidence.
 
 If this recommendation is useful but slightly wrong, the next step is not another long AI prompt. Generate and correct repo-local QA memory:
 

@@ -750,7 +750,9 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.match(qaMarkdown, /Source: `src\/pages\/preferences\.tsx:\d+` symbol/);
   assert.match(qaMarkdown, /confidence: (?:medium|high)/);
   assert.match(qaMarkdown, /Scenario routing:/);
-  assert.match(qaMarkdown, /E2E mapping:/);
+  assert.match(qaMarkdown, /E2E draft mapping:/);
+  assert.match(qaMarkdown, /Product QA execution: not run/);
+  assert.equal(agentSummary.execution.status, "not-run");
   assert.match(qaMarkdown, /## Optional Automation/);
   assert.doesNotMatch(qaMarkdown, /Install command|First E2E Draft Bootstrap/);
   assert.match(spec, /Change intent evidence:/);
@@ -1118,6 +1120,134 @@ test("URL-backed UI modes become restoration QA with representative controls", a
   assert.ok(selectors.includes("Preview"));
   assert.ok(selectors.includes("Compare"));
   assert.ok(selectors.includes("Usage"));
+});
+
+test("QA keeps assets and fixture evidence with the owning workspace flow", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      private: true,
+      workspaces: ["apps/*"],
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      devDependencies: { "@playwright/test": "1.56.0", vite: "7.0.0" },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await write(
+    root,
+    "apps/studio/src/pages/exports.tsx",
+    "export function ExportsPage() { return <main><h1>Exports</h1></main>; }\n",
+  );
+  await write(
+    root,
+    "apps/studio/src/mocks/exportHandlers.ts",
+    [
+      'import { http, HttpResponse } from "msw";',
+      "export const exportHandlers = [",
+      '  http.get("/api/exports", () => HttpResponse.json({ exports: [] })),',
+      "];",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "apps/admin/src/features/exports/exportMock.ts",
+    "export const adminExportMock = { reports: [] };\n",
+  );
+  await write(
+    root,
+    "apps/studio/src/features/account/api/accountApi.ts",
+    "export async function loadAccount() { return apiClient.getAccount(); }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/export-share-state");
+
+  await write(
+    root,
+    "apps/studio/src/features/account/api/accountApi.ts",
+    "export async function loadAccount() { return apiClient.getAccount({ includeDetails: true }); }\n",
+  );
+  commit(root, "fix: refresh account detail request");
+
+  await write(
+    root,
+    "apps/studio/src/pages/exports.tsx",
+    [
+      'import closeIcon from "../../public/export-panel/close.svg";',
+      "export function ExportsPage() {",
+      '  const [status, setStatus] = useState("");',
+      "  async function onShare() {",
+      "    await fetch('/api/exports');",
+      "    if (navigator.share) {",
+      "      await navigator.share({ url: '/exports' });",
+      "      setStatus('Export shared');",
+      "    } else {",
+      "      await navigator.clipboard.writeText('/exports');",
+      "      setStatus('Export link copied');",
+      "    }",
+      "  }",
+      "  return <main>",
+      "    <h1>Exports</h1>",
+      '    <img src={closeIcon} alt="Close export panel" />',
+      '    <button data-testid="export-share" onClick={onShare}>Share export</button>',
+      '    <p title="event_step">{status}</p>',
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  await write(root, "apps/studio/public/export-panel/close.svg", "<svg><path d=\"M0 0L1 1\" /></svg>\n");
+  commit(root, "fix: refine export panel header and actions");
+
+  const analysis = await analyze(root, [
+    "apps/studio/src/pages/exports.tsx",
+    "apps/studio/public/export-panel/close.svg",
+  ]);
+  assert.ok(analysis.intents[0].lifecycle.some((stage) => /share/i.test(stage.label)));
+  assert.equal(analysis.intents[0].lifecycle.some((stage) => /\bon share\b/i.test(stage.label)), false);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const exportPlanFlow = plan.flows.find((flow) => flow.files.includes("apps/studio/src/pages/exports.tsx"));
+  const accountPlanFlow = plan.flows.find((flow) =>
+    flow.files.includes("apps/studio/src/features/account/api/accountApi.ts")
+  );
+  assert.ok(exportPlanFlow);
+  assert.ok(accountPlanFlow);
+  assert.equal(exportPlanFlow.fixtureReadiness.apiEndpoints.some((endpoint) => /account/i.test(endpoint)), false);
+  assert.deepEqual(accountPlanFlow.fixtureReadiness.apiEndpoints, []);
+  assert.equal(accountPlanFlow.fixtureReadiness.apiEndpoints.includes("/api/accountApi"), false);
+  assert.match(accountPlanFlow.fixtureReadiness.nextActions[0], /accountApi\.ts/);
+  assert.match(accountPlanFlow.fixtureReadiness.nextActions[0], /did not invent one/);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const markdown = formatMarkdownQaDraft(qa);
+  const agent = JSON.parse(formatAgentQaDraft(qa));
+  const primaryFlow = qa.flows.find((flow) => flow.changedFiles.includes("apps/studio/src/pages/exports.tsx"));
+
+  assert.ok(primaryFlow);
+  assert.notEqual(primaryFlow.title, "Refine export panel header and actions");
+  assert.match(primaryFlow.title, /share/i);
+  assert.ok(primaryFlow.changedFiles.includes("apps/studio/public/export-panel/close.svg"));
+  assert.equal(
+    qa.flows.some((flow) => flow.changedFiles.length > 0 && flow.changedFiles.every((file) => file.endsWith(".svg"))),
+    false,
+  );
+  assert.equal(primaryFlow.selectorHints.some((selector) => /event_step/.test(selector)), false);
+  assert.ok(
+    qa.missingEvidence.some((item) => /apps\/studio\/src\/mocks\/exportHandlers\.ts/.test(item.detail)),
+  );
+  assert.equal(
+    qa.missingEvidence.some((item) => /apps\/admin\/src\/features\/exports\/exportMock\.ts/.test(item.detail)),
+    false,
+  );
+  assert.deepEqual(qa.execution, {
+    status: "not-run",
+    performed: false,
+    scope: "static-analysis-and-draft-mapping",
+  });
+  assert.equal(agent.execution.status, "not-run");
+  assert.match(markdown, /Product QA execution: not run/i);
+  assert.doesNotMatch(markdown, /E2E mapping: \d+ compiled/);
 });
 
 test("presentation-only conditions do not become lifecycle QA scenarios", async (t) => {
