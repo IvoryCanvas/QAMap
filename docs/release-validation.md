@@ -1,8 +1,8 @@
 # Release Validation
 
-## Unreleased (0.4.5 candidate) - 2026-07-16
+## 0.4.5 - 2026-07-16
 
-Validated as a traceable-reasoning, cross-domain precision, and repository-evidence ownership candidate. QAMap now exposes one inspectable path from diff evidence to affected behavior, risk, routed QA scenario, optional artifact, and explicit non-execution. It also keeps QA routing separate from draft-mapping gaps, rejects unrelated package mocks, and maps a diff-added UI action to its observable state result:
+Validated as a traceable-reasoning, cross-domain precision, and repository-evidence ownership release. QAMap now exposes one inspectable path from diff evidence to affected behavior, risk, routed QA scenario, optional artifact, and explicit non-execution. It also keeps QA routing separate from draft-mapping gaps, rejects unrelated package mocks, and maps a diff-added UI action to its observable state result:
 
 | Gate | Current result |
 | --- | --- |
@@ -10,7 +10,7 @@ Validated as a traceable-reasoning, cross-domain precision, and repository-evide
 | `pnpm test` | 180/180 passing |
 | `pnpm scan` | 0 findings |
 | `pnpm bench:ci` | 16/16 synthetic PR targets pass across web, mobile, API, shared-component, configuration, state-transition, and test-only changes; public trace fixtures reject missing scenario paths and untraceable required scenarios |
-| Coverage | Lines 88.64%, branches 85.22%, functions 95.91% |
+| Coverage | Lines 88.64%, branches 85.30%, functions 95.91% |
 | Change Intent coverage | Lines 98.61%, branches 91.41%, functions 99.47% |
 | QA trace coverage | Lines 98.26%, branches 92.13%, functions 96.77% |
 | Reasoning path | Stable IDs connect diff source -> evidence-linked lifecycle -> risk -> routing -> optional draft; partial and review-only paths retain their gaps instead of being promoted |
@@ -19,7 +19,7 @@ Validated as a traceable-reasoning, cross-domain precision, and repository-evide
 | UI state handoff | A diff-added action selector compiles to the interaction step and repository-observed stable state copy becomes the assertion and user-facing success signal |
 | Generated action integrity | Implementation-shaped setter stages cannot compile as a second user interaction; the public record-pinning target requires exactly one mapped action and one observable assertion |
 | Workspace evidence ownership | A domain-neutral multi-app fixture keeps a changed asset and same-workspace endpoint evidence with the owning behavior flow while rejecting an unrelated sibling-app mock and unrelated same-app API client |
-| Package preview | `pnpm pack --dry-run` passes; the package version intentionally remains unchanged until release preparation |
+| Package preview | `pnpm pack --dry-run` and `npm publish --dry-run --access public` pass for `@ivorycanvas/qamap@0.4.5`; 140 files, 863.1 kB packed |
 
 Human Markdown, full JSON, compact agent JSON, and generated Playwright, Maestro, or manual drafts now share the same trace ID. This keeps the reasoning layer separate from the artifact while letting a reviewer move from generated code back to the exact change, inferred consequence, and risk that caused it to exist. A `traceable` result means the reasoning provenance is connected; it never means the target product was launched or the scenario passed.
 

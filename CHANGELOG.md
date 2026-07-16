@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.5 - 2026-07-16
+
 ### Added
 
 - Added stable QA reasoning traces that connect an exact diff source to the affected lifecycle, risk statement, routed scenario, optional draft artifact, and explicit `not-run` execution state.
