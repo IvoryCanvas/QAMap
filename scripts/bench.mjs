@@ -345,6 +345,22 @@ function evaluateContract(expect, result, plan, qa) {
       `expected at least ${expect.minMappedScenarioAssertions} mapped scenario assertion(s), got ${result.mappedScenarioAssertions}`,
     );
   }
+  if (
+    expect.minMappedScenarioSteps !== undefined &&
+    result.mappedScenarioSteps < expect.minMappedScenarioSteps
+  ) {
+    failures.push(
+      `expected at least ${expect.minMappedScenarioSteps} mapped scenario step(s), got ${result.mappedScenarioSteps}`,
+    );
+  }
+  if (
+    expect.maxMappedScenarioSteps !== undefined &&
+    result.mappedScenarioSteps > expect.maxMappedScenarioSteps
+  ) {
+    failures.push(
+      `mapped scenario steps ${result.mappedScenarioSteps} exceed ${expect.maxMappedScenarioSteps}`,
+    );
+  }
 
   if (expect.runner && result.runner !== expect.runner) {
     failures.push(`runner expected ${expect.runner}, got ${result.runner}`);

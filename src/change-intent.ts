@@ -980,6 +980,10 @@ function isConfigurationGuardEvidence(evidence: ChangeIntentEvidence): boolean {
 }
 
 function selectPrimaryLifecycleSteps(lifecycle: BehaviorLifecycleStage[]): string[] {
+  const hasCommitBackedAction = lifecycle.some((stage) =>
+    stage.kind === "action" && stage.evidence.some((item) => item.kind === "commit"),
+  );
+  const hasUserAction = lifecycle.some((stage) => stage.kind === "action");
   const limits: Partial<Record<BehaviorLifecycleStageKind, number>> = {
     trigger: 1,
     action: 1,
@@ -989,6 +993,12 @@ function selectPrimaryLifecycleSteps(lifecycle: BehaviorLifecycleStage[]): strin
   const counts = new Map<BehaviorLifecycleStageKind, number>();
   const steps: string[] = [];
   for (const stage of lifecycle) {
+    if (hasCommitBackedAction && isImplementationShapedTriggerStage(stage)) {
+      continue;
+    }
+    if (hasUserAction && isImplementationShapedStateChangeStage(stage)) {
+      continue;
+    }
     const limit = limits[stage.kind] ?? 0;
     const count = counts.get(stage.kind) ?? 0;
     if (limit === 0 || count >= limit || isImplementationOnlyLifecycleStep(stage.label)) {
@@ -1001,6 +1011,20 @@ function selectPrimaryLifecycleSteps(lifecycle: BehaviorLifecycleStage[]): strin
     steps.push(stage.label);
   }
   return steps;
+}
+
+function isImplementationShapedTriggerStage(stage: BehaviorLifecycleStage): boolean {
+  if (stage.kind !== "trigger" || stage.evidence.some((item) => item.kind === "commit")) {
+    return false;
+  }
+  return /^Trigger\s+(?:set|handle|use|update|dispatch|emit|mutate|invoke|call)\b/i.test(stage.label);
+}
+
+function isImplementationShapedStateChangeStage(stage: BehaviorLifecycleStage): boolean {
+  if (stage.kind !== "state-change" || stage.evidence.some((item) => item.kind === "commit")) {
+    return false;
+  }
+  return /^Update state through (?:set|update|dispatch|emit|mutate|use)[A-Z0-9_]/.test(stage.label);
 }
 
 function lifecycleStepsDescribeSameAction(left: string, right: string): boolean {

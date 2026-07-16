@@ -670,23 +670,31 @@ function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flow
     }
     const intent = changeAnalysis.intents.find((candidate) => candidate.id === flow.intentId);
     const primary = intent?.scenarios.find((scenario) => scenario.kind === "primary");
-    if (!primary || !primary.assertions.includes(genericAssertion)) {
+    if (!primary || primary.assertions.length === 0) {
       continue;
     }
     const concreteAssertion = `Verify ${flow.languageBrief.successSignal}.`;
-    const assertions = primary.assertions.map((assertion) =>
-      assertion === genericAssertion
+    const originalAssertions = [...primary.assertions];
+    const replaceSingleAssertion = originalAssertions.length === 1;
+    const assertions = originalAssertions.map((assertion) =>
+      replaceSingleAssertion || assertion === genericAssertion
         ? concreteAssertion
         : assertion,
     );
+    if (assertions.every((assertion, index) => assertion === originalAssertions[index])) {
+      continue;
+    }
     primary.assertions = assertions;
     const flowScenario = flow.qaScenarios?.find((scenario) => scenario.id === primary.id);
     if (flowScenario && flowScenario !== primary) {
       flowScenario.assertions = [...assertions];
     }
-    flow.steps = flow.steps.map((step) => step === genericAssertion ? concreteAssertion : step);
+    const replacedAssertions = new Set(
+      originalAssertions.filter((assertion, index) => assertion !== assertions[index]),
+    );
+    flow.steps = flow.steps.map((step) => replacedAssertions.has(step) ? concreteAssertion : step);
     for (const target of flow.coverage) {
-      target.checks = target.checks.map((check) => check === genericAssertion ? concreteAssertion : check);
+      target.checks = target.checks.map((check) => replacedAssertions.has(check) ? concreteAssertion : check);
     }
   }
 }

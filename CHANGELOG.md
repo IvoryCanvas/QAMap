@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- Implementation-shaped setter stages no longer compile as a second user interaction after a real action. The public state-transition benchmark now enforces exactly one mapped action before its repository-observed assertion.
 - Event handlers such as `onShare` now produce natural action labels, and machine-style event keys are no longer promoted as visible-text selectors.
 - Static assets no longer create duplicate product flows when they support a behavior-bearing change.
 - Fixture recommendations no longer cross unrelated monorepo application boundaries unless exact endpoint evidence connects them, and frontend API client filenames are no longer fabricated into server URLs.

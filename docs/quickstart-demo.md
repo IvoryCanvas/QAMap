@@ -1,15 +1,13 @@
 # 30-Second Quick Start Demo
 
-This demo is the shortest way to show what QAMap does in a public README, blog post, or launch thread. It is text-first on purpose: record a GIF only from the current published package and current `.qamap/manifest.yaml` flow, so the public demo never drifts from the CLI.
+This demo is the shortest way to show what QAMap does in a public README, blog post, or launch thread. The checked-in GIF uses the current source against the public `web-react-record-pinning` benchmark without a manifest. Record actual CLI output and generated code only; do not substitute idealized report blocks.
 
 ## Story
 
-A reviewer sees a PR that changes a checkout form:
+A reviewer sees a PR that adds a record-pinning interaction and visible result:
 
 ```txt
-src/app/checkout/page.tsx
-src/features/checkout/CheckoutForm.tsx
-src/features/checkout/submitCheckout.ts
+src/pages/records.tsx
 ```
 
 The reviewer wants to know:
@@ -52,7 +50,7 @@ npx --yes @ivorycanvas/qamap@latest manifest init . --write /tmp/qamap-manifest.
 npx --yes @ivorycanvas/qamap@latest qa . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD
 ```
 
-The manifest is the durable part. It lets a team correct domains, flows, anchors, and checks once, then reuse that correction across future PRs without re-explaining the same QA context to an LLM.
+The manifest is the optional durable layer. First-run QA routing works without it; teams can add one later to correct domains, flows, anchors, and checks once, then reuse that correction across future PRs without re-explaining the same QA context to an LLM.
 
 If your coding agent supports reusable local instructions, use the packaged skill template as the PR handoff workflow:
 

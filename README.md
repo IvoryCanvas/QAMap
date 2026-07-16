@@ -23,9 +23,11 @@ commit + diff -> behavior lifecycle -> QA routing -> QA trace -> optional automa
 
 ## See It Work
 
-This is the packaged CLI running against a manifest-free Vue PR fixture. The recording only trims the report between views; the intent, routing decisions, diff sources, and automation receipts are real output.
+This is the current CLI running against the committed, manifest-free React state-transition fixture. The recording shows real deterministic output: QAMap identifies the change, exposes the reasoning path, and writes the Playwright draft shown at the end. It does **not** launch the fixture application or claim that product QA passed.
 
 ![QAMap reads a PR diff, routes QA scenarios, and reports E2E automation readiness](docs/assets/qamap-30s-demo.gif)
+
+_Recorded from the current source against `test/benchmarks/web-react-record-pinning`; no hand-written or simulated result blocks._
 
 ## Quick Start
 
@@ -73,33 +75,33 @@ QAMap keeps QA selection and test generation as two separate decisions:
 | **QA reasoning trace** | Give every scenario a stable ID that connects diff line -> affected lifecycle -> risk -> routing decision -> optional draft, while keeping execution explicitly `not-run`. |
 | **Automation receipt** | Report whether the selected scenario is fully, partially, or not mapped into a draft, including the missing selector, fixture, entrypoint, or assertion evidence. Machine output keeps the compatible values `compiled`, `partial`, and `not-compiled`; none of them means a test ran or passed. |
 
-Trimmed real output from the demo:
+Trimmed real output from the same demo:
 
 ```txt
 Product QA execution: not run; static analysis and draft mapping only
-Change intent: Import document and show completion state [high]
-Scenario routing: 1 required, 2 recommended, 0 review-only
-E2E draft mapping: 1 fully mapped, 0 partially mapped, 2 not mapped; no tests executed
-Reasoning trace: 3/3 scenarios traced; 2 fully connect diff evidence to affected behavior, risk, and QA routing
+Change intent: Pin a workspace record and show it first [high]
+Verify before merge: does the changed flow produce visible text
+  "Pinned record appears first"?
+Scenario routing: 1 required, 1 recommended, 0 review-only
+E2E draft mapping: 1 fully mapped, 1 not mapped; no tests executed
+Reasoning trace: 2/2 scenarios traced
 
-QA reasoning trace: trace:1d4fa7464738 [traceable]
-  Diff evidence: src/pages/documents.vue:20, symbol startImport
-  Affected behavior: trigger start import -> check is import ready
+QA reasoning trace: trace:ab8f9b137d27 [traceable]
+  Diff evidence: src/pages/records.tsx:15, symbol setPinned
   Risk: the changed behavior may not reach its intended observable outcome
-  QA scenario: [required] Import document and show completion state
-  Optional artifact: tests/e2e/import-document-and-show-completion-state.spec.ts
-                     fully mapped (not executed)
+  QA scenario: [required] Pin a workspace record and show it first
+  Expected proof: visible text "Pinned record appears first" appears
+  Optional artifact: tests/e2e/pin-a-workspace-record-and-show-it-first.spec.ts
+                     fully mapped (not executed), steps 1/1, assertions 1/1
+  Execution: not run
+```
 
-[critical] Import document and show completion state
-  Routing: required - 4 supporting diff hunks
-  E2E draft mapping: fully mapped (not executed) - steps 1/1, assertions 1/1
-  Source: src/pages/documents.vue:20, symbol startImport
-  Source: src/pages/documents.vue:10, symbol isImportReady
+The resulting primary Playwright path is repository-backed rather than a generic body-visible smoke test:
 
-[recommended] Destination path and query parameters
-  Routing: recommended - 2 direct diff hunks
-  E2E draft mapping: not mapped - missing a complete boundary compiler chain
-  Source: src/pages/documents.vue:11, symbol URLSearchParams
+```ts
+await page.goto("/records");
+await page.getByTestId("pin-record").click();
+await expect(page.getByText("Pinned record appears first")).toBeVisible();
 ```
 
 This distinction is deliberate: a scenario can deserve QA without QAMap pretending it already has enough evidence to generate a trustworthy E2E test. Static draft mapping answers whether QAMap could express the scenario; only a separate, explicit execution can produce pass or fail evidence.
