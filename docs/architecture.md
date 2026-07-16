@@ -12,6 +12,7 @@ commit range + base/head diff
   -> behavior lifecycle + impact selection
   -> runner-independent QA scenarios
   -> evidence-ranked scenario routing
+  -> stable QA reasoning trace
   -> Playwright / Maestro / manual adapter
   -> scenario automation receipts
   -> explicit local execution
@@ -53,6 +54,18 @@ Runner adapters then emit a second receipt for each routed scenario:
 - `review-only`: the scenario or repository has no executable adapter contract.
 
 A compilation receipt is static evidence, not a test result. Human output therefore calls these states `fully mapped`, `partially mapped`, and `not mapped`; the machine values remain stable for compatibility. Every `qa` result also carries an invocation-level `execution` receipt with `status: not-run` and `scope: static-analysis-and-draft-mapping`. Only explicit execution may produce pass or fail evidence. A required scenario that is partial or not compiled remains an execution blocker and prevents the draft from being described as runnable.
+
+## QA Reasoning Trace
+
+`src/qa-trace.ts` assembles the existing evidence and receipts into one causal path for each scenario:
+
+```txt
+diff file + line -> linked lifecycle stage -> risk -> routing decision -> optional draft -> not run
+```
+
+Trace IDs are derived from stable scenario IDs. The same ID appears in human QA output, the additive agent v1 payload, and generated Playwright, Maestro, or manual artifacts. A reviewer can therefore move from a draft back to the exact reason it exists without reconstructing that relationship from separate report sections.
+
+A trace is `traceable` only when a located diff source and an evidence-linked lifecycle stage support a routed scenario. `partial` means the source and lifecycle could not be joined exactly. `review-only` means contextual or commit evidence was not strong enough to make the scenario policy. These states describe reasoning provenance, never product execution or pass/fail status. Automation remains optional: the reasoning path can be traceable even when no deterministic runner adapter can compile it yet.
 
 ## Behavior Graph
 

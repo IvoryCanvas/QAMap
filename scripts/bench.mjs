@@ -109,6 +109,7 @@ function scoreTarget(target, plan, qa, durationMs) {
     qa.flows.flatMap((flow) => flow.scenarioAutomation ?? []).map((receipt) => [receipt.scenarioId, receipt]),
   ).values()];
   const scenarioReceiptIds = new Set(scenarioReceipts.map((receipt) => receipt.scenarioId));
+  const reasoningTraceIds = new Set(qa.traces.map((trace) => trace.scenario.id));
   const locatedQaScenarios = qaScenarios.filter((scenario) =>
     scenario.evidence.some((item) =>
       item.kind === "diff" && item.file && item.startLine !== undefined && item.relation !== "contextual"
@@ -144,6 +145,13 @@ function scoreTarget(target, plan, qa, durationMs) {
     scenarioTrace: qaScenarios.length > 0 ? `${locatedQaScenarios.length}/${qaScenarios.length}` : null,
     scenarioReceipts: scenarioReceipts.length,
     scenarioReceiptCoverage: qaScenarios.length > 0 ? `${scenarioReceipts.length}/${qaScenarios.length}` : null,
+    reasoningTraces: qa.traces.length,
+    reasoningTraceCoverage: qaScenarios.length > 0 ? `${qa.traces.length}/${qaScenarios.length}` : null,
+    traceableReasoning: qa.traces.filter((trace) => trace.status === "traceable").length,
+    missingReasoningTraces: qaScenarios.filter((scenario) => !reasoningTraceIds.has(scenario.id)).length,
+    untraceableRequiredScenarios: qa.traces.filter(
+      (trace) => trace.scenario.decision === "required" && trace.status !== "traceable"
+    ).length,
     missingScenarioReceipts: qaScenarios.filter((scenario) => !scenarioReceiptIds.has(scenario.id)).length,
     routedRequiredScenarios: scenarioReceipts.filter((receipt) => receipt.decision === "required").length,
     routedRecommendedScenarios: scenarioReceipts.filter((receipt) => receipt.decision === "recommended").length,
@@ -292,6 +300,25 @@ function evaluateContract(expect, result, plan, qa) {
   ) {
     failures.push(
       `missing scenario receipts ${result.missingScenarioReceipts} exceed ${expect.maxMissingScenarioReceipts}`,
+    );
+  }
+  if (expect.minReasoningTraces !== undefined && result.reasoningTraces < expect.minReasoningTraces) {
+    failures.push(`expected at least ${expect.minReasoningTraces} reasoning trace(s), got ${result.reasoningTraces}`);
+  }
+  if (
+    expect.maxMissingReasoningTraces !== undefined &&
+    result.missingReasoningTraces > expect.maxMissingReasoningTraces
+  ) {
+    failures.push(
+      `missing reasoning traces ${result.missingReasoningTraces} exceed ${expect.maxMissingReasoningTraces}`,
+    );
+  }
+  if (
+    expect.maxUntraceableRequiredScenarios !== undefined &&
+    result.untraceableRequiredScenarios > expect.maxUntraceableRequiredScenarios
+  ) {
+    failures.push(
+      `untraceable required scenarios ${result.untraceableRequiredScenarios} exceed ${expect.maxUntraceableRequiredScenarios}`,
     );
   }
   if (
@@ -521,6 +548,7 @@ function printTable(rows) {
     ["behaviorGraph", 9],
     ["changeIntents", 7],
     ["scenarioTrace", 8],
+    ["reasoningTraceCoverage", 8],
     ["scenarioReceiptCoverage", 8],
     ["scenarioAutomation", 9],
     ["blankActions", 6],
@@ -568,7 +596,7 @@ function printDeltas(baselineRows, currentRows) {
       continue;
     }
     const deltas = [];
-    for (const key of ["flows", "changeIntents", "highConfidenceIntents", "importPropagatedFlows", "diffAnchoredFlows", "manifestFlowMatches", "behaviorNodes", "behaviorImpactedNodes", "manifestBehaviorNodes", "commitBehaviorNodes", "scenarioReceipts", "missingScenarioReceipts", "compiledScenarioReceipts", "partialScenarioReceipts", "notCompiledScenarioReceipts", "mappedScenarioSteps", "mappedScenarioAssertions", "requiredScenarioGaps", "blankActions", "genericTitles", "readinessScore", "tryableDrafts", "totalTodos", "totalExecutionBlockers", "agentBytes"]) {
+    for (const key of ["flows", "changeIntents", "highConfidenceIntents", "importPropagatedFlows", "diffAnchoredFlows", "manifestFlowMatches", "behaviorNodes", "behaviorImpactedNodes", "manifestBehaviorNodes", "commitBehaviorNodes", "reasoningTraces", "traceableReasoning", "missingReasoningTraces", "untraceableRequiredScenarios", "scenarioReceipts", "missingScenarioReceipts", "compiledScenarioReceipts", "partialScenarioReceipts", "notCompiledScenarioReceipts", "mappedScenarioSteps", "mappedScenarioAssertions", "requiredScenarioGaps", "blankActions", "genericTitles", "readinessScore", "tryableDrafts", "totalTodos", "totalExecutionBlockers", "agentBytes"]) {
       const diff = (current[key] ?? 0) - (before[key] ?? 0);
       if (diff !== 0) {
         deltas.push(`${key} ${diff > 0 ? "+" : ""}${diff}`);
@@ -587,6 +615,7 @@ function shortLabel(key) {
     behaviorGraph: "graph n/i",
     changeIntents: "intents",
     scenarioTrace: "trace",
+    reasoningTraceCoverage: "path",
     scenarioReceiptCoverage: "receipt",
     scenarioAutomation: "map c/p/n",
     blankActions: "blank",

@@ -22,6 +22,54 @@
         "endLine": { "type": "integer", "minimum": 0 },
         "hunk": { "type": "string" }
       }
+    },
+    "qaTrace": {
+      "type": "object",
+      "required": ["id", "status", "risk", "scenario", "execution"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^trace:" },
+        "status": { "type": "string", "enum": ["traceable", "partial", "review-only"] },
+        "source": { "$ref": "#/definitions/evidenceSource" },
+        "behavior": {
+          "type": "object",
+          "required": ["id", "phase", "label", "relation"],
+          "properties": {
+            "id": { "type": "string" },
+            "phase": {
+              "type": "string",
+              "enum": ["trigger", "condition", "action", "state-change", "side-effect", "observable-outcome"]
+            },
+            "label": { "type": "string" },
+            "relation": { "type": "string", "enum": ["evidence-linked", "intent-context"] }
+          }
+        },
+        "risk": {
+          "type": "object",
+          "required": ["kind", "statement"],
+          "properties": {
+            "kind": { "type": "string", "enum": ["primary", "failure", "boundary", "state-transition"] },
+            "statement": { "type": "string" }
+          }
+        },
+        "scenario": {
+          "type": "object",
+          "required": ["id", "decision", "title"],
+          "properties": {
+            "id": { "type": "string" },
+            "decision": { "type": "string", "enum": ["required", "recommended", "review-only"] },
+            "title": { "type": "string" }
+          }
+        },
+        "artifact": {
+          "type": "object",
+          "required": ["draft", "status"],
+          "properties": {
+            "draft": { "type": "string" },
+            "status": { "type": "string", "enum": ["compiled", "partial", "not-compiled", "review-only"] }
+          }
+        },
+        "execution": { "const": "not-run" }
+      }
     }
   },
   "required": [
@@ -209,6 +257,21 @@
         "notCompiled": { "type": "integer", "minimum": 0 },
         "requiredGaps": { "type": "integer", "minimum": 0 }
       }
+    },
+    "traceCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total deterministic QA reasoning traces before compact output capping."
+    },
+    "omittedTraceCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Reasoning traces omitted from the compact payload."
+    },
+    "traces": {
+      "type": "array",
+      "description": "Compact causal paths from diff evidence to affected behavior, risk, routed scenario, optional artifact, and explicit non-execution.",
+      "items": { "$ref": "#/definitions/qaTrace" }
     },
     "automation": {
       "type": "object",

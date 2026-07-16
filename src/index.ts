@@ -78,6 +78,7 @@ export {
 } from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 export { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+export { buildQaReasoningTraces, qaTraceIdForScenario } from "./qa-trace.js";
 export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 export { isRequiredScenarioEvidence, routeQaScenario } from "./scenario-routing.js";
 export { scanProject } from "./scanner.js";
@@ -276,3 +277,13 @@ export type {
 export type { QAMapConfig, Finding, ScanCounts, ScanOptions, ScanResult, Severity } from "./types.js";
 export type { VerifyOptions, VerifyResult } from "./verify.js";
 export type { QaDraftFlow, QaDraftMissingEvidence, QaDraftOptions, QaDraftResult, QaExecutionReceipt } from "./qa.js";
+export type {
+  QaReasoningTrace,
+  QaReasoningTraceStatus,
+  QaTraceArtifact,
+  QaTraceArtifactInput,
+  QaTraceBehavior,
+  QaTraceBehaviorRelation,
+  QaTraceRisk,
+  QaTraceScenario,
+} from "./qa-trace.js";

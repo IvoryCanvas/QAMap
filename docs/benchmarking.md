@@ -53,6 +53,9 @@ Each target can declare:
 | `mustFindIntentEvidence` | Commit or diff terms that must remain attached to intent provenance. |
 | `mustTraceScenarioFiles` | Changed files that must appear in at least one scenario's exact direct/supporting base- or head-side diff source. |
 | `maxUntracedCriticalScenarios` | Maximum critical scenarios without a direct/supporting diff source carrying a file and line number. Contextual commit evidence cannot satisfy this contract; lifecycle fixtures keep it at zero. |
+| `minReasoningTraces` | Minimum stable causal paths from scenario evidence through affected behavior and QA routing. |
+| `maxMissingReasoningTraces` | Maximum routed scenarios with no corresponding QA reasoning trace. Public trace fixtures keep this at zero. |
+| `maxUntraceableRequiredScenarios` | Maximum required scenarios whose diff evidence cannot be joined to an evidence-linked lifecycle stage. Public trace fixtures keep this at zero. |
 | `minScenarioReceipts` | Minimum routed scenario receipts emitted by the E2E adapter. |
 | `maxMissingScenarioReceipts` | Maximum selected QA scenarios with no corresponding automation receipt. Public lifecycle fixtures keep this at zero. |
 | `minRoutedRequiredScenarios` | Minimum critical scenarios promoted to required by located direct or supporting diff evidence. |
@@ -96,7 +99,7 @@ node scripts/bench.mjs --baseline bench-results/<file>.json
 
 When both files exist, `pnpm bench` prefers the gitignored local config. CI always passes `--config bench.config.json --assert`, so private paths cannot affect the public quality gate.
 
-Saved results include intent titles, lifecycle and scenario terms, scenario trace coverage, scenario receipt coverage, flow titles, draft paths, recall gaps, raw readiness counts, self-check outcomes, TODOs, execution blockers, agent payload size, and timing. The table reports draft status as `runnable/near-runnable/review-only` and scenario compilation as `compiled/partial/not-compiled`. Use a saved baseline to see heuristic movement, but treat the committed expectation contract as the merge gate.
+Saved results include intent titles, lifecycle and scenario terms, located-source coverage (`trace`), complete QA reasoning paths (`path`), scenario receipt coverage, flow titles, draft paths, recall gaps, raw readiness counts, self-check outcomes, TODOs, execution blockers, agent payload size, and timing. The table reports draft status as `runnable/near-runnable/review-only` and scenario compilation as `compiled/partial/not-compiled`. Use a saved baseline to see heuristic movement, but treat the committed expectation contract as the merge gate.
 
 Every benchmark target also enforces the Behavior Graph base contract: graph schema version 1, at least one graph flow for every planned flow, at least one impacted node for a non-empty diff, and no edge whose endpoint is missing. The table reports `graph n/i` as total nodes versus impacted nodes. These checks keep the graph connected to real PR analysis while framework-specific adapters are introduced incrementally.
 

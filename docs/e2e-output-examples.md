@@ -21,6 +21,16 @@ At a Glance
 - Behavior lifecycle: trigger: submit preferences -> state-change: update saved state -> side-effect: invoke fetch -> observable-outcome: show saved state
 - Affected behavior: Submit notification preferences and show the saved state
 
+QA Reasoning Trace
+- trace:preferences-primary [traceable]
+  1. Diff evidence: src/pages/preferences.tsx:7, symbol fetch
+  2. Affected behavior: side-effect: invoke fetch [evidence-linked]
+  3. Risk: the changed behavior may not reach its observable saved state
+  4. QA scenario: [required] Submit notification preferences and show the saved state
+  5. Expected proof: the saved state becomes observable
+  6. Optional artifact: tests/e2e/submit-notification-preferences.spec.ts, partially mapped (not executed)
+  7. Execution: not run
+
 Change Intent Evidence
 - Commit: feat: submit notification preferences, persist the selected timezone, and show the saved state after the request completes
 - Critical scenario: Submit notification preferences and show the saved state
@@ -68,6 +78,8 @@ PR checklist
 ```
 
 The counts above describe static draft mapping, not execution. The compatible machine value `compiled` means the selected steps and assertions were mapped to concrete runner code. Only a separate, explicit validation command can turn that draft into pass or fail evidence.
+
+The same stable trace ID is included in generated Playwright, Maestro, and manual artifacts together with the strongest diff source. This lets a reviewer move from generated code back to the exact behavior and risk that caused it to exist.
 
 If this recommendation is useful but slightly wrong, the next step is not another long AI prompt. Generate and correct repo-local QA memory:
 

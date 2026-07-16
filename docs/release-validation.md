@@ -1,19 +1,23 @@
 # Release Validation
 
-## Unreleased (0.4.5 candidate) - 2026-07-15
+## Unreleased (0.4.5 candidate) - 2026-07-16
 
-Validated as a result-precision and repository-evidence ownership patch. QAMap now distinguishes static QA analysis from product execution at the top level, keeps supporting assets and fixture evidence with the behavior-bearing workspace flow, and avoids presenting machine-shaped event keys or unrelated package mocks as usable UI evidence:
+Validated as a traceable-reasoning, result-precision, and repository-evidence ownership candidate. QAMap now exposes one inspectable path from diff evidence to affected behavior, risk, routed QA scenario, optional artifact, and explicit non-execution. It also keeps supporting assets and fixture evidence with the behavior-bearing workspace flow instead of presenting unrelated package mocks as usable UI evidence:
 
 | Gate | Current result |
 | --- | --- |
-| `pnpm test` | 176/176 passing |
+| `pnpm test` | 177/177 passing |
 | `pnpm scan` | 0 findings |
-| `pnpm bench:ci` | 15/15 synthetic PR targets pass across web, mobile, API, shared-component, configuration, and test-only changes |
-| Coverage | Lines 88.57%, branches 85.19%, functions 95.82% |
+| `pnpm bench:ci` | 15/15 synthetic PR targets pass across web, mobile, API, shared-component, configuration, and test-only changes; public trace fixtures reject missing scenario paths and untraceable required scenarios |
+| Coverage | Lines 88.63%, branches 84.97%, functions 95.86% |
 | Change Intent coverage | Lines 98.58%, branches 91.64%, functions 99.44% |
+| QA trace coverage | Lines 98.26%, branches 88.17%, functions 96.77% |
+| Reasoning path | Stable IDs connect diff source -> evidence-linked lifecycle -> risk -> routing -> optional draft; partial and review-only paths retain their gaps instead of being promoted |
 | Product execution honesty | Human output says `not run` and `not executed`; agent output carries `execution: { status: "not-run", performed: false, scope: "static-analysis-and-draft-mapping" }` |
 | Workspace evidence ownership | A domain-neutral multi-app fixture keeps a changed asset and same-workspace endpoint evidence with the owning behavior flow while rejecting an unrelated sibling-app mock and unrelated same-app API client |
 | Package preview | `pnpm pack --dry-run` passes; the package version intentionally remains unchanged until release preparation |
+
+Human Markdown, full JSON, compact agent JSON, and generated Playwright, Maestro, or manual drafts now share the same trace ID. This keeps the reasoning layer separate from the artifact while letting a reviewer move from generated code back to the exact change, inferred consequence, and risk that caused it to exist. A `traceable` result means the reasoning provenance is connected; it never means the target product was launched or the scenario passed.
 
 The new fixture models a generic multi-application repository rather than a maintainer product. It changes a user action, supporting asset, and endpoint in one application, places a similarly named mock in another application, and changes an unrelated API client in the same application. The regression contract requires natural action language, one behavior flow instead of an asset-only duplicate, usable selector evidence, relevant fixture guidance, no filename-fabricated server URL, and an explicit non-execution receipt.
 

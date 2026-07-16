@@ -26,6 +26,7 @@ Before treating the next public release as ready, the golden demo must satisfy t
 - Generated E2E draft is a usable starting point: it has route/screen entry, meaningful actions, assertions, and clear TODOs only where repo data is missing.
 - The public benchmark distinguishes a tryable file from complete PR evidence: golden automation fixtures contract on self-checks, TODOs, execution blockers, and runnable status instead of passing on flow naming alone.
 - Recommendation evidence is explainable: output shows the changed file, manifest flow/check, and manifest path to repair when wrong.
+- Every required scenario has one inspectable path from diff line to affected behavior, risk, routing decision, optional artifact, and explicit execution status.
 - README demo shows the full loop: manifest-free PR QA draft, optional repo context baseline, PR mapping, E2E draft, and remaining validation gaps.
 - One manifest correction should improve future PR recommendations without another LLM prompt.
 
@@ -47,6 +48,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Keep `manifest context` useful as a pre-init sanity check for repo-local QA memory, harness docs, agent instructions, and runbooks.
 - Improve Playwright and Maestro compilation from intent scenarios while keeping runner choice behind the runner-independent QA contract.
 - Keep scenario selection and static draft mapping independently measurable: exact diff evidence routes each scenario as required, recommended, or review-only, then runner receipts report compatible `compiled`, `partial`, or `not-compiled` machine states while human output says mapped and not executed. Required mapping gaps must lower readiness instead of hiding behind a green smoke assertion.
+- Keep stable QA trace IDs across human, JSON, agent, and generated artifact output. Benchmark fixtures must reject missing scenario traces and required scenarios whose diff evidence cannot be joined to an affected lifecycle stage.
 - Require every new shared heuristic to pass unrelated web/mobile or UI/service fixtures plus a negative control. Product-specific vocabulary stays in fixtures and optional manifests, never in global rules.
 - Keep `verify`, `e2e`, and `manifest` as deeper layers behind `qa`; freeze new scanner, doctor, eval, domains, flows, and history features until the core QA contract is consistently useful.
 

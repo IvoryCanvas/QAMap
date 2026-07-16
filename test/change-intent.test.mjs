@@ -8,11 +8,97 @@ import ts from "typescript";
 import { analyzeChangeIntents } from "../dist/change-intent.js";
 import { generateE2eDraft, generateE2ePlan } from "../dist/e2e.js";
 import { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "../dist/qa.js";
+import { buildQaReasoningTraces, qaTraceIdForScenario } from "../dist/qa-trace.js";
 import { routeQaScenario } from "../dist/scenario-routing.js";
 import {
   addedDiffTextFromEvidence,
   collectAddedDiffEvidence,
 } from "../dist/test-plan.js";
+
+test("QA reasoning traces expose weak links without claiming product execution", () => {
+  const commitEvidence = {
+    kind: "commit",
+    value: "feat: save preferences",
+    commit: "abc123",
+    relation: "contextual",
+  };
+  const reviewScenario = {
+    id: "scenario:review-only",
+    kind: "failure",
+    priority: "recommended",
+    title: "Failure handling",
+    rationale: "Review the failure path.",
+    setup: [],
+    steps: ["Trigger the failure."],
+    assertions: ["Verify the failure remains recoverable."],
+    edgeCases: [],
+    evidence: [commitEvidence],
+  };
+  const reviewIntent = {
+    id: "intent:review-only",
+    title: "Save preferences",
+    summary: "Save preferences.",
+    confidence: "low",
+    commits: [],
+    files: ["src/preferences.ts"],
+    keywords: ["preferences"],
+    evidence: [commitEvidence],
+    lifecycle: [{
+      id: "stage:review-only",
+      kind: "action",
+      label: "Save preferences.",
+      confidence: "low",
+      evidence: [commitEvidence],
+      files: ["src/preferences.ts"],
+    }],
+    scenarios: [reviewScenario],
+    reviewRequired: true,
+  };
+
+  const [reviewTrace] = buildQaReasoningTraces([reviewIntent], []);
+  assert.equal(reviewTrace.id, qaTraceIdForScenario(reviewScenario.id));
+  assert.equal(reviewTrace.status, "review-only");
+  assert.equal(reviewTrace.behavior[0].relation, "evidence-linked");
+  assert.equal(reviewTrace.execution, "not-run");
+  assert.ok(reviewTrace.gaps.some((gap) => /No located diff source/.test(gap)));
+  assert.ok(reviewTrace.gaps.some((gap) => /No optional automation artifact/.test(gap)));
+
+  const diffEvidence = {
+    kind: "diff",
+    value: "Changed line invokes savePreferences.",
+    file: "src/preferences.ts",
+    symbol: "savePreferences",
+    relation: "direct",
+    side: "head",
+    startLine: 12,
+    endLine: 12,
+  };
+  const partialScenario = { ...reviewScenario, id: "scenario:partial", evidence: [diffEvidence] };
+  const partialIntent = { ...reviewIntent, id: "intent:partial", scenarios: [partialScenario] };
+  const [partialTrace] = buildQaReasoningTraces([partialIntent], [{
+    scenarioId: partialScenario.id,
+    flowTitle: "Preferences",
+    draftPath: "tests/e2e/preferences-review.md",
+    status: "not-compiled",
+    mappedSteps: 0,
+    totalSteps: 1,
+    mappedAssertions: 0,
+    totalAssertions: 1,
+  }, {
+    scenarioId: partialScenario.id,
+    flowTitle: "Preferences",
+    draftPath: "tests/e2e/preferences.spec.ts",
+    status: "compiled",
+    mappedSteps: 1,
+    totalSteps: 1,
+    mappedAssertions: 1,
+    totalAssertions: 1,
+  }]);
+  assert.equal(partialTrace.status, "partial");
+  assert.equal(partialTrace.behavior[0].relation, "intent-context");
+  assert.equal(partialTrace.artifact?.draftPath, "tests/e2e/preferences.spec.ts");
+  assert.ok(partialTrace.gaps.some((gap) => /No lifecycle stage shares/.test(gap)));
+});
 
 test("diff evidence preserves renamed paths and head-side hunk locations", async (t) => {
   const root = await makeRepo(t);
@@ -747,16 +833,31 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.ok(agentSummary.intents[0].scenarios.every((scenario) => scenario.routing?.decision));
   assert.ok(agentSummary.intents[0].scenarios.every((scenario) => scenario.automation?.status));
   assert.ok(agentSummary.scenarioCoverage.required >= 1);
+  const requiredTrace = qa.traces.find((trace) => trace.scenario.decision === "required");
+  assert.ok(requiredTrace);
+  assert.equal(requiredTrace.status, "traceable");
+  assert.ok(requiredTrace.sources.some((source) => source.file === "src/pages/preferences.tsx" && source.startLine));
+  assert.ok(requiredTrace.behavior.some((stage) => stage.relation === "evidence-linked"));
+  assert.ok(requiredTrace.artifact?.draftPath.endsWith(".spec.ts"));
+  assert.equal(requiredTrace.execution, "not-run");
+  assert.equal(agentSummary.traceCount, qa.traces.length);
+  assert.ok(agentSummary.traces.length > 0);
+  assert.ok(agentSummary.traces.every((trace) => trace.source?.file && trace.behavior?.phase));
+  assert.ok(agentSummary.traces.every((trace) => trace.execution === "not-run"));
   assert.match(qaMarkdown, /Source: `src\/pages\/preferences\.tsx:\d+` symbol/);
   assert.match(qaMarkdown, /confidence: (?:medium|high)/);
   assert.match(qaMarkdown, /Scenario routing:/);
   assert.match(qaMarkdown, /E2E draft mapping:/);
+  assert.match(qaMarkdown, /## QA Reasoning Trace/);
+  assert.match(qaMarkdown, /1\. Diff evidence:[\s\S]*2\. Affected behavior:[\s\S]*3\. Risk:[\s\S]*4\. QA scenario:/);
   assert.match(qaMarkdown, /Product QA execution: not run/);
   assert.equal(agentSummary.execution.status, "not-run");
   assert.match(qaMarkdown, /## Optional Automation/);
   assert.doesNotMatch(qaMarkdown, /Install command|First E2E Draft Bootstrap/);
   assert.match(spec, /Change intent evidence:/);
   assert.match(spec, /Behavior lifecycle:/);
+  assert.match(spec, /trace:[a-f0-9]{12}/);
+  assert.match(spec, /Diff source: src\/pages\/preferences\.tsx:\d+/);
   assert.match(spec, /Failure, timeout, and retry handling/);
 
   const oversizedQa = structuredClone(qa);

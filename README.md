@@ -15,10 +15,10 @@ QAMap is a **local-first, zero-LLM QA router**. It reads commits, code diffs, re
 No cloud. No source upload. No LLM token.
 
 ```txt
-commit + diff -> behavior lifecycle -> QA routing -> optional automation
-                 trigger / state /      required       Playwright
-                 outcome                recommended    Maestro
-                                        review-only    manual
+commit + diff -> behavior lifecycle -> QA routing -> QA trace -> optional automation
+                 trigger / state /      required       why this     Playwright
+                 outcome                recommended    scenario     Maestro
+                                        review-only    exists       manual
 ```
 
 ## See It Work
@@ -70,21 +70,31 @@ QAMap keeps QA selection and test generation as two separate decisions:
 | --- | --- |
 | **Behavior inference** | Connect commit intent and changed symbols into a trigger, condition, state change, side effect, and observable outcome. |
 | **Scenario routing** | Mark each scenario `required`, `recommended`, or `review-only`, with the exact diff hunk or commit that supports it. |
+| **QA reasoning trace** | Give every scenario a stable ID that connects diff line -> affected lifecycle -> risk -> routing decision -> optional draft, while keeping execution explicitly `not-run`. |
 | **Automation receipt** | Report whether the selected scenario is fully, partially, or not mapped into a draft, including the missing selector, fixture, entrypoint, or assertion evidence. Machine output keeps the compatible values `compiled`, `partial`, and `not-compiled`; none of them means a test ran or passed. |
 
 Trimmed real output from the demo:
 
 ```txt
 Product QA execution: not run; static analysis and draft mapping only
-Change intent: Open processed document summary [medium]
-Scenario routing: 1 required, 2 recommended, 1 review-only
+Change intent: Import document and show completion state [high]
+Scenario routing: 1 required, 2 recommended, 0 review-only
 E2E draft mapping: 1 fully mapped, 0 partially mapped, 2 not mapped; no tests executed
+Reasoning trace: 3/3 scenarios traced; 2 fully connect diff evidence to affected behavior, risk, and QA routing
 
-[critical] Open processed document summary
+QA reasoning trace: trace:1d4fa7464738 [traceable]
+  Diff evidence: src/pages/documents.vue:20, symbol startImport
+  Affected behavior: trigger start import -> check is import ready
+  Risk: the changed behavior may not reach its intended observable outcome
+  QA scenario: [required] Import document and show completion state
+  Optional artifact: tests/e2e/import-document-and-show-completion-state.spec.ts
+                     fully mapped (not executed)
+
+[critical] Import document and show completion state
   Routing: required - 4 supporting diff hunks
   E2E draft mapping: fully mapped (not executed) - steps 1/1, assertions 1/1
   Source: src/pages/documents.vue:20, symbol startImport
-  Source: src/pages/documents.vue:21, symbol isImportComplete
+  Source: src/pages/documents.vue:10, symbol isImportReady
 
 [recommended] Destination path and query parameters
   Routing: recommended - 2 direct diff hunks
@@ -135,6 +145,7 @@ Or run `qamap init --agent` to add the repo instructions and packaged skill. See
 ## Why QAMap
 
 - **Evidence over guesses.** Every routed scenario carries commit or line-level diff provenance.
+- **Traceable consequences.** The optional test draft points back to the same stable trace that explains the changed behavior and risk.
 - **Judgment before generation.** QAMap decides what deserves verification before choosing a runner.
 - **Honest automation.** Missing evidence lowers readiness instead of becoming a fake smoke test or guaranteed-failing assertion.
 - **Local and deterministic.** The same repository state produces the same result without uploading code or spending tokens.

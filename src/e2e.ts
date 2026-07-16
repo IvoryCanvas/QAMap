@@ -42,6 +42,7 @@ import type {
 } from "./change-intent.js";
 import { routeQaScenario } from "./scenario-routing.js";
 import type { QaScenarioDecision } from "./scenario-routing.js";
+import { qaTraceIdForScenario } from "./qa-trace.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
 export type E2eProjectType =
@@ -8443,6 +8444,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow, addedDiffText:
   lines.push("});");
   for (const routedScenario of playwrightRoutedScenarioDrafts(flow)) {
     lines.push("");
+    lines.push(`// QA trace: ${qaTraceIdForScenario(routedScenario.scenarioId)}`);
     lines.push(`// Routed QA scenario: ${routedScenario.scenarioId}`);
     lines.push(...routedScenario.lines);
   }
@@ -9121,7 +9123,13 @@ function appendIntentDraftComments(lines: string[], flow: E2eFlow, commentPrefix
   }
   lines.push(`${commentPrefix} - Runner-independent QA scenarios:`);
   for (const scenario of flow.qaScenarios.slice(0, 4)) {
-    lines.push(`${commentPrefix}   - [${scenario.priority}] ${scenario.kind}: ${scenario.title}`);
+    lines.push(
+      `${commentPrefix}   - ${qaTraceIdForScenario(scenario.id)} [${scenario.priority}] ${scenario.kind}: ${scenario.title}`,
+    );
+    const source = draftTraceSource(scenario);
+    if (source) {
+      lines.push(`${commentPrefix}     - Diff source: ${source}`);
+    }
     for (const assertion of scenario.assertions.slice(0, 2)) {
       lines.push(`${commentPrefix}     - Assert: ${assertion}`);
     }
@@ -9146,11 +9154,27 @@ function appendManualIntentDraft(lines: string[], flow: E2eFlow): void {
   }
   lines.push("- Runner-independent QA scenarios:");
   for (const scenario of flow.qaScenarios.slice(0, 4)) {
-    lines.push(`  - [${scenario.priority}] ${scenario.kind}: ${scenario.title}`);
+    lines.push(`  - \`${qaTraceIdForScenario(scenario.id)}\` [${scenario.priority}] ${scenario.kind}: ${scenario.title}`);
+    const source = draftTraceSource(scenario);
+    if (source) {
+      lines.push(`    - Diff source: ${source}`);
+    }
     for (const assertion of scenario.assertions.slice(0, 2)) {
       lines.push(`    - Assert: ${assertion}`);
     }
   }
+}
+
+function draftTraceSource(scenario: IntentQaScenario): string | undefined {
+  const source = scenario.evidence.find((evidence) =>
+    evidence.kind === "diff" && evidence.file && evidence.startLine !== undefined && evidence.relation !== "contextual"
+  );
+  if (!source?.file || source.startLine === undefined) {
+    return undefined;
+  }
+  const end = source.endLine !== undefined && source.endLine !== source.startLine ? `-${source.endLine}` : "";
+  const symbol = source.symbol ? ` symbol ${source.symbol}` : "";
+  return `${source.file}:${source.startLine}${end}${symbol}`;
 }
 
 function appendExecutionProfileComments(

@@ -22,7 +22,7 @@ Use `npx --yes @ivorycanvas/qamap@latest ...` for one-off human runs without ins
 
 ## Reading The Output
 
-Human-facing reports (`text` and `markdown` formats) open with an **At a Glance** section: evidence-backed change intent, behavior lifecycle, affected behavior, the reviewer question to answer before merge, concrete repository evidence, the proposed draft path, and missing trust requirements. Runner information appears later as an automation adapter. When printed to an interactive terminal the report is colorized (headings, statuses, priority tags, inline commands); files written with `--output`, pipes, CI logs, and the machine formats (`json`, `agent`, `sarif`) are always plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
+Human-facing reports (`text` and `markdown` formats) open with an **At a Glance** section: evidence-backed change intent, behavior lifecycle, affected behavior, the reviewer question to answer before merge, concrete repository evidence, trace coverage, the proposed draft path, and missing trust requirements. The **QA Reasoning Trace** section then gives each selected scenario a stable ID and shows the causal path from a diff source to affected behavior, risk, routing decision, and optional artifact. Runner information appears later as an automation adapter. When printed to an interactive terminal the report is colorized (headings, statuses, priority tags, inline commands); files written with `--output`, pipes, CI logs, and the machine formats (`json`, `agent`, `sarif`) are always plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
 
 Draft readiness is reported as a **stage on a fixed four-step journey**, for example `Stage: setup needed (1 of 4) — readiness 0/100`. A fresh repository usually starts at stage 1 — that is the expected starting point, not a failure. Each stage maps to a stable `readiness.level` value in the `json` and `agent` formats, which keeps machine output unchanged:
 
@@ -41,6 +41,7 @@ On a changed branch, QAMap tries to produce reviewable verification artifacts in
 - a commit-and-diff-backed change intent with confidence, review requirements, and source evidence
 - an ordered trigger, condition, action, state-change, side-effect, and observable-outcome lifecycle
 - runner-independent primary, failure, boundary, and state-transition QA scenarios
+- a stable reasoning trace for every intent-backed scenario, including explicit gaps when diff evidence cannot be joined to the inferred lifecycle
 - draft Playwright, Maestro, CLI command, or manual checklist files when the repository shape supports them
 - a repo-level verification manifest loop where humans correct durable flows once and later PRs get sharper route/check/test draft suggestions
 - a runner setup proposal that explains why Playwright or Maestro fits the changed surface and which files/commands would be created if the team accepts it

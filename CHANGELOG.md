@@ -4,11 +4,14 @@
 
 ### Added
 
+- Added stable QA reasoning traces that connect an exact diff source to the affected lifecycle, risk statement, routed scenario, optional draft artifact, and explicit `not-run` execution state.
+- Added benchmark contracts that fail when routed scenarios are missing reasoning traces or a required scenario cannot link its diff evidence to the affected lifecycle.
 - Added an invocation-level execution receipt to QA results and the additive agent v1 contract. Static `qa` runs now state `not-run` and `static-analysis-and-draft-mapping` instead of leaving product execution ambiguous.
 - Added a domain-neutral workspace regression fixture that keeps behavior source, supporting assets, endpoint evidence, and fixture candidates attached to the owning flow.
 
 ### Changed
 
+- Human, JSON, agent, Playwright, Maestro, and manual draft output now share stable trace IDs, so generated artifacts can be reviewed as consequences of a visible QA decision instead of opaque output.
 - Human reports now describe automation as fully, partially, or not mapped and explicitly say that no product tests were executed. Backward-compatible machine values remain unchanged.
 - Intent flow titles prefer diff-backed actions and outcomes when a broad commit subject does not describe the actual changed behavior.
 
