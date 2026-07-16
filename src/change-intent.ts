@@ -1322,7 +1322,7 @@ function collectCodeBehaviorSignalsFromText(
 ): void {
   for (const match of text.matchAll(/(?:@click(?:\.\w+)*|v-on:click(?:\.\w+)*|onClick)\s*=\s*(?:["']|\{)\s*(?:this\.)?([A-Za-z_$][\w$]*)/g)) {
     const symbol = match[1];
-    const label = `Trigger ${humanizeIdentifier(symbol)}.`;
+    const label = `Trigger ${humanizeEventHandler(symbol)}.`;
     signals.push({
       kind: "trigger",
       label,
@@ -1335,7 +1335,7 @@ function collectCodeBehaviorSignalsFromText(
     /\b(?:onClick|onPress|onSubmit|onChange|onEnded)\s*=\s*\{\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)?\s*=>\s*(?:\{[^}\n]*?)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/g,
   )) {
     const symbol = match[1];
-    const label = `Trigger ${humanizeIdentifier(symbol.split(".").at(-1) ?? symbol)}.`;
+    const label = `Trigger ${humanizeEventHandler(symbol.split(".").at(-1) ?? symbol)}.`;
     signals.push({
       kind: "trigger",
       label,
@@ -1383,7 +1383,7 @@ function collectCodeBehaviorSignalsFromText(
     if (/^on(?:Click|Press|Submit|Change)$/.test(symbol)) {
       continue;
     }
-    const label = `Handle ${humanizeIdentifier(symbol)}.`;
+    const label = `Handle ${humanizeEventHandler(symbol)}.`;
     signals.push({
       kind: "trigger",
       label,
@@ -1750,6 +1750,11 @@ function humanizeIdentifier(value: string): string {
     .replace(/[_-]+/g, " ")
     .trim()
     .toLowerCase();
+}
+
+function humanizeEventHandler(value: string): string {
+  const withoutEventPrefix = value.replace(/^on(?=[A-Z_])/, "");
+  return humanizeIdentifier(withoutEventPrefix || value);
 }
 
 function stableId(prefix: string, value: string): string {

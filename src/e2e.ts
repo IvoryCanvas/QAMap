@@ -2115,12 +2115,12 @@ function buildDraftActionItems(
   if (!verificationOnly && requiredScenarioGaps.length > 0) {
     const details = requiredScenarioGaps.slice(0, 3).map((receipt) => {
       const blocker = receipt.blockers[0] ?? "the selected scenario has no executable action and assertion mapping";
-      return `"${receipt.title}" is ${receipt.status}: ${blocker}`;
+      return `"${receipt.title}" is ${formatScenarioDraftMappingStatus(receipt.status)}: ${blocker}`;
     });
     items.push(draftActionItem(
       "assertion",
       "required",
-      "Compile required QA scenarios into executable coverage",
+      "Map required QA scenarios into executable draft coverage",
       details.join(" "),
     ));
   }
@@ -3215,6 +3215,7 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
   if (result.dryRun) {
     lines.push("- Mode: dry run (no files were written)");
   }
+  lines.push("- Product QA execution: not run; draft generation does not launch or exercise the target application.");
   lines.push(
     `- Files: ${result.files.filter((file) => file.status === "created").length} created, ${result.files.filter((file) => file.status === "preview").length} previewed, ${result.files.filter((file) => file.status === "skipped").length} skipped`,
   );
@@ -3241,8 +3242,8 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
       `${result.readinessSummary.recommendedScenarios} recommended, ${result.readinessSummary.reviewOnlyScenarios} review-only`,
   );
   lines.push(
-    `- Scenario automation: ${result.readinessSummary.compiledScenarios} compiled, ` +
-      `${result.readinessSummary.partialScenarios} partial, ${result.readinessSummary.notCompiledScenarios} not compiled; ` +
+    `- Scenario draft mapping: ${result.readinessSummary.compiledScenarios} fully mapped, ` +
+      `${result.readinessSummary.partialScenarios} partially mapped, ${result.readinessSummary.notCompiledScenarios} not mapped; ` +
       `${result.readinessSummary.requiredScenarioGaps} required gap${result.readinessSummary.requiredScenarioGaps === 1 ? "" : "s"}`,
   );
   if (result.readinessSummary.topBlockers.length > 0) {
@@ -3300,7 +3301,7 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
       lines.push(`- \`${escapeMarkdownInline(file.flowTitle)}\` (${escapeMarkdownInline(file.path)})`);
       for (const receipt of file.scenarioAutomation ?? []) {
         lines.push(
-          `  - [${receipt.decision}] ${escapeMarkdownInline(receipt.title)}: ${receipt.status} ` +
+          `  - [${receipt.decision}] ${escapeMarkdownInline(receipt.title)}: ${formatScenarioDraftMappingStatus(receipt.status)} ` +
             `(steps ${receipt.mappedSteps}/${receipt.totalSteps}, assertions ${receipt.mappedAssertions}/${receipt.totalAssertions})`,
         );
         for (const blocker of receipt.blockers.slice(0, 2)) {
@@ -3359,6 +3360,13 @@ export function formatMarkdownE2eDraft(result: E2eDraftResult): string {
   }
 
   return lines.join("\n");
+}
+
+function formatScenarioDraftMappingStatus(status: E2eScenarioAutomationStatus): string {
+  if (status === "compiled") return "fully mapped (not executed)";
+  if (status === "partial") return "partially mapped (not executed)";
+  if (status === "not-compiled") return "not mapped";
+  return "review only";
 }
 
 export function formatMarkdownE2eSetup(result: E2eSetupResult): string {
@@ -5020,7 +5028,7 @@ function buildFlowCandidates(
     });
   }
 
-  return prioritizeChangeIntentCandidates(changeAnalysis, candidates, projectType, importImpacts);
+  return prioritizeChangeIntentCandidates(changeAnalysis, candidates, projectType, importImpacts, domainLanguage);
 }
 
 function prioritizeChangeIntentCandidates(
@@ -5028,6 +5036,7 @@ function prioritizeChangeIntentCandidates(
   heuristicCandidates: FlowCandidate[],
   projectType: E2eProjectType,
   importImpacts: ImportImpact[] = [],
+  domainLanguage?: DomainLanguageSummary,
 ): FlowCandidate[] {
   const intentCandidates = (analysis?.intents ?? [])
     .filter((intent) => intent.files.length > 0 && (
@@ -5046,7 +5055,7 @@ function prioritizeChangeIntentCandidates(
       ]);
       return {
         kind: intentFlowKind(intent, projectType),
-        title: intent.title,
+        title: intentFlowDisplayTitle(intent, domainLanguage),
         reason: (intent.confidence === "low"
           ? `Located diff evidence supports this review-required change intent even though commit text was not behavior-bearing. ${intent.summary}`
           : `Commit and diff evidence support this ${intent.confidence}-confidence change intent. ${intent.summary}`) +
@@ -5072,11 +5081,83 @@ function prioritizeChangeIntentCandidates(
     return heuristicCandidates;
   }
 
-  const intentFiles = new Set(intentCandidates.flatMap((candidate) => candidate.files));
+  const changedAssetFiles = uniqueStrings(
+    heuristicCandidates.flatMap((candidate) => candidate.files).filter(isStaticAssetFile),
+  );
+  const intentCandidatesWithAssets = intentCandidates.map((candidate) => ({
+    ...candidate,
+    files: uniqueStrings([
+      ...candidate.files,
+      ...changedAssetFiles.filter((asset) => isSupportingAssetForFiles(asset, candidate.files)),
+    ]),
+  }));
+  const intentFiles = new Set(intentCandidatesWithAssets.flatMap((candidate) => candidate.files));
   const nonOverlapping = heuristicCandidates.filter((candidate) =>
     candidate.files.every((file) => !intentFiles.has(file)) || isVerificationOnlyKind(candidate.kind),
   );
-  return [...intentCandidates, ...nonOverlapping].slice(0, 4);
+  return [...intentCandidatesWithAssets, ...nonOverlapping].slice(0, 4);
+}
+
+function intentFlowDisplayTitle(
+  intent: ChangeIntentAnalysis["intents"][number],
+  domainLanguage?: DomainLanguageSummary,
+): string {
+  const actionStages = intent.lifecycle.filter(
+    (stage) =>
+      (stage.kind === "trigger" || stage.kind === "side-effect") &&
+      stage.evidence.some((evidence) => evidence.kind === "diff" && evidence.file),
+  );
+  const actions = uniqueStrings(
+    actionStages
+      .map((stage) => conciseLifecycleAction(stage.label))
+      .filter((label): label is string => Boolean(label)),
+  ).slice(0, 3);
+  if (actions.length < 2) {
+    return intent.title;
+  }
+  const titleTokens = new Set(pathWordTokens(intent.title));
+  const actionAlreadyNamed = actions.some((action) =>
+    pathWordTokens(action).some((token) => token.length > 3 && titleTokens.has(token))
+  );
+  if (actionAlreadyNamed) {
+    return intent.title;
+  }
+  const subject = summarizeFlowSubject(intent.files, "Changed behavior", domainLanguage);
+  return `${subject}: ${actions.map(titleCase).join(" / ")}`;
+}
+
+function conciseLifecycleAction(label: string): string | undefined {
+  const action = stripTerminalPunctuation(label)
+    .replace(/^(?:handle|trigger|invoke)\s+/i, "")
+    .replace(/^the\s+/i, "")
+    .trim();
+  if (!action || /^(?:behavior|result|action)$/i.test(action)) {
+    return undefined;
+  }
+  return action;
+}
+
+function isSupportingAssetForFiles(asset: string, flowFiles: string[]): boolean {
+  const assetOwner = workspaceOwner(asset);
+  const ownerToken = assetOwner?.split("/").at(-1);
+  const assetTokens = new Set(
+    domainTokensForEvidence(asset)
+      .filter((token) => token !== ownerToken)
+      .map(normalizeEvidenceToken),
+  );
+  if (assetTokens.size === 0) {
+    return false;
+  }
+  return flowFiles.some((file) => {
+    const fileOwner = workspaceOwner(file);
+    if (assetOwner && fileOwner && assetOwner !== fileOwner) {
+      return false;
+    }
+    return domainTokensForEvidence(file)
+      .filter((token) => token !== ownerToken)
+      .map(normalizeEvidenceToken)
+      .some((token) => assetTokens.has(token));
+  });
 }
 
 function intentFlowKind(intent: ChangeIntentAnalysis["intents"][number], projectType: E2eProjectType): E2eFlowKind {
@@ -5569,9 +5650,16 @@ async function inferFlowFixtureReadiness(
     const changedText = addedDiffText[file] ?? "";
     return isApiDependencyPath(file) || (changedText.length > 0 && hasApiDependencyText(changedText));
   });
+  const relatedChangedBackendFiles = context.changedBackendFiles.filter((file) =>
+    isRelatedEvidenceFile(file, files)
+  );
   const apiEndpoints = uniqueStrings([
-    ...(await findApiEndpointHints(root, uniqueStrings([...files, ...apiSignals]))),
-    ...context.changedBackendFiles.flatMap(apiEndpointFromBackendFile),
+    ...(await findApiEndpointHints(root, uniqueStrings([
+      ...files,
+      ...apiSignals,
+      ...relatedChangedBackendFiles,
+    ]))),
+    ...relatedChangedBackendFiles.flatMap(apiEndpointFromBackendFile),
   ]).slice(0, maxFilesPerFlow);
   const requiresMock = apiSignals.length > 0 || setupHints.some((hint) => hint.kind === "network" || hint.kind === "payment");
   if (!requiresMock) {
@@ -5603,11 +5691,20 @@ async function inferFlowFixtureReadiness(
     };
   }
 
-  const changedMockSignals = context.changedMockFiles.filter((file) => isRelatedEvidenceFile(file, files));
-  const projectMockSignals = context.projectMockFiles.filter((file) => isRelatedEvidenceFile(file, files));
-  const backendSignals = context.changedBackendFiles.filter((file) => isRelatedEvidenceFile(file, files));
-  const fallbackProjectMockSignals = projectMockSignals.length > 0 ? projectMockSignals : context.projectMockFiles;
-  const mockSignals = uniqueStrings([...changedMockSignals, ...fallbackProjectMockSignals]).slice(0, maxFilesPerFlow);
+  const mockCoversChangedEndpoint = (file: string): boolean => {
+    const insight = context.mockFileInsights.get(file);
+    return Boolean(
+      insight && apiEndpoints.some((endpoint) => insightCoversEndpoint(insight, endpoint)),
+    );
+  };
+  const changedMockSignals = context.changedMockFiles.filter(
+    (file) => mockCoversChangedEndpoint(file) || isRelatedEvidenceFile(file, files),
+  );
+  const projectMockSignals = context.projectMockFiles.filter(
+    (file) => mockCoversChangedEndpoint(file) || isRelatedEvidenceFile(file, files),
+  );
+  const backendSignals = relatedChangedBackendFiles;
+  const mockSignals = uniqueStrings([...changedMockSignals, ...projectMockSignals]).slice(0, maxFilesPerFlow);
 
   if (changedMockSignals.length > 0) {
     const changedInsights = insightsForMockSignals(changedMockSignals, context);
@@ -5626,9 +5723,8 @@ async function inferFlowFixtureReadiness(
     };
   }
 
-  if (context.projectMockFiles.length > 0) {
-    const reusableMockSignals = mockSignals.length > 0 ? mockSignals : context.projectMockFiles;
-    const reusableInsights = insightsForMockSignals(reusableMockSignals, context);
+  if (mockSignals.length > 0) {
+    const reusableInsights = insightsForMockSignals(mockSignals, context);
     return {
       status: "partial",
       reason: "Mock or fixture infrastructure exists, but this branch does not add flow-specific fixture evidence.",
@@ -5637,7 +5733,7 @@ async function inferFlowFixtureReadiness(
       backendSignals,
       mockSignals,
       nextActions: [
-        reuseFixtureAction(reusableMockSignals, reusableInsights, apiEndpoints),
+        reuseFixtureAction(mockSignals, reusableInsights, apiEndpoints),
         "Cover the primary success response and one empty, rejected, or server-error response.",
       ],
       ...(reusableInsights.length > 0 ? { mockInsights: reusableInsights } : {}),
@@ -5647,7 +5743,7 @@ async function inferFlowFixtureReadiness(
   if (backendSignals.length > 0) {
     return {
       status: "partial",
-      reason: "Backend or API contract changes exist, but deterministic fixture evidence was not detected.",
+      reason: "Related API implementation or contract changes exist, but deterministic fixture evidence was not detected.",
       apiSignals,
       apiEndpoints,
       backendSignals,
@@ -5655,7 +5751,7 @@ async function inferFlowFixtureReadiness(
       nextActions: [
         apiEndpoints.length > 0
           ? `Confirm the test environment can serve ${formatEndpointSummary(apiEndpoints)}, or add a mock response for local E2E runs.`
-          : "Confirm the test environment can serve the changed API path, or add a mock response for local E2E runs.",
+          : `Inspect ${backendSignals.slice(0, 3).map((file) => `\`${file}\``).join(", ")} for the concrete request URL and response shape before creating a mock; QAMap found no endpoint literal and did not invent one.`,
         "Seed realistic response data for success and failure paths.",
       ],
     };
@@ -5826,6 +5922,16 @@ function apiEndpointFromBackendFile(file: string): string[] {
   }
   const apiIndex = segments.findIndex((segment) => segment === "api" || segment === "apis");
   if (apiIndex >= 0) {
+    const parent = segments[apiIndex - 1];
+    const basename = segments.at(-1) ?? "";
+    const hasServerContext = segments
+      .slice(0, apiIndex)
+      .some((segment) => /^(?:server|servers|backend|backends|routes|controllers|handlers|endpoints)$/i.test(segment));
+    const isRootApiDirectory = apiIndex === 0 || parent === "src";
+    const isExplicitRouteFile = /^(?:route|handler|controller|resolver)$/i.test(basename);
+    if (!hasServerContext && !isRootApiDirectory && !isExplicitRouteFile) {
+      return [];
+    }
     const routeSegments = routeSegmentsFromFileParts(segments.slice(apiIndex + 1));
     if (routeSegments.length > 0) {
       return [`/api/${routeSegments.join("/")}`];
@@ -5913,8 +6019,28 @@ function isRelatedEvidenceFile(evidenceFile: string, flowFiles: string[]): boole
   if (flowFiles.length === 0) {
     return true;
   }
-  const evidenceTokens = domainTokensForEvidence(evidenceFile);
-  const flowTokens = new Set(flowFiles.flatMap(domainTokensForEvidence));
+  const evidenceOwner = workspaceOwner(evidenceFile);
+  const flowOwners = uniqueStrings(
+    flowFiles.map(workspaceOwner).filter((owner): owner is string => Boolean(owner)),
+  );
+  if (evidenceOwner && flowOwners.length > 0 && !flowOwners.includes(evidenceOwner)) {
+    return false;
+  }
+  const ownerTokens = new Set(
+    [evidenceOwner, ...flowOwners]
+      .filter((owner): owner is string => Boolean(owner))
+      .map((owner) => owner.split("/").at(-1)?.toLowerCase())
+      .filter((token): token is string => Boolean(token)),
+  );
+  const evidenceTokens = domainTokensForEvidence(evidenceFile)
+    .filter((token) => !ownerTokens.has(token))
+    .map(normalizeEvidenceToken);
+  const flowTokens = new Set(
+    flowFiles
+      .flatMap(domainTokensForEvidence)
+      .filter((token) => !ownerTokens.has(token))
+      .map(normalizeEvidenceToken),
+  );
   if (evidenceTokens.some((token) => flowTokens.has(token))) {
     return true;
   }
@@ -5928,6 +6054,21 @@ function domainTokensForEvidence(file: string): string[] {
     .flatMap((part) => part.replace(/([a-z0-9])([A-Z])/g, "$1 $2").split(/[^a-zA-Z0-9]+/))
     .map((part) => part.toLowerCase())
     .filter((part) => part.length > 2 && !fixtureEvidenceIgnoredTokens.has(part));
+}
+
+function normalizeEvidenceToken(token: string): string {
+  return token.length > 4 && token.endsWith("s") ? token.slice(0, -1) : token;
+}
+
+function workspaceOwner(file: string): string | undefined {
+  const parts = toPosixPath(file).split("/").filter(Boolean);
+  const workspaceIndex = parts.findIndex((part) => /^(?:apps?|packages?|services?)$/i.test(part));
+  // Only repository-root workspace folders establish ownership. Ordinary
+  // source paths such as src/services/foo.ts are not package boundaries.
+  if (workspaceIndex !== 0 || !parts[workspaceIndex + 1]) {
+    return undefined;
+  }
+  return parts.slice(0, workspaceIndex + 2).join("/");
 }
 
 const fixtureEvidenceIgnoredTokens = new Set([
@@ -6371,6 +6512,10 @@ function isUserFacingFile(file: string): boolean {
     /(?:^|\/)(app|pages|routes|screens|components|ui|navigation)\//i.test(file) ||
     /\.(?:tsx|jsx|vue|svelte)$/i.test(file)
   );
+}
+
+function isStaticAssetFile(file: string): boolean {
+  return /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp|woff2?|ttf|otf|mp3|m4a|ogg|wav|mp4|mov|webm)$/i.test(file);
 }
 
 function isApiRouteFile(file: string): boolean {
@@ -10302,7 +10447,11 @@ function extractSelectorsFromText(file: string, text: string, runner: E2eRunnerN
   }
 
   selectors.push(...extractTextNodeSelectors(file, text));
-  return selectors.filter((selector) => isUsefulSelector(selector.value));
+  return selectors.filter(
+    (selector) =>
+      isUsefulSelector(selector.value) &&
+      (selector.kind !== "visible-text" || isUsefulVisibleText(selector.value)),
+  );
 }
 
 function extractInputAttributeSelectors(
@@ -10531,6 +10680,15 @@ function isUsefulSelector(value: string): boolean {
   // Dotted tokens without spaces are almost always i18n keys or property paths,
   // never rendered UI text, so a locator built from them can never match.
   if (/^[\w$-]+(?:\.[\w$-]+)+$/.test(value)) {
+    return false;
+  }
+  return true;
+}
+
+function isUsefulVisibleText(value: string): boolean {
+  // Machine-facing event keys and telemetry identifiers can legally appear in
+  // JSX attributes, but they are not text a user can observe in the product.
+  if (/^[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+$/.test(value)) {
     return false;
   }
   return true;

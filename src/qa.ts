@@ -32,6 +32,7 @@ export interface QaDraftResult {
   manifestPath?: string;
   noCloud: true;
   noLlmToken: true;
+  execution: QaExecutionReceipt;
   testSuite: E2eDraftResult["plan"]["testSuite"];
   bootstrap: E2eDraftResult["plan"]["bootstrap"];
   runnerSetup: E2eDraftResult["plan"]["runnerSetup"];
@@ -42,6 +43,12 @@ export interface QaDraftResult {
   prChecklist: string[];
   agentHandoff: string[];
   suggestedCommands: string[];
+}
+
+export interface QaExecutionReceipt {
+  status: "not-run";
+  performed: false;
+  scope: "static-analysis-and-draft-mapping";
 }
 
 export interface QaDraftFlow {
@@ -99,6 +106,11 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     manifestPath: draft.plan.verificationManifestPath,
     noCloud: true,
     noLlmToken: true,
+    execution: {
+      status: "not-run",
+      performed: false,
+      scope: "static-analysis-and-draft-mapping",
+    },
     testSuite: draft.plan.testSuite,
     bootstrap: draft.plan.bootstrap,
     runnerSetup: draft.plan.runnerSetup,
@@ -138,6 +150,7 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
     project: result.project,
     runner: result.runner,
     manifest: result.manifestPath ?? null,
+    execution: result.execution,
     readiness: { score: result.readiness.score, level: result.readiness.level },
     scenarioCoverage: {
       required: result.readiness.requiredScenarios,
@@ -387,6 +400,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     project: summary.project,
     runner: summary.runner,
     manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 120) : null,
+    execution: summary.execution,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     testSuite: summary.testSuite,
@@ -414,6 +428,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     project: summary.project,
     runner: summary.runner,
     manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 180) : null,
+    execution: summary.execution,
     readiness: summary.readiness,
     testSuite: summary.testSuite,
     intentCount: summary.intentCount,
@@ -476,6 +491,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("");
   lines.push("## At a Glance");
   lines.push("");
+  lines.push("- Product QA execution: not run; this command performed static analysis and draft mapping only.");
   const primaryIntent = result.changeAnalysis.intents[0];
   if (primaryIntent) {
     lines.push(`- Change intent: ${escapeMarkdownInline(primaryIntent.title)} [${primaryIntent.confidence}]`);
@@ -543,8 +559,8 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
         `${result.readiness.recommendedScenarios} recommended, ${result.readiness.reviewOnlyScenarios} review-only.`,
     );
     lines.push(
-      `- E2E mapping: ${result.readiness.compiledScenarios} compiled, ` +
-        `${result.readiness.partialScenarios} partial, ${result.readiness.notCompiledScenarios} not compiled.`,
+      `- E2E draft mapping: ${result.readiness.compiledScenarios} fully mapped, ` +
+        `${result.readiness.partialScenarios} partially mapped, ${result.readiness.notCompiledScenarios} not mapped; no tests executed.`,
     );
   }
   lines.push("");
@@ -702,7 +718,7 @@ function appendQaChangeIntentMarkdown(lines: string[], result: QaDraftResult): v
       );
       if (automation) {
         lines.push(
-          `    - E2E mapping: ${automation.status} ` +
+          `    - E2E draft mapping: ${formatScenarioAutomationStatus(automation.status)} ` +
             `(steps ${automation.mappedSteps}/${automation.totalSteps}; assertions ${automation.mappedAssertions}/${automation.totalAssertions})`,
         );
         for (const blocker of automation.blockers.slice(0, 2)) {
@@ -720,6 +736,13 @@ function appendQaChangeIntentMarkdown(lines: string[], result: QaDraftResult): v
     }
     lines.push("");
   }
+}
+
+function formatScenarioAutomationStatus(status: E2eScenarioAutomationReceipt["status"]): string {
+  if (status === "compiled") return "fully mapped (not executed)";
+  if (status === "partial") return "partially mapped (not executed)";
+  if (status === "not-compiled") return "not mapped";
+  return "review only";
 }
 
 function findScenarioAutomation(

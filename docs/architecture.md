@@ -52,7 +52,7 @@ Runner adapters then emit a second receipt for each routed scenario:
 - `not-compiled`: the scenario was selected but no deterministic compiler had enough entrypoint, action, fixture, and outcome evidence;
 - `review-only`: the scenario or repository has no executable adapter contract.
 
-A compilation receipt is static evidence, not a test result. Only explicit execution may produce pass or fail evidence. A required scenario that is partial or not compiled remains an execution blocker and prevents the draft from being described as runnable.
+A compilation receipt is static evidence, not a test result. Human output therefore calls these states `fully mapped`, `partially mapped`, and `not mapped`; the machine values remain stable for compatibility. Every `qa` result also carries an invocation-level `execution` receipt with `status: not-run` and `scope: static-analysis-and-draft-mapping`. Only explicit execution may produce pass or fail evidence. A required scenario that is partial or not compiled remains an execution blocker and prevents the draft from being described as runnable.
 
 ## Behavior Graph
 

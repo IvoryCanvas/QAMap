@@ -1,5 +1,24 @@
 # Release Validation
 
+## Unreleased (0.4.5 candidate) - 2026-07-15
+
+Validated as a result-precision and repository-evidence ownership patch. QAMap now distinguishes static QA analysis from product execution at the top level, keeps supporting assets and fixture evidence with the behavior-bearing workspace flow, and avoids presenting machine-shaped event keys or unrelated package mocks as usable UI evidence:
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm test` | 176/176 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 15/15 synthetic PR targets pass across web, mobile, API, shared-component, configuration, and test-only changes |
+| Coverage | Lines 88.57%, branches 85.19%, functions 95.82% |
+| Change Intent coverage | Lines 98.58%, branches 91.64%, functions 99.44% |
+| Product execution honesty | Human output says `not run` and `not executed`; agent output carries `execution: { status: "not-run", performed: false, scope: "static-analysis-and-draft-mapping" }` |
+| Workspace evidence ownership | A domain-neutral multi-app fixture keeps a changed asset and same-workspace endpoint evidence with the owning behavior flow while rejecting an unrelated sibling-app mock and unrelated same-app API client |
+| Package preview | `pnpm pack --dry-run` passes; the package version intentionally remains unchanged until release preparation |
+
+The new fixture models a generic multi-application repository rather than a maintainer product. It changes a user action, supporting asset, and endpoint in one application, places a similarly named mock in another application, and changes an unrelated API client in the same application. The regression contract requires natural action language, one behavior flow instead of an asset-only duplicate, usable selector evidence, relevant fixture guidance, no filename-fabricated server URL, and an explicit non-execution receipt.
+
+Machine automation values remain `compiled`, `partial`, `not-compiled`, and `review-only` for the additive v1 contract. They now have unambiguous human labels: fully mapped, partially mapped, not mapped, and review only. These values describe whether a selected scenario could be expressed as a draft; they never mean the target application ran or passed.
+
 ## 0.4.4 - 2026-07-15
 
 Validated as a cross-framework evidence, honest-draft, and repeat-use UX patch. QAMap recovers conservative change intent from connected diff behavior even when commit text is not descriptive, maps React and Vue conditional states to changed actions and observable outcomes, keeps unsupported outcomes review-only, and can install short collision-safe package scripts for everyday branch and working-tree QA:

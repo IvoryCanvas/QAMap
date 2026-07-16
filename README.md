@@ -43,6 +43,8 @@ npx --yes @ivorycanvas/qamap@latest qa
 
 A manifest and test runner are **not required** for the first run.
 
+`qa` performs static analysis and draft mapping only. It does not launch the target application or claim that product QA passed.
+
 For repeat use in a JavaScript repository, install QAMap once and add short package scripts:
 
 ```sh
@@ -68,28 +70,29 @@ QAMap keeps QA selection and test generation as two separate decisions:
 | --- | --- |
 | **Behavior inference** | Connect commit intent and changed symbols into a trigger, condition, state change, side effect, and observable outcome. |
 | **Scenario routing** | Mark each scenario `required`, `recommended`, or `review-only`, with the exact diff hunk or commit that supports it. |
-| **Automation receipt** | Report whether the selected scenario is `compiled`, `partial`, or `not-compiled`, including the missing selector, fixture, entrypoint, or assertion evidence. |
+| **Automation receipt** | Report whether the selected scenario is fully, partially, or not mapped into a draft, including the missing selector, fixture, entrypoint, or assertion evidence. Machine output keeps the compatible values `compiled`, `partial`, and `not-compiled`; none of them means a test ran or passed. |
 
 Trimmed real output from the demo:
 
 ```txt
+Product QA execution: not run; static analysis and draft mapping only
 Change intent: Open processed document summary [medium]
 Scenario routing: 1 required, 2 recommended, 1 review-only
-E2E mapping: 1 compiled, 0 partial, 2 not compiled
+E2E draft mapping: 1 fully mapped, 0 partially mapped, 2 not mapped; no tests executed
 
 [critical] Open processed document summary
   Routing: required - 4 supporting diff hunks
-  E2E mapping: compiled - steps 1/1, assertions 1/1
+  E2E draft mapping: fully mapped (not executed) - steps 1/1, assertions 1/1
   Source: src/pages/documents.vue:20, symbol startImport
   Source: src/pages/documents.vue:21, symbol isImportComplete
 
 [recommended] Destination path and query parameters
   Routing: recommended - 2 direct diff hunks
-  E2E mapping: not-compiled - missing a complete boundary compiler chain
+  E2E draft mapping: not mapped - missing a complete boundary compiler chain
   Source: src/pages/documents.vue:11, symbol URLSearchParams
 ```
 
-This distinction is deliberate: a scenario can deserve QA without QAMap pretending it already has enough evidence to generate a trustworthy E2E test.
+This distinction is deliberate: a scenario can deserve QA without QAMap pretending it already has enough evidence to generate a trustworthy E2E test. Static draft mapping answers whether QAMap could express the scenario; only a separate, explicit execution can produce pass or fail evidence.
 
 ## From Judgment to E2E
 

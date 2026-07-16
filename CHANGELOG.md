@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+
+- Added an invocation-level execution receipt to QA results and the additive agent v1 contract. Static `qa` runs now state `not-run` and `static-analysis-and-draft-mapping` instead of leaving product execution ambiguous.
+- Added a domain-neutral workspace regression fixture that keeps behavior source, supporting assets, endpoint evidence, and fixture candidates attached to the owning flow.
+
+### Changed
+
+- Human reports now describe automation as fully, partially, or not mapped and explicitly say that no product tests were executed. Backward-compatible machine values remain unchanged.
+- Intent flow titles prefer diff-backed actions and outcomes when a broad commit subject does not describe the actual changed behavior.
+
+### Fixed
+
+- Event handlers such as `onShare` now produce natural action labels, and machine-style event keys are no longer promoted as visible-text selectors.
+- Static assets no longer create duplicate product flows when they support a behavior-bearing change.
+- Fixture recommendations no longer cross unrelated monorepo application boundaries unless exact endpoint evidence connects them, and frontend API client filenames are no longer fabricated into server URLs.
+
 ## 0.4.4 - 2026-07-15
 
 ### Added
