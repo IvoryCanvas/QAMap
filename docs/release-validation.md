@@ -2,24 +2,29 @@
 
 ## Unreleased (0.4.5 candidate) - 2026-07-16
 
-Validated as a traceable-reasoning, result-precision, and repository-evidence ownership candidate. QAMap now exposes one inspectable path from diff evidence to affected behavior, risk, routed QA scenario, optional artifact, and explicit non-execution. It also keeps supporting assets and fixture evidence with the behavior-bearing workspace flow instead of presenting unrelated package mocks as usable UI evidence:
+Validated as a traceable-reasoning, cross-domain precision, and repository-evidence ownership candidate. QAMap now exposes one inspectable path from diff evidence to affected behavior, risk, routed QA scenario, optional artifact, and explicit non-execution. It also keeps QA routing separate from draft-mapping gaps, rejects unrelated package mocks, and maps a diff-added UI action to its observable state result:
 
 | Gate | Current result |
 | --- | --- |
-| `pnpm test` | 177/177 passing |
+| `pnpm release:check` | Passed end to end without changing the package version |
+| `pnpm test` | 179/179 passing |
 | `pnpm scan` | 0 findings |
-| `pnpm bench:ci` | 15/15 synthetic PR targets pass across web, mobile, API, shared-component, configuration, and test-only changes; public trace fixtures reject missing scenario paths and untraceable required scenarios |
-| Coverage | Lines 88.63%, branches 84.97%, functions 95.86% |
-| Change Intent coverage | Lines 98.58%, branches 91.64%, functions 99.44% |
-| QA trace coverage | Lines 98.26%, branches 88.17%, functions 96.77% |
+| `pnpm bench:ci` | 16/16 synthetic PR targets pass across web, mobile, API, shared-component, configuration, state-transition, and test-only changes; public trace fixtures reject missing scenario paths and untraceable required scenarios |
+| Coverage | Lines 88.73%, branches 85.27%, functions 95.90% |
+| Change Intent coverage | Lines 98.59%, branches 91.12%, functions 99.45% |
+| QA trace coverage | Lines 98.26%, branches 92.13%, functions 96.77% |
 | Reasoning path | Stable IDs connect diff source -> evidence-linked lifecycle -> risk -> routing -> optional draft; partial and review-only paths retain their gaps instead of being promoted |
 | Product execution honesty | Human output says `not run` and `not executed`; agent output carries `execution: { status: "not-run", performed: false, scope: "static-analysis-and-draft-mapping" }` |
+| Judgment precision | Persisted dates do not imply scheduling, structured metadata does not imply browser routing, local services do not imply API fixtures, and report counts come from the emitted reasoning traces |
+| UI state handoff | A diff-added action selector compiles to the interaction step and repository-observed stable state copy becomes the assertion and user-facing success signal |
 | Workspace evidence ownership | A domain-neutral multi-app fixture keeps a changed asset and same-workspace endpoint evidence with the owning behavior flow while rejecting an unrelated sibling-app mock and unrelated same-app API client |
 | Package preview | `pnpm pack --dry-run` passes; the package version intentionally remains unchanged until release preparation |
 
 Human Markdown, full JSON, compact agent JSON, and generated Playwright, Maestro, or manual drafts now share the same trace ID. This keeps the reasoning layer separate from the artifact while letting a reviewer move from generated code back to the exact change, inferred consequence, and risk that caused it to exist. A `traceable` result means the reasoning provenance is connected; it never means the target product was launched or the scenario passed.
 
-The new fixture models a generic multi-application repository rather than a maintainer product. It changes a user action, supporting asset, and endpoint in one application, places a similarly named mock in another application, and changes an unrelated API client in the same application. The regression contract requires natural action language, one behavior flow instead of an asset-only duplicate, usable selector evidence, relevant fixture guidance, no filename-fabricated server URL, and an explicit non-execution receipt.
+The workspace fixture models a generic multi-application repository rather than a maintainer product. It changes a user action, supporting asset, and endpoint in one application, places a similarly named mock in another application, and changes an unrelated API client in the same application. The regression contract requires natural action language, one behavior flow instead of an asset-only duplicate, usable selector evidence, relevant fixture guidance, no filename-fabricated server URL, and an explicit non-execution receipt.
+
+The state-transition fixture models a framework-level interaction rather than a product domain: a branch adds a stable action control and conditional visible result. The benchmark requires the action selector, exact state copy, route, reasoning traces, and scenario-to-draft receipts to survive together. A unit-level negative set separately proves that date validation, structured `destination` data, ordinary local services, and substring selector matches do not fabricate unrelated QA or fixture requirements.
 
 Machine automation values remain `compiled`, `partial`, `not-compiled`, and `review-only` for the additive v1 contract. They now have unambiguous human labels: fully mapped, partially mapped, not mapped, and review only. These values describe whether a selected scenario could be expressed as a draft; they never mean the target application ran or passed.
 

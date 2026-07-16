@@ -8,18 +8,23 @@
 - Added benchmark contracts that fail when routed scenarios are missing reasoning traces or a required scenario cannot link its diff evidence to the affected lifecycle.
 - Added an invocation-level execution receipt to QA results and the additive agent v1 contract. Static `qa` runs now state `not-run` and `static-analysis-and-draft-mapping` instead of leaving product execution ambiguous.
 - Added a domain-neutral workspace regression fixture that keeps behavior source, supporting assets, endpoint evidence, and fixture candidates attached to the owning flow.
+- Added a public React state-transition benchmark that requires a diff-added action selector and observable state copy to reach the same automation draft.
 
 ### Changed
 
 - Human, JSON, agent, Playwright, Maestro, and manual draft output now share stable trace IDs, so generated artifacts can be reviewed as consequences of a visible QA decision instead of opaque output.
 - Human reports now describe automation as fully, partially, or not mapped and explicitly say that no product tests were executed. Backward-compatible machine values remain unchanged.
 - Intent flow titles prefer diff-backed actions and outcomes when a broad commit subject does not describe the actual changed behavior.
+- Human QA output now derives scenario counts from reasoning traces and separates QA routing from optional draft-mapping or repository-context gaps.
+- Intent-backed flow summaries prefer a commit-backed user action over implementation-shaped setter triggers and use repository-observed stable state copy as both the success signal and primary reasoning-trace proof.
 
 ### Fixed
 
 - Event handlers such as `onShare` now produce natural action labels, and machine-style event keys are no longer promoted as visible-text selectors.
 - Static assets no longer create duplicate product flows when they support a behavior-bearing change.
 - Fixture recommendations no longer cross unrelated monorepo application boundaries unless exact endpoint evidence connects them, and frontend API client filenames are no longer fabricated into server URLs.
+- Persisted date validation no longer fabricates calendar QA without scheduling evidence, and structured metadata fields such as `destination` no longer fabricate browser routing.
+- Ordinary local service modules no longer imply an API fixture dependency, and selector provenance no longer treats an unchanged label as diff-added merely because it is a substring of a changed identifier.
 
 ## 0.4.4 - 2026-07-15
 

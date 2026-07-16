@@ -996,6 +996,9 @@ test("generateE2ePlan detects data catalog repositories and suggests catalog ver
       "    properties:",
       "      - name: source",
       "        type: string",
+      "      - name: destination",
+      "        type: string",
+      "        description: Analytics destination category.",
     ].join("\n"),
   );
   await writeFile(
@@ -1026,6 +1029,10 @@ test("generateE2ePlan detects data catalog repositories and suggests catalog ver
   assert.ok(testabilityRow);
 
   assert.equal(plan.project.type, "data-catalog");
+  const scenarioTitles = plan.changeAnalysis.intents.flatMap((intent) =>
+    intent.scenarios.map((scenario) => scenario.title)
+  );
+  assert.equal(scenarioTitles.some((title) => /Destination path|destination routing/i.test(title)), false);
   assert.ok(plan.project.evidence.some((item) => item === "Catalog or taxonomy files found"));
   assert.equal(plan.recommendedRunner.name, "manual");
   assert.match(plan.recommendedRunner.reason, /taxonomy or data catalog/);
@@ -2700,6 +2707,61 @@ test("fixture guidance names the mock handler file to extend and shapes mock pay
     draftFile.selfCheck?.checks.find((check) => check.name === "Domain assertions")?.status,
     "pass",
   );
+});
+
+test("local service state and permission requests do not require unrelated API fixtures", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/settings"), { recursive: true });
+  await mkdir(path.join(root, "src/services"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ dependencies: { react: "^19.0.0", vite: "^7.0.0" } }),
+  );
+  await writeFile(
+    path.join(root, "src/services/localStorageService.ts"),
+    "export const localStorageService = { read: () => [] };\n",
+  );
+  await writeFile(
+    path.join(root, "src/services/reportMockService.ts"),
+    "export const reportMockService = { summary: { score: 10 } };\n",
+  );
+  await writeFile(
+    path.join(root, "src/pages/settings/SettingsPage.tsx"),
+    [
+      'import { localStorageService } from "../../services/localStorageService";',
+      "export function SettingsPage({ notificationService }) {",
+      "  const requestNotifications = () => notificationService.requestPermissionOnce();",
+      "  return <button onClick={requestNotifications}>{localStorageService.read().length}</button>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "fix/storage-recovery"]);
+  await writeFile(
+    path.join(root, "src/services/localStorageService.ts"),
+    [
+      "const isStorageDocument = (value) => Array.isArray(value?.records);",
+      "export const localStorageService = {",
+      "  read: (value) => isStorageDocument(value) ? value.records : [],",
+      "  clear: () => undefined,",
+      "};",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "fix: recover malformed local records"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const stateFlow = plan.flows.find((flow) => flow.kind === "state" || /local records/i.test(flow.title));
+
+  assert.ok(stateFlow);
+  assert.equal(stateFlow.fixtureReadiness.status, "not-needed");
+  assert.deepEqual(stateFlow.fixtureReadiness.apiSignals, []);
+  assert.deepEqual(stateFlow.fixtureReadiness.mockSignals, []);
+  assert.match(stateFlow.fixtureReadiness.reason, /No API, network, payment, or external-response dependency/i);
 });
 
 test("generateE2ePlan builds a bootstrap plan for projects without tests", async () => {
@@ -5509,7 +5571,8 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.match(markdown, /Automation stage:/);
   assert.match(markdown, /QA analysis and scenario routing do not require the optional automation runner/);
   assert.match(markdown, /- Repository validation: `/);
-  assert.match(markdown, /- QA proposal gap/);
+  assert.match(markdown, /- Optional automation gap/);
+  assert.match(markdown, /Draft Mapping And Context Gaps/);
   assert.match(markdown, /Manifest: not found; using repo signals and PR diff only/);
   assert.match(markdown, /PR Comment Draft/);
   assert.match(markdown, /Affected Flow/);
@@ -5579,7 +5642,13 @@ test("draft steps keep non-Latin selector labels instead of emitting blank actio
   await mkdir(path.join(root, "app/memo"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
-    JSON.stringify({ scripts: { test: "playwright test" }, dependencies: { next: "^15.0.0", "@playwright/test": "^1.56.0" } }),
+    JSON.stringify({
+      name: "sticky-items",
+      private: true,
+      scripts: { dev: "next dev -p 4173" },
+      dependencies: { next: "^15.0.0", react: "^19.0.0", "react-dom": "^19.0.0" },
+      devDependencies: { "@playwright/test": "^1.61.1" },
+    }),
   );
   await writeFile(
     path.join(root, "app/memo/page.tsx"),
@@ -5827,11 +5896,39 @@ test("diff-added selectors rank first and name the changed behavior", async () =
   await writeFile(
     path.join(root, "app/notes/page.tsx"),
     [
+      '"use client";',
+      'import { useState } from "react";',
+      "",
       "export default function NotesPage() {",
-      "  return <main>",
-      "    <input data-testid=\"note-input\" placeholder=\"Write a note\" />",
-      "    <button data-testid=\"add-note\">Add note</button>",
-      "  </main>;",
+      "  const [notes, setNotes] = useState<string[]>([]);",
+      '  const [draft, setDraft] = useState("");',
+      "  return (",
+      "    <main>",
+      "      <h1>Notes</h1>",
+      "      <input",
+      '        data-testid="note-input"',
+      '        placeholder="Write a note"',
+      "        value={draft}",
+      "        onChange={(event) => setDraft(event.target.value)}",
+      "      />",
+      "      <button",
+      '        data-testid="add-note"',
+      "        onClick={() => {",
+      "          if (draft.trim()) {",
+      "            setNotes([...notes, draft.trim()]);",
+      '            setDraft("");',
+      "          }",
+      "        }}",
+      "      >",
+      "        Add note",
+      "      </button>",
+      '      <ul data-testid="note-list">',
+      "        {notes.map((note, index) => (",
+      "          <li key={index}>{note}</li>",
+      "        ))}",
+      "      </ul>",
+      "    </main>",
+      "  );",
       "}",
     ].join("\n"),
   );
@@ -5843,17 +5940,59 @@ test("diff-added selectors rank first and name the changed behavior", async () =
   await writeFile(
     path.join(root, "app/notes/page.tsx"),
     [
+      '"use client";',
+      'import { useState } from "react";',
+      "",
+      "type Note = { text: string; pinned: boolean };",
+      "",
       "export default function NotesPage() {",
-      "  return <main>",
-      "    <input data-testid=\"note-input\" placeholder=\"Write a note\" />",
-      "    <button data-testid=\"add-note\">Add note</button>",
-      "    <button data-testid=\"pin-note\" aria-label=\"Pin selected note\">Pin</button>",
-      "  </main>;",
+      "  const [notes, setNotes] = useState<Note[]>([]);",
+      '  const [draft, setDraft] = useState("");',
+      "  const sorted = [...notes].sort((a, b) => Number(b.pinned) - Number(a.pinned));",
+      "  return (",
+      "    <main>",
+      "      <h1>Notes</h1>",
+      "      <input",
+      '        data-testid="note-input"',
+      '        placeholder="Write a note"',
+      "        value={draft}",
+      "        onChange={(event) => setDraft(event.target.value)}",
+      "      />",
+      "      <button",
+      '        data-testid="add-note"',
+      "        onClick={() => {",
+      "          if (draft.trim()) {",
+      "            setNotes([...notes, { text: draft.trim(), pinned: false }]);",
+      '            setDraft("");',
+      "          }",
+      "        }}",
+      "      >",
+      "        Add note",
+      "      </button>",
+      '      <ul data-testid="note-list">',
+      "        {sorted.map((note, index) => (",
+      "          <li key={index}>",
+      '            {note.pinned ? "📌 " : ""}',
+      "            {note.text}",
+      "            <button",
+      "              aria-label={`Pin ${note.text}`}",
+      '              data-testid="pin-note"',
+      "              onClick={() =>",
+      "                setNotes(notes.map((item) => (item === note ? { ...item, pinned: !item.pinned } : item)))",
+      "              }",
+      "            >",
+      "              Pin",
+      "            </button>",
+      "          </li>",
+      "        ))}",
+      "      </ul>",
+      "    </main>",
+      "  );",
       "}",
     ].join("\n"),
   );
   await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "add pin button"]);
+  await git(root, ["commit", "-m", "feat: pin notes to the top"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
   const flow = plan.flows.find((item) => item.selectors.length > 0);
@@ -5861,14 +6000,37 @@ test("diff-added selectors rank first and name the changed behavior", async () =
   const pinSelector = flow.selectors.find((selector) => selector.value === "pin-note");
   assert.ok(pinSelector, "expected the diff-added pin-note selector to be extracted");
   assert.equal(pinSelector.addedInDiff, true);
+  assert.equal(flow.selectors.find((selector) => selector.value === "Notes")?.addedInDiff, undefined);
+  assert.match(flow.languageBrief.trigger, /pin notes to the top/i);
+  assert.equal(flow.languageBrief.successSignal, 'visible text "📌" appears');
   assert.ok(
-    plan.domainLanguage.scenarios.some((scenario) => /pin/i.test(scenario.title)),
+    plan.changeAnalysis.intents.some((intent) =>
+      /pin/i.test(intent.title) || intent.scenarios.some((scenario) => /pin/i.test(scenario.title))
+    ),
     "expected a scenario named after the added pin action",
   );
 
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", runner: "playwright", dryRun: true });
   const stepText = draft.files.flatMap((file) => file.draftSteps ?? []).join("\n");
   assert.match(stepText, /pin/i);
+  const writtenDraft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    runner: "playwright",
+    output: "tests/e2e",
+  });
+  const pinDraft = writtenDraft.files.find((file) => /pin/i.test(file.flowTitle));
+  assert.ok(pinDraft);
+  assert.equal(pinDraft.scenarioAutomation?.find((receipt) => receipt.kind === "primary")?.status, "compiled");
+  const spec = await readFile(path.join(root, pinDraft.path), "utf8");
+  assert.match(spec, /page\.getByTestId\("pin-note"\)\.click\(\)/);
+  assert.match(spec, /expect\(page\.getByText\("📌"\)\)\.toBeVisible\(\)/);
+  assert.doesNotMatch(spec, /QAMap could not infer a stable locator for this step: Pin/i);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const qaMarkdown = formatMarkdownQaDraft(qa);
+  assert.match(qaMarkdown, /Behavior lifecycle: action: Pin notes to the top\./);
+  assert.match(qaMarkdown, /Expected proof: Verify visible text "📌" appears\./);
 });
 
 test("observed changed-endpoint responses are asserted with diff-derived status bounds", async () => {

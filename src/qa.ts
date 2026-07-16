@@ -135,7 +135,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     readiness: draft.readinessSummary,
     flows,
     missingEvidence,
-    prChecklist: buildPrChecklist(draft, flows, missingEvidence),
+    prChecklist: buildPrChecklist(draft, flows),
     agentHandoff: buildAgentHandoff(draft, flows, missingEvidence),
     suggestedCommands: draft.plan.suggestedCommands,
   };
@@ -652,17 +652,27 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   }
   const blocking = result.missingEvidence.filter((item) => item.priority === "required").slice(0, 2);
   if (blocking.length === 0) {
-    lines.push("- QA proposal gaps: no required evidence gap detected; review the scenario sources and run repository validation.");
+    lines.push("- Optional automation: no required draft-mapping gap detected; review the scenario sources and run repository validation.");
   } else {
     for (const [index, item] of blocking.entries()) {
       lines.push(
-        `- QA proposal gap${blocking.length > 1 ? ` ${index + 1}` : ""}: ${escapeMarkdownInline(item.title)}: ${escapeMarkdownInline(item.detail)}`,
+        `- Optional automation gap${blocking.length > 1 ? ` ${index + 1}` : ""}: ${escapeMarkdownInline(item.title)}: ${escapeMarkdownInline(item.detail)}`,
       );
     }
   }
-  const routedScenarios = result.readiness.requiredScenarios +
-    result.readiness.recommendedScenarios +
-    result.readiness.reviewOnlyScenarios;
+  const hasTraces = result.traces.length > 0;
+  const traceRouting = hasTraces
+    ? summarizeTraceRouting(result.traces)
+    : {
+        required: result.readiness.requiredScenarios,
+        recommended: result.readiness.recommendedScenarios,
+        reviewOnly: result.readiness.reviewOnlyScenarios,
+      };
+  const routedScenarios = hasTraces
+    ? result.traces.length
+    : result.readiness.requiredScenarios +
+      result.readiness.recommendedScenarios +
+      result.readiness.reviewOnlyScenarios;
   lines.push(
     routedScenarios > 0
       ? `- QA analysis: completed independently of runner setup; ${routedScenarios} diff-backed scenario${routedScenarios === 1 ? "" : "s"} routed for review.`
@@ -670,18 +680,29 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   );
   if (routedScenarios > 0) {
     lines.push(
-      `- Scenario routing: ${result.readiness.requiredScenarios} required, ` +
-        `${result.readiness.recommendedScenarios} recommended, ${result.readiness.reviewOnlyScenarios} review-only.`,
+      `- Scenario routing: ${traceRouting.required} required, ` +
+        `${traceRouting.recommended} recommended, ${traceRouting.reviewOnly} review-only.`,
     );
+    const traceAutomation = hasTraces
+      ? summarizeTraceAutomation(result.traces)
+      : {
+          compiled: result.readiness.compiledScenarios,
+          partial: result.readiness.partialScenarios,
+          notCompiled: result.readiness.notCompiledScenarios,
+          reviewOnly: result.readiness.reviewOnlyScenarios,
+        };
     lines.push(
-      `- E2E draft mapping: ${result.readiness.compiledScenarios} fully mapped, ` +
-        `${result.readiness.partialScenarios} partially mapped, ${result.readiness.notCompiledScenarios} not mapped; no tests executed.`,
+      `- E2E draft mapping: ${traceAutomation.compiled} fully mapped, ` +
+        `${traceAutomation.partial} partially mapped, ${traceAutomation.notCompiled} not mapped, ` +
+        `${traceAutomation.reviewOnly} review-only; no tests executed.`,
     );
-    const traceable = result.traces.filter((trace) => trace.status === "traceable").length;
-    lines.push(
-      `- Reasoning trace: ${result.traces.length}/${routedScenarios} scenario${routedScenarios === 1 ? "" : "s"} traced; ` +
-        `${traceable} fully connect diff evidence to affected behavior, risk, and QA routing.`,
-    );
+    if (hasTraces) {
+      const traceable = result.traces.filter((trace) => trace.status === "traceable").length;
+      lines.push(
+        `- Reasoning trace: ${result.traces.length}/${routedScenarios} scenario${routedScenarios === 1 ? "" : "s"} traced; ` +
+          `${traceable} fully connect diff evidence to affected behavior, risk, and QA routing.`,
+      );
+    }
   }
   lines.push("");
   lines.push("## Summary");
@@ -754,10 +775,10 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   }
   lines.push("");
 
-  lines.push("### Evidence Gaps In This QA Proposal");
+  lines.push("### Draft Mapping And Context Gaps");
   lines.push("");
   if (result.missingEvidence.length === 0) {
-    lines.push("- No required evidence gap was detected in the generated QA draft. Still run the project validation command before merge.");
+    lines.push("- No required automation or context gap was detected. Still review the QA reasoning and run the project validation command before merge.");
   } else {
     for (const item of result.missingEvidence.slice(0, 6)) {
       lines.push(`- [${item.priority}] ${item.kind}: ${escapeMarkdownInline(item.title)} - ${escapeMarkdownInline(item.detail)} (${escapeMarkdownInline(item.flowTitle)})`);
@@ -800,6 +821,35 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   }
 
   return lines.join("\n");
+}
+
+function summarizeTraceRouting(traces: QaReasoningTrace[]): {
+  required: number;
+  recommended: number;
+  reviewOnly: number;
+} {
+  return traces.reduce((summary, trace) => {
+    if (trace.scenario.decision === "required") summary.required += 1;
+    else if (trace.scenario.decision === "recommended") summary.recommended += 1;
+    else summary.reviewOnly += 1;
+    return summary;
+  }, { required: 0, recommended: 0, reviewOnly: 0 });
+}
+
+function summarizeTraceAutomation(traces: QaReasoningTrace[]): {
+  compiled: number;
+  partial: number;
+  notCompiled: number;
+  reviewOnly: number;
+} {
+  return traces.reduce((summary, trace) => {
+    const status = trace.artifact?.status;
+    if (status === "compiled") summary.compiled += 1;
+    else if (status === "partial") summary.partial += 1;
+    else if (status === "review-only") summary.reviewOnly += 1;
+    else summary.notCompiled += 1;
+    return summary;
+  }, { compiled: 0, partial: 0, notCompiled: 0, reviewOnly: 0 });
 }
 
 function appendQaReasoningTraceMarkdown(lines: string[], result: QaDraftResult): void {
@@ -955,9 +1005,13 @@ function formatEvidenceReference(evidence: ChangeIntentEvidence): string {
 }
 
 function summarizeIntentLifecycle(lifecycle: QaDraftResult["changeAnalysis"]["intents"][number]["lifecycle"]): string {
-  const preferredPhases = ["trigger", "condition", "state-change", "side-effect", "observable-outcome"];
-  const selected = preferredPhases
-    .map((phase) => lifecycle.find((stage) => stage.kind === phase))
+  const start = lifecycle.find((stage) => stage.kind === "trigger")
+    ?? lifecycle.find((stage) => stage.kind === "action");
+  const selected = [
+    start,
+    ...["condition", "state-change", "side-effect", "observable-outcome"]
+      .map((phase) => lifecycle.find((stage) => stage.kind === phase)),
+  ]
     .filter((stage): stage is NonNullable<typeof stage> => Boolean(stage));
   const fallback = selected.length > 0 ? selected : lifecycle.slice(0, 5);
   return fallback.map((stage) => `${stage.kind}: ${stage.label}`).join(" -> ");
@@ -1069,7 +1123,6 @@ function uniqueMissingEvidence(items: QaDraftMissingEvidence[]): QaDraftMissingE
 function buildPrChecklist(
   draft: E2eDraftResult,
   flows: QaDraftFlow[],
-  missingEvidence: QaDraftMissingEvidence[],
 ): string[] {
   const checklist = [
     flows[0]?.existingEvidencePaths.length
@@ -1085,11 +1138,6 @@ function buildPrChecklist(
       ? `Answer the reviewer question: ${flows[0].userJourney.reviewQuestion}`
       : "Name the user-visible behavior or contract this PR can break.",
   ];
-
-  const required = missingEvidence.filter((item) => item.priority === "required");
-  for (const item of required.slice(0, 4)) {
-    checklist.push(`${item.title}: ${item.detail}`);
-  }
 
   const validationCommand = draft.plan.suggestedCommands.find((command) => /\b(?:e2e|test|playwright|maestro)\b/i.test(command))
     ?? draft.plan.suggestedCommands[0];
@@ -1121,7 +1169,9 @@ function buildAgentHandoff(
       : flows.length > 0
         ? `Review the affected-flow evidence for ${flows[0].title} before using it as PR policy.`
         : undefined,
-    missingEvidence.length > 0 ? "Close required evidence gaps before treating this QA draft as merge proof." : undefined,
+    missingEvidence.length > 0
+      ? "Treat selector, fixture, runner, and draft-mapping gaps as optional automation work; they do not replace review of the QA reasoning."
+      : undefined,
     flows.some((flow) => !flow.verificationMode)
       ? "A wrong flow recommendation should become a manifest correction, so future PRs improve without another prompt."
       : undefined,

@@ -123,6 +123,35 @@
       }
     },
     {
+      "name": "web-react-record-pinning",
+      "fixture": "test/benchmarks/web-react-record-pinning",
+      "commitMessage": "feat: pin a workspace record and show it first",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minDiffAnchoredFlows": 1,
+        "minReasoningTraces": 2,
+        "maxMissingReasoningTraces": 0,
+        "maxUntraceableRequiredScenarios": 0,
+        "minScenarioReceipts": 2,
+        "maxMissingScenarioReceipts": 0,
+        "minMappedScenarioSteps": 1,
+        "minMappedScenarioAssertions": 1,
+        "mustReachFiles": ["src/pages/records.tsx"],
+        "mustNameIntents": ["pin a workspace record"],
+        "mustNameFlows": ["pin a workspace record"],
+        "mustIncludeLifecycle": ["pin a workspace record", "show it first"],
+        "mustIncludeQaScenarios": ["Changed conditional state and fallback"],
+        "mustFindEntrypoints": ["/records"],
+        "mustFindSelectors": ["pin-record", "Pinned record appears first"],
+        "mustFindSuccessSignals": ["Pinned record appears first"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 8192
+      }
+    },
+    {
       "name": "web-react-presentation-control",
       "fixture": "test/benchmarks/web-react-presentation-control",
       "commitMessage": "fix: preserve banner theme contrast",

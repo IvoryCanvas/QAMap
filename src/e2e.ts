@@ -568,6 +568,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     addedDiffText,
     changeAnalysis,
   );
+  refineChangeIntentAssertions(changeAnalysis, flows);
   const behaviorGraph = await analyzeBehaviorGraph(
     {
       root: testPlan.root,
@@ -659,6 +660,35 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     missingTestability,
     setupNotes,
   };
+}
+
+function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flows: E2eFlow[]): void {
+  const genericAssertion = "Verify the externally observable result matches the commit intent.";
+  for (const flow of flows) {
+    if (!flow.intentId || !/^visible text ".+" appears$/u.test(flow.languageBrief.successSignal)) {
+      continue;
+    }
+    const intent = changeAnalysis.intents.find((candidate) => candidate.id === flow.intentId);
+    const primary = intent?.scenarios.find((scenario) => scenario.kind === "primary");
+    if (!primary || !primary.assertions.includes(genericAssertion)) {
+      continue;
+    }
+    const concreteAssertion = `Verify ${flow.languageBrief.successSignal}.`;
+    const assertions = primary.assertions.map((assertion) =>
+      assertion === genericAssertion
+        ? concreteAssertion
+        : assertion,
+    );
+    primary.assertions = assertions;
+    const flowScenario = flow.qaScenarios?.find((scenario) => scenario.id === primary.id);
+    if (flowScenario && flowScenario !== primary) {
+      flowScenario.assertions = [...assertions];
+    }
+    flow.steps = flow.steps.map((step) => step === genericAssertion ? concreteAssertion : step);
+    for (const target of flow.coverage) {
+      target.checks = target.checks.map((check) => check === genericAssertion ? concreteAssertion : check);
+    }
+  }
 }
 
 function behaviorSurfaceForProject(projectType: E2eProjectType): BehaviorSurfaceKind {
@@ -2459,7 +2489,14 @@ function withTerminalPeriod(value: string): string {
 function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLanguageBrief {
   const actor = inferFlowActor(flow);
   if (flow.intentId && flow.lifecycle && flow.lifecycle.length > 0) {
-    const trigger = flow.lifecycle.find((stage) => stage.kind === "trigger")?.label ?? `Start the changed ${flow.title} behavior.`;
+    const lifecycleTrigger = flow.lifecycle.find((stage) => stage.kind === "trigger");
+    const commitAction = flow.lifecycle.find(
+      (stage) => stage.kind === "action" && stage.evidence.some((item) => item.kind === "commit"),
+    );
+    const trigger = lifecycleTrigger &&
+      (!isImplementationShapedTrigger(lifecycleTrigger.label) || !commitAction)
+      ? lifecycleTrigger.label
+      : commitAction?.label ?? lifecycleTrigger?.label ?? `Start the changed ${flow.title} behavior.`;
     const outcomes = flow.lifecycle
       .filter((stage) => stage.kind === "observable-outcome")
       .map((stage) => stripTerminalPunctuation(stage.label));
@@ -2671,7 +2708,9 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
     return "the affected build or runtime variant starts cleanly and handles fallback values";
   }
   const visibleOutcome = flow.selectors.find(
-    (selector) => selector.kind === "visible-text" && isVisibleSuccessOutcome(selector.value),
+    (selector) =>
+      selector.kind === "visible-text" &&
+      (isVisibleSuccessOutcome(selector.value) || isDiffBackedStateMarker(flow, selector)),
   );
   if (visibleOutcome) {
     return `visible text "${visibleOutcome.value}" appears`;
@@ -2688,8 +2727,22 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
 }
 
 function isVisibleSuccessOutcome(value: string): boolean {
-  return /\b(?:confirmed|saved|scheduled|refreshed|succeeded|success|completed|created|updated|deleted|sent|approved|accepted)\b/i.test(value) ||
+  return /\b(?:confirmed|saved|scheduled|refreshed|succeeded|success|completed|created|updated|deleted|sent|approved|accepted|pinned|unpinned|enabled|disabled|activated|deactivated|connected|disconnected|published|archived|ready|queued)\b/i.test(value) ||
     /(?:완료|성공|예약(?:됨|됐|되)|저장(?:됨|됐|되)|등록(?:됨|됐|되)|제출(?:됨|됐|되)|승인(?:됨|됐|되))/.test(value);
+}
+
+function isDiffBackedStateMarker(
+  flow: Omit<E2eFlow, "languageBrief">,
+  selector: E2eSelector,
+): boolean {
+  return Boolean(selector.addedInDiff) &&
+    selector.value.length <= 12 &&
+    /\p{Extended_Pictographic}/u.test(selector.value) &&
+    Boolean(flow.lifecycle?.some((stage) => stage.kind === "condition" || stage.kind === "state-change"));
+}
+
+function isImplementationShapedTrigger(value: string): boolean {
+  return /^Trigger\s+(?:set|handle|use|update|dispatch|emit|mutate|invoke|call)\b/i.test(value);
 }
 
 function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSignal: string): string {
@@ -5864,13 +5917,13 @@ async function findApiDependencySignals(
 }
 
 function isApiDependencyPath(file: string): boolean {
-  return /(?:^|\/)(?:api|apis|clients?|endpoints?|queries|mutations|graphql|trpc|services?)\//i.test(file) ||
+  return /(?:^|\/)(?:api|apis|clients?|endpoints?|queries|mutations|graphql|trpc)\//i.test(file) ||
     /(?:api|client|endpoint|query|mutation|graphql|trpc|request|response)\.[cm]?[jt]sx?$/i.test(file);
 }
 
 function hasApiDependencyText(text: string): boolean {
   return /(?:fetch\s*\(|axios\.|graphql|gql`|trpc\.|useQuery|useMutation|queryKey|apiClient|client\.(?:get|post|put|patch|delete)|\/api\/|endpoint)/i.test(text) ||
-    /\b(?:request|response)[A-Z_][A-Za-z0-9_$]*/.test(text);
+    /\b(?:api|http|network)(?:Request|Response)\b|\b(?:request|response)\.(?:headers|json|ok|status)\b/.test(text);
 }
 
 async function findApiEndpointHints(root: string, files: string[]): Promise<string[]> {
@@ -6119,10 +6172,19 @@ async function inferFlowSelectors(
     }
     const addedText = addedDiffText[file];
     for (const selector of extractSelectorsFromText(file, text, runner)) {
-      selectors.push(addedText && addedText.includes(selector.value) ? { ...selector, addedInDiff: true } : selector);
+      selectors.push(
+        addedText && selectorAppearsInAddedDiff(selector.value, addedText)
+          ? { ...selector, addedInDiff: true }
+          : selector,
+      );
     }
   }
   return selectRepresentativeSelectors(selectors, 12);
+}
+
+function selectorAppearsInAddedDiff(value: string, addedText: string): boolean {
+  const escaped = escapeRegExp(value);
+  return new RegExp(`(?:^|[^\\p{L}\\p{N}_])${escaped}(?:$|[^\\p{L}\\p{N}_])`, "mu").test(addedText);
 }
 
 function selectRepresentativeSelectors(selectors: E2eSelector[], limit: number): E2eSelector[] {
@@ -9966,6 +10028,20 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
       return fallbackInput;
     }
   }
+  if (!isVerificationStep(step)) {
+    const changedAction = takeBestSelectorForStep(
+      selectors,
+      step,
+      (selector) =>
+        Boolean(selector.addedInDiff) &&
+        !isInputSelector(selector) &&
+        selectorCanDriveInteraction(selector) &&
+        selectorMatchesStep(selector, step),
+    );
+    if (changedAction) {
+      return changedAction;
+    }
+  }
   if (!isInteractionStep(step) && !isVerificationStep(step) && !canUsePrimarySelector(step)) {
     return undefined;
   }
@@ -10548,6 +10624,15 @@ function extractTextNodeSelectors(file: string, text: string): E2eSelector[] {
 
 function extractRenderedStateSelectors(file: string, text: string): E2eSelector[] {
   const selectors: E2eSelector[] = [];
+  const conditionalTextMatcher = /\{\s*[^{}\n?]{1,160}\?\s*(?:"([^"]*)"|'([^']*)')\s*:\s*(?:"([^"]*)"|'([^']*)')\s*\}/g;
+  for (const match of text.matchAll(conditionalTextMatcher)) {
+    for (const branch of [match[1], match[2], match[3], match[4]]) {
+      const value = normalizeSelectorValue(branch);
+      if (value && isUsefulSelector(value) && isUsefulVisibleText(value)) {
+        selectors.push({ kind: "visible-text", value, file });
+      }
+    }
+  }
   const renderedNames = new Set(
     [...text.matchAll(/>\s*\{\s*([A-Za-z_$][\w$]*)\s*\}\s*</g)].map((match) => match[1]),
   );

@@ -497,6 +497,34 @@ test("state updates and navigation options do not fabricate calendar or routing 
   assert.equal(scenarioTitles.some((title) => /Scheduling, calendar|destination routing/i.test(title)), false);
 });
 
+test("persisted record date validation does not fabricate scheduling QA", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/storage.ts", "export const readStoredRecords = () => []\n");
+  commit(root, "benchmark baseline");
+  branch(root, "fix/storage-validation");
+  await write(
+    root,
+    "src/storage.ts",
+    [
+      "const parseStoredTimestamp = (value) =>",
+      "  (typeof value === 'string' || typeof value === 'number') &&",
+      "  !Number.isNaN(new Date(value).getTime());",
+      "export const readStoredRecords = (records) => records.filter((record) => parseStoredTimestamp(record.createdAt));",
+    ].join("\n"),
+  );
+  commit(root, "fix: reject not a number persisted records");
+
+  const analysis = await analyze(root, ["src/storage.ts"]);
+  const scenarioTitles = analysis.intents.flatMap((intent) => intent.scenarios.map((scenario) => scenario.title));
+
+  assert.equal(analysis.intents.length, 1);
+  assert.equal(scenarioTitles.some((title) => /Scheduling, calendar/i.test(title)), false);
+  assert.ok(scenarioTitles.some((title) => /persisted context|re-entry|stale state/i.test(title)));
+  const lifecycleLabels = analysis.intents.flatMap((intent) => intent.lifecycle.map((stage) => stage.label));
+  assert.ok(lifecycleLabels.some((label) => /not a number/i.test(label)));
+  assert.equal(lifecycleLabels.some((label) => /na n/i.test(label)), false);
+});
+
 test("change intent marks connected working-tree signals as review-required diff evidence", async (t) => {
   const root = await makeRepo(t);
   await write(root, "src/form.tsx", "export function Form() { return null; }\n");
@@ -859,6 +887,21 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.match(spec, /trace:[a-f0-9]{12}/);
   assert.match(spec, /Diff source: src\/pages\/preferences\.tsx:\d+/);
   assert.match(spec, /Failure, timeout, and retry handling/);
+
+  const staleReadinessQa = structuredClone(qa);
+  staleReadinessQa.readiness.requiredScenarios = 40;
+  staleReadinessQa.readiness.recommendedScenarios = 30;
+  staleReadinessQa.readiness.reviewOnlyScenarios = 20;
+  const traceBasedMarkdown = formatMarkdownQaDraft(staleReadinessQa);
+  const requiredTraceCount = qa.traces.filter((trace) => trace.scenario.decision === "required").length;
+  const recommendedTraceCount = qa.traces.filter((trace) => trace.scenario.decision === "recommended").length;
+  const reviewOnlyTraceCount = qa.traces.filter((trace) => trace.scenario.decision === "review-only").length;
+  assert.match(
+    traceBasedMarkdown,
+    new RegExp(`Scenario routing: ${requiredTraceCount} required, ${recommendedTraceCount} recommended, ${reviewOnlyTraceCount} review-only`),
+  );
+  assert.match(traceBasedMarkdown, new RegExp(`Reasoning trace: ${qa.traces.length}/${qa.traces.length} scenarios? traced`));
+  assert.doesNotMatch(traceBasedMarkdown, /Reasoning trace: \d+\/90/);
 
   const oversizedQa = structuredClone(qa);
   oversizedQa.changeAnalysis.intents = Array.from({ length: 12 }, (_, index) => ({
