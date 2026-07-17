@@ -74,7 +74,7 @@ export interface QaDraftFlow {
   why: string[];
 }
 
-type QaVerificationMode = "existing-test-evidence" | "configuration" | "documentation" | "generated-artifact";
+type QaVerificationMode = "analysis-rule" | "existing-test-evidence" | "configuration" | "documentation" | "generated-artifact";
 
 export interface QaDraftMissingEvidence {
   flowTitle: string;
@@ -570,6 +570,7 @@ function formatAgentEvidenceSource(evidence: ChangeIntentEvidence): Record<strin
     kind: evidence.kind,
     reason: truncateForAgent(evidence.value, 90),
   };
+  if (evidence.sourceRole && evidence.sourceRole !== "product") source.sourceRole = evidence.sourceRole;
   if (evidence.commit) source.commit = evidence.commit.slice(0, 12);
   if (evidence.file) source.file = evidence.file;
   if (evidence.previousFile) source.previousFile = evidence.previousFile;
@@ -1000,7 +1001,7 @@ function formatEvidenceReference(evidence: ChangeIntentEvidence): string {
       : `:${evidence.startLine}`;
   const location = evidence.file ? `\`${escapeMarkdownInline(evidence.file)}${lineRange}\`` : evidence.kind;
   const symbol = evidence.symbol ? ` symbol \`${escapeMarkdownInline(evidence.symbol)}\`` : "";
-  const qualifiers = [evidence.relation, evidence.side].filter(Boolean).join(", ");
+  const qualifiers = [evidence.sourceRole, evidence.relation, evidence.side].filter(Boolean).join(", ");
   return `${location}${symbol}${qualifiers ? ` [${qualifiers}]` : ""}`;
 }
 
@@ -1038,7 +1039,7 @@ function atAGlanceEvidence(flow: QaDraftFlow): string[] {
 }
 
 function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
-  const verificationMode = verificationModeForTitle(file.flowTitle);
+  const verificationMode = verificationModeForDraftFile(file);
   return {
     title: file.flowTitle,
     source: formatDraftSource(file.source),
@@ -1061,7 +1062,10 @@ function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
 }
 
 function buildFlowReasons(file: E2eDraftFile): string[] {
-  const verificationMode = verificationModeForTitle(file.flowTitle);
+  const verificationMode = verificationModeForDraftFile(file);
+  if (verificationMode === "analysis-rule") {
+    return ["Analyzer rules changed; verify positive, negative, and neighboring-rule controls instead of inventing a product journey."];
+  }
   if (verificationMode === "existing-test-evidence") {
     return ["Changed test files are existing QA evidence; run them instead of generating a duplicate draft."];
   }
@@ -1184,6 +1188,9 @@ function isChangedTestEvidenceTitle(title: string): boolean {
 }
 
 function verificationModeForTitle(title: string): QaVerificationMode | undefined {
+  if (/^Static analysis rule\b/i.test(title.trim())) {
+    return "analysis-rule";
+  }
   if (isChangedTestEvidenceTitle(title)) {
     return "existing-test-evidence";
   }
@@ -1199,11 +1206,21 @@ function verificationModeForTitle(title: string): QaVerificationMode | undefined
   return undefined;
 }
 
+function verificationModeForDraftFile(file: E2eDraftFile): QaVerificationMode | undefined {
+  if (file.qaScenarios?.some((scenario) => /analysis rule positive and negative controls/i.test(scenario.title))) {
+    return "analysis-rule";
+  }
+  return verificationModeForTitle(file.flowTitle);
+}
+
 function needsGeneratedDraft(result: QaDraftResult): boolean {
   return result.flows.some((flow) => !flow.verificationMode);
 }
 
 function formatVerificationMode(mode: QaVerificationMode): string {
+  if (mode === "analysis-rule") {
+    return "analyzer rule boundary verification";
+  }
   if (mode === "existing-test-evidence") {
     return "the changed test evidence";
   }

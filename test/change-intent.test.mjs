@@ -10,6 +10,7 @@ import { generateE2eDraft, generateE2ePlan } from "../dist/e2e.js";
 import { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "../dist/qa.js";
 import { buildQaReasoningTraces, qaTraceIdForScenario } from "../dist/qa-trace.js";
 import { routeQaScenario } from "../dist/scenario-routing.js";
+import { classifyChangeSourceRole } from "../dist/source-role.js";
 import {
   addedDiffTextFromEvidence,
   collectAddedDiffEvidence,
@@ -128,6 +129,50 @@ test("diff evidence preserves renamed paths and head-side hunk locations", async
   assert.match(hunk.hunkHeader, /^@@ /);
   assert.match(hunk.lines[0].text, /onSubmitPreferences/);
   assert.deepEqual(hunk.removedLines, []);
+});
+
+test("working-tree diff evidence includes untracked source with head-side locations", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/existing.ts", "export const existing = true;\n");
+  commit(root, "benchmark baseline");
+  await write(
+    root,
+    "src/rules/new-analysis-rule.ts",
+    [
+      "const schedulingVocabulary = /schedule|calendar/i;",
+      "export function analyzeEvidence(value) {",
+      "  return schedulingVocabulary.test(value);",
+      "}",
+    ].join("\n") + "\n",
+  );
+
+  const withoutWorkingTree = await collectAddedDiffEvidence(root, {
+    base: "main",
+    head: "HEAD",
+  });
+  const evidence = await collectAddedDiffEvidence(root, {
+    base: "main",
+    head: "HEAD",
+    includeWorkingTree: true,
+  });
+  const hunk = evidence["src/rules/new-analysis-rule.ts"][0];
+
+  assert.equal(withoutWorkingTree["src/rules/new-analysis-rule.ts"], undefined);
+  assert.equal(hunk.baseStartLine, 0);
+  assert.equal(hunk.startLine, 1);
+  assert.equal(hunk.endLine, 4);
+  assert.equal(hunk.lines[0].line, 1);
+  assert.match(hunk.lines[0].text, /schedulingVocabulary/);
+  assert.equal(
+    addedDiffTextFromEvidence(evidence)["src/rules/new-analysis-rule.ts"],
+    [
+      "const schedulingVocabulary = /schedule|calendar/i;",
+      "export function analyzeEvidence(value) {",
+      "  return schedulingVocabulary.test(value);",
+      "}",
+      "",
+    ].join("\n"),
+  );
 });
 
 test("diff evidence traces removed guards to base-side critical QA", async (t) => {
@@ -461,6 +506,207 @@ test("share icons and playground names do not fabricate share or media lifecycle
 
   assert.equal(titles.some((title) => /Share completion/i.test(title)), false);
   assert.equal(titles.some((title) => /Media start/i.test(title)), false);
+});
+
+test("source roles distinguish product behavior from commands and analysis rules", () => {
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/services/summaryReminder.ts",
+      "export function scheduleReminder() { return notifications.schedule(); }",
+    ).role,
+    "product",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/rules/rule-engine.ts",
+      "const evidencePattern = /schedule|reminder/; export function analyzeEvidence() {}",
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole("src/cli.ts", "const command = process.argv[2];").role,
+    "command",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/source-role.ts",
+      "const sourceSignal = /commander|yargs|meow|cac/; export function classifyChangeSourceRole() {}",
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/test-plan.ts",
+      "export async function collectAddedDiffEvidence(): Promise<AddedDiffEvidence> { return {}; }",
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/qa-trace.ts",
+      "export function buildReasoningTrace(intent, evidence) { return routeQaScenario(intent.scenarios[0]); }",
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole("src/qa.ts", "if (evidence.sourceRole) source.sourceRole = evidence.sourceRole;").role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole("src/index.ts", "export { classifyChangeSourceRole } from './source-role.js';").role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "schema/qamap-agent.schema.json",
+      '"sourceRole": { "enum": ["product", "analysis-rule"] }',
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/rules/discount.ts",
+      "const couponPattern = /^[A-Z]+$/; export function evaluateDiscount(evidence) { return couponPattern.test(evidence.code); }",
+    ).role,
+    "product",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/features/media/ImageAnalyzer.ts",
+      "export function analyzeImage(image) { return image.width > 100; }",
+    ).role,
+    "product",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/components/SelectBuilder.ts",
+      "export function buildSelect(builder) { return builder.option('compact'); }",
+    ).role,
+    "product",
+  );
+  assert.equal(classifyChangeSourceRole("test/fixtures/rule-engine.ts").role, "test");
+  assert.equal(classifyChangeSourceRole("bench.config.json").role, "test");
+  assert.equal(classifyChangeSourceRole("scripts/bench.mjs").role, "test");
+  assert.equal(classifyChangeSourceRole("playwright.config.ts").role, "test");
+  assert.equal(classifyChangeSourceRole("vite.config.ts").role, "configuration");
+});
+
+test("analysis rules and CLI surfaces receive role-specific QA without product-domain false positives", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({ name: "rule-cli", type: "module", bin: { "rule-cli": "dist/cli.js" } }),
+  );
+  await write(
+    root,
+    "src/rules/rule-engine.ts",
+    "export function analyzeEvidence(source) { return /request/.test(source); }\n",
+  );
+  await write(
+    root,
+    "src/cli.ts",
+    "const command = process.argv[2]; if (command === 'inspect') console.log('ok');\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/rule-output");
+  await write(
+    root,
+    "src/rules/rule-engine.ts",
+    [
+      "const schedulingVocabulary = /scheduledAt|reminder|calendar|timezone/i;",
+      "const validationVocabulary = /guard|validation|permission/i;",
+      "export function analyzeEvidence(source) {",
+      "  return {",
+      "    request: /request|response/.test(source),",
+      "    vocabularyOnly: schedulingVocabulary.test(source) || validationVocabulary.test(source),",
+      "  };",
+      "}",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "src/cli.ts",
+    [
+      "const [command, ...args] = process.argv.slice(2);",
+      "if (command === 'inspect' && args.includes('--format=json')) {",
+      "  process.stdout.write(JSON.stringify({ status: 'ok' }));",
+      "} else {",
+      "  process.stderr.write('usage: inspect --format=json');",
+      "  process.exitCode = 2;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "fix: improve analyzer and command QA precision");
+
+  const analysis = await analyze(root, ["src/rules/rule-engine.ts", "src/cli.ts"]);
+  const intent = analysis.intents[0];
+  const titles = intent.scenarios.map((scenario) => scenario.title);
+
+  assert.ok(intent.evidence.some((item) => item.sourceRole === "analysis-rule"));
+  assert.ok(intent.evidence.some((item) => item.sourceRole === "command"));
+  assert.ok(titles.some((title) => /analysis rule positive and negative controls/i.test(title)));
+  assert.ok(titles.some((title) => /CLI arguments, output, and exit behavior/i.test(title)));
+  assert.equal(titles.some((title) => /Scheduling, calendar|Removed guard|destination routing/i.test(title)), false);
+  assert.ok(intent.lifecycle.some((stage) => /stdout, stderr, exit status/i.test(stage.label)));
+  assert.ok(
+    intent.scenarios
+      .flatMap((scenario) => scenario.assertions)
+      .some((value) => /command produces the expected stdout, stderr, generated files, and exit status/i.test(value)),
+  );
+  assert.equal(intent.scenarios.flatMap((scenario) => scenario.assertions).some((value) => /Verify observe/i.test(value)), false);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((candidate) => candidate.intentId === intent.id);
+  assert.ok(flow);
+  assert.equal(plan.flows.length, 1);
+  assert.equal(flow.kind, "command");
+  assert.equal(flow.languageBrief.actor, "CLI user or maintainer");
+  assert.equal(flow.setupHints.some((hint) => hint.kind === "network" || hint.kind === "fixture"), false);
+  assert.equal(flow.fixtureReadiness.status, "not-needed");
+  assert.equal(flow.fixtureReadiness.apiEndpoints.length, 0);
+});
+
+test("analysis-only changes stay analyzer verification even inside a CLI repository", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({ name: "rule-cli", type: "module", bin: { "rule-cli": "dist/cli.js" } }),
+  );
+  await write(
+    root,
+    "src/rules/rule-engine.ts",
+    "export function analyzeEvidence(source) { return /request/.test(source); }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/rule-boundary");
+  await write(
+    root,
+    "src/rules/rule-engine.ts",
+    [
+      "const schedulingVocabulary = /scheduledAt|calendar/i;",
+      "export function analyzeEvidence(source) {",
+      "  return /request/.test(source) && !schedulingVocabulary.test(source);",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "fix: avoid analyzer vocabulary false positives");
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((candidate) => candidate.intentId);
+
+  assert.ok(flow);
+  assert.equal(flow.kind, "domain");
+  assert.equal(flow.languageBrief.actor, "Analyzer maintainer or reviewer");
+  assert.match(flow.languageBrief.successSignal, /positive controls emit located findings/i);
+  assert.equal(flow.languageBrief.successSignal.includes("stdout"), false);
+  assert.equal(flow.setupHints.some((hint) => hint.kind === "network" || hint.kind === "fixture"), false);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.equal(qa.flows[0].verificationMode, "analysis-rule");
+  assert.equal(qa.flows[0].why.some((reason) => /positive, negative, and neighboring-rule controls/i.test(reason)), true);
+  assert.equal(qa.prChecklist.some((item) => /manifest init/i.test(item)), false);
 });
 
 test("change intent ignores release-only commit metadata", async (t) => {

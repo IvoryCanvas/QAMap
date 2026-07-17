@@ -36,6 +36,14 @@ One richly evidenced squash commit can reach high confidence. A title without co
 
 The analysis is deterministic and local. It does not execute repository code, contact GitHub, upload source, or call an LLM.
 
+## Change Source Roles
+
+Before changed text can become behavior evidence, `src/source-role.ts` classifies its source as `product`, `command`, `analysis-rule`, `configuration`, `test`, `documentation`, or `generated`. The role is an evidence boundary, not a domain guess: vocabulary inside an analyzer regex, benchmark contract, CLI parser, or documentation example must not silently become product behavior.
+
+Product sources can contribute user actions, state, effects, and outcomes. Command sources contribute arguments, stdout, stderr, exit status, and generated-file contracts. Analysis-rule sources contribute positive and negative controls for the changed rule. Test, documentation, and generated sources remain verification evidence, while configuration stays on build/runtime verification unless another source proves a product journey.
+
+The same boundary applies downstream. E2E setup and fixture discovery only inspect runtime-relevant product, command, and configuration evidence. Analyzer rules and benchmark vocabulary may explain why a QA scenario exists, but `/api`, `fixture`, payment, scheduling, or routing words inside those files cannot create product setup requirements by themselves.
+
 ## Scenario Routing and Compilation Receipts
 
 Scenario generation and test generation are separate decisions. QAMap first routes every proposed scenario from its evidence:

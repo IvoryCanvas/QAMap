@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
+import { classifyChangeSourceRole } from "./source-role.js";
+import type { ChangeSourceRole } from "./source-role.js";
 import type { AddedDiffEvidence, AddedDiffHunk, TestPlanChangedFile } from "./test-plan.js";
 
 const execFileAsync = promisify(execFile);
@@ -22,6 +24,7 @@ export type IntentQaScenarioPriority = "critical" | "recommended";
 export interface ChangeIntentEvidence {
   kind: ChangeIntentEvidenceKind;
   value: string;
+  sourceRole?: ChangeSourceRole;
   commit?: string;
   file?: string;
   previousFile?: string;
@@ -412,7 +415,7 @@ function buildCommitIntent(
     keywords,
   );
   const relevantRiskEvidence = riskEvidence.filter((item) => item.file && files.includes(item.file));
-  const lifecycle = buildLifecycle(commits, relevantSignals);
+  const lifecycle = buildLifecycle(commits, relevantSignals, relevantRiskEvidence);
   const confidence = confidenceForIntent(commits, lifecycle, relevantSignals);
   const titleCommit = commits.find((commit) => commit.conventionalType === "feat" || commit.conventionalType === "feature") ??
     commits.find((commit) => commit.seed) ??
@@ -458,13 +461,23 @@ function buildDiffOnlyIntent(
   riskEvidence: ChangeIntentEvidence[],
   includesWorkingTree: boolean,
 ): ChangeIntent | undefined {
-  const lifecycle = lifecycleFromCodeSignals(codeSignals);
+  const roleEvidence = riskEvidence.filter((item) =>
+    item.sourceRole === "analysis-rule" || item.sourceRole === "command"
+  );
+  const lifecycle = limitLifecycleStages([
+    ...lifecycleFromCodeSignals(codeSignals),
+    ...lifecycleFromSourceRoles(roleEvidence),
+  ]);
   const stageKinds = new Set(lifecycle.map((stage) => stage.kind));
-  if (lifecycle.length < 3 || stageKinds.size < 3) {
+  const hasRecognizedSourceRole = roleEvidence.length > 0;
+  if ((!hasRecognizedSourceRole && (lifecycle.length < 3 || stageKinds.size < 3)) || lifecycle.length < 2) {
     return undefined;
   }
-  const files = uniqueStrings(codeSignals.map((signal) => signal.file)).slice(0, maxIntentFiles);
-  const titleSubject = diffIntentSubject(files[0]);
+  const files = uniqueStrings([
+    ...codeSignals.map((signal) => signal.file),
+    ...roleEvidence.map((item) => item.file ?? "").filter(Boolean),
+  ]).slice(0, maxIntentFiles);
+  const titleSubject = diffIntentSubject(files[0], roleEvidence[0]?.sourceRole);
   const title = `${titleSubject} ${includesWorkingTree ? "working-tree" : "changed"} behavior`;
   const evidence = uniqueEvidence([
     ...codeSignals.slice(0, 16).map((signal) => signal.evidence),
@@ -492,7 +505,9 @@ function buildDiffOnlyIntent(
   };
 }
 
-function diffIntentSubject(file: string | undefined): string {
+function diffIntentSubject(file: string | undefined, sourceRole?: ChangeSourceRole): string {
+  if (sourceRole === "analysis-rule") return "Static analysis rule";
+  if (sourceRole === "command") return "CLI command";
   if (!file) return "Working tree";
   const extensionless = path.basename(file).replace(/\.[^.]+$/, "");
   const subject = /^(?:index|page|route)$/i.test(extensionless)
@@ -524,7 +539,11 @@ function selectIntentFiles(
   return matched.slice(0, maxIntentFiles);
 }
 
-function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]): BehaviorLifecycleStage[] {
+function buildLifecycle(
+  commits: ParsedCommit[],
+  signals: CodeBehaviorSignal[],
+  roleEvidence: ChangeIntentEvidence[],
+): BehaviorLifecycleStage[] {
   const stages: BehaviorLifecycleStage[] = [];
   for (const commit of commits) {
     const evidence: ChangeIntentEvidence[] = [{
@@ -567,6 +586,8 @@ function buildLifecycle(commits: ParsedCommit[], signals: CodeBehaviorSignal[]):
     stages.push(createLifecycleStage(signal.kind, signal.label, "medium", [signal.evidence], [signal.file]));
   }
 
+  stages.push(...lifecycleFromSourceRoles(roleEvidence));
+
   return limitLifecycleStages(stages);
 }
 
@@ -575,6 +596,66 @@ function lifecycleFromCodeSignals(signals: CodeBehaviorSignal[]): BehaviorLifecy
     .filter((signal) => !isImplementationOnlyLifecycleStep(`${signal.label} ${signal.symbol}`))
     .map((signal) => createLifecycleStage(signal.kind, signal.label, "low", [signal.evidence], [signal.file]));
   return limitLifecycleStages(stages);
+}
+
+function lifecycleFromSourceRoles(evidence: ChangeIntentEvidence[]): BehaviorLifecycleStage[] {
+  const stages: BehaviorLifecycleStage[] = [];
+  const analysisEvidence = evidence.filter((item) => item.sourceRole === "analysis-rule");
+  if (analysisEvidence.length > 0) {
+    const files = uniqueStrings(analysisEvidence.map((item) => item.file ?? "").filter(Boolean));
+    stages.push(
+      createLifecycleStage(
+        "condition",
+        "Compare intended source evidence with unrelated rule vocabulary.",
+        "medium",
+        analysisEvidence,
+        files,
+      ),
+      createLifecycleStage(
+        "action",
+        "Evaluate the changed static-analysis rule against positive and negative controls.",
+        "medium",
+        analysisEvidence,
+        files,
+      ),
+      createLifecycleStage(
+        "observable-outcome",
+        "Observe intended findings without unrelated false positives.",
+        "medium",
+        analysisEvidence,
+        files,
+      ),
+    );
+  }
+
+  const commandEvidence = evidence.filter((item) => item.sourceRole === "command");
+  if (commandEvidence.length > 0) {
+    const files = uniqueStrings(commandEvidence.map((item) => item.file ?? "").filter(Boolean));
+    stages.push(
+      createLifecycleStage(
+        "trigger",
+        "Run the changed CLI command and options.",
+        "medium",
+        commandEvidence,
+        files,
+      ),
+      createLifecycleStage(
+        "condition",
+        "Check valid, missing, and invalid command arguments.",
+        "medium",
+        commandEvidence,
+        files,
+      ),
+      createLifecycleStage(
+        "observable-outcome",
+        "Observe stdout, stderr, exit status, and generated files.",
+        "medium",
+        commandEvidence,
+        files,
+      ),
+    );
+  }
+  return stages;
 }
 
 function limitLifecycleStages(stages: BehaviorLifecycleStage[]): BehaviorLifecycleStage[] {
@@ -662,12 +743,85 @@ function buildIntentQaScenarios(
   }
 
   const scenarios = [primary];
-  const searchable = `${title} ${keywords.join(" ")} ${lifecycle.map((stage) => stage.label).join(" ")}`.toLowerCase();
+  const hasExplicitProductDiffEvidence = evidence.some((item) =>
+    item.kind === "diff" && (item.sourceRole === undefined || item.sourceRole === "product")
+  );
+  const hasSpecializedDiffEvidence = evidence.some((item) =>
+    item.kind === "diff" && (item.sourceRole === "analysis-rule" || item.sourceRole === "command")
+  );
+  const hasProductDiffEvidence = hasExplicitProductDiffEvidence || !hasSpecializedDiffEvidence;
+  const productEvidence = evidence.filter((item) =>
+    item.kind === "commit"
+      ? hasProductDiffEvidence
+      : item.sourceRole === undefined || item.sourceRole === "product"
+  );
+  const productLifecycle = lifecycle.filter((stage) =>
+    stage.evidence.some((item) =>
+      item.kind === "commit"
+        ? hasProductDiffEvidence
+        : item.sourceRole === undefined || item.sourceRole === "product"
+    )
+  );
+  const searchable = `${hasProductDiffEvidence ? title : ""} ${productLifecycle.map((stage) => stage.label).join(" ")}`
+    .toLowerCase();
+
+  const analysisRuleEvidence = evidence.filter((item) => item.sourceRole === "analysis-rule");
+  if (analysisRuleEvidence.length > 0) {
+    scenarios.push(makeScenario(
+      intentId,
+      "analysis-rule-controls",
+      "boundary",
+      "recommended",
+      "Changed analysis rule positive and negative controls",
+      [
+        "Prepare one minimal fixture that should match the changed rule and one unrelated fixture that repeats only its vocabulary.",
+        "Preserve an existing fixture for a neighboring rule as a regression control.",
+      ],
+      [
+        "Run the repository's analyzer or benchmark against all three fixtures.",
+        "Inspect the exact finding or QA scenario emitted for each fixture.",
+      ],
+      [
+        "Verify the intended source shape emits the expected finding or scenario with located evidence.",
+        "Verify vocabulary inside rule definitions, strings, comments, and unrelated source does not become product behavior.",
+        "Verify the neighboring rule keeps its previous result.",
+      ],
+      ["Rule vocabulary without behavior", "Adjacent rule regression", "Removed rule evidence"],
+      analysisRuleEvidence,
+    ));
+  }
+
+  const commandEvidence = evidence.filter((item) => item.sourceRole === "command");
+  if (commandEvidence.length > 0) {
+    const commandTargets = uniqueStrings(commandEvidence.map((item) => item.symbol ?? "").filter(Boolean)).slice(0, 4);
+    scenarios.push(makeScenario(
+      intentId,
+      "cli-command-contract",
+      "failure",
+      "recommended",
+      "Changed CLI arguments, output, and exit behavior",
+      [
+        `Prepare valid, missing, and invalid inputs for ${commandTargets.length > 0 ? commandTargets.join(", ") : "the changed command surface"}.`,
+        "Prepare a temporary output location so command side effects can be inspected without modifying the repository.",
+      ],
+      [
+        "Run the changed command with valid arguments and every changed option.",
+        "Repeat with missing or invalid arguments and an unwritable or conflicting output target when applicable.",
+      ],
+      [
+        "Verify valid input produces the documented stdout or file output and exits successfully.",
+        "Verify invalid input produces actionable stderr, exits non-zero, and leaves no partial output.",
+      ],
+      ["Missing argument", "Unknown option", "Conflicting output", "Repeated invocation"],
+      commandEvidence,
+    ));
+  }
 
   const removedGuardEvidence = evidence.filter((item) =>
     item.kind === "diff" &&
     item.side === "base" &&
     item.relation === "direct" &&
+    (item.sourceRole === undefined || item.sourceRole === "product" || item.sourceRole === "configuration") &&
     /guard|validat|permission|authoriz|authent|allowed|denied|protected/i.test(`${item.symbol ?? ""} ${item.value}`)
   );
   const removedConfigurationGuardEvidence = removedGuardEvidence.filter(isConfigurationGuardEvidence);
@@ -700,6 +854,7 @@ function buildIntentQaScenarios(
     item.kind === "diff" &&
     item.side === "head" &&
     item.relation === "direct" &&
+    (item.sourceRole === undefined || item.sourceRole === "product") &&
     /public access|protected access|unauthenticated|authentication boundary/i.test(item.value)
   );
   if (changedAccessEvidence.length > 0) {
@@ -715,8 +870,8 @@ function buildIntentQaScenarios(
   }
 
   const changedConditionEvidence = scenarioEvidenceFor(
-    lifecycle,
-    evidence,
+    productLifecycle,
+    productEvidence,
     /\b(?:is|has|can|should|show|hide)[A-Z_\w]*|eligible|available|loaded|loading|empty|ready|selected/i,
     /color|theme|style|class|layout|size|width|height|dark|light/i,
   );
@@ -734,6 +889,7 @@ function buildIntentQaScenarios(
 
   const destinationParameterEvidence = evidence.filter((item) =>
     item.kind === "diff" &&
+    (item.sourceRole === undefined || item.sourceRole === "product") &&
     item.file &&
     item.startLine !== undefined &&
     /urlsearchparams|searchparams|query|location\.href|window\.location|destination|redirect/i.test(`${item.symbol ?? ""} ${item.value}`)
@@ -788,8 +944,8 @@ function buildIntentQaScenarios(
   }
 
   const calendarEvidence = scenarioEvidenceFor(
-    lifecycle,
-    evidence,
+    productLifecycle,
+    productEvidence,
     /schedul|reminder|calendar|daily|tomorrow|timezone/i,
   );
   if (calendarEvidence.length > 0) {
@@ -813,7 +969,7 @@ function buildIntentQaScenarios(
     ], [
       "Verify no protected side effect occurs while blocked.",
       "Verify re-enabling produces one correct side effect without stale state.",
-    ], ["Permission denied", "Feature disabled", "State restored"], scenarioEvidenceFor(lifecycle, evidence, /toggle|enable|disable|permission|authoriz|auth|guard/i)));
+    ], ["Permission denied", "Feature disabled", "State restored"], scenarioEvidenceFor(productLifecycle, productEvidence, /toggle|enable|disable|permission|authoriz|auth|guard/i)));
   }
 
   const entryRoutingSearchable = searchable.replaceAll("navigation.setoptions", "");
@@ -833,8 +989,8 @@ function buildIntentQaScenarios(
       "Verify a valid payload opens the matching destination and state.",
       "Verify invalid context fails safely without opening unrelated data.",
     ], ["Missing payload", "Stale identifier", "Repeated entry"], scenarioEvidenceFor(
-      lifecycle,
-      evidence,
+      productLifecycle,
+      productEvidence,
       routingEvidencePattern,
       /navigation\.setoptions/i,
     )));
@@ -849,12 +1005,12 @@ function buildIntentQaScenarios(
     ], [
       "Verify each response produces the intended visible or persisted state.",
       "Verify retries do not duplicate requests or side effects.",
-    ], ["Unauthorized", "Timeout", "Server error", "Duplicate retry"], scenarioEvidenceFor(lifecycle, evidence, /fetch|request|network|endpoint|api|mutation|response|timeout/i)));
+    ], ["Unauthorized", "Timeout", "Server error", "Duplicate retry"], scenarioEvidenceFor(productLifecycle, productEvidence, /fetch|request|network|endpoint|api|mutation|response|timeout/i)));
   }
 
   const shareEvidence = scenarioEvidenceFor(
-    lifecycle,
-    evidence,
+    productLifecycle,
+    productEvidence,
     /navigator\.share|navigator\.clipboard|\bclipboard\b|\baborterror\b|(?:^|[\s.])(?:share|copy)(?:\s|\(|\.|$)/i,
   );
   if (hasActionableLocatedDiffEvidence(shareEvidence)) {
@@ -870,8 +1026,8 @@ function buildIntentQaScenarios(
   }
 
   const mediaEvidence = scenarioEvidenceFor(
-    lifecycle,
-    evidence,
+    productLifecycle,
+    productEvidence,
     /<audio\b|<video\b|\bhtmlmediaelement\b|(?:^|[\s.])(?:audio|video|media|play|pause|ended|currenttime)(?:\s|\(|\.|$)/i,
   );
   if (hasActionableLocatedDiffEvidence(mediaEvidence)) {
@@ -890,6 +1046,7 @@ function buildIntentQaScenarios(
     item.kind === "diff" &&
     item.side === "head" &&
     item.relation === "direct" &&
+    (item.sourceRole === undefined || item.sourceRole === "product") &&
     /availability window|exposure window|expiry boundary/i.test(item.value)
   );
   if (availabilityEvidence.length > 0) {
@@ -905,8 +1062,8 @@ function buildIntentQaScenarios(
   }
 
   const scopedStorageEvidence = scenarioEvidenceFor(
-    lifecycle,
-    evidence,
+    productLifecycle,
+    productEvidence,
     /sessionstorage|localstorage|\.setitem|\.removeitem|persisted context/i,
   );
   if (scopedStorageEvidence.length > 0) {
@@ -930,7 +1087,7 @@ function buildIntentQaScenarios(
     ], [
       "Verify the latest state survives or is invalidated intentionally.",
       "Verify stale state cannot overwrite the changed result.",
-    ], ["Stale cache", "App restart", "Repeated synchronization"], scenarioEvidenceFor(lifecycle, evidence, /sync|persist|storage|cache|reload|re.?entry|save|store/i)));
+    ], ["Stale cache", "App restart", "Repeated synchronization"], scenarioEvidenceFor(productLifecycle, productEvidence, /sync|persist|storage|cache|reload|re.?entry|save|store/i)));
   }
 
   return rankIntentQaScenarios(uniqueScenarios(scenarios)).slice(0, maxQaScenariosPerIntent);
@@ -1090,7 +1247,8 @@ function collectCodeBehaviorSignals(
   const signals: CodeBehaviorSignal[] = [];
   const locatedFiles = new Set<string>();
   for (const [file, hunks] of Object.entries(addedDiffEvidence)) {
-    if (!isBehaviorBearingFile(file)) {
+    const sourceRole = classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
+    if (sourceRole !== "product") {
       continue;
     }
     locatedFiles.add(file);
@@ -1101,7 +1259,8 @@ function collectCodeBehaviorSignals(
     }
   }
   for (const [file, text] of Object.entries(addedDiffText)) {
-    if (!isBehaviorBearingFile(file) || locatedFiles.has(file)) {
+    const sourceRole = classifyChangeSourceRole(file, text).role;
+    if (sourceRole !== "product" || locatedFiles.has(file)) {
       continue;
     }
     collectCodeBehaviorSignalsFromText(signals, file, text);
@@ -1147,7 +1306,16 @@ function selectCodeSignals(signals: CodeBehaviorSignal[]): CodeBehaviorSignal[] 
 function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIntentEvidence[] {
   const evidence: ChangeIntentEvidence[] = [];
   for (const [file, hunks] of Object.entries(addedDiffEvidence)) {
-    if (!isBehaviorBearingFile(file)) {
+    const sourceRole = classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
+    if (sourceRole === "test" || sourceRole === "documentation" || sourceRole === "generated") {
+      continue;
+    }
+    if (sourceRole === "analysis-rule") {
+      evidence.push(...collectAnalysisRuleDiffEvidence(file, hunks));
+      continue;
+    }
+    if (sourceRole === "command") {
+      evidence.push(...collectCommandDiffEvidence(file, hunks));
       continue;
     }
     for (const hunk of hunks) {
@@ -1330,10 +1498,12 @@ function diffRiskEvidence(
   symbol: string,
   value: string,
   side: "base" | "head",
+  sourceRole: ChangeSourceRole = classifyChangeSourceRole(file).role,
 ): ChangeIntentEvidence {
   return {
     kind: "diff",
     value,
+    sourceRole,
     file,
     previousFile: hunk.previousFile,
     symbol,
@@ -1343,6 +1513,112 @@ function diffRiskEvidence(
     endLine: line,
     hunkHeader: hunk.hunkHeader,
   };
+}
+
+function collectAnalysisRuleDiffEvidence(
+  file: string,
+  hunks: AddedDiffHunk[],
+): ChangeIntentEvidence[] {
+  const evidence: ChangeIntentEvidence[] = [];
+  for (const hunk of hunks) {
+    for (const [side, lines] of [["head", hunk.lines], ["base", hunk.removedLines ?? []]] as const) {
+      const line = lines.find((candidate) => meaningfulChangedLine(candidate.text));
+      if (!line) continue;
+      const symbol = declaredOrCalledSymbol(line.text) ?? path.basename(file).replace(/\.[^.]+$/, "");
+      evidence.push(diffRiskEvidence(
+        file,
+        hunk,
+        line.line,
+        symbol,
+        `${side === "base" ? "Removed" : "Changed"} static-analysis rule definition near ${symbol}.`,
+        side,
+        "analysis-rule",
+      ));
+    }
+  }
+  return uniqueEvidence(evidence);
+}
+
+function collectCommandDiffEvidence(
+  file: string,
+  hunks: AddedDiffHunk[],
+): ChangeIntentEvidence[] {
+  const evidence: ChangeIntentEvidence[] = [];
+  for (const hunk of hunks) {
+    for (const [side, lines] of [["head", hunk.lines], ["base", hunk.removedLines ?? []]] as const) {
+      let hunkMatched = false;
+      for (const line of lines) {
+        const signal = commandLineSignal(line.text);
+        if (!signal) continue;
+        hunkMatched = true;
+        evidence.push(diffRiskEvidence(
+          file,
+          hunk,
+          line.line,
+          signal.symbol,
+          `${side === "base" ? "Removed" : "Changed"} ${signal.description}.`,
+          side,
+          "command",
+        ));
+      }
+      if (!hunkMatched) {
+        const line = lines.find((candidate) => meaningfulChangedLine(candidate.text));
+        if (!line) continue;
+        const symbol = declaredOrCalledSymbol(line.text) ?? path.basename(file).replace(/\.[^.]+$/, "");
+        evidence.push(diffRiskEvidence(
+          file,
+          hunk,
+          line.line,
+          symbol,
+          `${side === "base" ? "Removed" : "Changed"} CLI command implementation near ${symbol}.`,
+          side,
+          "command",
+        ));
+      }
+    }
+  }
+  return uniqueEvidence(evidence).slice(0, 16);
+}
+
+function commandLineSignal(text: string): { symbol: string; description: string } | undefined {
+  const command = text.match(/\.(?:command|commandDir)\s*\(\s*["'`]([^"'`]+)/i) ??
+    text.match(/\bcase\s+["'`]([^"'`]+)["'`]\s*:/i);
+  if (command) {
+    return { symbol: command[1], description: `CLI command declaration for "${command[1]}"` };
+  }
+  const option = text.match(/\.(?:option|requiredOption)\s*\(\s*["'`]([^"'`]+)/i) ??
+    text.match(/["'`](--[a-z0-9][a-z0-9-]*)["'`]/i);
+  if (option) {
+    return { symbol: option[1], description: `CLI option contract for "${option[1]}"` };
+  }
+  if (/\bprocess\.(?:exit|exitCode)\b|\bsetExitCode\s*\(/i.test(text)) {
+    return { symbol: "exit-status", description: "CLI exit status behavior" };
+  }
+  if (/\b(?:process\.)?(?:stdout|stderr)\b|\bconsole\.(?:log|error|warn)\s*\(/i.test(text)) {
+    const stream = /stderr|console\.(?:error|warn)/i.test(text) ? "stderr" : "stdout";
+    return { symbol: stream, description: `CLI ${stream} output behavior` };
+  }
+  if (/\bprocess\.argv\b|\bparseArgs\s*\(/i.test(text)) {
+    return { symbol: "arguments", description: "CLI argument parsing behavior" };
+  }
+  return undefined;
+}
+
+function meaningfulChangedLine(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.length > 0 && !/^(?:[{}()[\],;]|\/\/[\s-]*)+$/.test(trimmed);
+}
+
+function declaredOrCalledSymbol(text: string): string | undefined {
+  return text.match(/\b(?:const|let|var|function|class|interface|type)\s+([A-Za-z_$][\w$]*)/)?.[1] ??
+    text.match(/\b([A-Za-z_$][\w$]*)\s*\(/)?.[1];
+}
+
+function diffTextForRoleClassification(hunks: AddedDiffHunk[]): string {
+  return hunks.flatMap((hunk) => [
+    ...hunk.lines.map((line) => line.text),
+    ...(hunk.removedLines ?? []).map((line) => line.text),
+  ]).join("\n");
 }
 
 function collectCodeBehaviorSignalsFromText(
@@ -1459,6 +1735,7 @@ function codeSignalEvidence(
   return {
     kind: "diff",
     value,
+    sourceRole: "product",
     file,
     previousFile: hunk?.previousFile,
     symbol,
@@ -1648,12 +1925,8 @@ function normalizeToken(value: string): string {
 }
 
 function isBehaviorBearingFile(file: string): boolean {
-  return !(
-    /(?:^|\/)(?:docs?|test|tests|__tests__|fixtures?|snapshots?|coverage|dist|build)\//i.test(file) ||
-    /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|CHANGELOG\.md|README\.md)$/i.test(file) ||
-    /\.(?:md|mdx|snap|map)$/i.test(file) ||
-    /\.(?:avif|bmp|gif|ico|jpe?g|png|webp|svg|mp3|m4a|ogg|wav|woff2?|ttf|otf|eot|pdf|zip|gz|br)$/i.test(file)
-  );
+  const role = classifyChangeSourceRole(file).role;
+  return role !== "test" && role !== "documentation" && role !== "generated";
 }
 
 function isStructuredDataFile(file: string): boolean {
@@ -1745,7 +2018,7 @@ function rankIntentQaScenarios(scenarios: IntentQaScenario[]): IntentQaScenario[
 function uniqueEvidence(evidence: ChangeIntentEvidence[]): ChangeIntentEvidence[] {
   const seen = new Set<string>();
   return evidence.filter((item) => {
-    const key = `${item.kind}:${item.relation ?? ""}:${item.side ?? ""}:${item.commit ?? ""}:${item.file ?? ""}:${item.startLine ?? ""}:${item.endLine ?? ""}:${item.symbol ?? ""}:${item.value}`;
+    const key = `${item.kind}:${item.sourceRole ?? ""}:${item.relation ?? ""}:${item.side ?? ""}:${item.commit ?? ""}:${item.file ?? ""}:${item.startLine ?? ""}:${item.endLine ?? ""}:${item.symbol ?? ""}:${item.value}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -1772,7 +2045,19 @@ function stripTerminalPunctuation(value: string): string {
 }
 
 function assertionForStage(stage: BehaviorLifecycleStage): string {
-  return `Verify ${lowercaseFirst(stripTerminalPunctuation(stage.label))}.`;
+  const label = stripTerminalPunctuation(stage.label);
+  const visible = label.match(/^Show\s+(.+)$/i)?.[1];
+  if (visible) {
+    return `Verify ${lowercaseFirst(visible)} is visible.`;
+  }
+  const observed = label.match(/^Observe(?:\s+the result of)?\s+(.+)$/i)?.[1];
+  if (observed) {
+    if (/^stdout, stderr, exit status, and generated files$/i.test(observed)) {
+      return "Verify the command produces the expected stdout, stderr, generated files, and exit status.";
+    }
+    return `Verify ${lowercaseFirst(observed)} is externally observable.`;
+  }
+  return `Verify ${lowercaseFirst(label)}.`;
 }
 
 function lowercaseFirst(value: string): string {

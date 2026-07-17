@@ -853,7 +853,7 @@ test("generateE2ePlan detects CLI packages and suggests command verification che
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e", dryRun: true });
   const markdown = formatMarkdownE2ePlan(plan);
   const draftMarkdown = formatMarkdownE2eDraft(draft);
-  const flow = plan.flows.find((item) => /CLI command verification checklist/.test(item.title));
+  const flow = plan.flows.find((item) => item.kind === "command");
 
   assert.equal(plan.project.type, "cli");
   assert.ok(plan.project.evidence.some((item) => item === "package.json bin entry found"));
@@ -863,13 +863,14 @@ test("generateE2ePlan detects CLI packages and suggests command verification che
   assert.ok(plan.bootstrap.steps.some((step) => step.title === "Start with CLI command validation"));
   assert.ok(flow);
   assert.equal(flow.languageBrief.actor, "CLI user or maintainer");
-  assert.match(flow.languageBrief.trigger, /Run the CLI command path affected by src\/cli\.ts/);
+  assert.equal(flow.languageBrief.trigger, "Run the changed CLI command and options.");
   assert.match(flow.languageBrief.successSignal, /stdout, stderr, generated files, and exit code/);
+  assert.equal(flow.setupHints.some((hint) => hint.kind === "fixture"), false);
   assert.equal(flow.fixtureReadiness.status, "not-needed");
-  assert.ok(flow.coverage.some((target) => target.title === "CLI command contract"));
-  assert.ok(flow.coverage.some((target) => target.title === "CLI failure and usage paths"));
+  assert.ok(flow.coverage.some((target) => /Changed CLI arguments, output, and exit behavior/i.test(target.title)));
+  assert.ok(flow.qaScenarios.some((scenario) => /Changed CLI arguments, output, and exit behavior/i.test(scenario.title)));
   assert.equal(draft.files.some((file) => /primary journey/i.test(file.flowTitle)), false);
-  assert.ok(draft.files.some((file) => /CLI command verification checklist/.test(file.flowTitle)));
+  assert.ok(draft.files.some((file) => file.flowTitle === flow.title));
   assert.equal(
     draft.files.some((file) => file.actionItems.some((item) => item.kind === "fixture" && item.priority === "required")),
     false,

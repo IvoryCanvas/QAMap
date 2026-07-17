@@ -43,6 +43,7 @@ import type {
 import { routeQaScenario } from "./scenario-routing.js";
 import type { QaScenarioDecision } from "./scenario-routing.js";
 import { qaTraceIdForScenario } from "./qa-trace.js";
+import { classifyChangeSourceRole } from "./source-role.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
 export type E2eProjectType =
@@ -1979,6 +1980,14 @@ function buildDraftPromotionGuidance(flow: E2eFlow): E2eDraftPromotionGuidance {
     (scenario?.checks.length ?? 0) > 0 ||
     (coreFlow?.checks.length ?? 0) > 0;
 
+  if (isAnalysisRuleFocusedFlow(flow)) {
+    return {
+      status: "needs-review",
+      reason: "The changed analyzer rule is linked to located diff evidence and boundary-focused QA controls.",
+      action: "Run positive, negative, and neighboring-rule fixtures, then record the analyzer or benchmark result.",
+    };
+  }
+
   if (manifestMatch) {
     if (hasEntrypoint && hasChecks) {
       return {
@@ -2496,6 +2505,7 @@ function withTerminalPeriod(value: string): string {
 
 function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLanguageBrief {
   const actor = inferFlowActor(flow);
+  const analysisRuleFocused = isAnalysisRuleFocusedFlow(flow);
   if (flow.intentId && flow.lifecycle && flow.lifecycle.length > 0) {
     const lifecycleTrigger = flow.lifecycle.find((stage) => stage.kind === "trigger");
     const commitAction = flow.lifecycle.find(
@@ -2504,7 +2514,9 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
     const trigger = lifecycleTrigger &&
       (!isImplementationShapedTrigger(lifecycleTrigger.label) || !commitAction)
       ? lifecycleTrigger.label
-      : commitAction?.label ?? lifecycleTrigger?.label ?? `Start the changed ${flow.title} behavior.`;
+      : commitAction?.label ?? lifecycleTrigger?.label ?? (analysisRuleFocused
+        ? "Run the changed analyzer against positive, negative, and neighboring-rule controls."
+        : `Start the changed ${flow.title} behavior.`);
     const outcomes = flow.lifecycle
       .filter((stage) => stage.kind === "observable-outcome")
       .map((stage) => stripTerminalPunctuation(stage.label));
@@ -2526,9 +2538,13 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
     return {
       actor,
       trigger,
-      goal: `Complete the intended behavior: ${flow.title}.`,
+      goal: analysisRuleFocused
+        ? `Validate ${flow.title} against positive, negative, and neighboring-rule controls.`
+        : `Complete the intended behavior: ${flow.title}.`,
       successSignal,
-      reviewQuestion: `Does ${flow.title} follow the inferred lifecycle and produce this outcome: ${successSignal}?`,
+      reviewQuestion: analysisRuleFocused
+        ? `Does ${flow.title} emit only the intended findings while preserving neighboring rules: ${successSignal}?`
+        : `Does ${flow.title} follow the inferred lifecycle and produce this outcome: ${successSignal}?`,
       edgeCases: uniqueStrings(scenarioEdges).slice(0, 6),
     };
   }
@@ -2547,6 +2563,9 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
 
 function inferFlowActor(flow: Omit<E2eFlow, "languageBrief">): string {
   const haystack = `${flow.title} ${flow.reason} ${flow.files.join(" ")}`.toLowerCase();
+  if (isAnalysisRuleFocusedFlow(flow)) {
+    return "Analyzer maintainer or reviewer";
+  }
   if (isApiContractFocusedFlow(flow)) {
     return "API consumer or upstream service";
   }
@@ -2600,6 +2619,9 @@ function hasUserFacingEntrypointOrFile(flow: Omit<E2eFlow, "languageBrief">): bo
 }
 
 function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
+  if (isAnalysisRuleFocusedFlow(flow)) {
+    return "Run the changed analyzer against positive, negative, and neighboring-rule controls.";
+  }
   const route = flow.entrypoints.find((entrypoint) => entrypoint.kind === "route");
   if (route) {
     return `Open route ${route.value}.`;
@@ -2655,6 +2677,9 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
 }
 
 function inferFlowGoal(flow: Omit<E2eFlow, "languageBrief">): string {
+  if (isAnalysisRuleFocusedFlow(flow)) {
+    return `Protect ${flow.title} by verifying intended findings and rejecting vocabulary-only false positives.`;
+  }
   if (isApiContractFocusedFlow(flow)) {
     return `Protect ${flow.title} by verifying the changed request, response, auth, and failure contract.`;
   }
@@ -2691,6 +2716,9 @@ function isFlowGoalCandidateStep(step: string): boolean {
 }
 
 function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
+  if (isAnalysisRuleFocusedFlow(flow)) {
+    return "positive controls emit located findings, negative controls stay quiet, and neighboring rules keep their prior result";
+  }
   if (isApiContractFocusedFlow(flow)) {
     return "the changed contract returns the expected status, response shape, auth behavior, and failure handling";
   }
@@ -2754,6 +2782,9 @@ function isImplementationShapedTrigger(value: string): boolean {
 }
 
 function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSignal: string): string {
+  if (isAnalysisRuleFocusedFlow(flow)) {
+    return `Can a reviewer confirm the changed analyzer rule stays within its intended boundary: ${successSignal}?`;
+  }
   if (isApiContractFocusedFlow(flow)) {
     return `Can a reviewer confirm that the changed endpoint, handler, or service contract is exercised and this outcome is verified: ${successSignal}?`;
   }
@@ -2813,7 +2844,19 @@ function isGeneratedArtifactFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): b
 }
 
 function isCliCommandFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
-  return /\bCLI command verification\b/i.test(flow.title);
+  return flow.kind === "command" || /\bCLI command verification\b/i.test(flow.title);
+}
+
+function isAnalysisRuleFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return hasOnlyAnalysisRuleDiffEvidence(flow.intentEvidence);
+}
+
+function hasOnlyAnalysisRuleDiffEvidence(evidence: ChangeIntentEvidence[] | undefined): boolean {
+  const locatedEvidence = (evidence ?? []).filter(
+    (evidence) => evidence.kind === "diff" && evidence.sourceRole !== undefined,
+  );
+  return locatedEvidence.some((evidence) => evidence.sourceRole === "analysis-rule") &&
+    locatedEvidence.every((evidence) => evidence.sourceRole === "analysis-rule");
 }
 
 function inferFlowEdgeCases(flow: Omit<E2eFlow, "languageBrief">): string[] {
@@ -4792,7 +4835,7 @@ async function buildFlows(
   const importImpacts = await collectImportImpacts(root, files);
   const fixtureContext = await collectFixtureReadinessContext(root, files);
   const flowResults = await Promise.all(
-    buildFlowCandidates(files, runner, projectType, domainLanguage, importImpacts, changeAnalysis).map((candidate) =>
+    buildFlowCandidates(files, runner, projectType, domainLanguage, importImpacts, changeAnalysis, addedDiffText).map((candidate) =>
       buildFlow(root, runner, candidate, testSuiteInventory, fixtureContext, addedDiffText),
     ),
   );
@@ -4859,14 +4902,17 @@ function buildFlowCandidates(
   domainLanguage: DomainLanguageSummary,
   importImpacts: ImportImpact[] = [],
   changeAnalysis?: ChangeIntentAnalysis,
+  addedDiffText: Record<string, string> = {},
 ): FlowCandidate[] {
   const lowSignalCandidate = importImpacts.length === 0 ? buildLowSignalChangeCandidate(files) : undefined;
   if (lowSignalCandidate) {
     return [lowSignalCandidate];
   }
 
-  const behaviorFiles = files.filter((file) => !isTestLikeFile(file));
-  const candidateFiles = behaviorFiles.length > 0 ? behaviorFiles : files;
+  const candidateFiles = files.filter((file) => {
+    const role = classifyChangeSourceRole(file, addedDiffText[file] ?? "").role;
+    return isReleaseMetadataFile(file) || role === "product" || role === "command" || role === "configuration";
+  });
   const impactSurfaceFiles = importImpacts.map((impact) => impact.surface).filter((surface) => !candidateFiles.includes(surface));
   // Backend route modules often live under `routes/`, which is also a common
   // frontend surface directory. Once the repository is classified as an API
@@ -5090,7 +5136,21 @@ function buildFlowCandidates(
     });
   }
 
-  return prioritizeChangeIntentCandidates(changeAnalysis, candidates, projectType, importImpacts, domainLanguage);
+  const supportingAssets = files.filter(isStaticAssetFile);
+  const candidatesWithAssets = candidates.map((candidate) => ({
+    ...candidate,
+    files: uniqueStrings([
+      ...candidate.files,
+      ...supportingAssets.filter((asset) => isSupportingAssetForFiles(asset, candidate.files)),
+    ]),
+  }));
+  return prioritizeChangeIntentCandidates(
+    changeAnalysis,
+    candidatesWithAssets,
+    projectType,
+    importImpacts,
+    domainLanguage,
+  );
 }
 
 function prioritizeChangeIntentCandidates(
@@ -5224,6 +5284,14 @@ function isSupportingAssetForFiles(asset: string, flowFiles: string[]): boolean 
 
 function intentFlowKind(intent: ChangeIntentAnalysis["intents"][number], projectType: E2eProjectType): E2eFlowKind {
   const searchable = `${intent.title} ${intent.keywords.join(" ")} ${intent.lifecycle.map((stage) => stage.label).join(" ")}`.toLowerCase();
+  const locatedRoles = intent.evidence
+    .filter((evidence) => evidence.kind === "diff" && evidence.sourceRole !== undefined)
+    .map((evidence) => evidence.sourceRole);
+  const analysisRuleOnly = locatedRoles.includes("analysis-rule") &&
+    locatedRoles.every((role) => role === "analysis-rule");
+  if (analysisRuleOnly) {
+    return "domain";
+  }
   if (projectType === "cli") {
     return "command";
   }
@@ -5331,9 +5399,12 @@ async function buildFlow(
   if (files.length === 0) {
     return undefined;
   }
+  const analysisRuleFocused = hasOnlyAnalysisRuleDiffEvidence(candidate.intentEvidence);
   const coverage = candidate.coverage ?? buildCoverageTargets(candidate.kind, files, runner);
-  const setupHints = await inferFlowSetupHints(root, files, candidate.kind, addedDiffText);
-  const interactionEvidenceApplies = !isVerificationOnlyKind(candidate.kind);
+  const setupHints = analysisRuleFocused
+    ? []
+    : await inferFlowSetupHints(root, files, candidate.kind, addedDiffText);
+  const interactionEvidenceApplies = !analysisRuleFocused && !isVerificationOnlyKind(candidate.kind);
   const selectors = interactionEvidenceApplies
     ? await inferFlowSelectors(root, files, runner, addedDiffText)
     : [];
@@ -5354,6 +5425,7 @@ async function buildFlow(
       setupHints,
       fixtureContext,
       addedDiffText,
+      analysisRuleFocused,
     ),
     selectors,
     missingTestability: interactionEvidenceApplies ? await findFlowTestabilityGaps(root, files, runner, selectors) : [],
@@ -5474,29 +5546,33 @@ async function inferFlowSetupHints(
   }
 
   const hints: E2eSetupHint[] = [];
+  const setupEvidenceFiles = files.filter((file) => {
+    const role = classifyChangeSourceRole(file, addedDiffText[file] ?? "").role;
+    return role === "product" || role === "command" || role === "configuration";
+  });
   const fileTexts: Array<{ file: string; text: string }> = [];
-  for (const file of files.slice(0, 12)) {
+  for (const file of setupEvidenceFiles.slice(0, 12)) {
     const text = await readTextIfExists(path.join(root, file));
     if (text) {
       fileTexts.push({ file, text });
     }
   }
 
-  const filesText = files.join("\n");
+  const filesText = setupEvidenceFiles.join("\n");
   const combinedText = `${filesText}\n${fileTexts.map((item) => item.text).join("\n")}`;
-  const changedText = files.map((file) => addedDiffText[file] ?? "").filter(Boolean).join("\n");
+  const changedText = setupEvidenceFiles.map((file) => addedDiffText[file] ?? "").filter(Boolean).join("\n");
   const shouldUseContentSignals = kind !== "config" && kind !== "content" && kind !== "command";
   const signalText = shouldUseContentSignals ? combinedText : filesText;
   const changedSignalText = `${filesText}\n${changedText}`;
   const matchingFiles = (pattern: RegExp) =>
     uniqueStrings([
-      ...files.filter((file) => pattern.test(file)),
+      ...setupEvidenceFiles.filter((file) => pattern.test(file)),
       ...(shouldUseContentSignals
         ? fileTexts.filter((item) => pattern.test(item.text)).map((item) => item.file)
         : []),
     ]).slice(0, maxFilesPerFlow);
   const matchingChangedFiles = (pattern: RegExp) =>
-    uniqueStrings(files.filter((file) => pattern.test(file) || pattern.test(addedDiffText[file] ?? "")))
+    uniqueStrings(setupEvidenceFiles.filter((file) => pattern.test(file) || pattern.test(addedDiffText[file] ?? "")))
       .slice(0, maxFilesPerFlow);
 
   if (/(?:^|\/|[-_])(auth|session|login|logout|permission|permissions|guard|guards|token|jwt)(?:\/|[-_.]|$)/i.test(changedSignalText)) {
@@ -5528,7 +5604,7 @@ async function inferFlowSetupHints(
   }
 
   const fixtureEvidence = /(?:\b(?:fixture|fixtures|factory|factories|mock|mocks|faker|msw|nock|test-data)\b|\b(?:fixture|mock|seed)(?:Data|Response|Handler|Factory|Record)s?\b)/i;
-  if (fixtureEvidence.test(changedSignalText)) {
+  if (kind !== "command" && fixtureEvidence.test(changedSignalText)) {
     const fixtureFiles = matchingChangedFiles(fixtureEvidence);
     hints.push(
       setupHint(
@@ -5658,7 +5734,19 @@ async function inferFlowFixtureReadiness(
   setupHints: E2eSetupHint[],
   context: FixtureReadinessContext,
   addedDiffText: Record<string, string> = {},
+  analysisRuleFocused = false,
 ): Promise<E2eFixtureReadiness> {
+  if (analysisRuleFocused) {
+    return {
+      status: "not-needed",
+      reason: "This verification flow targets analyzer rule boundaries; repository tests and positive or negative controls matter more than product API fixtures.",
+      apiSignals: [],
+      apiEndpoints: [],
+      backendSignals: [],
+      mockSignals: [],
+      nextActions: [],
+    };
+  }
   if (kind === "test-evidence" || kind === "documentation" || kind === "generated-artifact") {
     return {
       status: "not-needed",
@@ -7108,7 +7196,13 @@ async function buildDraftFlows(
 ): Promise<DraftE2eFlow[]> {
   const baseFlows = plan.flows.length > 0 ? plan.flows : [buildFallbackFlow(plan)];
   const manifestFlows = await buildManifestDraftFlows(plan, baseFlows, addedDiffText);
-  const domainScenarios = shouldUseDomainScenariosForDraft(plan) ? plan.domainLanguage.scenarios : [];
+  const domainScenarios = shouldUseDomainScenariosForDraft(plan)
+    ? plan.domainLanguage.scenarios.filter((scenario) =>
+        scenario.source === "core-flow" || scenario.files.some(
+          (file) => classifyChangeSourceRole(file, addedDiffText[file] ?? "").role === "product",
+        )
+      )
+    : [];
   const scenarioFlows = await Promise.all(
     domainScenarios
       .filter((scenario) => scenario.files.length > 0 || scenario.source === "core-flow")
@@ -7176,7 +7270,7 @@ function shouldUseDomainScenariosForDraft(plan: E2ePlanResult): boolean {
 }
 
 function isEvidenceVerificationFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
-  return isTestEvidenceFocusedFlow(flow) || isDocumentationFocusedFlow(flow) || isGeneratedArtifactFocusedFlow(flow);
+  return isAnalysisRuleFocusedFlow(flow) || isTestEvidenceFocusedFlow(flow) || isDocumentationFocusedFlow(flow) || isGeneratedArtifactFocusedFlow(flow);
 }
 
 function isVerificationOnlyFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
@@ -7812,7 +7906,9 @@ function buildScenarioAutomationReceipts(
         blockers: [
           selection.decision === "review-only"
             ? selection.reason
-            : "The repository has no executable browser or device adapter for this scenario, so it remains review evidence.",
+            : isAnalysisRuleFocusedFlow(flow)
+              ? "This analyzer scenario maps to repository tests or benchmarks rather than a browser or device draft, so it remains review evidence."
+              : "The repository has no executable browser or device adapter for this scenario, so it remains review evidence.",
         ],
       };
     }
