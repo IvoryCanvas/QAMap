@@ -1,6 +1,6 @@
 # Agent Format Contract
 
-`qamap qa --format agent` prints one compact line of JSON designed to be pasted into a coding agent's context instead of the full markdown report. The complete line stays below 4KB. When the uncapped result would be larger, QAMap preserves the strongest intent, routed scenarios, affected flow, and total/omitted counts instead of silently overflowing the context budget. This page is the contract for that output: what the fields mean, what an agent may rely on, and how the format is allowed to change.
+`qamap qa --format agent` prints one compact line of JSON designed to be pasted into a coding agent's context instead of the full markdown report. The complete line stays below 4KB. When the uncapped result would be larger, QAMap preserves the strongest intent, its highest-priority routed scenarios, the affected flow, its `verificationMode`, and total/omitted counts instead of silently overflowing the context budget. Even the emergency shape retains that intent, flow, and one validation command when the repository exposes one. This page is the contract for that output: what the fields mean, what an agent may rely on, and how the format is allowed to change.
 
 ```sh
 qamap qa . --base origin/main --head HEAD --format agent
@@ -24,7 +24,7 @@ The intended loop for a coding agent:
 4. Check `execution` before interpreting any result. Version 1 currently reports `status: "not-run"`, `performed: false`, and `scope: "static-analysis-and-draft-mapping"` because `qa` never launches the target application.
 5. Check `scenarioCoverage` and `scenarios[].automation` before trusting a draft. A required scenario with `partial` or `not-compiled` automation remains a blocker. `compiled` is a backward-compatible machine value meaning static commands and assertions were fully mapped; it does not mean the target application was executed or passed.
 6. Treat `readiness` as automation readiness, not as a verdict on the PR. `requiredBootstrap` contains non-runner repository context only; runner adoption lives under the opt-in `automation` object.
-7. Use `flows[].changedFiles`, `flows[].evidence`, and `flows[].reviewQuestion` to understand why the flow was selected. Use `steps`, `selectors`, and `successSignal` to write or review tests; `flows[].scenarioAutomation` is the compact selected-to-draft map and `runnable` says how much to trust the generated draft.
+7. Use `flows[].verificationMode` before choosing an artifact: values such as `analysis-rule` or `existing-test-evidence` mean validating existing repository behavior, not inventing a product E2E. Then use `flows[].changedFiles`, `flows[].evidence`, and `flows[].reviewQuestion` to understand why the flow was selected. Use `steps`, `selectors`, and `successSignal` to write or review tests; `flows[].scenarioAutomation` is the compact selected-to-draft map and `runnable` says how much to trust the generated draft. Lean 4KB compaction still retains `source`, `verificationMode`, the first review step, and one next command when the repository exposes one.
 8. Surface `requiredEvidence` in the PR description, and paste `prChecklist` items into the PR body.
 9. Run `commands` to validate. Report their results separately from the QAMap analysis receipt.
 

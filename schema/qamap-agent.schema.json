@@ -366,10 +366,11 @@
     },
     "compaction": {
       "type": "object",
-      "description": "Present when QAMap reduced lower-priority detail to keep the complete line at or below 8KB.",
+      "description": "Present when QAMap reduced lower-priority detail to keep the complete line below 4KB while retaining the highest-priority flow and its verification mode.",
       "properties": {
         "maxBytes": { "type": "integer", "minimum": 1 },
         "originalBytes": { "type": "integer", "minimum": 1 },
+        "lean": { "type": "boolean" },
         "emergency": { "type": "boolean" }
       }
     },

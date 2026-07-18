@@ -707,6 +707,30 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
   assert.equal(qa.flows[0].verificationMode, "analysis-rule");
   assert.equal(qa.flows[0].why.some((reason) => /positive, negative, and neighboring-rule controls/i.test(reason)), true);
   assert.equal(qa.prChecklist.some((item) => /manifest init/i.test(item)), false);
+
+  const oversizedQa = structuredClone(qa);
+  oversizedQa.changeAnalysis.intents = Array.from({ length: 12 }, (_, index) => ({
+    ...structuredClone(qa.changeAnalysis.intents[0]),
+    title: `${qa.changeAnalysis.intents[0].title} ${index} ${"intent".repeat(40)}`,
+  }));
+  oversizedQa.flows = Array.from({ length: 20 }, (_, index) => ({
+    ...structuredClone(qa.flows[0]),
+    title: `${qa.flows[0].title} ${index} ${"flow".repeat(40)}`,
+    changedFiles: Array.from({ length: 12 }, (__, fileIndex) => `src/${"nested/".repeat(20)}file-${fileIndex}.ts`),
+    draftSteps: Array.from({ length: 12 }, (__, stepIndex) => `Step ${stepIndex} ${"detail ".repeat(50)}`),
+    selectorHints: Array.from({ length: 12 }, (__, selectorIndex) => `[data-testid="${"selector".repeat(20)}-${selectorIndex}"]`),
+  }));
+  oversizedQa.base = `refs/heads/${"base-segment/".repeat(1000)}`;
+  oversizedQa.head = `refs/heads/${"head-segment/".repeat(1000)}`;
+  oversizedQa.manifestPath = `${"manifest/".repeat(1000)}qamap.yaml`;
+  const compactOutput = formatAgentQaDraft(oversizedQa);
+  const compactSummary = JSON.parse(compactOutput);
+
+  assert.ok(Buffer.byteLength(compactOutput) <= 4 * 1024);
+  assert.ok(compactSummary.compaction.lean || compactSummary.compaction.emergency);
+  assert.equal(compactSummary.flows[0].verificationMode, "analysis-rule");
+  assert.equal(compactSummary.flows[0].source, qa.flows[0].source);
+  assert.ok(compactSummary.flows[0].steps.length > 0);
 });
 
 test("change intent ignores release-only commit metadata", async (t) => {
@@ -1097,7 +1121,11 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   const calendarScenario = plan.changeAnalysis.intents[0].scenarios.find((scenario) => /calendar/i.test(scenario.title));
   assert.ok(calendarScenario?.evidence.some((item) => item.symbol?.toLowerCase() === "timezone" && item.startLine));
   assert.match(agentSummary.intents[0].title, /Submit account preferences/i);
-  assert.ok(agentSummary.intents[0].sources.some((source) => source.file && source.startLine));
+  const agentIntentSources = [
+    ...(agentSummary.intents[0].sources ?? []),
+    ...agentSummary.intents[0].scenarios.flatMap((scenario) => scenario.sources ?? []),
+  ];
+  assert.ok(agentIntentSources.some((source) => source.file && source.startLine));
   assert.ok(agentSummary.intents[0].lifecycle.some((stage) => stage.phase === "state-change"));
   assert.equal(agentSummary.intents[0].scenarioCount, plan.changeAnalysis.intents[0].scenarios.length);
   assert.ok(agentSummary.intents[0].omittedScenarioCount > 0);
@@ -1173,6 +1201,8 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.equal(compactAgentSummary.omittedFlowCount, 20 - compactAgentSummary.flows.length);
   assert.ok(compactAgentSummary.intents.length > 0);
   assert.ok(compactAgentSummary.flows.length > 0);
+  assert.equal(typeof compactAgentSummary.flows[0].source, "string");
+  assert.ok(Array.isArray(compactAgentSummary.flows[0].steps));
   assert.ok(compactAgentSummary.compaction);
 
   const pathologicalQa = structuredClone(oversizedQa);

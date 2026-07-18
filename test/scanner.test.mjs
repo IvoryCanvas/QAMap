@@ -5619,6 +5619,21 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   const agentSchema = JSON.parse(await readFile(path.join(repositoryRoot, "schema/qamap-agent.schema.json"), "utf8"));
   assert.deepEqual(collectSchemaViolations(agentSchema, agentSummary), []);
 
+  const oversizedQa = structuredClone(qa);
+  oversizedQa.flows = Array.from({ length: 20 }, () => ({
+    ...structuredClone(qa.flows[0]),
+    changedFiles: Array.from({ length: 12 }, (_, index) => `src/${"nested/".repeat(20)}file-${index}.tsx`),
+    draftSteps: Array.from({ length: 12 }, (_, index) => `Step ${index} ${"detail ".repeat(50)}`),
+    selectorHints: Array.from({ length: 12 }, (_, index) => `[data-testid="${"selector".repeat(20)}-${index}"]`),
+  }));
+  oversizedQa.base = `refs/heads/${"base-segment/".repeat(1000)}`;
+  oversizedQa.head = `refs/heads/${"head-segment/".repeat(1000)}`;
+  const compactAgentOutput = formatAgentQaDraft(oversizedQa);
+  const compactAgentSummary = JSON.parse(compactAgentOutput);
+  assert.ok(Buffer.byteLength(compactAgentOutput) <= 4 * 1024);
+  assert.ok(compactAgentSummary.compaction);
+  assert.deepEqual(collectSchemaViolations(agentSchema, compactAgentSummary), []);
+
   const agentCliOutput = await execFileAsync(process.execPath, [
     cliPath,
     "qa",

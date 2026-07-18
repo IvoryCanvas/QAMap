@@ -317,6 +317,7 @@ interface AgentSummaryShape {
     title?: unknown;
     confidence?: unknown;
     reviewRequired?: unknown;
+    evidence?: string[];
     sources?: unknown[];
     lifecycle: unknown[];
     scenarioCount?: number;
@@ -329,8 +330,20 @@ interface AgentSummaryShape {
       confidence?: unknown;
       sources?: unknown[];
       assertions: string[];
-      routing?: { decision?: unknown };
-      automation?: { status?: unknown; blocker?: string };
+      routing?: {
+        decision?: unknown;
+        reason?: string;
+        requiredSources?: unknown;
+        referenceSources?: unknown;
+      };
+      automation?: {
+        status?: unknown;
+        mappedSteps?: unknown;
+        totalSteps?: unknown;
+        mappedAssertions?: unknown;
+        totalAssertions?: unknown;
+        blocker?: string;
+      };
     }>;
   }>;
   flows: Array<{
@@ -426,8 +439,8 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     title: intent.title,
     confidence: intent.confidence,
     reviewRequired: intent.reviewRequired,
-    sources: intent.sources?.slice(0, 1),
-    lifecycle: intent.lifecycle.slice(0, 3),
+    evidence: [],
+    lifecycle: intent.lifecycle.slice(0, 3).map(compactAgentLifecycleStage),
     scenarioCount: intent.scenarioCount,
     omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 2),
     scenarios: intent.scenarios.slice(0, 2).map((scenario) => ({
@@ -436,10 +449,24 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
       kind: scenario.kind,
       title: scenario.title,
       confidence: scenario.confidence,
-      sources: scenario.sources?.slice(0, 1),
-      routing: scenario.routing ? { decision: scenario.routing.decision } : undefined,
+      sources: scenario.sources?.slice(0, 1).map(compactAgentEvidenceSource),
+      assertions: scenario.assertions.slice(0, 1).map((assertion) => truncateForAgent(assertion, 80)),
+      routing: scenario.routing
+        ? {
+            decision: scenario.routing.decision,
+            reason: `Evidence-backed ${String(scenario.routing.decision ?? "review-only")} routing.`,
+            requiredSources: scenario.routing.requiredSources,
+            referenceSources: scenario.routing.referenceSources,
+          }
+        : undefined,
       automation: scenario.automation
-        ? { status: scenario.automation.status }
+        ? {
+            status: scenario.automation.status,
+            mappedSteps: scenario.automation.mappedSteps,
+            totalSteps: scenario.automation.totalSteps,
+            mappedAssertions: scenario.automation.mappedAssertions,
+            totalAssertions: scenario.automation.totalAssertions,
+          }
         : undefined,
     })),
   }));
@@ -487,10 +514,22 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
   }));
   const leanFlows = compact.flows.slice(0, 1).map((flow) => ({
     title: flow.title,
+    source: truncateForAgent(String(flow.source ?? ""), 40),
     draft: flow.draft,
+    verificationMode: flow.verificationMode,
     entry: flow.entry,
-    successSignal: flow.successSignal,
+    changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 80)),
+    reviewQuestion: flow.reviewQuestion
+      ? truncateForAgent(String(flow.reviewQuestion), 100)
+      : undefined,
+    successSignal: flow.successSignal
+      ? truncateForAgent(String(flow.successSignal), 100)
+      : undefined,
+    steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 80)),
     selectors: flow.selectors.slice(0, 1),
+    existingEvidence: flow.existingEvidence
+      ?.slice(0, 1)
+      .map((file) => truncateForAgent(file, 100)),
   }));
   const leanPayload = JSON.stringify({
     schema: summary.schema,
@@ -523,6 +562,39 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     return leanPayload;
   }
 
+  const emergencyIntents = summary.intents.slice(0, 1).map((intent) => ({
+    title: truncateForAgent(String(intent.title ?? ""), 60),
+    confidence: intent.confidence,
+    reviewRequired: intent.reviewRequired,
+    evidence: [],
+    lifecycle: [],
+    scenarioCount: intent.scenarioCount,
+    omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
+    scenarios: intent.scenarios.slice(0, 1).map((scenario) => ({
+      id: scenario.id,
+      priority: scenario.priority,
+      kind: scenario.kind,
+      title: truncateForAgent(String(scenario.title ?? ""), 60),
+      confidence: scenario.confidence,
+      assertions: [],
+      routing: scenario.routing
+        ? {
+            decision: scenario.routing.decision,
+            reason: "Retained highest-priority routing decision.",
+            requiredSources: scenario.routing.requiredSources,
+            referenceSources: scenario.routing.referenceSources,
+          }
+        : undefined,
+    })),
+  }));
+  const emergencyFlows = summary.flows.slice(0, 1).map((flow) => ({
+    title: truncateForAgent(String(flow.title ?? ""), 60),
+    source: truncateForAgent(String(flow.source ?? ""), 30),
+    draft: truncateForAgent(String(flow.draft ?? ""), 80),
+    verificationMode: flow.verificationMode,
+    steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 60)),
+    selectors: flow.selectors.slice(0, 1).map((selector) => truncateForAgent(selector, 60)),
+  }));
   return JSON.stringify({
     schema: summary.schema,
     base: truncateForAgent(String(summary.base ?? ""), 180),
@@ -537,22 +609,50 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     traces: [],
     testSuite: summary.testSuite,
     intentCount: summary.intentCount,
-    omittedIntentCount: summary.intentCount,
-    intents: [],
+    omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - emergencyIntents.length),
+    intents: emergencyIntents,
     flowCount: summary.flowCount,
-    omittedFlowCount: summary.flowCount,
-    flows: [],
+    omittedFlowCount: Math.max(0, numericCount(summary.flowCount) - emergencyFlows.length),
+    flows: emergencyFlows,
     requiredEvidence: [],
     recommendedEvidenceCount: summary.recommendedEvidenceCount,
     requiredBootstrap: [],
     prChecklist: [],
-    commands: [],
+    commands: summary.commands.slice(0, 1).map((command) => truncateForAgent(command, 100)),
     compaction: { maxBytes: agentPayloadByteLimit, originalBytes: Buffer.byteLength(payload), emergency: true },
   });
 }
 
 function numericCount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function compactAgentEvidenceSource(source: unknown): unknown {
+  if (!source || typeof source !== "object") return source;
+  const value = source as Record<string, unknown>;
+  return {
+    kind: value.kind,
+    reason: "Located evidence.",
+    sourceRole: value.sourceRole,
+    commit: value.commit,
+    file: value.file,
+    previousFile: value.previousFile,
+    symbol: value.symbol,
+    relation: value.relation,
+    side: value.side,
+    startLine: value.startLine,
+    endLine: value.endLine,
+    hunk: typeof value.hunk === "string" ? truncateForAgent(value.hunk, 70) : value.hunk,
+  };
+}
+
+function compactAgentLifecycleStage(stage: unknown): unknown {
+  if (!stage || typeof stage !== "object") return stage;
+  const value = stage as Record<string, unknown>;
+  return {
+    phase: value.phase,
+    label: truncateForAgent(String(value.label ?? ""), 45),
+  };
 }
 
 function compactAgentRiskStatement(kind: unknown): string {
