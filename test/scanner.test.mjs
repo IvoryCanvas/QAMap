@@ -1544,6 +1544,8 @@ test("generateE2ePlan treats Maestro-only changes as test evidence", async () =>
   assert.equal(qa.missingEvidence.some((item) => item.kind === "manifest"), false);
   assert.equal(qa.missingEvidence.some((item) => /entrypoint/i.test(`${item.title} ${item.detail}`)), false);
   assert.equal(qa.bootstrap.steps.some((step) => step.title === "Create the first changed-flow E2E draft"), false);
+  assert.match(qa.prChecklist[0], /Run the changed test evidence:/);
+  assert.equal(qa.agentHandoff.some((item) => /Run the changed test evidence/.test(item)), true);
   assert.match(qaMarkdown, /Existing test evidence:/);
   assert.doesNotMatch(qaMarkdown, /Proposed draft: `.maestro\/changed-test-evidence/);
 });
@@ -2160,6 +2162,7 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
   await initGitRepo(root);
   await mkdir(path.join(root, "src/features/bundle/fragments"), { recursive: true });
   await mkdir(path.join(root, "src/features/bundle/__tests__"), { recursive: true });
+  await mkdir(path.join(root, "scripts/__tests__"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -2191,6 +2194,10 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
       "});",
     ].join("\n"),
   );
+  await writeFile(
+    path.join(root, "scripts/__tests__/BundleBuild.test.tsx"),
+    "it('builds the bundle successfully', () => expect(true).toBe(true));\n",
+  );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
@@ -2209,7 +2216,7 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
 
   assert.ok(flow);
   assert.equal(plan.testSuite.hasTestSuite, true);
-  assert.equal(plan.testSuite.testFileCount, 1);
+  assert.equal(plan.testSuite.testFileCount, 2);
   assert.ok(plan.testSuite.frameworkSignals.includes("vitest"));
   assert.equal(
     flow.coverageEvidence.find((evidence) => evidence.targetTitle === "Primary success path")?.status,
@@ -2225,6 +2232,15 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
       .find((evidence) => evidence.targetTitle === "Loading, empty, error, and success states")
       ?.files.includes("src/features/bundle/__tests__/BundleView.test.tsx"),
   );
+  assert.equal(
+    flow.coverageEvidence.some((evidence) => evidence.files.includes("scripts/__tests__/BundleBuild.test.tsx")),
+    false,
+  );
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.ok(qa.flows[0].existingEvidencePaths.includes("src/features/bundle/__tests__/BundleView.test.tsx"));
+  assert.equal(qa.flows[0].existingEvidencePaths.includes("scripts/__tests__/BundleBuild.test.tsx"), false);
+  assert.match(qa.prChecklist[0], /Run the related test evidence:/);
+  assert.equal(qa.agentHandoff.some((item) => /Run the related test evidence/.test(item)), true);
   assert.match(markdown, /Existing test evidence:/);
   assert.match(markdown, /covered Loading, empty, error, and success states/);
 });

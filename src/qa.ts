@@ -605,7 +605,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     confidence: intent.confidence,
     reviewRequired: intent.reviewRequired,
     evidence: [],
-    lifecycle: [],
+    lifecycle: intent.lifecycle.slice(0, 1).map(compactAgentLifecycleStage),
     scenarioCount: intent.scenarioCount,
     omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
     scenarios: intent.scenarios.slice(0, 1).map((scenario) => ({
@@ -614,7 +614,8 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
       kind: scenario.kind,
       title: truncateForAgent(String(scenario.title ?? ""), 60),
       confidence: scenario.confidence,
-      assertions: [],
+      sources: scenario.sources?.slice(0, 1).map(compactAgentEvidenceSource),
+      assertions: scenario.assertions.slice(0, 1).map((assertion) => truncateForAgent(assertion, 70)),
       routing: scenario.routing
         ? {
             decision: scenario.routing.decision,
@@ -630,10 +631,22 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     source: truncateForAgent(String(flow.source ?? ""), 30),
     draft: truncateForAgent(String(flow.draft ?? ""), 80),
     verificationMode: flow.verificationMode,
+    entry: flow.entry ? truncateForAgent(String(flow.entry), 80) : undefined,
+    changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 80)),
+    reviewQuestion: flow.reviewQuestion
+      ? truncateForAgent(String(flow.reviewQuestion), 100)
+      : undefined,
+    successSignal: flow.successSignal
+      ? truncateForAgent(String(flow.successSignal), 100)
+      : undefined,
     steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 60)),
     selectors: flow.selectors.slice(0, 1).map((selector) => truncateForAgent(selector, 60)),
+    existingEvidence: flow.existingEvidence
+      ?.slice(0, 1)
+      .map((file) => truncateForAgent(file, 80)),
   }));
-  return JSON.stringify({
+  const emergencyTraces = leanTraces.slice(0, 1);
+  const emergencySummary = {
     schema: summary.schema,
     base: truncateForAgent(String(summary.base ?? ""), 180),
     head: truncateForAgent(String(summary.head ?? ""), 180),
@@ -644,8 +657,8 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     traceCount: summary.traceCount,
-    omittedTraceCount: summary.traceCount,
-    traces: [],
+    omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - emergencyTraces.length),
+    traces: emergencyTraces,
     testSuite: summary.testSuite,
     intentCount: summary.intentCount,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - emergencyIntents.length),
@@ -653,12 +666,42 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     flowCount: summary.flowCount,
     omittedFlowCount: Math.max(0, numericCount(summary.flowCount) - emergencyFlows.length),
     flows: emergencyFlows,
-    requiredEvidence: [],
+    requiredEvidence: summary.requiredEvidence.slice(0, 1),
     recommendedEvidenceCount: summary.recommendedEvidenceCount,
     requiredBootstrap: [],
-    prChecklist: [],
+    prChecklist: summary.prChecklist.slice(0, 1).map((item) => truncateForAgent(item, 100)),
     commands: summary.commands.slice(0, 1).map((command) => truncateForAgent(command, 100)),
     compaction: { maxBytes: agentPayloadByteLimit, originalBytes: Buffer.byteLength(payload), emergency: true },
+  };
+  const emergencyPayload = JSON.stringify(emergencySummary);
+  if (Buffer.byteLength(emergencyPayload) <= agentPayloadByteLimit) {
+    return emergencyPayload;
+  }
+
+  return JSON.stringify({
+    ...emergencySummary,
+    omittedTraceCount: summary.traceCount,
+    traces: [],
+    intents: emergencyIntents.map((intent) => ({
+      ...intent,
+      lifecycle: [],
+      scenarios: intent.scenarios.map((scenario) => ({
+        ...scenario,
+        sources: [],
+        assertions: [],
+      })),
+    })),
+    flows: emergencyFlows.map((flow) => ({
+      title: flow.title,
+      source: flow.source,
+      draft: flow.draft,
+      verificationMode: flow.verificationMode,
+      changedFiles: flow.changedFiles,
+      steps: flow.steps,
+      selectors: flow.selectors,
+    })),
+    requiredEvidence: [],
+    prChecklist: [],
   });
 }
 
@@ -1235,7 +1278,9 @@ function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
     coverageTargets: file.coverageTargets ?? [],
     entrypointHints: file.entrypointHints ?? [],
     selectorHints: file.selectorHints ?? [],
-    existingEvidencePaths: isChangedTestEvidenceTitle(file.flowTitle) ? (file.changedFiles ?? []) : [],
+    existingEvidencePaths: isChangedTestEvidenceTitle(file.flowTitle)
+      ? (file.changedFiles ?? [])
+      : (file.coverageEvidencePaths ?? []),
     verificationMode,
     setupHints: file.setupHints ?? [],
     manifestUpdatePath: file.manifestUpdatePath,
@@ -1311,9 +1356,12 @@ function buildPrChecklist(
   draft: E2eDraftResult,
   flows: QaDraftFlow[],
 ): string[] {
+  const testEvidenceLabel = flows[0]?.verificationMode === "existing-test-evidence"
+    ? "changed test evidence"
+    : "related test evidence";
   const checklist = [
     flows[0]?.existingEvidencePaths.length
-      ? `Run the changed test evidence: ${flows[0].existingEvidencePaths.slice(0, 4).join(", ")}.`
+      ? `Run the ${testEvidenceLabel}: ${flows[0].existingEvidencePaths.slice(0, 4).join(", ")}.`
       : flows[0]?.verificationMode
         ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${draft.plan.suggestedCommands[0] ?? "the nearest repository validation command"}.`
       : draft.plan.changeAnalysis.intents[0]
@@ -1344,11 +1392,14 @@ function buildAgentHandoff(
   flows: QaDraftFlow[],
   missingEvidence: QaDraftMissingEvidence[],
 ): string[] {
+  const testEvidenceLabel = flows[0]?.verificationMode === "existing-test-evidence"
+    ? "changed test evidence"
+    : "related test evidence";
   const handoff = [
     "Use this as a local PR QA skill result, not as proof that browser or device QA already passed.",
     draft.dryRun ? "No files were written because this command previews QA work only." : undefined,
     flows[0]?.existingEvidencePaths.length
-      ? `Run the changed test evidence (${flows[0].existingEvidencePaths.slice(0, 3).join(", ")}) and record the result before handoff.`
+      ? `Run the ${testEvidenceLabel} (${flows[0].existingEvidencePaths.slice(0, 3).join(", ")}) and record the result before handoff.`
       : flows[0]?.verificationMode
         ? `Run ${formatVerificationMode(flows[0].verificationMode)} and record the command and result before handoff; do not invent a product-journey E2E for this diff alone.`
       : draft.plan.changeAnalysis.intents[0]

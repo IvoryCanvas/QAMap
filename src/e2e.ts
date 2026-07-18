@@ -326,6 +326,7 @@ export interface E2eDraftFile {
   selectorHints?: string[];
   setupHints?: string[];
   coverageTargets?: string[];
+  coverageEvidencePaths?: string[];
   manifestUpdatePath?: string;
   languageBrief?: E2eFlowLanguageBrief;
   actionItems?: E2eDraftActionItem[];
@@ -2229,6 +2230,7 @@ function draftFileDetails(flow: DraftE2eFlow): Pick<
   | "selectorHints"
   | "setupHints"
   | "coverageTargets"
+  | "coverageEvidencePaths"
   | "manifestUpdatePath"
   | "intentId"
   | "intentConfidence"
@@ -2242,6 +2244,7 @@ function draftFileDetails(flow: DraftE2eFlow): Pick<
     selectorHints: flow.selectors.map(formatSelectorHint).slice(0, 8),
     setupHints: flow.setupHints.map((hint) => `${hint.title}: ${hint.detail}`).slice(0, 6),
     coverageTargets: flow.coverage.map((target) => `${target.priority}: ${target.title}`).slice(0, 7),
+    coverageEvidencePaths: uniqueStrings(flow.coverageEvidence.flatMap((evidence) => evidence.files)).slice(0, 8),
     manifestUpdatePath: flow.manifestMatch?.updatePath,
     intentId: flow.intentId,
     intentConfidence: flow.intentConfidence,

@@ -378,18 +378,26 @@ function commitsShareIntent(left: ParsedCommit, right: ParsedCommit): boolean {
   const scopeTokens = new Set(
     [left.scope, right.scope]
       .filter((scope): scope is string => Boolean(scope))
-      .map(normalizeToken),
+      .flatMap((scope) => [normalizeToken(scope), ...extractKeywords(scope)]),
   );
   const sharedKeywords = left.keywords.filter((keyword) =>
     rightKeywords.has(keyword) && keyword.length >= 4 && !scopeTokens.has(keyword)
   );
-  if (sharedKeywords.length > 0) {
+  if (sharedKeywords.length >= 2) {
+    return true;
+  }
+
+  const rightFiles = new Set((right.files ?? []).filter(isBehaviorBearingFile));
+  const sharesBehaviorFile = (left.files ?? []).some(
+    (file) => isBehaviorBearingFile(file) && rightFiles.has(file),
+  );
+  if (sharedKeywords.length === 1 && sharesBehaviorFile) {
     return true;
   }
 
   // Conventional scopes often name an entire package (for example `web` or
-  // `app`), not one user intent. Scope equality must not merge unrelated
-  // feature commits by itself.
+  // `app`), not one user intent. A single shared word can also create a
+  // transitive bridge across a long PR, so it needs same-file evidence.
   return false;
 }
 
@@ -526,7 +534,7 @@ function selectIntentFiles(
   const behaviorFiles = changedFiles.filter(isBehaviorBearingFile);
   const changedSet = new Set(behaviorFiles);
   const commitChangedFiles = commitFiles.filter((file) => changedSet.has(file));
-  if (commitChangedFiles.length > 0) {
+  if (commitFiles.length > 0) {
     return commitChangedFiles.slice(0, maxIntentFiles);
   }
   if (clusterCount === 1) {

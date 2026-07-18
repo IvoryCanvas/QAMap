@@ -383,6 +383,59 @@ test("a broad conventional scope does not merge unrelated product intents", asyn
   assert.ok(analysis.intents.some((intent) => /Save account timezone preferences/i.test(intent.title)));
 });
 
+test("single-keyword bridges do not collapse a long PR into one change intent", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/reminder.ts", "export const reminder = 'idle';\n");
+  await write(root, "src/profile.ts", "export const profile = 'idle';\n");
+  await write(root, "src/preferences.ts", "export const preferences = 'idle';\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/mixed-product-work");
+
+  await write(root, "src/reminder.ts", "export function scheduleReminder() { return deliverReminder(); }\n");
+  commit(root, "feat(web): schedule reminder delivery");
+  await write(root, "src/profile.ts", "export function showReminderProfile() { return openProfile(); }\n");
+  commit(root, "feat(web): show reminder profile");
+  await write(root, "src/preferences.ts", "export function saveProfilePreferences() { return persistPreferences(); }\n");
+  commit(root, "feat(web): save profile preferences");
+
+  const analysis = await analyze(root, ["src/reminder.ts", "src/profile.ts", "src/preferences.ts"]);
+
+  assert.equal(analysis.intents.length, 3);
+  assert.ok(analysis.intents.some((intent) => /Schedule reminder delivery/i.test(intent.title)));
+  assert.ok(analysis.intents.some((intent) => /Show reminder profile/i.test(intent.title)));
+  assert.ok(analysis.intents.some((intent) => /Save profile preferences/i.test(intent.title)));
+  assert.ok(analysis.intents.every((intent) => intent.commits.length === 1));
+  assert.ok(analysis.intents.every((intent) => intent.files.length === 1));
+});
+
+test("infrastructure commit keywords do not attach to unrelated product symbols", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "turbo.json", '{"globalEnv":[]}\n');
+  await write(root, "src/review.tsx", "export function Review() { return null; }\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/mixed-infrastructure-and-product");
+
+  await write(root, "turbo.json", '{"globalEnv":["LINK_DEV_PHASE"]}\n');
+  commit(root, "feat(env): enable link dev phase deployment");
+  await write(
+    root,
+    "src/review.tsx",
+    "export function Review() { const [phase, setPhase] = useState('review'); return <button onClick={() => setPhase('done')}>{phase}</button>; }\n",
+  );
+  commit(root, "feat(playground): add review phase control");
+
+  const analysis = await analyze(root, ["turbo.json", "src/review.tsx"]);
+
+  assert.equal(analysis.intents.length, 2);
+  const infrastructureIntent = analysis.intents.find((intent) => /Link dev phase deployment/i.test(intent.title));
+  const productIntent = analysis.intents.find((intent) => /Add review phase control/i.test(intent.title));
+  assert.ok(infrastructureIntent);
+  assert.ok(productIntent);
+  assert.deepEqual(infrastructureIntent.files, ["turbo.json"]);
+  assert.deepEqual(productIntent.files, ["src/review.tsx"]);
+  assert.equal(productIntent.commits.some((item) => /link dev phase deployment/i.test(item.subject)), false);
+});
+
 test("a related feature title remains primary when an earlier fix shares its diff", async (t) => {
   const root = await makeRepo(t);
   await write(root, "src/review.tsx", "export function Review() { return null; }\n");
@@ -741,7 +794,13 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
   assert.equal(compactSummary.readiness.basis, "repository-validation");
   assert.equal(compactSummary.readiness.automationApplicable, false);
   assert.equal(compactSummary.scenarioCoverage.automationApplicable, false);
+  assert.ok(compactSummary.traces.length > 0);
+  assert.equal(typeof compactSummary.traces[0].source.file, "string");
+  assert.ok(compactSummary.intents[0].scenarios[0].sources.length > 0);
   assert.equal(compactSummary.flows[0].source, qa.flows[0].source);
+  assert.ok(compactSummary.flows[0].changedFiles.length > 0);
+  assert.equal(typeof compactSummary.flows[0].reviewQuestion, "string");
+  assert.equal(typeof compactSummary.flows[0].successSignal, "string");
   assert.ok(compactSummary.flows[0].steps.length > 0);
 });
 
