@@ -75,6 +75,8 @@ QAMap keeps QA selection and test generation as two separate decisions:
 | **QA reasoning trace** | Give every scenario a stable ID that connects diff line -> affected lifecycle -> risk -> routing decision -> optional draft, while keeping execution explicitly `not-run`. |
 | **Automation receipt** | Report whether the selected scenario is fully, partially, or not mapped into a draft, including the missing selector, fixture, entrypoint, or assertion evidence. Machine output keeps the compatible values `compiled`, `partial`, and `not-compiled`; none of them means a test ran or passed. |
 
+Changes limited to analyzer rules, configuration, documentation, generated artifacts, or existing tests are routed to repository validation. QAMap does not mislabel them as blocked product E2E work, and it never claims that a suggested command has already passed.
+
 Trimmed real output from the same demo:
 
 ```txt

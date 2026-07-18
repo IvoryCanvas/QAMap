@@ -10,6 +10,7 @@ import { generateE2eDraft, generateE2ePlan } from "../dist/e2e.js";
 import { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "../dist/qa.js";
 import { buildQaReasoningTraces, qaTraceIdForScenario } from "../dist/qa-trace.js";
 import { routeQaScenario } from "../dist/scenario-routing.js";
+import { classifyChangeSourceRole } from "../dist/source-role.js";
 import {
   addedDiffTextFromEvidence,
   collectAddedDiffEvidence,
@@ -128,6 +129,50 @@ test("diff evidence preserves renamed paths and head-side hunk locations", async
   assert.match(hunk.hunkHeader, /^@@ /);
   assert.match(hunk.lines[0].text, /onSubmitPreferences/);
   assert.deepEqual(hunk.removedLines, []);
+});
+
+test("working-tree diff evidence includes untracked source with head-side locations", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/existing.ts", "export const existing = true;\n");
+  commit(root, "benchmark baseline");
+  await write(
+    root,
+    "src/rules/new-analysis-rule.ts",
+    [
+      "const schedulingVocabulary = /schedule|calendar/i;",
+      "export function analyzeEvidence(value) {",
+      "  return schedulingVocabulary.test(value);",
+      "}",
+    ].join("\n") + "\n",
+  );
+
+  const withoutWorkingTree = await collectAddedDiffEvidence(root, {
+    base: "main",
+    head: "HEAD",
+  });
+  const evidence = await collectAddedDiffEvidence(root, {
+    base: "main",
+    head: "HEAD",
+    includeWorkingTree: true,
+  });
+  const hunk = evidence["src/rules/new-analysis-rule.ts"][0];
+
+  assert.equal(withoutWorkingTree["src/rules/new-analysis-rule.ts"], undefined);
+  assert.equal(hunk.baseStartLine, 0);
+  assert.equal(hunk.startLine, 1);
+  assert.equal(hunk.endLine, 4);
+  assert.equal(hunk.lines[0].line, 1);
+  assert.match(hunk.lines[0].text, /schedulingVocabulary/);
+  assert.equal(
+    addedDiffTextFromEvidence(evidence)["src/rules/new-analysis-rule.ts"],
+    [
+      "const schedulingVocabulary = /schedule|calendar/i;",
+      "export function analyzeEvidence(value) {",
+      "  return schedulingVocabulary.test(value);",
+      "}",
+      "",
+    ].join("\n"),
+  );
 });
 
 test("diff evidence traces removed guards to base-side critical QA", async (t) => {
@@ -338,6 +383,59 @@ test("a broad conventional scope does not merge unrelated product intents", asyn
   assert.ok(analysis.intents.some((intent) => /Save account timezone preferences/i.test(intent.title)));
 });
 
+test("single-keyword bridges do not collapse a long PR into one change intent", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/reminder.ts", "export const reminder = 'idle';\n");
+  await write(root, "src/profile.ts", "export const profile = 'idle';\n");
+  await write(root, "src/preferences.ts", "export const preferences = 'idle';\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/mixed-product-work");
+
+  await write(root, "src/reminder.ts", "export function scheduleReminder() { return deliverReminder(); }\n");
+  commit(root, "feat(web): schedule reminder delivery");
+  await write(root, "src/profile.ts", "export function showReminderProfile() { return openProfile(); }\n");
+  commit(root, "feat(web): show reminder profile");
+  await write(root, "src/preferences.ts", "export function saveProfilePreferences() { return persistPreferences(); }\n");
+  commit(root, "feat(web): save profile preferences");
+
+  const analysis = await analyze(root, ["src/reminder.ts", "src/profile.ts", "src/preferences.ts"]);
+
+  assert.equal(analysis.intents.length, 3);
+  assert.ok(analysis.intents.some((intent) => /Schedule reminder delivery/i.test(intent.title)));
+  assert.ok(analysis.intents.some((intent) => /Show reminder profile/i.test(intent.title)));
+  assert.ok(analysis.intents.some((intent) => /Save profile preferences/i.test(intent.title)));
+  assert.ok(analysis.intents.every((intent) => intent.commits.length === 1));
+  assert.ok(analysis.intents.every((intent) => intent.files.length === 1));
+});
+
+test("infrastructure commit keywords do not attach to unrelated product symbols", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "turbo.json", '{"globalEnv":[]}\n');
+  await write(root, "src/review.tsx", "export function Review() { return null; }\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/mixed-infrastructure-and-product");
+
+  await write(root, "turbo.json", '{"globalEnv":["LINK_DEV_PHASE"]}\n');
+  commit(root, "feat(env): enable link dev phase deployment");
+  await write(
+    root,
+    "src/review.tsx",
+    "export function Review() { const [phase, setPhase] = useState('review'); return <button onClick={() => setPhase('done')}>{phase}</button>; }\n",
+  );
+  commit(root, "feat(playground): add review phase control");
+
+  const analysis = await analyze(root, ["turbo.json", "src/review.tsx"]);
+
+  assert.equal(analysis.intents.length, 2);
+  const infrastructureIntent = analysis.intents.find((intent) => /Link dev phase deployment/i.test(intent.title));
+  const productIntent = analysis.intents.find((intent) => /Add review phase control/i.test(intent.title));
+  assert.ok(infrastructureIntent);
+  assert.ok(productIntent);
+  assert.deepEqual(infrastructureIntent.files, ["turbo.json"]);
+  assert.deepEqual(productIntent.files, ["src/review.tsx"]);
+  assert.equal(productIntent.commits.some((item) => /link dev phase deployment/i.test(item.subject)), false);
+});
+
 test("a related feature title remains primary when an earlier fix shares its diff", async (t) => {
   const root = await makeRepo(t);
   await write(root, "src/review.tsx", "export function Review() { return null; }\n");
@@ -461,6 +559,249 @@ test("share icons and playground names do not fabricate share or media lifecycle
 
   assert.equal(titles.some((title) => /Share completion/i.test(title)), false);
   assert.equal(titles.some((title) => /Media start/i.test(title)), false);
+});
+
+test("source roles distinguish product behavior from commands and analysis rules", () => {
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/services/summaryReminder.ts",
+      "export function scheduleReminder() { return notifications.schedule(); }",
+    ).role,
+    "product",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/rules/rule-engine.ts",
+      "const evidencePattern = /schedule|reminder/; export function analyzeEvidence() {}",
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole("src/cli.ts", "const command = process.argv[2];").role,
+    "command",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/source-role.ts",
+      "const sourceSignal = /commander|yargs|meow|cac/; export function classifyChangeSourceRole() {}",
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/test-plan.ts",
+      "export async function collectAddedDiffEvidence(): Promise<AddedDiffEvidence> { return {}; }",
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/qa-trace.ts",
+      "export function buildReasoningTrace(intent, evidence) { return routeQaScenario(intent.scenarios[0]); }",
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole("src/qa.ts", "if (evidence.sourceRole) source.sourceRole = evidence.sourceRole;").role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole("src/index.ts", "export { classifyChangeSourceRole } from './source-role.js';").role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "schema/qamap-agent.schema.json",
+      '"sourceRole": { "enum": ["product", "analysis-rule"] }',
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/rules/discount.ts",
+      "const couponPattern = /^[A-Z]+$/; export function evaluateDiscount(evidence) { return couponPattern.test(evidence.code); }",
+    ).role,
+    "product",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/features/media/ImageAnalyzer.ts",
+      "export function analyzeImage(image) { return image.width > 100; }",
+    ).role,
+    "product",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
+      "src/components/SelectBuilder.ts",
+      "export function buildSelect(builder) { return builder.option('compact'); }",
+    ).role,
+    "product",
+  );
+  assert.equal(classifyChangeSourceRole("test/fixtures/rule-engine.ts").role, "test");
+  assert.equal(classifyChangeSourceRole("bench.config.json").role, "test");
+  assert.equal(classifyChangeSourceRole("scripts/bench.mjs").role, "test");
+  assert.equal(classifyChangeSourceRole("playwright.config.ts").role, "test");
+  assert.equal(classifyChangeSourceRole("vite.config.ts").role, "configuration");
+});
+
+test("analysis rules and CLI surfaces receive role-specific QA without product-domain false positives", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({ name: "rule-cli", type: "module", bin: { "rule-cli": "dist/cli.js" } }),
+  );
+  await write(
+    root,
+    "src/rules/rule-engine.ts",
+    "export function analyzeEvidence(source) { return /request/.test(source); }\n",
+  );
+  await write(
+    root,
+    "src/cli.ts",
+    "const command = process.argv[2]; if (command === 'inspect') console.log('ok');\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/rule-output");
+  await write(
+    root,
+    "src/rules/rule-engine.ts",
+    [
+      "const schedulingVocabulary = /scheduledAt|reminder|calendar|timezone/i;",
+      "const validationVocabulary = /guard|validation|permission/i;",
+      "export function analyzeEvidence(source) {",
+      "  return {",
+      "    request: /request|response/.test(source),",
+      "    vocabularyOnly: schedulingVocabulary.test(source) || validationVocabulary.test(source),",
+      "  };",
+      "}",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "src/cli.ts",
+    [
+      "const [command, ...args] = process.argv.slice(2);",
+      "if (command === 'inspect' && args.includes('--format=json')) {",
+      "  process.stdout.write(JSON.stringify({ status: 'ok' }));",
+      "} else {",
+      "  process.stderr.write('usage: inspect --format=json');",
+      "  process.exitCode = 2;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "fix: improve analyzer and command QA precision");
+
+  const analysis = await analyze(root, ["src/rules/rule-engine.ts", "src/cli.ts"]);
+  const intent = analysis.intents[0];
+  const titles = intent.scenarios.map((scenario) => scenario.title);
+
+  assert.ok(intent.evidence.some((item) => item.sourceRole === "analysis-rule"));
+  assert.ok(intent.evidence.some((item) => item.sourceRole === "command"));
+  assert.ok(titles.some((title) => /analysis rule positive and negative controls/i.test(title)));
+  assert.ok(titles.some((title) => /CLI arguments, output, and exit behavior/i.test(title)));
+  assert.equal(titles.some((title) => /Scheduling, calendar|Removed guard|destination routing/i.test(title)), false);
+  assert.ok(intent.lifecycle.some((stage) => /stdout, stderr, exit status/i.test(stage.label)));
+  assert.ok(
+    intent.scenarios
+      .flatMap((scenario) => scenario.assertions)
+      .some((value) => /command produces the expected stdout, stderr, generated files, and exit status/i.test(value)),
+  );
+  assert.equal(intent.scenarios.flatMap((scenario) => scenario.assertions).some((value) => /Verify observe/i.test(value)), false);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((candidate) => candidate.intentId === intent.id);
+  assert.ok(flow);
+  assert.equal(plan.flows.length, 1);
+  assert.equal(flow.kind, "command");
+  assert.equal(flow.languageBrief.actor, "CLI user or maintainer");
+  assert.equal(flow.setupHints.some((hint) => hint.kind === "network" || hint.kind === "fixture"), false);
+  assert.equal(flow.fixtureReadiness.status, "not-needed");
+  assert.equal(flow.fixtureReadiness.apiEndpoints.length, 0);
+});
+
+test("analysis-only changes stay analyzer verification even inside a CLI repository", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({ name: "rule-cli", type: "module", bin: { "rule-cli": "dist/cli.js" } }),
+  );
+  await write(
+    root,
+    "src/rules/rule-engine.ts",
+    "export function analyzeEvidence(source) { return /request/.test(source); }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/rule-boundary");
+  await write(
+    root,
+    "src/rules/rule-engine.ts",
+    [
+      "const schedulingVocabulary = /scheduledAt|calendar/i;",
+      "export function analyzeEvidence(source) {",
+      "  return /request/.test(source) && !schedulingVocabulary.test(source);",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "fix: avoid analyzer vocabulary false positives");
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((candidate) => candidate.intentId);
+
+  assert.ok(flow);
+  assert.equal(flow.kind, "domain");
+  assert.equal(flow.languageBrief.actor, "Analyzer maintainer or reviewer");
+  assert.match(flow.languageBrief.successSignal, /positive controls emit located findings/i);
+  assert.equal(flow.languageBrief.successSignal.includes("stdout"), false);
+  assert.equal(flow.setupHints.some((hint) => hint.kind === "network" || hint.kind === "fixture"), false);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const qaMarkdown = formatMarkdownQaDraft(qa);
+  assert.equal(qa.flows[0].verificationMode, "analysis-rule");
+  assert.equal(qa.readiness.basis, "repository-validation");
+  assert.equal(qa.readiness.automationApplicable, false);
+  assert.equal(qa.readiness.verificationStatus, "command-needed");
+  assert.equal(qa.flows[0].why.some((reason) => /positive, negative, and neighboring-rule controls/i.test(reason)), true);
+  assert.equal(qa.prChecklist.some((item) => /manifest init/i.test(item)), false);
+  assert.match(qaMarkdown, /Repository verification stage: validation command needed/);
+  assert.match(qaMarkdown, /Optional automation readiness: not applicable/);
+  assert.doesNotMatch(qaMarkdown, /Automation stage: setup needed/);
+  assert.doesNotMatch(qaMarkdown, /- E2E draft mapping:/);
+  assert.doesNotMatch(qaMarkdown, /Trace gap: No optional automation artifact/);
+
+  const oversizedQa = structuredClone(qa);
+  oversizedQa.changeAnalysis.intents = Array.from({ length: 12 }, (_, index) => ({
+    ...structuredClone(qa.changeAnalysis.intents[0]),
+    title: `${qa.changeAnalysis.intents[0].title} ${index} ${"intent".repeat(40)}`,
+  }));
+  oversizedQa.flows = Array.from({ length: 20 }, (_, index) => ({
+    ...structuredClone(qa.flows[0]),
+    title: `${qa.flows[0].title} ${index} ${"flow".repeat(40)}`,
+    changedFiles: Array.from({ length: 12 }, (__, fileIndex) => `src/${"nested/".repeat(20)}file-${fileIndex}.ts`),
+    draftSteps: Array.from({ length: 12 }, (__, stepIndex) => `Step ${stepIndex} ${"detail ".repeat(50)}`),
+    selectorHints: Array.from({ length: 12 }, (__, selectorIndex) => `[data-testid="${"selector".repeat(20)}-${selectorIndex}"]`),
+  }));
+  oversizedQa.base = `refs/heads/${"base-segment/".repeat(1000)}`;
+  oversizedQa.head = `refs/heads/${"head-segment/".repeat(1000)}`;
+  oversizedQa.manifestPath = `${"manifest/".repeat(1000)}qamap.yaml`;
+  const compactOutput = formatAgentQaDraft(oversizedQa);
+  const compactSummary = JSON.parse(compactOutput);
+
+  assert.ok(Buffer.byteLength(compactOutput) <= 4 * 1024);
+  assert.ok(compactSummary.compaction.lean || compactSummary.compaction.emergency);
+  assert.equal(compactSummary.flows[0].verificationMode, "analysis-rule");
+  assert.equal(compactSummary.readiness.basis, "repository-validation");
+  assert.equal(compactSummary.readiness.automationApplicable, false);
+  assert.equal(compactSummary.scenarioCoverage.automationApplicable, false);
+  assert.ok(compactSummary.traces.length > 0);
+  assert.equal(typeof compactSummary.traces[0].source.file, "string");
+  assert.ok(compactSummary.intents[0].scenarios[0].sources.length > 0);
+  assert.equal(compactSummary.flows[0].source, qa.flows[0].source);
+  assert.ok(compactSummary.flows[0].changedFiles.length > 0);
+  assert.equal(typeof compactSummary.flows[0].reviewQuestion, "string");
+  assert.equal(typeof compactSummary.flows[0].successSignal, "string");
+  assert.ok(compactSummary.flows[0].steps.length > 0);
 });
 
 test("change intent ignores release-only commit metadata", async (t) => {
@@ -851,7 +1192,11 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   const calendarScenario = plan.changeAnalysis.intents[0].scenarios.find((scenario) => /calendar/i.test(scenario.title));
   assert.ok(calendarScenario?.evidence.some((item) => item.symbol?.toLowerCase() === "timezone" && item.startLine));
   assert.match(agentSummary.intents[0].title, /Submit account preferences/i);
-  assert.ok(agentSummary.intents[0].sources.some((source) => source.file && source.startLine));
+  const agentIntentSources = [
+    ...(agentSummary.intents[0].sources ?? []),
+    ...agentSummary.intents[0].scenarios.flatMap((scenario) => scenario.sources ?? []),
+  ];
+  assert.ok(agentIntentSources.some((source) => source.file && source.startLine));
   assert.ok(agentSummary.intents[0].lifecycle.some((stage) => stage.phase === "state-change"));
   assert.equal(agentSummary.intents[0].scenarioCount, plan.changeAnalysis.intents[0].scenarios.length);
   assert.ok(agentSummary.intents[0].omittedScenarioCount > 0);
@@ -927,6 +1272,8 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.equal(compactAgentSummary.omittedFlowCount, 20 - compactAgentSummary.flows.length);
   assert.ok(compactAgentSummary.intents.length > 0);
   assert.ok(compactAgentSummary.flows.length > 0);
+  assert.equal(typeof compactAgentSummary.flows[0].source, "string");
+  assert.ok(Array.isArray(compactAgentSummary.flows[0].steps));
   assert.ok(compactAgentSummary.compaction);
 
   const pathologicalQa = structuredClone(oversizedQa);

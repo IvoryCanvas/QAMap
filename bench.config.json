@@ -6,6 +6,8 @@
       "fixture": "test/benchmarks/web-testless-checkout",
       "expect": {
         "runner": "playwright",
+        "readinessBasis": "optional-automation",
+        "automationApplicable": true,
         "minFlows": 1,
         "minReasoningTraces": 2,
         "maxMissingReasoningTraces": 0,
@@ -260,6 +262,43 @@
       }
     },
     {
+      "name": "cli-analysis-rules",
+      "fixture": "test/benchmarks/cli-analysis-rules",
+      "commitMessage": "fix: improve analyzer and command QA precision",
+      "expect": {
+        "runner": "manual",
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "verificationStatus": "ready-to-run",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 3,
+        "maxMissingReasoningTraces": 0,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": ["src/rules/rule-engine.ts", "src/cli.ts"],
+        "mustIncludeQaScenarios": [
+          "Changed analysis rule positive and negative controls",
+          "Changed CLI arguments, output, and exit behavior"
+        ],
+        "mustNotIncludeQaScenarios": [
+          "Scheduling, calendar",
+          "Removed guard or validation behavior",
+          "Entry payload and destination routing"
+        ],
+        "mustNotFindEvidence": [
+          "Network response setup",
+          "Fixture data setup",
+          "/api/orders"
+        ],
+        "mustTraceScenarioFiles": ["src/rules/rule-engine.ts", "src/cli.ts"],
+        "maxUntracedCriticalScenarios": 0,
+        "maxMissingScenarioReceipts": 0,
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "expo-maestro-profile",
       "fixture": "test/benchmarks/expo-maestro-profile",
       "expect": {
@@ -345,6 +384,9 @@
       "fixture": "test/benchmarks/expo-config-only",
       "expect": {
         "runner": "manual",
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "verificationStatus": "ready-to-run",
         "minFlows": 1,
         "mustHaveBehaviorKinds": ["flow", "source", "assertion"],
         "mustReachFiles": [
@@ -368,6 +410,9 @@
       "fixture": "test/benchmarks/maestro-test-only",
       "expect": {
         "runner": "maestro",
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "verificationStatus": "ready-to-run",
         "minFlows": 1,
         "mustHaveBehaviorKinds": ["flow", "source", "assertion"],
         "mustReachFiles": [

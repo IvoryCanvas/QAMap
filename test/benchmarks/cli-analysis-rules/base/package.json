@@ -1,0 +1,11 @@
+{
+  "name": "cli-analysis-rules-fixture",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "inspect-source": "src/cli.ts"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

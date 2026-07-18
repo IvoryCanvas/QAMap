@@ -77,6 +77,7 @@ function joinHumanList(values: string[]): string {
 function evidenceKey(evidence: ChangeIntentEvidence): string {
   return [
     evidence.kind,
+    evidence.sourceRole ?? "",
     evidence.commit ?? "",
     evidence.file ?? "",
     evidence.previousFile ?? "",

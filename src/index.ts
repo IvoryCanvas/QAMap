@@ -81,6 +81,7 @@ export { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "./qa
 export { buildQaReasoningTraces, qaTraceIdForScenario } from "./qa-trace.js";
 export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 export { isRequiredScenarioEvidence, routeQaScenario } from "./scenario-routing.js";
+export { classifyChangeSourceRole } from "./source-role.js";
 export { scanProject } from "./scanner.js";
 export {
   formatQaScriptInitReport,
@@ -214,6 +215,7 @@ export type {
 } from "./flows.js";
 export type { GitHubActionMode, GitHubActionOptions, GitHubActionResult } from "./github.js";
 export type { QaScenarioDecision, QaScenarioSelectionReceipt } from "./scenario-routing.js";
+export type { ChangeSourceRole, ChangeSourceRoleClassification } from "./source-role.js";
 export type {
   JavaScriptPackageManager,
   QaScriptEntry,

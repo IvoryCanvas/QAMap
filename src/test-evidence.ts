@@ -165,11 +165,69 @@ function findRelatedTestFiles(flow: FlowCoverageInput, files: TestSuiteEvidenceF
   if (flowTokens.length === 0) {
     return [];
   }
-  return files.filter((file) => {
-    const testTokens = meaningfulTokens([file.path, ...file.imports, ...file.testNames].join("\n"));
-    const overlap = flowTokens.filter((token) => testTokens.includes(token));
-    return overlap.length > 0 || importsFlowFile(file.imports, flow.files);
-  });
+  const flowStems = new Set(flow.files.map(sourceFileStem).filter(Boolean));
+  const flowOwners = new Set(flow.files.flatMap(ownershipPathSegments));
+  return files
+    .map((file) => {
+      const testTokens = meaningfulTokens([file.path, ...file.imports, ...file.testNames].join("\n"));
+      const overlap = flowTokens.filter((token) => testTokens.includes(token)).length;
+      const directImport = importsFlowFile(file.imports, flow.files);
+      const matchingStem = flowStems.has(sourceFileStem(file.path));
+      const sharedOwner = ownershipPathSegments(file.path).some((segment) => flowOwners.has(segment));
+      const related = directImport || matchingStem || overlap >= 2 || (overlap >= 1 && sharedOwner);
+      return {
+        file,
+        related,
+        score: (directImport ? 100 : 0) + (matchingStem ? 80 : 0) + (sharedOwner ? 20 : 0) + overlap * 5,
+      };
+    })
+    .filter((candidate) => candidate.related)
+    .sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path))
+    .map((candidate) => candidate.file);
+}
+
+const structuralPathSegments = new Set([
+  "app",
+  "apps",
+  "component",
+  "components",
+  "feature",
+  "features",
+  "fragment",
+  "fragments",
+  "lib",
+  "package",
+  "packages",
+  "page",
+  "pages",
+  "route",
+  "routes",
+  "screen",
+  "screens",
+  "script",
+  "scripts",
+  "service",
+  "services",
+  "src",
+  "test",
+  "tests",
+  "__tests__",
+]);
+
+function ownershipPathSegments(value: string): string[] {
+  return value
+    .replaceAll("\\", "/")
+    .split("/")
+    .slice(0, -1)
+    .map((segment) => segment.toLowerCase())
+    .filter((segment) => segment.length > 2 && !structuralPathSegments.has(segment));
+}
+
+function sourceFileStem(value: string): string {
+  return path.basename(value)
+    .replace(/(?:\.|-)(?:test|spec)(?=\.)/i, "")
+    .replace(/\.[^.]+$/, "")
+    .toLowerCase();
 }
 
 function importsFlowFile(imports: string[], flowFiles: string[]): boolean {
@@ -345,15 +403,30 @@ function meaningfulTokens(text: string): string[] {
     "component",
     "components",
     "contract",
+    "cjs",
+    "css",
+    "cts",
     "flow",
+    "fragment",
+    "fragments",
+    "html",
     "index",
     "init",
+    "java",
+    "json",
+    "jsx",
+    "less",
+    "mjs",
+    "mts",
     "page",
     "pages",
     "route",
     "routes",
     "screen",
     "screens",
+    "script",
+    "scripts",
+    "scss",
     "smoke",
     "service",
     "services",
@@ -363,8 +436,14 @@ function meaningfulTokens(text: string): string[] {
     "src",
     "test",
     "tests",
+    "tsx",
     "ui",
+    "vue",
+    "swift",
+    "svelte",
     "workflow",
+    "yaml",
+    "yml",
   ]);
   return uniqueStrings(
     text

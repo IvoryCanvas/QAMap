@@ -36,13 +36,16 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 
 - Stabilize commit-range Change Intent analysis: related behavior commits, diff symbols, confidence, review requirements, lifecycle stages, and runner-independent QA scenarios.
 - Preserve a conservative diff-only intent when commit messages are not descriptive, while keeping low-confidence scenarios recommended and review-required until stronger evidence exists.
+- Classify changed sources before interpreting vocabulary: product, command, analysis-rule, configuration, test, documentation, and generated evidence must produce role-appropriate QA instead of borrowing one another's domain signals.
 - Keep `qamap.change-intent` as a direct Behavior Graph adapter while moving more source observations out of the compatibility adapter.
 - Preserve `qa` as the static, read-only product surface while designing explicit execution behind `verify`; never turn a scan into implicit project-code execution.
 - Treat the committed [benchmark contract](benchmarking.md) as the quality gate for recommendations, not only implementation correctness. Reduce real failures into public fixtures and require `pnpm bench:ci` on every PR.
 - Keep execution readiness separate from validation completeness. A draft may be locally runnable while still requiring failure coverage, fixture confirmation, or reviewer approval before it becomes trusted PR evidence.
+- Keep optional automation readiness separate from repository verification readiness. Analyzer rules, configuration, documentation, generated output, and existing tests must point to repository validation without being mislabeled as blocked product E2E work.
 - Make `qa` the primary product surface. Its first screen and `--format agent` payload must agree on change intent, lifecycle, QA scenarios, affected behavior, repository evidence, draft path, and missing trust requirements.
 - Keep `qa --format agent` below 4KB without dropping the highest-priority intent, routed scenarios, affected flow, and omitted counts needed for an agent handoff.
 - Improve changed-file impact mapping from shared symbols and components to consuming routes, screens, API contracts, and manifest flows.
+- Keep long-PR intent clustering conservative: package scopes and one-word keyword bridges must not collapse unrelated commits into one high-confidence QA lifecycle.
 - Keep the [release validation checklist](release-validation.md), [manifest guide](manifest.md), public [E2E output examples](e2e-output-examples.md), and README examples aligned with captured output from the public fixtures.
 - Stabilize the manifest feedback loop with `.qamap/manifest.yaml`, `manifest init`, `manifest validate`, `manifest explain`, JSON Schema, and manifest-driven E2E draft shaping.
 - Keep `manifest context` useful as a pre-init sanity check for repo-local QA memory, harness docs, agent instructions, and runbooks.

@@ -199,9 +199,14 @@ function scoreTarget(target, plan, qa, durationMs) {
     mustReachMissing: mustReach.filter((file) => !flowFiles.has(file)),
     mustNameRecall: mustName.length > 0 ? `${named.length}/${mustName.length}` : null,
     mustNameMissing: mustName.filter((name) => !named.includes(name)),
-    readiness: `${qa.readiness.level} (${qa.readiness.score})`,
+    readiness: qa.readiness.automationApplicable
+      ? `${qa.readiness.level} (${qa.readiness.score})`
+      : `${qa.readiness.verificationStatus ?? "command-needed"} (repo)`,
     readinessLevel: qa.readiness.level,
     readinessScore: qa.readiness.score,
+    readinessBasis: qa.readiness.basis,
+    automationApplicable: qa.readiness.automationApplicable,
+    verificationStatus: qa.readiness.verificationStatus ?? null,
     runnableCandidates: qa.readiness.runnableCandidates,
     nearRunnableFiles: qa.readiness.nearRunnable,
     reviewOnlyFiles: qa.readiness.reviewOnly,
@@ -236,6 +241,24 @@ function evaluateContract(expect, result, plan, qa) {
   const danglingBehaviorEdges = plan.behaviorGraph.edges.filter(
     (edge) => !behaviorNodeIds.has(edge.from) || !behaviorNodeIds.has(edge.to),
   );
+
+  if (expect.readinessBasis !== undefined && result.readinessBasis !== expect.readinessBasis) {
+    failures.push(`readiness basis expected ${expect.readinessBasis}, got ${result.readinessBasis}`);
+  }
+  if (
+    expect.automationApplicable !== undefined &&
+    result.automationApplicable !== expect.automationApplicable
+  ) {
+    failures.push(
+      `automation applicability expected ${expect.automationApplicable}, got ${result.automationApplicable}`,
+    );
+  }
+  if (
+    expect.verificationStatus !== undefined &&
+    result.verificationStatus !== expect.verificationStatus
+  ) {
+    failures.push(`verification status expected ${expect.verificationStatus}, got ${result.verificationStatus}`);
+  }
 
   if (plan.behaviorGraph.schemaVersion !== 1) {
     failures.push(`behavior graph schema expected 1, got ${plan.behaviorGraph.schemaVersion}`);

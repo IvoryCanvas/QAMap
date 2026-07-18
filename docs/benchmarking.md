@@ -19,6 +19,7 @@ The command fails when any target violates its declared expectations. The initia
 - a presentation-only React condition that must not create behavioral state-transition QA;
 - a web preferences change that must become submit, persistence, request-failure, and re-entry QA instead of a generic journey;
 - a mobile reminder change that must become scheduling, calendar, duplicate, resynchronization, and entry-routing QA;
+- a CLI plus static-analysis-rule change that must verify command I/O and positive/negative controls without turning rule vocabulary into product scheduling, routing, API, or fixture QA;
 - an Expo app with Maestro;
 - an API service that should produce a contract checklist instead of a browser journey;
 - a design-token repository that should stay on artifact verification;

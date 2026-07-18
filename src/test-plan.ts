@@ -741,11 +741,71 @@ export async function collectAddedDiffEvidence(
         "HEAD",
       ]);
       mergeAddedDiffEvidence(byFile, workingTree, relativeRoot);
+      await mergeUntrackedDiffEvidence(byFile, gitRoot, relativeRoot);
     }
   } catch {
     return byFile;
   }
   return byFile;
+}
+
+async function mergeUntrackedDiffEvidence(
+  byFile: AddedDiffEvidence,
+  gitRoot: string,
+  relativeRoot: string,
+): Promise<void> {
+  const { stdout } = await git(gitRoot, ["ls-files", "--others", "--exclude-standard", "-z"]);
+  const untrackedFiles = stdout.split("\0").filter(Boolean);
+
+  for (const gitFile of untrackedFiles) {
+    const file = relativeRoot
+      ? stripScopedPath(gitFile, relativeRoot, `${relativeRoot}/`)
+      : gitFile;
+    if (!file || file === "." || byFile[file]) {
+      continue;
+    }
+    if (Object.keys(byFile).length >= maxAddedTextFiles) {
+      break;
+    }
+
+    const absoluteFile = path.resolve(gitRoot, gitFile);
+    const relativeFile = path.relative(gitRoot, absoluteFile);
+    if (relativeFile.startsWith("..") || path.isAbsolute(relativeFile)) {
+      continue;
+    }
+
+    try {
+      const stat = await fs.lstat(absoluteFile);
+      if (!stat.isFile() || stat.size === 0 || stat.size > maxAddedTextPerFile) {
+        continue;
+      }
+      const content = await fs.readFile(absoluteFile);
+      if (content.includes(0)) {
+        continue;
+      }
+      const text = content.toString("utf8");
+      const sourceLines = text.split(/\r?\n/);
+      if (sourceLines.at(-1) === "") {
+        sourceLines.pop();
+      }
+      if (sourceLines.length === 0) {
+        continue;
+      }
+      const lines = sourceLines.map((line, index) => ({ line: index + 1, text: line }));
+      byFile[file] = [{
+        file,
+        baseStartLine: 0,
+        baseEndLine: 0,
+        startLine: 1,
+        endLine: lines.length,
+        hunkHeader: `@@ -0,0 +1,${lines.length} @@`,
+        lines,
+        removedLines: [],
+      }];
+    } catch {
+      // A working-tree file can disappear between listing and reading it.
+    }
+  }
 }
 
 export function addedDiffTextFromEvidence(evidence: AddedDiffEvidence): Record<string, string> {

@@ -853,7 +853,7 @@ test("generateE2ePlan detects CLI packages and suggests command verification che
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e", dryRun: true });
   const markdown = formatMarkdownE2ePlan(plan);
   const draftMarkdown = formatMarkdownE2eDraft(draft);
-  const flow = plan.flows.find((item) => /CLI command verification checklist/.test(item.title));
+  const flow = plan.flows.find((item) => item.kind === "command");
 
   assert.equal(plan.project.type, "cli");
   assert.ok(plan.project.evidence.some((item) => item === "package.json bin entry found"));
@@ -863,13 +863,14 @@ test("generateE2ePlan detects CLI packages and suggests command verification che
   assert.ok(plan.bootstrap.steps.some((step) => step.title === "Start with CLI command validation"));
   assert.ok(flow);
   assert.equal(flow.languageBrief.actor, "CLI user or maintainer");
-  assert.match(flow.languageBrief.trigger, /Run the CLI command path affected by src\/cli\.ts/);
+  assert.equal(flow.languageBrief.trigger, "Run the changed CLI command and options.");
   assert.match(flow.languageBrief.successSignal, /stdout, stderr, generated files, and exit code/);
+  assert.equal(flow.setupHints.some((hint) => hint.kind === "fixture"), false);
   assert.equal(flow.fixtureReadiness.status, "not-needed");
-  assert.ok(flow.coverage.some((target) => target.title === "CLI command contract"));
-  assert.ok(flow.coverage.some((target) => target.title === "CLI failure and usage paths"));
+  assert.ok(flow.coverage.some((target) => /Changed CLI arguments, output, and exit behavior/i.test(target.title)));
+  assert.ok(flow.qaScenarios.some((scenario) => /Changed CLI arguments, output, and exit behavior/i.test(scenario.title)));
   assert.equal(draft.files.some((file) => /primary journey/i.test(file.flowTitle)), false);
-  assert.ok(draft.files.some((file) => /CLI command verification checklist/.test(file.flowTitle)));
+  assert.ok(draft.files.some((file) => file.flowTitle === flow.title));
   assert.equal(
     draft.files.some((file) => file.actionItems.some((item) => item.kind === "fixture" && item.priority === "required")),
     false,
@@ -1285,10 +1286,21 @@ test("generateE2eDraft keeps Expo native version changes in one mobile build con
   assert.equal(agentSummary.firstDraftCommand, undefined);
   assert.equal(typeof agentSummary.flows[0].draft, "string");
   assert.equal(agentSummary.flows[0].verificationMode, "configuration");
+  assert.equal(qa.readiness.basis, "repository-validation");
+  assert.equal(qa.readiness.automationApplicable, false);
+  assert.equal(qa.readiness.verificationStatus, "ready-to-run");
+  assert.equal(agentSummary.readiness.basis, "repository-validation");
+  assert.equal(agentSummary.readiness.automationApplicable, false);
+  assert.equal(agentSummary.readiness.verificationStatus, "ready-to-run");
+  assert.equal(agentSummary.scenarioCoverage.automationApplicable, false);
   const agentSchema = JSON.parse(await readFile(path.join(repositoryRoot, "schema/qamap-agent.schema.json"), "utf8"));
   assert.deepEqual(collectSchemaViolations(agentSchema, agentSummary), []);
   assert.deepEqual(plan.suggestedCommands.slice(0, 2), ["npm run build:apk", "npm run build:ios"]);
   assert.equal(qa.bootstrap.steps.some((step) => step.title === "Create the first changed-flow E2E draft"), false);
+  assert.match(qaMarkdown, /Repository verification stage: ready to run `npm run build:apk`; QAMap has not executed it/);
+  assert.match(qaMarkdown, /Optional automation readiness: not applicable/);
+  assert.doesNotMatch(qaMarkdown, /Automation stage: setup needed/);
+  assert.doesNotMatch(qaMarkdown, /- E2E draft mapping:/);
   assert.doesNotMatch(qaMarkdown, /## First E2E Draft Bootstrap/);
   assert.doesNotMatch(qaMarkdown, /Proposed draft:/);
 });
@@ -1532,6 +1544,8 @@ test("generateE2ePlan treats Maestro-only changes as test evidence", async () =>
   assert.equal(qa.missingEvidence.some((item) => item.kind === "manifest"), false);
   assert.equal(qa.missingEvidence.some((item) => /entrypoint/i.test(`${item.title} ${item.detail}`)), false);
   assert.equal(qa.bootstrap.steps.some((step) => step.title === "Create the first changed-flow E2E draft"), false);
+  assert.match(qa.prChecklist[0], /Run the changed test evidence:/);
+  assert.equal(qa.agentHandoff.some((item) => /Run the changed test evidence/.test(item)), true);
   assert.match(qaMarkdown, /Existing test evidence:/);
   assert.doesNotMatch(qaMarkdown, /Proposed draft: `.maestro\/changed-test-evidence/);
 });
@@ -2148,6 +2162,7 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
   await initGitRepo(root);
   await mkdir(path.join(root, "src/features/bundle/fragments"), { recursive: true });
   await mkdir(path.join(root, "src/features/bundle/__tests__"), { recursive: true });
+  await mkdir(path.join(root, "scripts/__tests__"), { recursive: true });
   await writeFile(
     path.join(root, "package.json"),
     JSON.stringify({
@@ -2179,6 +2194,10 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
       "});",
     ].join("\n"),
   );
+  await writeFile(
+    path.join(root, "scripts/__tests__/BundleBuild.test.tsx"),
+    "it('builds the bundle successfully', () => expect(true).toBe(true));\n",
+  );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "base"]);
   await git(root, ["branch", "-M", "main"]);
@@ -2197,7 +2216,7 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
 
   assert.ok(flow);
   assert.equal(plan.testSuite.hasTestSuite, true);
-  assert.equal(plan.testSuite.testFileCount, 1);
+  assert.equal(plan.testSuite.testFileCount, 2);
   assert.ok(plan.testSuite.frameworkSignals.includes("vitest"));
   assert.equal(
     flow.coverageEvidence.find((evidence) => evidence.targetTitle === "Primary success path")?.status,
@@ -2213,6 +2232,15 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
       .find((evidence) => evidence.targetTitle === "Loading, empty, error, and success states")
       ?.files.includes("src/features/bundle/__tests__/BundleView.test.tsx"),
   );
+  assert.equal(
+    flow.coverageEvidence.some((evidence) => evidence.files.includes("scripts/__tests__/BundleBuild.test.tsx")),
+    false,
+  );
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.ok(qa.flows[0].existingEvidencePaths.includes("src/features/bundle/__tests__/BundleView.test.tsx"));
+  assert.equal(qa.flows[0].existingEvidencePaths.includes("scripts/__tests__/BundleBuild.test.tsx"), false);
+  assert.match(qa.prChecklist[0], /Run the related test evidence:/);
+  assert.equal(qa.agentHandoff.some((item) => /Run the related test evidence/.test(item)), true);
   assert.match(markdown, /Existing test evidence:/);
   assert.match(markdown, /covered Loading, empty, error, and success states/);
 });
@@ -5606,6 +5634,10 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.match(agentSummary.flows[0].successSignal, /Order confirmed/);
   assert.equal(Array.isArray(agentSummary.flows[0].evidence), true);
   assert.equal(typeof agentSummary.readiness.score, "number");
+  assert.equal(agentSummary.readiness.basis, "optional-automation");
+  assert.equal(agentSummary.readiness.automationApplicable, true);
+  assert.equal(agentSummary.readiness.verificationStatus, undefined);
+  assert.equal(agentSummary.scenarioCoverage.automationApplicable, true);
   assert.equal(Array.isArray(agentSummary.requiredEvidence), true);
   assert.equal(Array.isArray(agentSummary.prChecklist), true);
   assert.equal(agentSummary.firstDraftCommand, undefined);
@@ -5617,6 +5649,21 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   // Contract check: the published schema must accept real output.
   const agentSchema = JSON.parse(await readFile(path.join(repositoryRoot, "schema/qamap-agent.schema.json"), "utf8"));
   assert.deepEqual(collectSchemaViolations(agentSchema, agentSummary), []);
+
+  const oversizedQa = structuredClone(qa);
+  oversizedQa.flows = Array.from({ length: 20 }, () => ({
+    ...structuredClone(qa.flows[0]),
+    changedFiles: Array.from({ length: 12 }, (_, index) => `src/${"nested/".repeat(20)}file-${index}.tsx`),
+    draftSteps: Array.from({ length: 12 }, (_, index) => `Step ${index} ${"detail ".repeat(50)}`),
+    selectorHints: Array.from({ length: 12 }, (_, index) => `[data-testid="${"selector".repeat(20)}-${index}"]`),
+  }));
+  oversizedQa.base = `refs/heads/${"base-segment/".repeat(1000)}`;
+  oversizedQa.head = `refs/heads/${"head-segment/".repeat(1000)}`;
+  const compactAgentOutput = formatAgentQaDraft(oversizedQa);
+  const compactAgentSummary = JSON.parse(compactAgentOutput);
+  assert.ok(Buffer.byteLength(compactAgentOutput) <= 4 * 1024);
+  assert.ok(compactAgentSummary.compaction);
+  assert.deepEqual(collectSchemaViolations(agentSchema, compactAgentSummary), []);
 
   const agentCliOutput = await execFileAsync(process.execPath, [
     cliPath,

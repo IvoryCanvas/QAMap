@@ -12,6 +12,10 @@
       "properties": {
         "kind": { "type": "string", "enum": ["commit", "diff", "source"] },
         "reason": { "type": "string" },
+        "sourceRole": {
+          "type": "string",
+          "enum": ["product", "command", "analysis-rule", "configuration", "test", "documentation", "generated"]
+        },
         "commit": { "type": "string" },
         "file": { "type": "string" },
         "previousFile": { "type": "string" },
@@ -136,7 +140,21 @@
         "level": {
           "type": "string",
           "enum": ["ready", "near-runnable", "needs-work", "blocked"],
-          "description": "Stable machine value; human reports render this as a stage on a four-step journey."
+          "description": "Stable optional-automation value. Ignore it when automationApplicable is false and use verificationStatus instead."
+        },
+        "basis": {
+          "type": "string",
+          "enum": ["optional-automation", "repository-validation"],
+          "description": "Whether this change needs an automation draft or should validate existing repository evidence."
+        },
+        "automationApplicable": {
+          "type": "boolean",
+          "description": "False when configuration, docs, generated output, tests, or analyzer rules should use repository validation instead of product E2E automation."
+        },
+        "verificationStatus": {
+          "type": "string",
+          "enum": ["ready-to-run", "command-needed"],
+          "description": "Repository-validation preparation state. This never means the command was executed or passed."
         }
       }
     },
@@ -249,6 +267,10 @@
       "description": "Counts that connect routed QA scenarios to generated automation without claiming execution.",
       "required": ["required", "recommended", "reviewOnly", "compiled", "partial", "notCompiled", "requiredGaps"],
       "properties": {
+        "automationApplicable": {
+          "type": "boolean",
+          "description": "False when draft mapping counts are compatibility detail rather than a required product E2E target."
+        },
         "required": { "type": "integer", "minimum": 0 },
         "recommended": { "type": "integer", "minimum": 0 },
         "reviewOnly": { "type": "integer", "minimum": 0 },
@@ -300,7 +322,7 @@
           "draft": { "type": "string", "description": "Path of the fallback draft artifact for this flow. When verificationMode is present, run existing repository evidence first instead of generating it by default." },
           "verificationMode": {
             "type": "string",
-            "enum": ["existing-test-evidence", "configuration", "documentation", "generated-artifact"],
+            "enum": ["analysis-rule", "existing-test-evidence", "configuration", "documentation", "generated-artifact"],
             "description": "Why this flow should validate existing evidence instead of generating a new product-journey E2E draft."
           },
           "runnable": {
@@ -362,10 +384,11 @@
     },
     "compaction": {
       "type": "object",
-      "description": "Present when QAMap reduced lower-priority detail to keep the complete line at or below 8KB.",
+      "description": "Present when QAMap reduced lower-priority detail to keep the complete line below 4KB while retaining the highest-priority flow and its verification mode.",
       "properties": {
         "maxBytes": { "type": "integer", "minimum": 1 },
         "originalBytes": { "type": "integer", "minimum": 1 },
+        "lean": { "type": "boolean" },
         "emergency": { "type": "boolean" }
       }
     },
