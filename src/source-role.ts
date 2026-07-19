@@ -96,6 +96,7 @@ function isAnalysisRuleSource(file: string, text: string): boolean {
 function isConfigurationPath(file: string): boolean {
   const basename = path.posix.basename(file);
   return /(?:^|\/)\.github(?:\/|$)/i.test(file) ||
+    /(?:^|\/)(?:settings|config)(?:\/|$).+\.py$/i.test(file) ||
     /(?:^|\/)(?:android|ios)(?:\/|$)/i.test(file) && /(?:gradle|plist|pbxproj|xcconfig)$/i.test(basename) ||
     /^(?:package\.json|tsconfig(?:\.[^.]+)?\.json|jsconfig\.json|app\.json|eas\.json|pyproject\.toml|Cargo\.toml|go\.mod)$/i.test(basename) ||
     /(?:^|[.-])config\.[^/]+$/i.test(basename) ||

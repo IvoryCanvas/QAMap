@@ -32,7 +32,7 @@ Run this before writing a PR body or asking for review. Agents should prefer the
 npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa . --base origin/main --head HEAD --format agent
 ```
 
-The result carries `intents[]` with scenario-level structured diff `sources`, `flows[]` (affected behavior, entry route, steps, selectors), `requiredEvidence[]`, optional `automation`, `prChecklist[]`, and `commands[]` under `schema: qamap.qa`. The one-off command uses npm directly so an agent does not trigger Corepack or rewrite the target repository's `packageManager` metadata.
+The result carries a canonical `route` decision, `intents[]` with scenario-level structured diff `sources`, `flows[]` (affected behavior, entry route, steps, selectors), `requiredEvidence[]`, optional `automation`, `prChecklist[]`, and `commands[]` under `schema: qamap.qa`. Read `route.status`, `route.nextAction`, and its optional exact repository command before compatibility readiness scores. The one-off command uses npm directly so an agent does not trigger Corepack or rewrite the target repository's `packageManager` metadata.
 
 For a human-readable report, drop the flag; for installed projects write it to a file:
 
@@ -78,6 +78,7 @@ If your agent supports symlinked skills, point its skill directory at `skills/qa
 
 Use `Change Intent Evidence` and the `PR Comment Draft` as review context:
 
+- canonical route: complete an optional draft, run an existing repository command, or define one
 - commit-backed intent, confidence, and whether human review is required
 - ordered behavior lifecycle
 - primary, failure, boundary, and state-transition QA scenarios

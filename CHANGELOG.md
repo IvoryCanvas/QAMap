@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Added
+
+- Added a canonical `route` decision to QA JSON and compact agent output. It tells consumers whether the change needs an optional automation draft or existing repository validation, exposes an unambiguous status, and names the next action without relying on compatibility readiness scores.
+- Added the first provenance-pinned public PR benchmark, reduced from Cal.com PR #27765 under its MIT license. The contract requires QAMap to recover form-validation timing, exact diff evidence, existing regression tests, and edit/blur/correction/submission state-transition QA.
+- Added a repository-local manifest lifecycle regression that proves one human correction sharpens the current PR and is reused by the next PR without another prompt.
+- Added a Python API regression fixture that requires an exact changed test to outrank broad repository evidence and route directly to its existing `pytest` command.
+- Added positive and negative nested-action regressions. A changed item-level action can reuse same-entity input and creation controls as prerequisites, while unrelated controls remain excluded.
+
+### Changed
+
+- Form validation-mode changes now produce framework-neutral timing QA across initial editing, the configured validation trigger, stale-error correction, and final submission when both the previous and new modes are present in a form-shaped diff.
+- Agent payload compaction now preserves the canonical route decision before lower-priority detail, including under lean and emergency 4KB shapes.
+- Playwright drafts can now prepare an entity before exercising a newly added nested action when the same source exposes strongly related input and creation controls.
+- Playwright bootstrap guidance now includes the package-manager-specific Chromium installation command required after adding the test package.
+
+### Fixed
+
+- Repository-validation output no longer requires consumers to reconcile a compatibility-only `blocked` automation level with a `ready-to-run` repository command. The additive route status now expresses the applicable decision directly.
+- CLI command changes now use a `command-contract` verification mode, so mixed analyzer and package-surface diffs route to the discovered repository command instead of appearing as blocked product E2E drafts.
+- Python settings modules are no longer treated as product API behavior, while executable service modules remain eligible for contract impact.
+- Changed Python regression tests now retain imported-module ownership, extracted test names, and changed-file priority; generic `index` tests in another package no longer appear as related evidence.
+
 ## 0.4.6 - 2026-07-18
 
 ### Added

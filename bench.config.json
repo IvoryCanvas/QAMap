@@ -2,6 +2,42 @@
   "$comment": "Committed quality contract. Each fixture is materialized as a temporary Git repository with a main baseline and one PR change.",
   "targets": [
     {
+      "name": "public-calcom-signup-validation",
+      "fixture": "test/benchmarks/public-calcom-signup-validation",
+      "commitMessage": "fix: defer email validation to after first blur on signup form",
+      "provenance": {
+        "kind": "public-pull-request",
+        "repository": "calcom/cal.diy",
+        "pullRequest": 27765,
+        "url": "https://github.com/calcom/cal.diy/pull/27765",
+        "base": "e940aac2f1bc1d589ae9a03803edb0abda6837e7",
+        "head": "614c4d533a9047b031d78a4da65bdfaec472c3a5",
+        "license": "MIT"
+      },
+      "expect": {
+        "provenanceKind": "public-pull-request",
+        "runner": "playwright",
+        "readinessBasis": "optional-automation",
+        "automationApplicable": true,
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 2,
+        "maxMissingReasoningTraces": 0,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": ["apps/web/modules/signup-view.tsx"],
+        "mustNameIntents": ["defer email validation"],
+        "mustNameFlows": ["defer email validation"],
+        "mustIncludeLifecycle": ["after first blur"],
+        "mustFindIntentEvidence": ["defer email validation"],
+        "mustTraceScenarioFiles": ["apps/web/modules/signup-view.tsx"],
+        "mustFindExistingEvidence": ["apps/web/modules/signup-view.test.tsx"],
+        "mustFindSelectors": ["email-input", "email-error"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "web-testless-checkout",
       "fixture": "test/benchmarks/web-testless-checkout",
       "expect": {
@@ -147,7 +183,8 @@
         "mustIncludeLifecycle": ["pin a workspace record", "show it first"],
         "mustIncludeQaScenarios": ["Pinned record appears first", "Changed conditional state and fallback"],
         "mustFindEntrypoints": ["/records"],
-        "mustFindSelectors": ["pin-record", "Pinned record appears first"],
+        "mustFindSelectors": ["record-input", "add-record", "pin-record", "Pinned record appears first"],
+        "mustIncludeSteps": ["Fill Record Input with realistic data", "Create Record using Add Record"],
         "mustFindSuccessSignals": ["Pinned record appears first"],
         "maxBlankActions": 0,
         "maxGenericTitles": 0,
@@ -270,6 +307,9 @@
         "readinessBasis": "repository-validation",
         "automationApplicable": false,
         "verificationStatus": "ready-to-run",
+        "routeStatus": "verification-ready-to-run",
+        "routeNextAction": "run-repository-command",
+        "mustRouteCommands": ["test"],
         "minFlows": 1,
         "minChangeIntents": 1,
         "minReasoningTraces": 3,
@@ -387,6 +427,9 @@
         "readinessBasis": "repository-validation",
         "automationApplicable": false,
         "verificationStatus": "ready-to-run",
+        "routeStatus": "verification-ready-to-run",
+        "routeNextAction": "run-repository-command",
+        "mustRouteCommands": ["build:apk"],
         "minFlows": 1,
         "mustHaveBehaviorKinds": ["flow", "source", "assertion"],
         "mustReachFiles": [
@@ -413,6 +456,9 @@
         "readinessBasis": "repository-validation",
         "automationApplicable": false,
         "verificationStatus": "ready-to-run",
+        "routeStatus": "verification-ready-to-run",
+        "routeNextAction": "run-repository-command",
+        "mustRouteCommands": ["maestro test"],
         "minFlows": 1,
         "mustHaveBehaviorKinds": ["flow", "source", "assertion"],
         "mustReachFiles": [
@@ -424,6 +470,35 @@
         "mustNotFindEvidence": ["fixture", "selector", "entrypoint", "manifest"],
         "mustFindSuccessSignals": ["changed test evidence runs"],
         "mustRecommendCommands": ["maestro test .maestro"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
+      "name": "api-python-notification-routing",
+      "fixture": "test/benchmarks/api-python-notification-routing",
+      "commitMessage": "fix: route delivery notices to the configured operations dashboard",
+      "expect": {
+        "runner": "manual",
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "verificationStatus": "ready-to-run",
+        "routeStatus": "verification-ready-to-run",
+        "routeNextAction": "run-repository-command",
+        "mustRouteCommands": ["test_delivery_notice_destination.py"],
+        "minFlows": 1,
+        "mustHaveBehaviorKinds": ["flow", "source", "assertion"],
+        "mustReachFiles": [
+          "jobs/notifications/delivery_notice.py",
+          "project/settings/prod.py"
+        ],
+        "mustNameFlows": ["delivery"],
+        "mustNotNameFlows": ["Prod primary journey"],
+        "mustFindExistingEvidence": [
+          "jobs/notifications/tests/test_delivery_notice_destination.py"
+        ],
+        "mustRecommendCommands": ["test_delivery_notice_destination.py"],
         "maxBlankActions": 0,
         "maxGenericTitles": 0,
         "maxAgentBytes": 4096

@@ -149,11 +149,13 @@ Or run `qamap init --agent` to add the repo instructions and packaged skill. See
 ## Why QAMap
 
 - **Evidence over guesses.** Every routed scenario carries commit or line-level diff provenance.
+- **Real PR regressions.** Public benchmark reductions pin their PR URL, commits, license, and human QA expectation instead of relying only on invented demos.
 - **Traceable consequences.** The optional test draft points back to the same stable trace that explains the changed behavior and risk.
 - **Judgment before generation.** QAMap decides what deserves verification before choosing a runner.
 - **Honest automation.** Missing evidence lowers readiness instead of becoming a fake smoke test or guaranteed-failing assertion.
 - **Local and deterministic.** The same repository state produces the same result without uploading code or spending tokens.
 - **Manifest optional.** Start immediately, then promote reviewed team knowledge only when it improves future PRs.
+- **Corrections compound.** One reviewed manifest correction is tested against the current PR and reused on the next one without another prompt.
 
 Positioning against recorders, LLM test generation, and impact-analysis tools: [where QAMap fits](docs/adoption.md#where-qamap-fits).
 

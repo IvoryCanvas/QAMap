@@ -34,6 +34,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
    ```
 
 4. Read and verify intent before generating code. In agent format:
+   - `route` — the canonical applicable decision. Use `status`, `nextAction`, and the optional exact `command` before looking at legacy readiness scores. A `verification-*` status means use repository validation; a `draft-*` status describes optional automation preparation.
    - `intents[]` — commit/diff evidence, confidence, `reviewRequired`, ordered lifecycle, and primary/failure/boundary/state-transition scenarios. Read each scenario's structured `sources` before accepting it; a diff source carries `file`, head-side line numbers, symbol, and hunk.
    - If `reviewRequired` is true or the lifecycle conflicts with the PR, ask a human to confirm the intended behavior before promoting a draft.
    - `flows[]` — affected flows with `draft` path, `runnable` status, entry route, capped steps, and selectors.
@@ -54,6 +55,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
 ## Output Rules
 
 - Treat QAMap output as QA planning evidence, not proof that browser, device, API, or manual QA passed.
+- Prefer `route` over compatibility `readiness.level`. In particular, do not call repository validation blocked merely because the optional-automation score is blocked.
 - Preserve change intent, confidence, lifecycle, QA scenarios, their strongest file/line sources, affected flow, missing evidence, and validation command in the handoff.
 - Keep automation optional until the scenario and its evidence have been reviewed.
 - Treat Playwright, Maestro, and manual output as adapters after QA design. Do not let runner selection replace review of the inferred intent and scenarios.

@@ -367,6 +367,7 @@ The QA judgment above does not require adopting this adapter.
 - Draft target: `tests/e2e/checkout-primary-journey.spec.ts`
 - Preview or create a draft: `qamap e2e draft . --base main --head HEAD`
 - If the team accepts this adapter, inspect its setup proposal: `qamap e2e setup . --runner playwright`
+- The proposal includes both the package dependency and browser runtime command, such as `pnpm exec playwright install chromium`; installing `@playwright/test` alone is not presented as a complete runnable setup.
 ```
 
 Draft action items should make the next developer action explicit:

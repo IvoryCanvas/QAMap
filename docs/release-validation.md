@@ -1,5 +1,34 @@
 # Release Validation
 
+## 0.4.7 candidate - 2026-07-19
+
+Validated as a decision-contract, executable-draft, exact-test-routing, public-regression, and compounding-repository-context candidate. QAMap now exposes one canonical route after it reads a change: either complete an optional automation draft or run a repository validation command. It also connects item-level actions to repository-backed prerequisites, ranks exact changed Python regression tests, adds a provenance-pinned public PR reduction, and proves that one reviewed manifest correction improves both the current PR and the next related PR without another prompt:
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end without changing the published package version |
+| `pnpm test` | 192/192 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 19/19 targets pass across React, Vue, SvelteKit, Expo, JavaScript and Python API services, shared components, configuration, test-only, CLI/analyzer, and a provenance-pinned public PR reduction |
+| Coverage | Lines 88.86%, branches 85.41%, functions 95.94% |
+| Canonical route | Agent output reports one `route.basis`, unambiguous status, next action, and exact repository command when available; the older readiness score remains compatibility detail |
+| Public PR regression | A behavior-preserving reduction of Cal.com PR #27765 recovers the edit -> validation trigger -> correction -> submit lifecycle, exact diff evidence, and related existing regression test |
+| Executable nested-action draft | In an isolated testless web repository, the generated draft filled the entity input, created the required item, exercised the diff-added item action, asserted the visible outcome, and passed 1/1 in Chromium |
+| Exact Python validation | A changed Python regression test that imports the changed module ranks first and routes to its narrowed `pytest` command; neighboring settings modules remain configuration evidence |
+| Repository QA memory | A generic flow is corrected through `.qamap/manifest.yaml`, the same PR becomes manifest-backed, and a later PR automatically reuses the reviewed flow, route, steps, and selectors |
+| Framework-neutral state inference | React Hook Form timing changes are recognized only when both old and new modes occur in form-shaped evidence; an unrelated non-form `mode` change remains a negative control |
+| CLI command contract | CLI-only and mixed analyzer/package-surface changes route to repository validation such as `pnpm test` instead of a blocked product E2E draft |
+| Compact agent handoff | Every benchmark remains below 4KB while preserving the canonical route; the public PR payload is 4,011 bytes and the largest mobile lifecycle payload is 4,059 bytes |
+| Package preview | `pnpm pack --dry-run` and `npm pack --dry-run` pass for the unchanged `@ivorycanvas/qamap@0.4.6` candidate source; 143 files, 886.8 kB packed |
+
+The public fixture records its upstream repository, pull request URL, base and head SHAs, license, and reduction method. It is not described as a verbatim repository snapshot. Its contract fails if QAMap loses the changed validation timing, exact source location, related test evidence, or the four observable state boundaries a reviewer needs to reason about the regression.
+
+The manifest lifecycle is intentionally not a one-shot generation demo. The first heuristic result is preserved, a human supplies team language and stable evidence once, and both the current and subsequent related changes are reevaluated against that committed knowledge. This is the measurable distinction between repository-local QA context and repeatedly prompting an agent with the same explanation.
+
+The canonical `route` is the decision agents and integrations should consume first. Product behavior can still lead toward Playwright, Maestro, or manual E2E artifacts. Analyzer rules, CLI command contracts, configuration, documentation, generated output, and existing tests instead point at repository validation. In both cases `execution.status` remains `not-run`; QAMap selects and explains work but does not claim that the target application or command passed.
+
+The executable smoke is deliberately narrower than the static `qa` contract. QAMap's normal analysis still reports product execution as `not-run`. For release validation only, an isolated copy installed the proposed Playwright setup, including Chromium, and executed the generated file against the local application. The first draft failed because the changed item-level control did not exist in an empty collection. That failure became a generic same-entity prerequisite rule plus positive and negative regressions; the regenerated draft then passed.
+
 ## 0.4.6 - 2026-07-18
 
 Validated as a source-role-aware routing, large-PR evidence, and repository-verification release. QAMap now distinguishes product behavior from analyzer, command, configuration, documentation, generated, and test evidence before selecting QA. It retains an inspectable path through compact agent output, avoids merging unrelated long-PR intents, and points product changes at related existing tests without presenting repository validation as a failed product E2E:

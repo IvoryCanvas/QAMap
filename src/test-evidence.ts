@@ -14,6 +14,7 @@ export interface FlowCoverageInput {
   title: string;
   files: string[];
   coverage: CoverageTargetLike[];
+  changedFiles?: string[];
 }
 
 export interface TestSuiteEvidenceFile {
@@ -166,25 +167,52 @@ function findRelatedTestFiles(flow: FlowCoverageInput, files: TestSuiteEvidenceF
     return [];
   }
   const flowStems = new Set(flow.files.map(sourceFileStem).filter(Boolean));
+  const hasSpecificFlowStem = flow.files.some((file) => meaningfulTokens(sourceFileStem(file)).length > 0);
   const flowOwners = new Set(flow.files.flatMap(ownershipPathSegments));
+  const changedFiles = new Set((flow.changedFiles ?? []).map((file) => file.replaceAll("\\", "/")));
   return files
     .map((file) => {
       const testTokens = meaningfulTokens([file.path, ...file.imports, ...file.testNames].join("\n"));
-      const overlap = flowTokens.filter((token) => testTokens.includes(token)).length;
-      const directImport = importsFlowFile(file.imports, flow.files);
-      const matchingStem = flowStems.has(sourceFileStem(file.path));
-      const sharedOwner = ownershipPathSegments(file.path).some((segment) => flowOwners.has(segment));
-      const related = directImport || matchingStem || overlap >= 2 || (overlap >= 1 && sharedOwner);
+      const testOwners = new Set(ownershipPathSegments(file.path));
+      const sharedOwners = new Set([...flowOwners].filter((segment) => testOwners.has(segment)));
+      const sharedOwnerTokens = new Set(meaningfulTokens([...sharedOwners].join("\n")));
+      const overlap = flowTokens
+        .filter((token) => !sharedOwners.has(token) && !sharedOwnerTokens.has(token))
+        .filter((token) => testTokens.includes(token)).length;
+      const directImport = importsFlowFile(file.path, file.imports, flow.files);
+      const testStem = sourceFileStem(file.path);
+      const matchingStem = !genericFileStems.has(testStem) && flowStems.has(testStem);
+      const sharedOwner = sharedOwners.size > 0;
+      const related =
+        directImport ||
+        matchingStem ||
+        overlap >= 2 ||
+        (overlap >= 1 && sharedOwner) ||
+        (sharedOwner && !hasSpecificFlowStem);
       return {
         file,
         related,
-        score: (directImport ? 100 : 0) + (matchingStem ? 80 : 0) + (sharedOwner ? 20 : 0) + overlap * 5,
+        score:
+          (changedFiles.has(file.path) ? 200 : 0) +
+          (directImport ? 100 : 0) +
+          (matchingStem ? 80 : 0) +
+          (sharedOwner ? 20 : 0) +
+          overlap * 5,
       };
     })
     .filter((candidate) => candidate.related)
     .sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path))
     .map((candidate) => candidate.file);
 }
+
+const genericFileStems = new Set([
+  "app",
+  "index",
+  "main",
+  "page",
+  "route",
+  "screen",
+]);
 
 const structuralPathSegments = new Set([
   "app",
@@ -230,13 +258,22 @@ function sourceFileStem(value: string): string {
     .toLowerCase();
 }
 
-function importsFlowFile(imports: string[], flowFiles: string[]): boolean {
+function importsFlowFile(testFile: string, imports: string[], flowFiles: string[]): boolean {
   return imports.some((importPath) => {
-    const importStem = normalizePathForMatch(importPath);
+    const resolvedImport = importPath.startsWith(".")
+      ? path.posix.normalize(path.posix.join(path.posix.dirname(testFile.replaceAll("\\", "/")), importPath))
+      : importPath;
+    const importStem = normalizePathForMatch(resolvedImport);
     if (!importStem) {
       return false;
     }
-    return flowFiles.some((file) => normalizePathForMatch(file).endsWith(importStem));
+    return flowFiles.some((file) => {
+      const flowStem = normalizePathForMatch(file);
+      if (importPath.startsWith(".")) {
+        return flowStem === importStem;
+      }
+      return flowStem === importStem || flowStem.endsWith(`/${importStem}`);
+    });
   });
 }
 
@@ -245,6 +282,7 @@ function normalizePathForMatch(value: string): string {
     .replace(/\.(?:[cm]?[jt]sx?|vue|svelte|py|go|rs|java|kt|swift)$/i, "")
     .replace(/^\.\//, "")
     .replace(/\.\.\//g, "")
+    .replaceAll(".", "/")
     .toLowerCase();
 }
 
@@ -254,6 +292,10 @@ function extractTestNames(text: string): string[] {
   for (const match of text.matchAll(matcher)) {
     names.push(normalizeText(match[2]));
   }
+  const pythonMatcher = /^(?:async\s+)?def\s+(test_[A-Za-z0-9_]+)\s*\(/gm;
+  for (const match of text.matchAll(pythonMatcher)) {
+    names.push(normalizeText(match[1].replace(/^test_/, "").replaceAll("_", " ")));
+  }
   return uniqueStrings(names).slice(0, 40);
 }
 
@@ -262,6 +304,26 @@ function extractImports(text: string): string[] {
   const importMatcher = /\bfrom\s+["']([^"']+)["']|require\(\s*["']([^"']+)["']\s*\)/g;
   for (const match of text.matchAll(importMatcher)) {
     imports.push(match[1] ?? match[2]);
+  }
+  const pythonFromMatcher = /^from\s+([A-Za-z_][\w.]*)\s+import\s+([^\n#]+)/gm;
+  for (const match of text.matchAll(pythonFromMatcher)) {
+    const modulePath = match[1];
+    imports.push(modulePath);
+    for (const imported of match[2].split(",")) {
+      const symbol = imported.trim().split(/\s+as\s+/i)[0]?.trim();
+      if (symbol && symbol !== "*") {
+        imports.push(`${modulePath}.${symbol}`);
+      }
+    }
+  }
+  const pythonImportMatcher = /^import\s+([^\n#]+)/gm;
+  for (const match of text.matchAll(pythonImportMatcher)) {
+    for (const imported of match[1].split(",")) {
+      const modulePath = imported.trim().split(/\s+as\s+/i)[0]?.trim();
+      if (modulePath) {
+        imports.push(modulePath);
+      }
+    }
   }
   return uniqueStrings(imports).slice(0, 80);
 }

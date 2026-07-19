@@ -895,6 +895,37 @@ function buildIntentQaScenarios(
     ], ["Condition false", "Loading or unknown state", "Empty collection", "Re-entry"], changedConditionEvidence));
   }
 
+  const validationTimingEvidence = evidence.filter((item) =>
+    item.kind === "diff" &&
+    item.side === "head" &&
+    item.relation === "direct" &&
+    (item.sourceRole === undefined || item.sourceRole === "product") &&
+    /changed form validation timing from/i.test(item.value)
+  );
+  if (validationTimingEvidence.length > 0) {
+    scenarios.push(makeScenario(
+      intentId,
+      "validation-timing",
+      "state-transition",
+      "critical",
+      "Validation timing across edit, blur, correction, and submit",
+      [
+        "Prepare an initially untouched field with one invalid value and one valid correction.",
+        "Keep the normal form submission path available as a final validation boundary.",
+      ],
+      [
+        "Type an incomplete value before the configured validation trigger, then leave the field.",
+        "Correct the value after the first validation result and submit the form.",
+      ],
+      [
+        "Verify validation feedback stays hidden before its configured trigger and appears after the invalid field crosses that boundary.",
+        "Verify correcting the value clears stale feedback and form submission still validates every required field.",
+      ],
+      ["Initial typing", "First blur", "Correction after error", "Direct submission"],
+      validationTimingEvidence,
+    ));
+  }
+
   const destinationParameterEvidence = evidence.filter((item) =>
     item.kind === "diff" &&
     (item.sourceRole === undefined || item.sourceRole === "product") &&
@@ -1327,6 +1358,17 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
       continue;
     }
     for (const hunk of hunks) {
+      const validationTimingChange = detectFormValidationTimingChange(file, hunk);
+      if (validationTimingChange) {
+        evidence.push(diffRiskEvidence(
+          file,
+          hunk,
+          validationTimingChange.line,
+          "form-validation-mode",
+          `Changed form validation timing from ${validationTimingChange.before} to ${validationTimingChange.after}.`,
+          "head",
+        ));
+      }
       for (const [side, lines] of [["head", hunk.lines], ["base", hunk.removedLines ?? []]] as const) {
         for (const line of lines) {
           const calendarMatch = line.text.match(
@@ -1461,6 +1503,27 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
     }
   }
   return uniqueEvidence(evidence);
+}
+
+function detectFormValidationTimingChange(
+  file: string,
+  hunk: AddedDiffHunk,
+): { before: string; after: string; line: number } | undefined {
+  const context = `${file} ${hunk.hunkHeader ?? ""}`;
+  if (!/form|field|signup|register|validation|schema/i.test(context)) {
+    return undefined;
+  }
+  const modePattern = /\bmode\s*:\s*["'`](onChange|onBlur|onTouched|onSubmit|all)["'`]/i;
+  const before = (hunk.removedLines ?? [])
+    .map((line) => ({ line: line.line, mode: line.text.match(modePattern)?.[1] }))
+    .find((item) => item.mode);
+  const after = hunk.lines
+    .map((line) => ({ line: line.line, mode: line.text.match(modePattern)?.[1] }))
+    .find((item) => item.mode);
+  if (!before?.mode || !after?.mode || before.mode.toLowerCase() === after.mode.toLowerCase()) {
+    return undefined;
+  }
+  return { before: before.mode, after: after.mode, line: after.line };
 }
 
 function sharingCapabilitySymbol(text: string): string | undefined {

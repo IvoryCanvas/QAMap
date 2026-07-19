@@ -1,0 +1,17 @@
+{
+  "name": "public-calcom-signup-validation",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "next": "15.0.0",
+    "react": "19.0.0",
+    "react-hook-form": "7.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.50.0",
+    "vitest": "3.0.0"
+  }
+}

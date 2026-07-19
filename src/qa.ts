@@ -40,6 +40,7 @@ export interface QaDraftResult {
   runnerSetup: E2eDraftResult["plan"]["runnerSetup"];
   changeAnalysis: E2eDraftResult["plan"]["changeAnalysis"];
   traces: QaReasoningTrace[];
+  route: QaRouteDecision;
   readiness: QaReadinessSummary;
   flows: QaDraftFlow[];
   missingEvidence: QaDraftMissingEvidence[];
@@ -50,6 +51,25 @@ export interface QaDraftResult {
 
 export type QaReadinessBasis = "optional-automation" | "repository-validation";
 export type QaVerificationStatus = "ready-to-run" | "command-needed";
+export type QaRouteStatus =
+  | "draft-ready"
+  | "draft-near-runnable"
+  | "draft-needs-work"
+  | "draft-blocked"
+  | "verification-ready-to-run"
+  | "verification-command-needed";
+export type QaRouteNextAction =
+  | "review-and-run-draft"
+  | "complete-draft-evidence"
+  | "run-repository-command"
+  | "define-repository-command";
+
+export interface QaRouteDecision {
+  basis: QaReadinessBasis;
+  status: QaRouteStatus;
+  nextAction: QaRouteNextAction;
+  command?: string;
+}
 
 export interface QaReadinessSummary extends E2eDraftReadinessSummary {
   basis: QaReadinessBasis;
@@ -83,7 +103,13 @@ export interface QaDraftFlow {
   why: string[];
 }
 
-type QaVerificationMode = "analysis-rule" | "existing-test-evidence" | "configuration" | "documentation" | "generated-artifact";
+type QaVerificationMode =
+  | "command-contract"
+  | "analysis-rule"
+  | "existing-test-evidence"
+  | "configuration"
+  | "documentation"
+  | "generated-artifact";
 
 export interface QaDraftMissingEvidence {
   flowTitle: string;
@@ -101,6 +127,15 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   });
   const qaFiles = draft.plan.changedFiles.length > 0 ? draft.files : [];
   const flows = qaFiles.map((file) => qaFlowFromDraftFile(file));
+  const changedFiles = draft.plan.changedFiles.map((file) => file.path);
+  const preferredVerificationCommand = buildChangedTestVerificationCommand(
+    flows,
+    changedFiles,
+    draft.plan.suggestedCommands,
+  );
+  const suggestedCommands = preferredVerificationCommand
+    ? uniqueStrings([preferredVerificationCommand, ...draft.plan.suggestedCommands])
+    : draft.plan.suggestedCommands;
   const missingEvidence = buildMissingEvidence(qaFiles);
   const traces = buildQaReasoningTraces(
     draft.plan.changeAnalysis.intents,
@@ -115,7 +150,8 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
       totalAssertions: receipt.totalAssertions,
     }))),
   );
-  const readiness = buildQaReadiness(draft.readinessSummary, flows, draft.plan.suggestedCommands);
+  const readiness = buildQaReadiness(draft.readinessSummary, flows, suggestedCommands, changedFiles);
+  const route = buildQaRouteDecision(readiness, suggestedCommands);
 
   return {
     tool: {
@@ -142,12 +178,40 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     runnerSetup: draft.plan.runnerSetup,
     changeAnalysis: draft.plan.changeAnalysis,
     traces,
+    route,
     readiness,
     flows,
     missingEvidence,
-    prChecklist: buildPrChecklist(draft, flows),
-    agentHandoff: buildAgentHandoff(draft, flows, missingEvidence),
-    suggestedCommands: draft.plan.suggestedCommands,
+    prChecklist: buildPrChecklist(draft, flows, suggestedCommands),
+    agentHandoff: buildAgentHandoff(draft, flows, missingEvidence, suggestedCommands),
+    suggestedCommands,
+  };
+}
+
+function buildQaRouteDecision(
+  readiness: QaReadinessSummary,
+  suggestedCommands: string[],
+): QaRouteDecision {
+  if (readiness.basis === "repository-validation") {
+    const command = suggestedCommands[0];
+    return command
+      ? {
+          basis: "repository-validation",
+          status: "verification-ready-to-run",
+          nextAction: "run-repository-command",
+          command,
+        }
+      : {
+          basis: "repository-validation",
+          status: "verification-command-needed",
+          nextAction: "define-repository-command",
+        };
+  }
+
+  return {
+    basis: "optional-automation",
+    status: `draft-${readiness.level}`,
+    nextAction: readiness.level === "ready" ? "review-and-run-draft" : "complete-draft-evidence",
   };
 }
 
@@ -155,8 +219,12 @@ function buildQaReadiness(
   readiness: E2eDraftReadinessSummary,
   flows: QaDraftFlow[],
   suggestedCommands: string[],
+  changedFiles: string[],
 ): QaReadinessSummary {
-  const repositoryValidation = flows.length > 0 && flows.every((flow) => Boolean(flow.verificationMode));
+  const repositoryValidation = flows.length > 0 && (
+    flows.every((flow) => Boolean(flow.verificationMode)) ||
+    shouldRunChangedTestEvidence(flows, changedFiles)
+  );
   if (!repositoryValidation) {
     return {
       ...readiness,
@@ -170,6 +238,41 @@ function buildQaReadiness(
     automationApplicable: false,
     verificationStatus: suggestedCommands.length > 0 ? "ready-to-run" : "command-needed",
   };
+}
+
+function shouldRunChangedTestEvidence(flows: QaDraftFlow[], changedFiles: string[]): boolean {
+  const changed = new Set(changedFiles);
+  const hasChangedRelatedTest = flows.some((flow) =>
+    flow.existingEvidencePaths.some((file) => changed.has(file))
+  );
+  const scenarioReceipts = flows.flatMap((flow) => flow.scenarioAutomation);
+  return hasChangedRelatedTest &&
+    scenarioReceipts.length > 0 &&
+    scenarioReceipts.every((receipt) => receipt.decision === "review-only");
+}
+
+function buildChangedTestVerificationCommand(
+  flows: QaDraftFlow[],
+  changedFiles: string[],
+  suggestedCommands: string[],
+): string | undefined {
+  const changed = new Set(changedFiles);
+  const changedEvidence = uniqueStrings(
+    flows.flatMap((flow) => flow.existingEvidencePaths).filter((file) => changed.has(file)),
+  );
+  if (changedEvidence.length === 0) {
+    return undefined;
+  }
+  const pytest = suggestedCommands.find((command) => /^pytest(?:\s|$)/i.test(command));
+  const pythonTests = changedEvidence.filter((file) => /(?:^|\/)test_[^/]+\.py$|(?:^|\/)[^/]+_test\.py$/i.test(file));
+  if (pytest && pythonTests.length > 0) {
+    return `pytest ${pythonTests.slice(0, 4).join(" ")}`;
+  }
+  const packageTest = suggestedCommands.find((command) => /^(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+test(?:\s|$)/i.test(command));
+  if (packageTest && pythonTests.length > 0) {
+    return `${packageTest} -- ${pythonTests.slice(0, 4).join(" ")}`;
+  }
+  return undefined;
 }
 
 const agentListLimit = 6;
@@ -199,6 +302,7 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
     runner: result.runner,
     manifest: result.manifestPath ?? null,
     execution: result.execution,
+    route: result.route,
     readiness: {
       score: result.readiness.score,
       level: result.readiness.level,
@@ -256,10 +360,10 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
       reviewRequired: intent.reviewRequired,
       evidence: intent.evidence.slice(0, 2).map((item) => truncateForAgent(item.value, 100)),
       sources: strongestEvidence(intent.evidence, 1).map(formatAgentEvidenceSource),
-      lifecycle: intent.lifecycle.slice(0, 6).map((stage) => ({
+      lifecycle: selectAgentLifecycleStages(intent.lifecycle.map((stage) => ({
         phase: stage.kind,
         label: truncateForAgent(stage.label, 120),
-      })),
+      })), 6),
       scenarioCount: intent.scenarios.length,
       omittedScenarioCount: Math.max(0, intent.scenarios.length - 2),
       scenarios: intent.scenarios.slice(0, 2).map((scenario) => {
@@ -417,7 +521,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     traces: summary.traces.slice(0, 2),
     intents: summary.intents.slice(0, 2).map((intent) => ({
       ...intent,
-      lifecycle: intent.lifecycle.slice(0, 4),
+      lifecycle: selectAgentLifecycleStages(intent.lifecycle, 4),
       scenarios: intent.scenarios.slice(0, 2).map((scenario) => ({
         ...scenario,
         assertions: scenario.assertions.slice(0, 1),
@@ -446,7 +550,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
 
   const minimalIntents = compact.intents.slice(0, 1).map((intent) => ({
     ...intent,
-    lifecycle: intent.lifecycle.slice(0, 3),
+    lifecycle: selectAgentLifecycleStages(intent.lifecycle, 3),
     omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
     scenarios: intent.scenarios.slice(0, 1),
   }));
@@ -478,7 +582,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     confidence: intent.confidence,
     reviewRequired: intent.reviewRequired,
     evidence: [],
-    lifecycle: intent.lifecycle.slice(0, 3).map(compactAgentLifecycleStage),
+    lifecycle: selectAgentLifecycleStages(intent.lifecycle, 3).map(emergencyAgentLifecycleStage),
     scenarioCount: intent.scenarioCount,
     omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 2),
     scenarios: intent.scenarios.slice(0, 2).map((scenario) => ({
@@ -577,6 +681,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     runner: summary.runner,
     manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 120) : null,
     execution: summary.execution,
+    route: summary.route,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     traceCount: summary.traceCount,
@@ -605,23 +710,32 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     confidence: intent.confidence,
     reviewRequired: intent.reviewRequired,
     evidence: [],
-    lifecycle: intent.lifecycle.slice(0, 1).map(compactAgentLifecycleStage),
+    lifecycle: selectAgentLifecycleStages(intent.lifecycle, 3).map(compactAgentLifecycleStage),
     scenarioCount: intent.scenarioCount,
-    omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
-    scenarios: intent.scenarios.slice(0, 1).map((scenario) => ({
+    omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 2),
+    scenarios: intent.scenarios.slice(0, 2).map((scenario) => ({
       id: scenario.id,
       priority: scenario.priority,
       kind: scenario.kind,
       title: truncateForAgent(String(scenario.title ?? ""), 60),
       confidence: scenario.confidence,
-      sources: scenario.sources?.slice(0, 1).map(compactAgentEvidenceSource),
-      assertions: scenario.assertions.slice(0, 1).map((assertion) => truncateForAgent(assertion, 70)),
+      sources: scenario.sources?.slice(0, 1).map(emergencyAgentEvidenceSource),
+      assertions: [],
       routing: scenario.routing
         ? {
             decision: scenario.routing.decision,
-            reason: "Retained highest-priority routing decision.",
+            reason: "Evidence-backed route.",
             requiredSources: scenario.routing.requiredSources,
             referenceSources: scenario.routing.referenceSources,
+          }
+        : undefined,
+      automation: scenario.automation
+        ? {
+            status: scenario.automation.status,
+            mappedSteps: scenario.automation.mappedSteps,
+            totalSteps: scenario.automation.totalSteps,
+            mappedAssertions: scenario.automation.mappedAssertions,
+            totalAssertions: scenario.automation.totalAssertions,
           }
         : undefined,
     })),
@@ -654,6 +768,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     runner: summary.runner,
     manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 180) : null,
     execution: summary.execution,
+    route: summary.route,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     traceCount: summary.traceCount,
@@ -678,35 +793,96 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     return emergencyPayload;
   }
 
+  const floorIntents = emergencyIntents.slice(0, 1).map((intent) => ({
+    ...intent,
+    title: truncateForAgent(String(intent.title ?? ""), 45),
+    lifecycle: selectAgentLifecycleStages(intent.lifecycle, 2),
+    omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
+    scenarios: intent.scenarios.slice(0, 1).map((scenario) => ({
+      ...scenario,
+      title: truncateForAgent(String(scenario.title ?? ""), 45),
+      sources: scenario.sources?.slice(0, 1),
+      assertions: [],
+    })),
+  }));
+  const floorFlows = emergencyFlows.slice(0, 1).map((flow) => ({
+    ...flow,
+    title: truncateForAgent(String(flow.title ?? ""), 45),
+    draft: truncateForAgent(String(flow.draft ?? ""), 60),
+    entry: flow.entry ? truncateForAgent(String(flow.entry), 60) : undefined,
+    changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 60)),
+    reviewQuestion: flow.reviewQuestion
+      ? truncateForAgent(String(flow.reviewQuestion), 75)
+      : undefined,
+    successSignal: flow.successSignal
+      ? truncateForAgent(String(flow.successSignal), 75)
+      : undefined,
+    steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 45)),
+    selectors: flow.selectors.slice(0, 1).map((selector) => truncateForAgent(selector, 45)),
+    existingEvidence: flow.existingEvidence
+      ?.slice(0, 1)
+      .map((file) => truncateForAgent(file, 60)),
+  }));
   return JSON.stringify({
-    ...emergencySummary,
-    omittedTraceCount: summary.traceCount,
-    traces: [],
-    intents: emergencyIntents.map((intent) => ({
-      ...intent,
-      lifecycle: [],
-      scenarios: intent.scenarios.map((scenario) => ({
-        ...scenario,
-        sources: [],
-        assertions: [],
-      })),
-    })),
-    flows: emergencyFlows.map((flow) => ({
-      title: flow.title,
-      source: flow.source,
-      draft: flow.draft,
-      verificationMode: flow.verificationMode,
-      changedFiles: flow.changedFiles,
-      steps: flow.steps,
-      selectors: flow.selectors,
-    })),
+    schema: summary.schema,
+    base: truncateForAgent(String(summary.base ?? ""), 80),
+    head: truncateForAgent(String(summary.head ?? ""), 80),
+    project: summary.project,
+    runner: summary.runner,
+    manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 80) : null,
+    execution: summary.execution,
+    route: summary.route,
+    readiness: summary.readiness,
+    scenarioCoverage: summary.scenarioCoverage,
+    traceCount: summary.traceCount,
+    omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - emergencyTraces.length),
+    traces: emergencyTraces,
+    testSuite: summary.testSuite,
+    intentCount: summary.intentCount,
+    omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - floorIntents.length),
+    intents: floorIntents,
+    flowCount: summary.flowCount,
+    omittedFlowCount: Math.max(0, numericCount(summary.flowCount) - floorFlows.length),
+    flows: floorFlows,
     requiredEvidence: [],
+    recommendedEvidenceCount: summary.recommendedEvidenceCount,
+    requiredBootstrap: [],
     prChecklist: [],
+    commands: summary.commands.slice(0, 1).map((command) => truncateForAgent(command, 70)),
+    compaction: {
+      maxBytes: agentPayloadByteLimit,
+      originalBytes: Buffer.byteLength(payload),
+      emergency: true,
+      floor: true,
+    },
   });
 }
 
 function numericCount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function selectAgentLifecycleStages<T>(stages: T[], limit: number): T[] {
+  if (stages.length <= limit) return stages;
+  const phasePriority = ["trigger", "state-change", "observable-outcome", "side-effect", "action", "condition"];
+  const selectedIndexes: number[] = [];
+  for (const phase of phasePriority) {
+    const index = stages.findIndex((stage, candidateIndex) =>
+      !selectedIndexes.includes(candidateIndex) && lifecycleStagePhase(stage) === phase
+    );
+    if (index !== -1) selectedIndexes.push(index);
+    if (selectedIndexes.length >= limit) break;
+  }
+  for (let index = 0; index < stages.length && selectedIndexes.length < limit; index += 1) {
+    if (!selectedIndexes.includes(index)) selectedIndexes.push(index);
+  }
+  return selectedIndexes.sort((left, right) => left - right).map((index) => stages[index]);
+}
+
+function lifecycleStagePhase(stage: unknown): string | undefined {
+  if (!stage || typeof stage !== "object") return undefined;
+  const value = stage as Record<string, unknown>;
+  return typeof value.phase === "string" ? value.phase : typeof value.kind === "string" ? value.kind : undefined;
 }
 
 function compactAgentEvidenceSource(source: unknown): unknown {
@@ -728,12 +904,37 @@ function compactAgentEvidenceSource(source: unknown): unknown {
   };
 }
 
+function emergencyAgentEvidenceSource(source: unknown): unknown {
+  if (!source || typeof source !== "object") return source;
+  const value = source as Record<string, unknown>;
+  return {
+    kind: value.kind,
+    reason: "Located evidence.",
+    sourceRole: value.sourceRole,
+    commit: value.commit,
+    file: value.file,
+    symbol: value.symbol,
+    relation: value.relation,
+    side: value.side,
+    startLine: value.startLine,
+  };
+}
+
 function compactAgentLifecycleStage(stage: unknown): unknown {
   if (!stage || typeof stage !== "object") return stage;
   const value = stage as Record<string, unknown>;
   return {
     phase: value.phase,
     label: truncateForAgent(String(value.label ?? ""), 45),
+  };
+}
+
+function emergencyAgentLifecycleStage(stage: unknown): unknown {
+  if (!stage || typeof stage !== "object") return stage;
+  const value = stage as Record<string, unknown>;
+  return {
+    phase: value.phase,
+    label: truncateForAgent(String(value.label ?? ""), 35),
   };
 }
 
@@ -1291,6 +1492,9 @@ function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
 
 function buildFlowReasons(file: E2eDraftFile): string[] {
   const verificationMode = verificationModeForDraftFile(file);
+  if (verificationMode === "command-contract") {
+    return ["CLI behavior changed; verify arguments, output, side effects, and exit codes instead of inventing a product journey."];
+  }
   if (verificationMode === "analysis-rule") {
     return ["Analyzer rules changed; verify positive, negative, and neighboring-rule controls instead of inventing a product journey."];
   }
@@ -1355,6 +1559,7 @@ function uniqueMissingEvidence(items: QaDraftMissingEvidence[]): QaDraftMissingE
 function buildPrChecklist(
   draft: E2eDraftResult,
   flows: QaDraftFlow[],
+  suggestedCommands: string[],
 ): string[] {
   const testEvidenceLabel = flows[0]?.verificationMode === "existing-test-evidence"
     ? "changed test evidence"
@@ -1363,7 +1568,7 @@ function buildPrChecklist(
     flows[0]?.existingEvidencePaths.length
       ? `Run the ${testEvidenceLabel}: ${flows[0].existingEvidencePaths.slice(0, 4).join(", ")}.`
       : flows[0]?.verificationMode
-        ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${draft.plan.suggestedCommands[0] ?? "the nearest repository validation command"}.`
+        ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${suggestedCommands[0] ?? "the nearest repository validation command"}.`
       : draft.plan.changeAnalysis.intents[0]
         ? `Review the proposed QA scenarios and their sources for: ${draft.plan.changeAnalysis.intents[0].title}.`
       : flows.length > 0
@@ -1374,8 +1579,8 @@ function buildPrChecklist(
       : "Name the user-visible behavior or contract this PR can break.",
   ];
 
-  const validationCommand = draft.plan.suggestedCommands.find((command) => /\b(?:e2e|test|playwright|maestro)\b/i.test(command))
-    ?? draft.plan.suggestedCommands[0];
+  const validationCommand = suggestedCommands.find((command) => /\b(?:e2e|test|playwright|maestro)\b/i.test(command))
+    ?? suggestedCommands[0];
   if (validationCommand) {
     checklist.push(`Run local validation: ${validationCommand}`);
   }
@@ -1391,6 +1596,7 @@ function buildAgentHandoff(
   draft: E2eDraftResult,
   flows: QaDraftFlow[],
   missingEvidence: QaDraftMissingEvidence[],
+  suggestedCommands: string[],
 ): string[] {
   const testEvidenceLabel = flows[0]?.verificationMode === "existing-test-evidence"
     ? "changed test evidence"
@@ -1401,7 +1607,7 @@ function buildAgentHandoff(
     flows[0]?.existingEvidencePaths.length
       ? `Run the ${testEvidenceLabel} (${flows[0].existingEvidencePaths.slice(0, 3).join(", ")}) and record the result before handoff.`
       : flows[0]?.verificationMode
-        ? `Run ${formatVerificationMode(flows[0].verificationMode)} and record the command and result before handoff; do not invent a product-journey E2E for this diff alone.`
+        ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${suggestedCommands[0] ?? "the nearest repository command"} and record the result before handoff; do not invent a product-journey E2E for this diff alone.`
       : draft.plan.changeAnalysis.intents[0]
         ? `Review each proposed scenario and its diff sources for ${draft.plan.changeAnalysis.intents[0].title} before using it as PR policy.`
       : flows.length > 0
@@ -1422,6 +1628,9 @@ function isChangedTestEvidenceTitle(title: string): boolean {
 }
 
 function verificationModeForTitle(title: string): QaVerificationMode | undefined {
+  if (/\bCLI command verification checklist$/i.test(title.trim())) {
+    return "command-contract";
+  }
   if (/^Static analysis rule\b/i.test(title.trim())) {
     return "analysis-rule";
   }
@@ -1441,6 +1650,13 @@ function verificationModeForTitle(title: string): QaVerificationMode | undefined
 }
 
 function verificationModeForDraftFile(file: E2eDraftFile): QaVerificationMode | undefined {
+  const scenarioSourceRoles = (file.qaScenarios ?? [])
+    .flatMap((scenario) => scenario.evidence)
+    .map((source) => source.sourceRole)
+    .filter((role): role is NonNullable<typeof role> => Boolean(role));
+  if (scenarioSourceRoles.length > 0 && scenarioSourceRoles.every((role) => role === "command")) {
+    return "command-contract";
+  }
   if (file.qaScenarios?.some((scenario) => /analysis rule positive and negative controls/i.test(scenario.title))) {
     return "analysis-rule";
   }
@@ -1452,6 +1668,9 @@ function needsGeneratedDraft(result: QaDraftResult): boolean {
 }
 
 function formatVerificationMode(mode: QaVerificationMode): string {
+  if (mode === "command-contract") {
+    return "CLI command contract verification";
+  }
   if (mode === "analysis-rule") {
     return "analyzer rule boundary verification";
   }

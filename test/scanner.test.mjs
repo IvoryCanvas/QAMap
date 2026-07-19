@@ -851,6 +851,8 @@ test("generateE2ePlan detects CLI packages and suggests command verification che
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "docs/e2e", dryRun: true });
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const agentSummary = JSON.parse(formatAgentQaDraft(qa));
   const markdown = formatMarkdownE2ePlan(plan);
   const draftMarkdown = formatMarkdownE2eDraft(draft);
   const flow = plan.flows.find((item) => item.kind === "command");
@@ -880,6 +882,17 @@ test("generateE2ePlan detects CLI packages and suggests command verification che
   assert.match(markdown, /Project: CLI/);
   assert.match(markdown, /Start with CLI command validation/);
   assert.match(draftMarkdown, /representative arguments, expected stdout\/stderr, generated files, exit codes/);
+  assert.ok(
+    qa.flows.every((item) => item.verificationMode === "command-contract"),
+    JSON.stringify(qa.flows.map(({ title, verificationMode, changedFiles }) => ({ title, verificationMode, changedFiles }))),
+  );
+  assert.deepEqual(agentSummary.route, {
+    basis: "repository-validation",
+    status: "verification-ready-to-run",
+    nextAction: "run-repository-command",
+    command: "npm test",
+  });
+  assert.equal(agentSummary.readiness.automationApplicable, false);
 });
 
 test("generateE2ePlan detects design token packages and suggests artifact validation", async () => {
@@ -1292,6 +1305,12 @@ test("generateE2eDraft keeps Expo native version changes in one mobile build con
   assert.equal(agentSummary.readiness.basis, "repository-validation");
   assert.equal(agentSummary.readiness.automationApplicable, false);
   assert.equal(agentSummary.readiness.verificationStatus, "ready-to-run");
+  assert.deepEqual(agentSummary.route, {
+    basis: "repository-validation",
+    status: "verification-ready-to-run",
+    nextAction: "run-repository-command",
+    command: "npm run build:apk",
+  });
   assert.equal(agentSummary.scenarioCoverage.automationApplicable, false);
   const agentSchema = JSON.parse(await readFile(path.join(repositoryRoot, "schema/qamap-agent.schema.json"), "utf8"));
   assert.deepEqual(collectSchemaViolations(agentSchema, agentSummary), []);
@@ -2284,6 +2303,133 @@ test("generateE2ePlan keeps generic test filenames from overmatching unrelated s
   assert.equal(evidenceFiles.includes("listings/tests/test_services.py"), false);
 });
 
+test("generateE2ePlan does not treat generic index tests in another package as flow evidence", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "packages/correlation/src"), { recursive: true });
+  await mkdir(path.join(root, "services/storefront/src/features/campaign/Landing"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: { test: "vitest run" },
+      dependencies: { vite: "^7.0.0", react: "^19.0.0" },
+      devDependencies: { vitest: "^3.0.0" },
+    }),
+  );
+  await writeFile(
+    path.join(root, "packages/correlation/src/index.ts"),
+    "export const correlationHeader = 'request-id';\n",
+  );
+  await writeFile(
+    path.join(root, "packages/correlation/src/index.test.ts"),
+    [
+      "import { correlationHeader } from './index';",
+      "it('propagates request correlation headers', () => expect(correlationHeader).toContain('id'));",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "services/storefront/src/features/campaign/Landing/index.tsx"),
+    "export function Landing() { return <button>Share campaign</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/campaign-share"]);
+  await writeFile(
+    path.join(root, "services/storefront/src/features/campaign/Landing/index.tsx"),
+    "export function Landing() { return <button aria-label=\"Share campaign\">Share campaign</button>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: expose campaign share action"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const evidenceFiles = plan.flows.flatMap((flow) =>
+    flow.coverageEvidence.flatMap((evidence) => evidence.files),
+  );
+
+  assert.equal(evidenceFiles.includes("packages/correlation/src/index.test.ts"), false);
+});
+
+test("generateE2ePlan prefers a Python test that imports the changed module", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "celery_tasks/seeding/tests"), { recursive: true });
+  await mkdir(path.join(root, "project/settings"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ scripts: { test: "pytest" } }),
+  );
+  await writeFile(path.join(root, "requirements.txt"), "Django==5.2.0\npytest==8.4.0\n");
+  await writeFile(
+    path.join(root, "celery_tasks/seeding/slack_campaign_notification.py"),
+    "def campaign_cta_url(campaign_id, fallback):\n    return fallback\n",
+  );
+  await writeFile(
+    path.join(root, "celery_tasks/seeding/tests/test_creator_push_tasks.py"),
+    "def test_creator_push_is_sent():\n    assert True\n",
+  );
+  await writeFile(path.join(root, "project/settings/dev.py"), "DASHBOARD_URL = ''\n");
+  await writeFile(path.join(root, "project/settings/prod.py"), "DASHBOARD_URL = ''\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "fix/campaign-cta"]);
+  await writeFile(
+    path.join(root, "celery_tasks/seeding/slack_campaign_notification.py"),
+    [
+      "def campaign_cta_url(campaign_id, fallback, dashboard_url):",
+      "    return f'{dashboard_url}/ops/{campaign_id}' if dashboard_url else fallback",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "celery_tasks/seeding/tests/test_slack_campaign_cta.py"),
+    [
+      "from celery_tasks.seeding import slack_campaign_notification as notification",
+      "",
+      "def test_campaign_cta_uses_dashboard_when_configured():",
+      "    assert notification.campaign_cta_url(42, '/admin/42', 'https://dashboard.example') == 'https://dashboard.example/ops/42'",
+      "",
+      "def test_campaign_cta_falls_back_to_admin():",
+      "    assert notification.campaign_cta_url(42, '/admin/42', '') == '/admin/42'",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, "project/settings/dev.py"), "DASHBOARD_URL = ''\n");
+  await writeFile(path.join(root, "project/settings/prod.py"), "DASHBOARD_URL = 'https://dashboard.example'\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "fix: route campaign CTA by configured dashboard"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const changedFlow = plan.flows.find((flow) =>
+    flow.files.includes("celery_tasks/seeding/slack_campaign_notification.py"),
+  );
+  const evidenceFiles = changedFlow?.coverageEvidence.flatMap((evidence) => evidence.files) ?? [];
+
+  assert.ok(
+    changedFlow,
+    JSON.stringify(plan.flows.map((flow) => ({ title: flow.title, files: flow.files }))),
+  );
+  assert.ok(evidenceFiles.includes("celery_tasks/seeding/tests/test_slack_campaign_cta.py"));
+  assert.equal(evidenceFiles.includes("celery_tasks/seeding/tests/test_creator_push_tasks.py"), false);
+  assert.equal(evidenceFiles[0], "celery_tasks/seeding/tests/test_slack_campaign_cta.py");
+  assert.equal(plan.flows.some((flow) => /^Dev primary journey$/i.test(flow.title)), false);
+  assert.equal(plan.flows.some((flow) => /configuration verification/i.test(flow.title)), true);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.deepEqual(qa.route, {
+    basis: "repository-validation",
+    status: "verification-ready-to-run",
+    nextAction: "run-repository-command",
+    command: "npm test -- celery_tasks/seeding/tests/test_slack_campaign_cta.py",
+  });
+  assert.equal(qa.readiness.automationApplicable, false);
+  assert.equal(qa.suggestedCommands[0], "npm test -- celery_tasks/seeding/tests/test_slack_campaign_cta.py");
+});
+
 test("generateE2ePlan suggests setup hints for auth and session changes", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
@@ -3241,7 +3387,10 @@ test("generateE2ePlan infers Playwright base URLs from dev scripts", async () =>
   assert.equal(plan.executionProfile.baseUrl, "http://localhost:3004");
   assert.equal(plan.runnerSetup.status, "proposed");
   assert.equal(plan.runnerSetup.setupCommand, "qamap e2e setup . --runner playwright");
-  assert.deepEqual(plan.runnerSetup.installCommands, ["pnpm add -D @playwright/test"]);
+  assert.deepEqual(plan.runnerSetup.installCommands, [
+    "pnpm add -D @playwright/test",
+    "pnpm exec playwright install chromium",
+  ]);
   assert.ok(plan.runnerSetup.filesToCreate.includes("playwright.config.ts"));
   assert.ok(plan.executionProfile.blockers.some((blocker) => /Playwright config/.test(blocker)));
   assert.equal(plan.executionProfile.blockers.some((blocker) => /baseURL|base URL/.test(blocker)), false);
@@ -3250,6 +3399,7 @@ test("generateE2ePlan infers Playwright base URLs from dev scripts", async () =>
   assert.match(runnerStep.action, /webServer\.command "pnpm run dev"/);
   assert.match(runnerStep.action, /use\.baseURL "http:\/\/localhost:3004"/);
   assert.ok(runnerStep.commands.includes("pnpm add -D @playwright/test"));
+  assert.ok(runnerStep.commands.includes("pnpm exec playwright install chromium"));
   assert.ok(runnerStep.commands.includes("qamap e2e setup . --runner playwright"));
   assert.ok(runnerStep.commands.includes("pnpm run dev"));
   assert.ok(runnerStep.commands.includes("npx playwright test"));
@@ -3270,7 +3420,11 @@ test("generateE2ePlan infers Playwright base URLs from dev scripts", async () =>
   assert.ok(setup.createdFiles.includes("playwright.config.ts"));
   assert.ok(setup.createdFiles.includes("tests/e2e/"));
   assert.ok(setup.updatedFiles.includes("package.json"));
-  assert.deepEqual(setup.installCommands, ["pnpm add -D @playwright/test"]);
+  assert.deepEqual(setup.installCommands, [
+    "pnpm add -D @playwright/test",
+    "pnpm exec playwright install chromium",
+  ]);
+  assert.ok(setup.nextCommands.includes("pnpm exec playwright install chromium"));
   assert.equal(setup.draftFiles.length, 1);
   assert.equal(setupDraftFile.status, "created");
   assert.match(setupDraftFile.path, /^tests\/e2e\/settings-save\.spec\.ts$/);
@@ -5637,6 +5791,8 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.equal(agentSummary.readiness.basis, "optional-automation");
   assert.equal(agentSummary.readiness.automationApplicable, true);
   assert.equal(agentSummary.readiness.verificationStatus, undefined);
+  assert.equal(agentSummary.route.basis, "optional-automation");
+  assert.match(agentSummary.route.status, /^draft-/);
   assert.equal(agentSummary.scenarioCoverage.automationApplicable, true);
   assert.equal(Array.isArray(agentSummary.requiredEvidence), true);
   assert.equal(Array.isArray(agentSummary.prChecklist), true);
@@ -5663,6 +5819,7 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   const compactAgentSummary = JSON.parse(compactAgentOutput);
   assert.ok(Buffer.byteLength(compactAgentOutput) <= 4 * 1024);
   assert.ok(compactAgentSummary.compaction);
+  assert.deepEqual(compactAgentSummary.route, agentSummary.route);
   assert.deepEqual(collectSchemaViolations(agentSchema, compactAgentSummary), []);
 
   const agentCliOutput = await execFileAsync(process.execPath, [
@@ -6070,14 +6227,76 @@ test("diff-added selectors rank first and name the changed behavior", async () =
   assert.ok(pinDraft);
   assert.equal(pinDraft.scenarioAutomation?.find((receipt) => receipt.kind === "primary")?.status, "compiled");
   const spec = await readFile(path.join(root, pinDraft.path), "utf8");
+  assert.match(spec, /page\.getByTestId\("note-input"\)\.fill\("QAMap sample value"\)/);
+  assert.match(spec, /page\.getByTestId\("add-note"\)\.click\(\)/);
   assert.match(spec, /page\.getByTestId\("pin-note"\)\.click\(\)/);
   assert.match(spec, /expect\(page\.getByText\("📌"\)\)\.toBeVisible\(\)/);
+  assert.ok(
+    spec.indexOf('page.getByTestId("note-input").fill') < spec.indexOf('page.getByTestId("add-note").click'),
+    "expected the input to be filled before creating the prerequisite record",
+  );
+  assert.ok(
+    spec.indexOf('page.getByTestId("add-note").click') < spec.indexOf('page.getByTestId("pin-note").click'),
+    "expected the prerequisite record to exist before exercising the changed nested action",
+  );
   assert.doesNotMatch(spec, /QAMap could not infer a stable locator for this step: Pin/i);
 
   const qa = await generateQaDraft(root, { base: "main", head: "HEAD", runner: "playwright" });
   const qaMarkdown = formatMarkdownQaDraft(qa);
   assert.match(qaMarkdown, /Behavior lifecycle: action: Pin notes to the top\./);
   assert.match(qaMarkdown, /Expected proof: Verify visible text "📌" appears\./);
+});
+
+test("nested actions do not borrow unrelated creation controls as prerequisites", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "app/notes"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ scripts: { test: "playwright test" }, dependencies: { next: "^15.0.0", "@playwright/test": "^1.56.0" } }),
+  );
+  const page = (pinning) => [
+    '"use client";',
+    'import { useState } from "react";',
+    "export default function NotesPage() {",
+    "  const [pinned, setPinned] = useState(false);",
+    "  return <main>",
+    '    <input data-testid="member-input" />',
+    '    <button data-testid="add-member">Add member</button>',
+    "    <article>",
+    "      <h2>Release note</h2>",
+    ...(pinning
+      ? [
+          '      <button data-testid="pin-note" onClick={() => setPinned(true)}>Pin note</button>',
+          '      {pinned ? <p>Pinned note appears first</p> : null}',
+        ]
+      : []),
+    "    </article>",
+    "  </main>;",
+    "}",
+  ].join("\n");
+  await writeFile(path.join(root, "app/notes/page.tsx"), page(false));
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/pin-note"]);
+  await writeFile(path.join(root, "app/notes/page.tsx"), page(true));
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: pin a release note"]);
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    runner: "playwright",
+    output: "tests/e2e",
+  });
+  const pinDraft = draft.files.find((file) => /pin/i.test(file.flowTitle));
+  assert.ok(pinDraft);
+  const spec = await readFile(path.join(root, pinDraft.path), "utf8");
+  assert.match(spec, /page\.getByTestId\("pin-note"\)\.click\(\)/);
+  assert.doesNotMatch(spec, /page\.getByTestId\("member-input"\)\.fill/);
+  assert.doesNotMatch(spec, /page\.getByTestId\("add-member"\)\.click/);
 });
 
 test("observed changed-endpoint responses are asserted with diff-derived status bounds", async () => {

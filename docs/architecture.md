@@ -63,6 +63,8 @@ Runner adapters then emit a second receipt for each routed scenario:
 
 A compilation receipt is static evidence, not a test result. Human output therefore calls these states `fully mapped`, `partially mapped`, and `not mapped`; the machine values remain stable for compatibility. Every `qa` result also carries an invocation-level `execution` receipt with `status: not-run` and `scope: static-analysis-and-draft-mapping`. Only explicit execution may produce pass or fail evidence. A required scenario that is partial or not compiled remains an execution blocker and prevents the draft from being described as runnable.
 
+The additive `route` object is the canonical machine decision above those compatibility values. It separates optional draft preparation from repository validation and names the next action directly: complete or review a draft, run an existing command, or define a missing command. Agent payload compaction preserves this object before lower-priority detail, so a repository-verification result cannot be misread as blocked product E2E work.
+
 ## QA Reasoning Trace
 
 `src/qa-trace.ts` assembles the existing evidence and receipts into one causal path for each scenario:

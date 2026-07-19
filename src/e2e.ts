@@ -3985,6 +3985,7 @@ async function buildRunnerSetupProposal(
     const status: E2eRunnerSetupStatus = hasConfig && hasDependency && hasScript ? "ready" : "proposed";
     const filesToCreate = hasConfig ? [] : ["playwright.config.ts", "tests/e2e/"];
     const filesToUpdate = packageJson && (!hasScript || !hasDependency) ? ["package.json"] : [];
+    const browserInstallCommand = playwrightBrowserInstallCommand(packageManager);
     return {
       runner,
       status,
@@ -3994,16 +3995,21 @@ async function buildRunnerSetupProposal(
           ? "The repository already has Playwright dependency, script, and config evidence, so generated specs can target the existing E2E surface."
           : "This change targets a web surface, so Playwright is the best default for turning the generated scenario into browser E2E code without introducing a mobile or service runner.",
       setupCommand: status === "ready" ? undefined : setupCommand,
-      installCommands: hasDependency ? [] : [packageInstallCommand(packageManager, "@playwright/test")],
+      installCommands: uniqueStrings([
+        ...(!hasDependency ? [packageInstallCommand(packageManager, "@playwright/test")] : []),
+        browserInstallCommand,
+      ]),
       filesToCreate,
       filesToUpdate,
       nextCommands: uniqueStrings([
+        browserInstallCommand,
         profile.startCommand,
         profile.testCommand ?? "npx playwright test",
         draftCommand,
       ].filter(Boolean) as string[]),
       notes: [
         playwrightConfigGuidance(profile),
+        "Install the Playwright Chromium runtime before the first local or CI execution; the package dependency alone does not provide a browser binary.",
         "Run the setup command only after reviewing the generated scenario and confirming Playwright fits this repository's QA strategy.",
       ],
     };
@@ -4152,6 +4158,19 @@ function packageInstallCommand(packageManager: string, dependencyName: string): 
     return `bun add -d ${dependencyName}`;
   }
   return `npm install -D ${dependencyName}`;
+}
+
+function playwrightBrowserInstallCommand(packageManager: string): string {
+  if (packageManager === "pnpm") {
+    return "pnpm exec playwright install chromium";
+  }
+  if (packageManager === "yarn") {
+    return "yarn playwright install chromium";
+  }
+  if (packageManager === "bun") {
+    return "bunx playwright install chromium";
+  }
+  return "npx playwright install chromium";
 }
 
 async function updatePackageJsonScript(root: string, scriptName: string, scriptValue: string, force: boolean): Promise<boolean> {
@@ -4839,7 +4858,7 @@ async function buildFlows(
   const fixtureContext = await collectFixtureReadinessContext(root, files);
   const flowResults = await Promise.all(
     buildFlowCandidates(files, runner, projectType, domainLanguage, importImpacts, changeAnalysis, addedDiffText).map((candidate) =>
-      buildFlow(root, runner, candidate, testSuiteInventory, fixtureContext, addedDiffText),
+      buildFlow(root, runner, candidate, testSuiteInventory, fixtureContext, addedDiffText, files),
     ),
   );
   const flows = flowResults.filter((flow): flow is E2eFlow => Boolean(flow));
@@ -4928,7 +4947,10 @@ function buildFlowCandidates(
   const apiServiceSourceFiles =
     projectType === "api-service"
       ? candidateFiles.filter(
-          (file) => !apiFiles.includes(file) && !isConfigLikeFile(file) && isServiceSourceFile(file),
+          (file) =>
+            !apiFiles.includes(file) &&
+            !isConfigLikeFile(file) &&
+            (isServiceSourceFile(file) || isPythonServiceModule(file)),
         )
       : [];
   const cliCommandFiles =
@@ -5397,6 +5419,7 @@ async function buildFlow(
   testSuiteInventory: TestSuiteInventory,
   fixtureContext: FixtureReadinessContext,
   addedDiffText: Record<string, string> = {},
+  changedFiles: string[] = [],
 ): Promise<E2eFlow | undefined> {
   const files = uniqueStrings(candidate.files).slice(0, 20);
   if (files.length === 0) {
@@ -5418,7 +5441,10 @@ async function buildFlow(
     files,
     steps: refineStepsForInferredSelectors(candidate.steps, selectors),
     coverage,
-    coverageEvidence: evaluateFlowCoverageEvidence({ title: candidate.title, files, coverage }, testSuiteInventory),
+    coverageEvidence: evaluateFlowCoverageEvidence(
+      { title: candidate.title, files, coverage, changedFiles },
+      testSuiteInventory,
+    ),
     entrypoints: interactionEvidenceApplies ? await inferFlowEntrypoints(root, files, runner) : [],
     setupHints,
     fixtureReadiness: await inferFlowFixtureReadiness(
@@ -5456,14 +5482,19 @@ function preferDiffAdded(
 }
 
 function refineStepsForInferredSelectors(steps: string[], selectors: E2eSelector[]): string[] {
+  const stepsWithPrerequisites = inferEntityPrerequisiteSteps(steps, selectors);
   const inputSelector = preferDiffAdded(selectors, isInputSelector);
   const actionSelector = preferDiffAdded(selectors, (selector) => selectorCanDriveInteraction(selector) && !isInputSelector(selector));
-  if (!inputSelector || !actionSelector || steps.some((step) => /^\s*(?:fill|input|enter|type|provide|write)\b/i.test(step))) {
-    return steps;
+  if (
+    !inputSelector ||
+    !actionSelector ||
+    stepsWithPrerequisites.some((step) => /^\s*(?:fill|input|enter|type|provide|write)\b/i.test(step))
+  ) {
+    return stepsWithPrerequisites;
   }
 
   const refined: string[] = [];
-  for (const step of steps) {
+  for (const step of stepsWithPrerequisites) {
     const subject = exerciseStepSubject(step);
     if (!subject) {
       refined.push(step);
@@ -5473,6 +5504,113 @@ function refineStepsForInferredSelectors(steps: string[], selectors: E2eSelector
     refined.push(`${actionVerbForSelector(actionSelector)} ${subject} using ${selectorStepLabel(actionSelector)}.`);
   }
   return uniqueStrings(refined);
+}
+
+interface EntityPrerequisite {
+  input: E2eSelector;
+  setupAction: E2eSelector;
+  entity: string;
+}
+
+function inferEntityPrerequisiteSteps(steps: string[], selectors: E2eSelector[]): string[] {
+  if (steps.some(isInputStep)) {
+    return steps;
+  }
+
+  for (let index = 0; index < steps.length; index += 1) {
+    const step = steps[index];
+    if (isAssertionStep(step) || isVerificationStep(step)) {
+      continue;
+    }
+    const prerequisite = inferEntityPrerequisite(step, selectors);
+    if (!prerequisite || steps.some((candidate) => stepNamesSetupAction(candidate, prerequisite.setupAction))) {
+      continue;
+    }
+    const entity = titleCase(prerequisite.entity);
+    return uniqueStrings([
+      ...steps.slice(0, index),
+      `Fill ${selectorStepLabel(prerequisite.input)} with realistic data.`,
+      `Create ${entity} using ${selectorStepLabel(prerequisite.setupAction)}.`,
+      step,
+      ...steps.slice(index + 1),
+    ]);
+  }
+  return steps;
+}
+
+function inferEntityPrerequisite(step: string, selectors: E2eSelector[]): EntityPrerequisite | undefined {
+  const targetAction = selectors
+    .filter(
+      (selector) =>
+        Boolean(selector.addedInDiff) &&
+        !isInputSelector(selector) &&
+        selectorCanDriveInteraction(selector) &&
+        selectorMatchesStep(selector, step) &&
+        !selectorSetupActionVerb(selector),
+    )
+    .sort((left, right) => selectorStepMatchScore(right, step) - selectorStepMatchScore(left, step))[0];
+  if (!targetAction) {
+    return undefined;
+  }
+
+  const targetEntities = selectorEntityTokens(targetAction);
+  for (const setupAction of selectors) {
+    if (
+      setupAction === targetAction ||
+      setupAction.file !== targetAction.file ||
+      isInputSelector(setupAction) ||
+      !selectorCanDriveInteraction(setupAction) ||
+      !selectorSetupActionVerb(setupAction)
+    ) {
+      continue;
+    }
+    const setupEntities = selectorEntityTokens(setupAction);
+    const entity = targetEntities.find((token) => setupEntities.includes(token));
+    if (!entity) {
+      continue;
+    }
+    const input = selectors.find(
+      (selector) =>
+        selector.file === targetAction.file &&
+        isInputSelector(selector) &&
+        selectorEntityTokens(selector).includes(entity),
+    );
+    if (input) {
+      return { input, setupAction, entity };
+    }
+  }
+  return undefined;
+}
+
+function selectorSetupActionVerb(selector: E2eSelector): string | undefined {
+  return selector.value
+    .replace(/[-_]+/g, " ")
+    .toLocaleLowerCase()
+    .match(/\b(?:add|create|new|register|invite|seed|import)\b/)?.[0];
+}
+
+function selectorEntityTokens(selector: E2eSelector): string[] {
+  const workflowWords = new Set([
+    "action",
+    "add",
+    "button",
+    "control",
+    "create",
+    "field",
+    "import",
+    "input",
+    "invite",
+    "link",
+    "new",
+    "register",
+    "seed",
+  ]);
+  return keywordsForStep(selector.value).filter((token) => !workflowWords.has(token));
+}
+
+function stepNamesSetupAction(step: string, selector: E2eSelector): boolean {
+  const verb = selectorSetupActionVerb(selector);
+  return Boolean(verb && keywordsForStep(step).includes(verb));
 }
 
 function refineManifestStepsForInferredSelectors(steps: string[], selectors: E2eSelector[]): string[] {
@@ -6751,7 +6889,7 @@ function isCatalogDataFile(file: string): boolean {
 }
 
 function isConfigLikeFile(file: string): boolean {
-  return isReleaseMetadataFile(file) || isMobileNativeConfigFile(file) || /(?:(?:^|\/)(?:\.agents?|\.claude|\.cursor|\.dev|\.gemini|\.github|docs?)\/|(?:^|\/)(?:AGENTS|CLAUDE|CODEX|DECISIONS|GEMINI|PLAN|README|SKILL)\.md$|\.gitignore|package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|bun\.lockb|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|release-please|docker|env|feature-?flags?|experiments?)/i.test(
+  return isReleaseMetadataFile(file) || isMobileNativeConfigFile(file) || /(?:^|\/)(?:settings|config)(?:\/|$).+\.py$/i.test(file) || /(?:(?:^|\/)(?:\.agents?|\.claude|\.cursor|\.dev|\.gemini|\.github|docs?)\/|(?:^|\/)(?:AGENTS|CLAUDE|CODEX|DECISIONS|GEMINI|PLAN|README|SKILL)\.md$|\.gitignore|package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|bun\.lockb|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|release-please|docker|env|feature-?flags?|experiments?)/i.test(
     file,
   );
 }
@@ -6844,6 +6982,12 @@ function isServiceSourceFile(file: string): boolean {
   return /(?:^|\/)src\/.+\.(?:[cm]?[jt]s|py|go|rs|java|kt|cs)$/i.test(file) ||
     /(?:^|\/)(?:urls|views|viewsets|serializers|routers|controllers?|handlers?|admin|models|services|tasks|permissions|filters|consumers|signals)\w*\.py$/i.test(file) ||
     /(?:^|\/)(?:views|viewsets|serializers|services|api|apis|routers|handlers|tasks|consumers)\/[^/]+\.py$/i.test(file);
+}
+
+function isPythonServiceModule(file: string): boolean {
+  return /\.py$/i.test(file) &&
+    !/(?:^|\/)(?:migrations?|tests?|fixtures?|__pycache__)(?:\/|$)/i.test(file) &&
+    !/(?:^|\/)(?:manage|conftest|setup|wsgi|asgi|__init__)\.py$/i.test(file);
 }
 
 function summarizeFlowSubject(files: string[], fallback: string, domainLanguage?: DomainLanguageSummary): string {
@@ -10135,7 +10279,7 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
       return fallbackInput;
     }
   }
-  if (!isVerificationStep(step)) {
+  if (!isInteractionStep(step) && !isVerificationStep(step) && !canUsePrimarySelector(step)) {
     const changedAction = takeBestSelectorForStep(
       selectors,
       step,
@@ -10148,8 +10292,6 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
     if (changedAction) {
       return changedAction;
     }
-  }
-  if (!isInteractionStep(step) && !isVerificationStep(step) && !canUsePrimarySelector(step)) {
     return undefined;
   }
   const diffGateForStep = isAssertionStep(step) || isVerificationStep(step)

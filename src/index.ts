@@ -278,7 +278,19 @@ export type {
 } from "./test-plan.js";
 export type { QAMapConfig, Finding, ScanCounts, ScanOptions, ScanResult, Severity } from "./types.js";
 export type { VerifyOptions, VerifyResult } from "./verify.js";
-export type { QaDraftFlow, QaDraftMissingEvidence, QaDraftOptions, QaDraftResult, QaExecutionReceipt } from "./qa.js";
+export type {
+  QaDraftFlow,
+  QaDraftMissingEvidence,
+  QaDraftOptions,
+  QaDraftResult,
+  QaExecutionReceipt,
+  QaReadinessBasis,
+  QaReadinessSummary,
+  QaRouteDecision,
+  QaRouteNextAction,
+  QaRouteStatus,
+  QaVerificationStatus,
+} from "./qa.js";
 export type {
   QaReasoningTrace,
   QaReasoningTraceStatus,

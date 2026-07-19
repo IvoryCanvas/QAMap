@@ -26,7 +26,7 @@ Human-facing reports (`text` and `markdown` formats) open with an **At a Glance*
 
 Scenario routing and draft mapping answer different questions. Routing explains what the changed behavior should prove before merge. **Draft Mapping And Context Gaps** explains why an optional generated artifact may still need a selector, fixture, runner, or repository fact. Those draft gaps do not invalidate the runner-independent QA judgment and are not automatically PR merge requirements.
 
-Draft readiness is reported as a **stage on a fixed four-step journey**, for example `Stage: setup needed (1 of 4) — readiness 0/100`. A fresh repository usually starts at stage 1 — that is the expected starting point, not a failure. Each stage maps to a stable `readiness.level` value in the `json` and `agent` formats, which keeps machine output unchanged:
+Draft readiness is reported as a **stage on a fixed four-step journey**, for example `Stage: setup needed (1 of 4) — readiness 0/100`. A fresh repository usually starts at stage 1 — that is the expected starting point, not a failure. Each stage maps to a stable compatibility `readiness.level` value in the `json` and `agent` formats:
 
 | Stage line | JSON `readiness.level` | Meaning |
 | --- | --- | --- |
@@ -34,6 +34,8 @@ Draft readiness is reported as a **stage on a fixed four-step journey**, for exa
 | `draft in progress (2 of 4)` | `needs-work` | Drafts exist; close the required action items to make them runnable. |
 | `almost runnable (3 of 4)` | `near-runnable` | Run the drafts locally and clear the remaining review items. |
 | `ready to run (4 of 4)` | `ready` | Drafts are ready to try as local regression evidence. |
+
+Machine consumers should read `route` first. It exposes the applicable basis, an unambiguous `draft-*` or `verification-*` status, the next action, and an exact existing command when one is available. `readiness.level` remains for v1 compatibility and describes optional automation only; it is not a PR verdict and is irrelevant when `route.basis` is `repository-validation`.
 
 
 ## What QAMap Produces

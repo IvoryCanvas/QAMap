@@ -793,6 +793,9 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
   assert.equal(compactSummary.flows[0].verificationMode, "analysis-rule");
   assert.equal(compactSummary.readiness.basis, "repository-validation");
   assert.equal(compactSummary.readiness.automationApplicable, false);
+  assert.equal(compactSummary.route.basis, "repository-validation");
+  assert.equal(compactSummary.route.status, "verification-command-needed");
+  assert.equal(compactSummary.route.nextAction, "define-repository-command");
   assert.equal(compactSummary.scenarioCoverage.automationApplicable, false);
   assert.ok(compactSummary.traces.length > 0);
   assert.equal(typeof compactSummary.traces[0].source.file, "string");
@@ -1820,6 +1823,68 @@ test("presentation-only conditions do not become lifecycle QA scenarios", async 
   assert.equal(analysis.intents.length, 1);
   assert.equal(
     analysis.intents[0].scenarios.some((scenario) => /conditional state and fallback/i.test(scenario.title)),
+    false,
+  );
+});
+
+test("form validation mode changes produce edit-trigger-correction QA across unrelated forms", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/forms/SupportRequestForm.tsx";
+  await write(
+    root,
+    file,
+    [
+      "export function SupportRequestForm() {",
+      "  const form = useForm({ mode: 'onChange' });",
+      "  return <form><input name=\"subject\" /><button>Send request</button></form>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/support-validation-timing");
+  await write(
+    root,
+    file,
+    [
+      "export function SupportRequestForm() {",
+      "  const form = useForm({ mode: 'onBlur' });",
+      "  return <form><input name=\"subject\" /><button>Send request</button></form>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "fix: wait until field exit before validating support request");
+
+  const analysis = await analyze(root, [file]);
+  const scenario = analysis.intents[0].scenarios.find((candidate) =>
+    /validation timing across edit, blur, correction, and submit/i.test(candidate.title)
+  );
+  assert.ok(scenario);
+  assert.equal(scenario.kind, "state-transition");
+  assert.equal(scenario.priority, "critical");
+  assert.ok(scenario.evidence.some((item) => item.file === file && item.side === "head"));
+  assert.ok(scenario.assertions.some((assertion) => /correcting the value clears stale feedback/i.test(assertion)));
+});
+
+test("non-form interaction mode changes do not fabricate validation timing QA", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/components/Canvas.tsx";
+  await write(
+    root,
+    file,
+    "export const canvasInteraction = { mode: 'onChange' };\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/canvas-interaction");
+  await write(
+    root,
+    file,
+    "export const canvasInteraction = { mode: 'onTouched' };\n",
+  );
+  commit(root, "fix: update canvas interaction mode");
+
+  const analysis = await analyze(root, [file]);
+  assert.equal(
+    analysis.intents[0].scenarios.some((scenario) => /validation timing/i.test(scenario.title)),
     false,
   );
 });

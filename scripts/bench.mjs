@@ -124,9 +124,12 @@ function scoreTarget(target, plan, qa, durationMs) {
   ))];
   const mustName = expect.mustNameFlows ?? [];
   const named = mustName.filter((name) => includesTerm(flowTitles, name));
+  const existingEvidencePaths = qa.flows.flatMap((flow) => flow.existingEvidencePaths ?? []);
 
   return {
     name: target.name,
+    provenanceKind: target.provenance?.kind ?? "synthetic-fixture",
+    provenanceUrl: target.provenance?.url ?? null,
     runner: plan.recommendedRunner.name,
     runnerExpected: expect.runner ?? null,
     runnerCorrect: expect.runner ? plan.recommendedRunner.name === expect.runner : null,
@@ -134,6 +137,7 @@ function scoreTarget(target, plan, qa, durationMs) {
     planFlowTitles,
     flowTitles,
     successSignals,
+    existingEvidencePaths,
     entrypoints,
     changeIntents: plan.changeAnalysis.intents.length,
     highConfidenceIntents: plan.changeAnalysis.intents.filter((intent) => intent.confidence === "high").length,
@@ -202,6 +206,9 @@ function scoreTarget(target, plan, qa, durationMs) {
     readiness: qa.readiness.automationApplicable
       ? `${qa.readiness.level} (${qa.readiness.score})`
       : `${qa.readiness.verificationStatus ?? "command-needed"} (repo)`,
+    routeStatus: qa.route.status,
+    routeNextAction: qa.route.nextAction,
+    routeCommand: qa.route.command ?? null,
     readinessLevel: qa.readiness.level,
     readinessScore: qa.readiness.score,
     readinessBasis: qa.readiness.basis,
@@ -245,6 +252,18 @@ function evaluateContract(expect, result, plan, qa) {
   if (expect.readinessBasis !== undefined && result.readinessBasis !== expect.readinessBasis) {
     failures.push(`readiness basis expected ${expect.readinessBasis}, got ${result.readinessBasis}`);
   }
+  if (expect.routeStatus !== undefined && result.routeStatus !== expect.routeStatus) {
+    failures.push(`route status expected ${expect.routeStatus}, got ${result.routeStatus}`);
+  }
+  if (expect.routeNextAction !== undefined && result.routeNextAction !== expect.routeNextAction) {
+    failures.push(`route next action expected ${expect.routeNextAction}, got ${result.routeNextAction}`);
+  }
+  appendMissingTerms(
+    failures,
+    "route command",
+    result.routeCommand ? [result.routeCommand] : [],
+    expect.mustRouteCommands,
+  );
   if (
     expect.automationApplicable !== undefined &&
     result.automationApplicable !== expect.automationApplicable
@@ -306,6 +325,10 @@ function evaluateContract(expect, result, plan, qa) {
   appendUnexpectedTerms(failures, "intent QA scenario", result.intentScenarios, expect.mustNotIncludeQaScenarios);
   appendMissingTerms(failures, "intent evidence", result.intentEvidence, expect.mustFindIntentEvidence);
   appendMissingTerms(failures, "scenario source file", result.scenarioSourceFiles, expect.mustTraceScenarioFiles);
+  appendMissingTerms(failures, "existing test evidence", result.existingEvidencePaths, expect.mustFindExistingEvidence);
+  if (expect.provenanceKind !== undefined && result.provenanceKind !== expect.provenanceKind) {
+    failures.push(`provenance kind expected ${expect.provenanceKind}, got ${result.provenanceKind}`);
+  }
   if (
     expect.maxUntracedCriticalScenarios !== undefined &&
     result.untracedCriticalScenarios > expect.maxUntracedCriticalScenarios
@@ -502,6 +525,7 @@ function includesTerm(values, term) {
 }
 
 async function prepareTarget(target, configDir) {
+  await validateTargetProvenance(target, configDir);
   if (target.fixture) {
     return materializeFixture(target, configDir);
   }
@@ -510,6 +534,45 @@ async function prepareTarget(target, configDir) {
   }
   const repositoryRoot = path.resolve(expandHome(target.path));
   return targetPaths(target, repositoryRoot, target.base, target.head);
+}
+
+async function validateTargetProvenance(target, configDir) {
+  const provenance = target.provenance;
+  if (!provenance) return;
+  if (provenance.kind !== "public-pull-request") {
+    throw new Error(`Target ${target.name} has unsupported provenance kind ${provenance.kind}.`);
+  }
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(provenance.repository ?? "")) {
+    throw new Error(`Target ${target.name} must pin a public owner/repository.`);
+  }
+  if (!Number.isInteger(provenance.pullRequest) || provenance.pullRequest <= 0) {
+    throw new Error(`Target ${target.name} must pin a positive pull request number.`);
+  }
+  const expectedUrl = `https://github.com/${provenance.repository}/pull/${provenance.pullRequest}`;
+  if (provenance.url !== expectedUrl) {
+    throw new Error(`Target ${target.name} provenance URL must be ${expectedUrl}.`);
+  }
+  for (const refName of ["base", "head"]) {
+    if (!/^[0-9a-f]{40}$/.test(provenance[refName] ?? "")) {
+      throw new Error(`Target ${target.name} must pin a 40-character ${refName} commit.`);
+    }
+  }
+  if (typeof provenance.license !== "string" || provenance.license.trim().length === 0) {
+    throw new Error(`Target ${target.name} must record the source license.`);
+  }
+  if (!target.fixture) return;
+  const provenancePath = path.resolve(configDir, target.fixture, "PROVENANCE.md");
+  const provenanceText = await fs.readFile(provenancePath, "utf8");
+  for (const pinnedValue of [
+    provenance.url,
+    provenance.base,
+    provenance.head,
+    provenance.license,
+  ]) {
+    if (!provenanceText.includes(pinnedValue)) {
+      throw new Error(`Target ${target.name} PROVENANCE.md does not include ${pinnedValue}.`);
+    }
+  }
 }
 
 async function materializeFixture(target, configDir) {

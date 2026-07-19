@@ -132,6 +132,41 @@
         "scope": { "const": "static-analysis-and-draft-mapping" }
       }
     },
+    "route": {
+      "type": "object",
+      "description": "Canonical next-step decision. Prefer this object over the compatibility-only readiness score and level.",
+      "required": ["basis", "status", "nextAction"],
+      "properties": {
+        "basis": {
+          "type": "string",
+          "enum": ["optional-automation", "repository-validation"]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft-ready",
+            "draft-near-runnable",
+            "draft-needs-work",
+            "draft-blocked",
+            "verification-ready-to-run",
+            "verification-command-needed"
+          ]
+        },
+        "nextAction": {
+          "type": "string",
+          "enum": [
+            "review-and-run-draft",
+            "complete-draft-evidence",
+            "run-repository-command",
+            "define-repository-command"
+          ]
+        },
+        "command": {
+          "type": "string",
+          "description": "Exact existing repository command when nextAction is run-repository-command. QAMap has not executed it."
+        }
+      }
+    },
     "readiness": {
       "type": "object",
       "required": ["score", "level"],
@@ -322,7 +357,7 @@
           "draft": { "type": "string", "description": "Path of the fallback draft artifact for this flow. When verificationMode is present, run existing repository evidence first instead of generating it by default." },
           "verificationMode": {
             "type": "string",
-            "enum": ["analysis-rule", "existing-test-evidence", "configuration", "documentation", "generated-artifact"],
+            "enum": ["command-contract", "analysis-rule", "existing-test-evidence", "configuration", "documentation", "generated-artifact"],
             "description": "Why this flow should validate existing evidence instead of generating a new product-journey E2E draft."
           },
           "runnable": {
