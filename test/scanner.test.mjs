@@ -7205,6 +7205,18 @@ test("package version matches the CLI version constant", async () => {
   assert.equal(VERSION, packageJson.version);
 });
 
+test("package root exports the public QA API and declarations", async () => {
+  const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8"));
+  const publicApi = await import("@ivorycanvas/qamap");
+
+  assert.equal(packageJson.main, "./dist/index.js");
+  assert.equal(packageJson.types, "./dist/index.d.ts");
+  assert.equal(packageJson.exports["."].import, "./dist/index.js");
+  assert.equal(packageJson.exports["."].types, "./dist/index.d.ts");
+  assert.equal(typeof publicApi.generateQaDraft, "function");
+  assert.equal(typeof publicApi.formatAgentQaDraft, "function");
+});
+
 test("e2e draft can use an external verification manifest for read-only adoption preview", async () => {
   const root = await makeTempRepo();
   const manifestOutputRoot = await mkdtemp(path.join(tmpdir(), "qamap-external-manifest-"));

@@ -3,6 +3,17 @@
   "version": "0.4.6",
   "description": "Local zero-LLM PR QA designer that maps commit intent and diffs to traceable behavior lifecycles, QA scenarios, and optional automation drafts.",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
   "packageManager": "pnpm@10.32.1",
   "bin": {
     "qamap": "dist/cli.js"

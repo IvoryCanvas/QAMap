@@ -152,6 +152,17 @@ npx --yes skills add IvoryCanvas/QAMap --skill qamap-pr-qa
 
 Or run `qamap init --agent` to add the repo instructions and packaged skill. See the [agent format contract](docs/agent-format.md) and [agent skill guide](docs/agent-skill.md).
 
+Tools that embed QAMap can consume the same public contract without launching a shell:
+
+```js
+import { formatAgentQaDraft, generateQaDraft } from "@ivorycanvas/qamap";
+
+const draft = await generateQaDraft(process.cwd(), { base: "origin/main", head: "HEAD" });
+const context = JSON.parse(formatAgentQaDraft(draft));
+```
+
+`context.execution` remains `not-run`; an orchestrator must report any later test execution separately.
+
 ## Why QAMap
 
 - **Evidence over guesses.** Every routed scenario carries commit or line-level diff provenance.

@@ -25,6 +25,7 @@
 
 ### Fixed
 
+- The npm package root now exports the documented programmatic API and TypeScript declarations, so agent tools and local QA orchestrators can import `generateQaDraft` and `formatAgentQaDraft` without relying on an internal `dist` path.
 - Nested page components no longer become fabricated routes, API endpoints no longer become browser navigation targets, API schema parameter names no longer become mobile screens, settlement vocabulary alone no longer creates payment setup, and unchanged success copy is no longer borrowed as a changed-flow assertion.
 - Capturing a current server timestamp with `timezone.now()` no longer creates scheduling and calendar-boundary QA; actual schedule, reminder, and timezone preference changes remain eligible.
 - Python Compose discovery no longer prefers a worker or scheduler over the primary web/API service merely because both services share the same Python image.
