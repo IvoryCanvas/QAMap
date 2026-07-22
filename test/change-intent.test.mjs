@@ -1310,6 +1310,164 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.ok(boundedAgentSummary.flows.length > 0);
 });
 
+test("one change intent produces separate QA flows for distinct user surfaces", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { react: "19.0.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(
+    root,
+    "src/features/account/pages/PlanPage.tsx",
+    [
+      "import { completeTransaction } from '../../transactions/services/transactionService';",
+      "export function PlanPage() { return <p>Free plan</p>; }",
+    ].join("\n") + "\n",
+  );
+  await write(
+    root,
+    "src/features/credits/pages/CreditPage.tsx",
+    [
+      "import { completeTransaction } from '../../transactions/services/transactionService';",
+      "export function CreditPage() { return <p>No credits</p>; }",
+    ].join("\n") + "\n",
+  );
+  await write(
+    root,
+    "src/features/transactions/services/transactionService.ts",
+    "export async function completeTransaction() { return { status: 'idle' }; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/transaction-completion");
+
+  await write(
+    root,
+    "src/features/account/pages/PlanPage.tsx",
+    [
+      "import { completeTransaction } from '../../transactions/services/transactionService';",
+      "export function PlanPage() {",
+      "  return <section>",
+      "    <button data-testid=\"plan-confirm\" onClick={completeTransaction}>Confirm plan</button>",
+      "    <p>Plan activated</p>",
+      "  </section>;",
+      "}",
+    ].join("\n") + "\n",
+  );
+  await write(
+    root,
+    "src/features/credits/pages/CreditPage.tsx",
+    [
+      "import { completeTransaction } from '../../transactions/services/transactionService';",
+      "export function CreditPage() {",
+      "  return <section>",
+      "    <button data-testid=\"credits-confirm\" onClick={completeTransaction}>Confirm credits</button>",
+      "    <p>Credits updated</p>",
+      "  </section>;",
+      "}",
+    ].join("\n") + "\n",
+  );
+  await write(
+    root,
+    "src/features/transactions/services/transactionService.ts",
+    "export async function completeTransaction() { return { status: 'completed' }; }\n",
+  );
+  commit(root, "feat: complete a transaction and refresh the affected product state");
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const intent = plan.changeAnalysis.intents[0];
+  const intentFlows = plan.flows.filter((flow) => flow.intentId === intent?.id);
+  const accountFlow = intentFlows.find((flow) =>
+    flow.files.some((file) => file.includes("/account/")),
+  );
+  const creditsFlow = intentFlows.find((flow) =>
+    flow.files.some((file) => file.includes("/credits/")),
+  );
+
+  assert.equal(plan.changeAnalysis.intents.length, 1);
+  assert.equal(intentFlows.length, 2);
+  assert.ok(accountFlow);
+  assert.ok(creditsFlow);
+  assert.match(accountFlow.title, /Account/i);
+  assert.match(creditsFlow.title, /Credits/i);
+  assert.match(accountFlow.languageBrief.successSignal, /Plan activated/i);
+  assert.doesNotMatch(accountFlow.languageBrief.successSignal, /Credits updated/i);
+  assert.match(creditsFlow.languageBrief.successSignal, /Credits updated/i);
+  assert.doesNotMatch(creditsFlow.languageBrief.successSignal, /Plan activated/i);
+  assert.ok(accountFlow.files.some((file) => file.includes("/transactions/")));
+  assert.ok(creditsFlow.files.some((file) => file.includes("/transactions/")));
+  assert.ok(
+    accountFlow.intentEvidence
+      .filter((evidence) => evidence.file)
+      .every((evidence) => !evidence.file.includes("/credits/")),
+  );
+  assert.ok(
+    creditsFlow.intentEvidence
+      .filter((evidence) => evidence.file)
+      .every((evidence) => !evidence.file.includes("/account/")),
+  );
+  const accountPrimary = accountFlow.qaScenarios.find((scenario) => scenario.kind === "primary");
+  const creditsPrimary = creditsFlow.qaScenarios.find((scenario) => scenario.kind === "primary");
+  assert.ok(accountPrimary.assertions.some((assertion) => /Plan activated/i.test(assertion)));
+  assert.ok(creditsPrimary.assertions.some((assertion) => /Credits updated/i.test(assertion)));
+});
+
+test("an unchanged success message can ground QA when the same surface has direct diff evidence", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { react: "19.0.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(
+    root,
+    "src/features/jobs/components/JobPanel.tsx",
+    [
+      "export function JobPanel() {",
+      "  function submitJob() { return undefined; }",
+      "  return <section>",
+      "    <button onClick={submitJob}>Submit job</button>",
+      "    <p>Job queued</p>",
+      "  </section>;",
+      "}",
+    ].join("\n") + "\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/job-submission");
+
+  await write(
+    root,
+    "src/features/jobs/components/JobPanel.tsx",
+    [
+      "export function JobPanel() {",
+      "  async function submitJob() {",
+      "    await fetch('/api/jobs', { method: 'POST' });",
+      "  }",
+      "  return <section>",
+      "    <button onClick={submitJob}>Submit job</button>",
+      "    <p>Job queued</p>",
+      "  </section>;",
+      "}",
+    ].join("\n") + "\n",
+  );
+  commit(root, "feat: submit a background job");
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((candidate) => candidate.intentId);
+  const successSelector = flow?.selectors.find((selector) => selector.value === "Job queued");
+
+  assert.ok(flow);
+  assert.ok(successSelector, JSON.stringify(flow.selectors));
+  assert.notEqual(successSelector?.addedInDiff, true);
+  assert.match(flow.languageBrief.successSignal, /Job queued/i);
+});
+
 test("evidence-routed failure QA becomes a separate partial Playwright scenario without domain rules", async (t) => {
   const root = await makeRepo(t);
   await write(

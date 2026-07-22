@@ -15,6 +15,8 @@
 
 ### Changed
 
+- A single change intent that spans distinct feature, route, or screen surfaces now produces surface-scoped QA flows. Each flow keeps its own files, lifecycle, scenarios, and observable outcome while shared import evidence remains traceable.
+- An existing success message can now ground a flow when it is the only success-shaped outcome on that surface and the same file has direct diff evidence; newly added success copy still takes priority.
 - Working-tree analysis now compares the selected merge base directly with the final worktree, so intermediate files removed later in the branch do not survive as stale changed-file or diff evidence.
 - Draft reporting now says `static-runnable` and `not executed` explicitly; generated tests with skipped placeholders or without observable assertions fail self-check instead of appearing runnable.
 - Specific commit-and-diff-backed intent titles now remain the flow language shown to reviewers; internal handler and serializer symbols only refine broad titles such as generic update or release work.
@@ -25,8 +27,9 @@
 
 ### Fixed
 
+- QA flows created from one broad intent no longer borrow assertions or success signals from neighboring product surfaces, and residual navigation or service changes are relabeled from their own files instead of inheriting a partially consumed UI title.
 - The npm package root now exports the documented programmatic API and TypeScript declarations, so agent tools and local QA orchestrators can import `generateQaDraft` and `formatAgentQaDraft` without relying on an internal `dist` path.
-- Nested page components no longer become fabricated routes, API endpoints no longer become browser navigation targets, API schema parameter names no longer become mobile screens, settlement vocabulary alone no longer creates payment setup, and unchanged success copy is no longer borrowed as a changed-flow assertion.
+- Nested page components no longer become fabricated routes, API endpoints no longer become browser navigation targets, API schema parameter names no longer become mobile screens, settlement vocabulary alone no longer creates payment setup, and unchanged success copy from unrelated or weakly evidenced surfaces is no longer borrowed as a changed-flow assertion.
 - Capturing a current server timestamp with `timezone.now()` no longer creates scheduling and calendar-boundary QA; actual schedule, reminder, and timezone preference changes remain eligible.
 - Python Compose discovery no longer prefers a worker or scheduler over the primary web/API service merely because both services share the same Python image.
 - Repository-validation output no longer requires consumers to reconcile a compatibility-only `blocked` automation level with a `ready-to-run` repository command. The additive route status now expresses the applicable decision directly.
