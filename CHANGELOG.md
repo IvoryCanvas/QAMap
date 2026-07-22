@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.7 - 2026-07-22
+
 ### Added
 
 - Added provenance-aware base resolution across QA, review, test-plan, and E2E output. QAMap now reads explicit input, PR CI metadata, repo-local Git configuration, and Git history in order, and discloses long-lived refs that point to the same commit.
