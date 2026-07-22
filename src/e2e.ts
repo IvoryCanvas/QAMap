@@ -668,17 +668,26 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
 
 function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flows: E2eFlow[]): void {
   const genericAssertion = "Verify the externally observable result matches the commit intent.";
+  const flowCountByIntent = new Map<string, number>();
+  for (const flow of flows) {
+    if (flow.intentId) {
+      flowCountByIntent.set(flow.intentId, (flowCountByIntent.get(flow.intentId) ?? 0) + 1);
+    }
+  }
   for (const flow of flows) {
     if (!flow.intentId || !/^visible text ".+" appears$/u.test(flow.languageBrief.successSignal)) {
       continue;
     }
     const intent = changeAnalysis.intents.find((candidate) => candidate.id === flow.intentId);
     const primary = intent?.scenarios.find((scenario) => scenario.kind === "primary");
-    if (!primary || primary.assertions.length === 0) {
+    const flowScenario = flow.qaScenarios?.find((scenario) => scenario.kind === "primary");
+    const hasMultipleFlows = (flowCountByIntent.get(flow.intentId) ?? 0) > 1;
+    const assertionSource = hasMultipleFlows ? flowScenario : primary;
+    if (!primary || !assertionSource || assertionSource.assertions.length === 0) {
       continue;
     }
     const concreteAssertion = `Verify ${flow.languageBrief.successSignal}.`;
-    const originalAssertions = [...primary.assertions];
+    const originalAssertions = [...assertionSource.assertions];
     const replaceSingleAssertion = originalAssertions.length === 1;
     const assertions = originalAssertions.map((assertion) =>
       replaceSingleAssertion || assertion === genericAssertion
@@ -688,9 +697,10 @@ function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flow
     if (assertions.every((assertion, index) => assertion === originalAssertions[index])) {
       continue;
     }
-    primary.assertions = assertions;
-    const flowScenario = flow.qaScenarios?.find((scenario) => scenario.id === primary.id);
-    if (flowScenario && flowScenario !== primary) {
+    if (!hasMultipleFlows) {
+      primary.assertions = assertions;
+    }
+    if (flowScenario) {
       flowScenario.assertions = [...assertions];
     }
     const replacedAssertions = new Set(
@@ -2748,12 +2758,13 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
   if (/\bconfiguration verification\b/i.test(flow.title)) {
     return "the affected build or runtime variant starts cleanly and handles fallback values";
   }
-  const visibleOutcome = flow.selectors.find(
+  const addedVisibleOutcome = flow.selectors.find(
     (selector) =>
       selector.kind === "visible-text" &&
       Boolean(selector.addedInDiff) &&
       (isVisibleSuccessOutcome(selector.value) || isDiffBackedStateMarker(flow, selector)),
   );
+  const visibleOutcome = addedVisibleOutcome ?? repositorySuccessOutcome(flow);
   if (visibleOutcome) {
     return `visible text "${visibleOutcome.value}" appears`;
   }
@@ -2766,6 +2777,25 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
     return stripTerminalPunctuation(coverageCheck);
   }
   return "the changed journey reaches a visible, stable success state";
+}
+
+function repositorySuccessOutcome(
+  flow: Omit<E2eFlow, "languageBrief">,
+): E2eSelector | undefined {
+  const candidates = flow.selectors.filter(
+    (selector) => selector.kind === "visible-text" && isVisibleSuccessOutcome(selector.value),
+  );
+  if (candidates.length !== 1) {
+    return undefined;
+  }
+  const [candidate] = candidates;
+  const hasDirectSurfaceEvidence = flow.intentEvidence?.some((evidence) =>
+    evidence.kind === "diff" &&
+    evidence.file === candidate.file &&
+    evidence.startLine !== undefined &&
+    evidence.relation !== "contextual"
+  );
+  return hasDirectSurfaceEvidence ? candidate : undefined;
 }
 
 function isVisibleSuccessOutcome(value: string): boolean {
@@ -4847,6 +4877,14 @@ type DraftE2eFlow = E2eFlow & {
   manifestMatch?: VerificationManifestMatch;
   manifestCheckMatches?: VerificationManifestMatch[];
 };
+type AnalyzedChangeIntent = ChangeIntentAnalysis["intents"][number];
+
+interface IntentFlowScope {
+  label?: string;
+  files: string[];
+  importImpacts: ImportImpact[];
+  split: boolean;
+}
 
 async function buildFlows(
   root: string,
@@ -5197,26 +5235,37 @@ function prioritizeChangeIntentCandidates(
         item.kind === "diff" && item.file && item.startLine !== undefined && item.relation !== "contextual"
       )
     ))
-    .map((intent): FlowCandidate => {
-      const relatedImportImpacts = importImpacts.filter((impact) => intent.files.includes(impact.changedFile));
-      const impactedSurfaces = relatedImportImpacts.map((impact) => impact.surface);
-      const primaryScenario = intent.scenarios.find((scenario) => scenario.kind === "primary") ?? intent.scenarios[0];
+    .flatMap((intent) => buildIntentFlowScopes(intent, importImpacts).map((scope) => {
+      const scopedEvidence = scopeIntentEvidence(intent.evidence, scope.files);
+      const scopedLifecycle = scopeIntentLifecycle(intent.lifecycle, scope.files);
+      const scopedScenarios = scopeIntentScenarios(
+        intent.scenarios,
+        scope.files,
+        scopedEvidence,
+        scopedLifecycle,
+        scope.split,
+      );
+      const primaryScenario = scopedScenarios.find((scenario) => scenario.kind === "primary") ?? scopedScenarios[0];
       const steps = uniqueStrings([
-        ...(primaryScenario?.steps ?? intent.lifecycle.map((stage) => stage.label)),
+        ...(primaryScenario?.steps ?? scopedLifecycle.map((stage) => stage.label)),
         ...(primaryScenario?.assertions ?? []),
       ]);
+      const baseTitle = intentFlowDisplayTitle(intent, domainLanguage);
       return {
         kind: intentFlowKind(intent, projectType),
-        title: intentFlowDisplayTitle(intent, domainLanguage),
+        title: scope.split && scope.label ? scopedIntentFlowTitle(baseTitle, scope.label) : baseTitle,
         reason: (intent.confidence === "low"
           ? `Located diff evidence supports this review-required change intent even though commit text was not behavior-bearing. ${intent.summary}`
           : `Commit and diff evidence support this ${intent.confidence}-confidence change intent. ${intent.summary}`) +
-            (relatedImportImpacts.length > 0
-              ? ` Reverse imports reach ${relatedImportImpacts.slice(0, 3).map(describeImportChain).join("; ")}.`
+            (scope.split && scope.label
+              ? ` This flow is scoped to the ${titleCase(scope.label)} user surface so evidence and outcomes from neighboring surfaces stay separate.`
+              : "") +
+            (scope.importImpacts.length > 0
+              ? ` Reverse imports reach ${scope.importImpacts.slice(0, 3).map(describeImportChain).join("; ")}.`
               : ""),
-        files: uniqueStrings([...intent.files, ...impactedSurfaces]),
+        files: scope.files,
         steps,
-        coverage: intent.scenarios.map((scenario) => ({
+        coverage: scopedScenarios.map((scenario) => ({
           title: scenario.title,
           priority: scenario.priority,
           reason: scenario.rationale,
@@ -5224,11 +5273,11 @@ function prioritizeChangeIntentCandidates(
         })),
         intentId: intent.id,
         intentConfidence: intent.confidence,
-        intentEvidence: intent.evidence,
-        lifecycle: intent.lifecycle,
-        qaScenarios: intent.scenarios,
-      };
-    });
+        intentEvidence: scopedEvidence,
+        lifecycle: scopedLifecycle,
+        qaScenarios: scopedScenarios,
+      } satisfies FlowCandidate;
+    }));
   if (intentCandidates.length === 0) {
     return heuristicCandidates;
   }
@@ -5244,10 +5293,249 @@ function prioritizeChangeIntentCandidates(
     ]),
   }));
   const intentFiles = new Set(intentCandidatesWithAssets.flatMap((candidate) => candidate.files));
-  const nonOverlapping = heuristicCandidates.filter((candidate) =>
-    candidate.files.every((file) => !intentFiles.has(file)) || isVerificationOnlyKind(candidate.kind),
-  );
+  const nonOverlapping = heuristicCandidates.flatMap((candidate): FlowCandidate[] => {
+    if (isVerificationOnlyKind(candidate.kind)) {
+      return [candidate];
+    }
+    const remainingFiles = candidate.files.filter((file) => !intentFiles.has(file));
+    return remainingFiles.length > 0
+      ? [scopeResidualHeuristicCandidate(candidate, remainingFiles, domainLanguage)]
+      : [];
+  });
   return [...intentCandidatesWithAssets, ...nonOverlapping].slice(0, 4);
+}
+
+function scopeResidualHeuristicCandidate(
+  candidate: FlowCandidate,
+  files: string[],
+  domainLanguage?: DomainLanguageSummary,
+): FlowCandidate {
+  const subject = summarizeFlowSubject(files, "Changed", domainLanguage);
+  if (candidate.kind === "ui" && !files.some((file) => isUiImplementationFile(file) || isRoutableSurfaceFile(file))) {
+    return {
+      kind: "domain",
+      title: `${subject} behavior smoke flow`,
+      reason: "These changed behavior files are not covered by the surface-scoped intent flows, so they remain an explicit repository-level verification path.",
+      files,
+      steps: [
+        "Identify the route, screen, command, or public API that reaches the changed behavior.",
+        "Exercise the primary successful path through that entry point.",
+        "Verify the resulting navigation, state, output, or side effect.",
+        "Exercise one invalid, unavailable, or fallback path when reachable.",
+      ],
+    };
+  }
+  const title = candidate.kind === "ui"
+    ? `${subject} UI smoke flow`
+    : candidate.kind === "api"
+      ? `${subject} API contract smoke flow`
+      : candidate.kind === "state"
+        ? `${subject} state transition flow`
+        : candidate.kind === "content"
+          ? `${subject} content and theme smoke flow`
+          : candidate.kind === "domain"
+            ? `${subject} workflow smoke flow`
+            : candidate.title;
+  return {
+    ...candidate,
+    title,
+    reason: `${candidate.reason} This candidate is scoped to changed files not already explained by an intent flow.`,
+    files,
+  };
+}
+
+function buildIntentFlowScopes(
+  intent: AnalyzedChangeIntent,
+  importImpacts: ImportImpact[],
+): IntentFlowScope[] {
+  const relatedImportImpacts = importImpacts.filter((impact) => intent.files.includes(impact.changedFile));
+  const groupedFiles = new Map<string, string[]>();
+
+  for (const file of intent.files) {
+    const label = intentSurfaceSeedLabel(file);
+    if (!label) {
+      continue;
+    }
+    groupedFiles.set(label, uniqueStrings([...(groupedFiles.get(label) ?? []), file]));
+  }
+
+  if (groupedFiles.size < 2) {
+    return [{
+      files: uniqueStrings([...intent.files, ...relatedImportImpacts.map((impact) => impact.surface)]),
+      importImpacts: relatedImportImpacts,
+      split: false,
+    }];
+  }
+
+  for (const file of intent.files) {
+    const label = intentSurfaceLabel(file);
+    if (label && groupedFiles.has(label)) {
+      groupedFiles.set(label, uniqueStrings([...(groupedFiles.get(label) ?? []), file]));
+    }
+  }
+
+  return [...groupedFiles.entries()]
+    .map(([label, files]) => {
+      const scopedImpacts = relatedImportImpacts.filter((impact) => intentSurfaceLabel(impact.surface) === label);
+      return {
+        label,
+        files: uniqueStrings([
+          ...files,
+          ...scopedImpacts.flatMap((impact) => [impact.changedFile, impact.surface]),
+        ]),
+        importImpacts: scopedImpacts,
+        split: true,
+      };
+    })
+    .sort((left, right) => right.files.length - left.files.length)
+    .slice(0, 3);
+}
+
+function intentSurfaceLabel(file: string): string | undefined {
+  const domain = domainFromPath(file);
+  if (domain) {
+    return canonicalIntentSurfaceLabel(domain);
+  }
+  if (!isUserFacingFile(file)) {
+    return undefined;
+  }
+  const routeSurface = surfaceFromPath(file);
+  if (routeSurface) {
+    return canonicalIntentSurfaceLabel(routeSurface);
+  }
+  const segments = file.split("/");
+  const areaIndex = segments.findIndex((segment) => /^(?:components?|ui)$/i.test(segment));
+  if (areaIndex >= 0 && segments.length - areaIndex > 2) {
+    return canonicalIntentSurfaceLabel(normalizePathSegment(segments[areaIndex + 1]));
+  }
+  return undefined;
+}
+
+function intentSurfaceSeedLabel(file: string): string | undefined {
+  if (!isUserFacingFile(file)) {
+    return undefined;
+  }
+  const domain = domainFromPath(file);
+  if (domain) {
+    return canonicalIntentSurfaceLabel(domain);
+  }
+  if (/(?:^|\/)(?:app|pages|routes)\//i.test(file) && isRoutableSurfaceFile(file)) {
+    return canonicalIntentSurfaceLabel(surfaceFromPath(file));
+  }
+  const segments = file.split("/");
+  const screensIndex = segments.findIndex((segment) => /^screens$/i.test(segment));
+  return screensIndex >= 0 && segments.length - screensIndex > 2
+    ? canonicalIntentSurfaceLabel(normalizePathSegment(segments[screensIndex + 1]))
+    : undefined;
+}
+
+function canonicalIntentSurfaceLabel(label: string | undefined): string | undefined {
+  if (!label) {
+    return undefined;
+  }
+  const tokens = pathWordTokens(label).filter((token) =>
+    !new Set(["component", "components", "page", "pages", "screen", "screens", "view", "views"]).has(token)
+  );
+  return tokens.length > 0 ? tokens.join("-") : undefined;
+}
+
+function scopedIntentFlowTitle(baseTitle: string, label: string): string {
+  const surfaceTitle = titleCase(label);
+  return baseTitle.toLowerCase().startsWith(surfaceTitle.toLowerCase())
+    ? baseTitle
+    : `${surfaceTitle}: ${baseTitle}`;
+}
+
+function scopeIntentEvidence(
+  evidence: ChangeIntentEvidence[],
+  files: string[],
+): ChangeIntentEvidence[] {
+  const fileSet = new Set(files);
+  return evidence
+    .filter((item) => !item.file && !item.previousFile ||
+      Boolean(item.file && fileSet.has(item.file)) ||
+      Boolean(item.previousFile && fileSet.has(item.previousFile)))
+    .map((item) => ({ ...item }));
+}
+
+function scopeIntentLifecycle(
+  lifecycle: BehaviorLifecycleStage[],
+  files: string[],
+): BehaviorLifecycleStage[] {
+  const fileSet = new Set(files);
+  return lifecycle
+    .filter((stage) => {
+      const evidenceFiles = stage.evidence.flatMap((item) => [item.file, item.previousFile]).filter(Boolean);
+      if (evidenceFiles.length > 0) {
+        return evidenceFiles.some((file) => fileSet.has(file as string));
+      }
+      return stage.files.length === 0 || stage.files.some((file) => fileSet.has(file));
+    })
+    .map((stage) => ({
+      ...stage,
+      evidence: scopeIntentEvidence(stage.evidence, files),
+      files: stage.files.filter((file) => fileSet.has(file)),
+    }));
+}
+
+function scopeIntentScenarios(
+  scenarios: IntentQaScenario[],
+  files: string[],
+  fallbackEvidence: ChangeIntentEvidence[],
+  lifecycle: BehaviorLifecycleStage[],
+  specializePrimary: boolean,
+): IntentQaScenario[] {
+  const fileSet = new Set(files);
+  return scenarios
+    .filter((scenario) => {
+      if (scenario.kind === "primary") {
+        return true;
+      }
+      const evidenceFiles = scenario.evidence.flatMap((item) => [item.file, item.previousFile]).filter(Boolean);
+      return evidenceFiles.length === 0 || evidenceFiles.some((file) => fileSet.has(file as string));
+    })
+    .map((scenario) => {
+      const evidence = scopeIntentEvidence(scenario.evidence, files);
+      const scopedScenario = {
+        ...scenario,
+        setup: [...scenario.setup],
+        steps: [...scenario.steps],
+        assertions: [...scenario.assertions],
+        edgeCases: [...scenario.edgeCases],
+        evidence: evidence.length > 0 ? evidence : fallbackEvidence.map((item) => ({ ...item })),
+      };
+      return specializePrimary && scenario.kind === "primary"
+        ? specializePrimaryScenario(scopedScenario, lifecycle)
+        : scopedScenario;
+    });
+}
+
+function specializePrimaryScenario(
+  scenario: IntentQaScenario,
+  lifecycle: BehaviorLifecycleStage[],
+): IntentQaScenario {
+  const locatedStages = lifecycle.filter((stage) => stage.files.length > 0);
+  const scopedStages = locatedStages.length > 0 ? locatedStages : lifecycle;
+  const outcomeStages = scopedStages.filter((stage) => stage.kind === "observable-outcome");
+  const sideEffectStages = scopedStages.filter((stage) => stage.kind === "side-effect");
+  const assertionStages = outcomeStages.length > 0 ? outcomeStages : sideEffectStages;
+  if (scopedStages.length === 0 || assertionStages.length === 0) {
+    return scenario;
+  }
+  return {
+    ...scenario,
+    steps: uniqueStrings(scopedStages.map((stage) => stage.label)),
+    assertions: uniqueStrings(assertionStages.map(scopedLifecycleAssertion)),
+  };
+}
+
+function scopedLifecycleAssertion(stage: BehaviorLifecycleStage): string {
+  const label = stripTerminalPunctuation(stage.label);
+  const observed = label.match(/^Observe the result of (.+)$/i)?.[1];
+  if (observed) {
+    return `Verify ${observed} is externally observable.`;
+  }
+  return `Verify ${lowercaseFirst(label)}.`;
 }
 
 function intentFlowDisplayTitle(
@@ -7373,9 +7661,12 @@ function dedupeFlows(flows: E2eFlow[]): E2eFlow[] {
     for (const file of newFiles) {
       seenFiles.add(file);
     }
+    const sharesIntentWithEarlierFlow = Boolean(
+      flow.intentId && deduped.some((candidate) => candidate.intentId === flow.intentId),
+    );
     deduped.push({
       ...flow,
-      files: newFiles,
+      files: sharesIntentWithEarlierFlow ? flow.files : newFiles,
     });
   }
   return deduped;
