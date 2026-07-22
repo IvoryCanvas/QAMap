@@ -419,7 +419,7 @@
     },
     "compaction": {
       "type": "object",
-      "description": "Present when QAMap reduced lower-priority detail to keep the complete line below 4KB while retaining the highest-priority flow and its verification mode.",
+      "description": "Present when QAMap reduced lower-priority detail to keep the complete line below 4KB while retaining the highest-priority flow and a compact second flow for multi-surface changes.",
       "properties": {
         "maxBytes": { "type": "integer", "minimum": 1 },
         "originalBytes": { "type": "integer", "minimum": 1 },

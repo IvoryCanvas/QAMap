@@ -1413,6 +1413,55 @@ test("one change intent produces separate QA flows for distinct user surfaces", 
   const creditsPrimary = creditsFlow.qaScenarios.find((scenario) => scenario.kind === "primary");
   assert.ok(accountPrimary.assertions.some((assertion) => /Plan activated/i.test(assertion)));
   assert.ok(creditsPrimary.assertions.some((assertion) => /Credits updated/i.test(assertion)));
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const accountQaFlow = qa.flows.find((flow) =>
+    flow.changedFiles.some((file) => file.includes("/account/")),
+  );
+  const creditsQaFlow = qa.flows.find((flow) =>
+    flow.changedFiles.some((file) => file.includes("/credits/")),
+  );
+  assert.ok(accountQaFlow);
+  assert.ok(creditsQaFlow);
+
+  const oversizedQa = structuredClone(qa);
+  oversizedQa.changeAnalysis.intents = Array.from({ length: 12 }, (_, index) => ({
+    ...structuredClone(qa.changeAnalysis.intents[0]),
+    title: `${qa.changeAnalysis.intents[0].title} ${index} ${"intent".repeat(40)}`,
+  }));
+  oversizedQa.flows = [
+    structuredClone(accountQaFlow),
+    structuredClone(creditsQaFlow),
+    ...Array.from({ length: 18 }, (_, index) => ({
+      ...structuredClone(index % 2 === 0 ? accountQaFlow : creditsQaFlow),
+      title: `Additional surface ${index} ${"flow".repeat(40)}`,
+      changedFiles: Array.from(
+        { length: 12 },
+        (__, fileIndex) => `src/${"nested/".repeat(20)}file-${fileIndex}.tsx`,
+      ),
+      draftSteps: Array.from({ length: 12 }, (__, stepIndex) => `Step ${stepIndex} ${"detail ".repeat(50)}`),
+      selectorHints: Array.from(
+        { length: 12 },
+        (__, selectorIndex) => `[data-testid="${"selector".repeat(20)}-${selectorIndex}"]`,
+      ),
+    })),
+  ];
+  oversizedQa.base = `refs/heads/${"base-segment/".repeat(1000)}`;
+  oversizedQa.head = `refs/heads/${"head-segment/".repeat(1000)}`;
+  oversizedQa.manifestPath = `${"manifest/".repeat(1000)}qamap.yaml`;
+
+  const compactOutput = formatAgentQaDraft(oversizedQa);
+  const compactSummary = JSON.parse(compactOutput);
+  assert.ok(Buffer.byteLength(compactOutput) <= 4 * 1024);
+  assert.ok(compactSummary.compaction.emergency);
+  assert.equal(compactSummary.flowCount, 20);
+  assert.ok(compactSummary.flows.length >= 2);
+  assert.match(compactSummary.flows[0].title, /Account/i);
+  assert.match(compactSummary.flows[0].successSignal, /Plan activated/i);
+  assert.match(compactSummary.flows[1].title, /Credits/i);
+  assert.match(compactSummary.flows[1].successSignal, /Credits updated/i);
+  assert.ok(compactSummary.flows[1].changedFiles.some((file) => file.includes("credits")));
+  assert.equal(compactSummary.omittedFlowCount, 20 - compactSummary.flows.length);
 });
 
 test("an unchanged success message can ground QA when the same surface has direct diff evidence", async (t) => {

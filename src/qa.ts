@@ -513,6 +513,10 @@ interface AgentSummaryShape {
   commands: string[];
 }
 
+type CompactAgentFlowShape = Omit<AgentSummaryShape["flows"][number], "evidence"> & {
+  evidence?: string[];
+};
+
 function serializeAgentSummary(summary: AgentSummaryShape): string {
   const payload = JSON.stringify(summary);
   if (Buffer.byteLength(payload) <= agentPayloadByteLimit) {
@@ -557,12 +561,14 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
     scenarios: intent.scenarios.slice(0, 1),
   }));
-  const minimalFlows = compact.flows.slice(0, 1).map((flow) => ({
-    ...flow,
-    steps: flow.steps.slice(0, 2),
-    selectors: flow.selectors.slice(0, 1),
-    existingEvidence: flow.existingEvidence?.slice(0, 1),
-  }));
+  const minimalFlows = compact.flows.slice(0, 2).map((flow, index) => index === 0
+    ? {
+        ...flow,
+        steps: flow.steps.slice(0, 2),
+        selectors: flow.selectors.slice(0, 1),
+        existingEvidence: flow.existingEvidence?.slice(0, 1),
+      }
+    : secondaryAgentFlow(flow));
   const minimalPayload = JSON.stringify({
     ...compact,
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - Math.min(1, compact.traces.length)),
@@ -657,25 +663,27 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
       : undefined,
     execution: trace.execution,
   }));
-  const leanFlows = compact.flows.slice(0, 1).map((flow) => ({
-    title: flow.title,
-    source: truncateForAgent(String(flow.source ?? ""), 40),
-    draft: flow.draft,
-    verificationMode: flow.verificationMode,
-    entry: flow.entry,
-    changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 80)),
-    reviewQuestion: flow.reviewQuestion
-      ? truncateForAgent(String(flow.reviewQuestion), 100)
-      : undefined,
-    successSignal: flow.successSignal
-      ? truncateForAgent(String(flow.successSignal), 100)
-      : undefined,
-    steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 80)),
-    selectors: flow.selectors.slice(0, 1),
-    existingEvidence: flow.existingEvidence
-      ?.slice(0, 1)
-      .map((file) => truncateForAgent(file, 100)),
-  }));
+  const leanFlows = compact.flows.slice(0, 3).map((flow, index) => index === 0
+    ? {
+        title: flow.title,
+        source: truncateForAgent(String(flow.source ?? ""), 40),
+        draft: flow.draft,
+        verificationMode: flow.verificationMode,
+        entry: flow.entry,
+        changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 80)),
+        reviewQuestion: flow.reviewQuestion
+          ? truncateForAgent(String(flow.reviewQuestion), 100)
+          : undefined,
+        successSignal: flow.successSignal
+          ? truncateForAgent(String(flow.successSignal), 100)
+          : undefined,
+        steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 80)),
+        selectors: flow.selectors.slice(0, 1),
+        existingEvidence: flow.existingEvidence
+          ?.slice(0, 1)
+          .map((file) => truncateForAgent(file, 100)),
+      }
+    : secondaryAgentFlow(flow));
   const leanPayload = JSON.stringify({
     schema: summary.schema,
     base: truncateForAgent(String(summary.base ?? ""), 120),
@@ -743,25 +751,27 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
         : undefined,
     })),
   }));
-  const emergencyFlows = summary.flows.slice(0, 1).map((flow) => ({
-    title: truncateForAgent(String(flow.title ?? ""), 60),
-    source: truncateForAgent(String(flow.source ?? ""), 30),
-    draft: truncateForAgent(String(flow.draft ?? ""), 80),
-    verificationMode: flow.verificationMode,
-    entry: flow.entry ? truncateForAgent(String(flow.entry), 80) : undefined,
-    changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 80)),
-    reviewQuestion: flow.reviewQuestion
-      ? truncateForAgent(String(flow.reviewQuestion), 100)
-      : undefined,
-    successSignal: flow.successSignal
-      ? truncateForAgent(String(flow.successSignal), 100)
-      : undefined,
-    steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 60)),
-    selectors: flow.selectors.slice(0, 1).map((selector) => truncateForAgent(selector, 60)),
-    existingEvidence: flow.existingEvidence
-      ?.slice(0, 1)
-      .map((file) => truncateForAgent(file, 80)),
-  }));
+  const emergencyFlows = summary.flows.slice(0, 3).map((flow, index) => index === 0
+    ? {
+        title: truncateForAgent(String(flow.title ?? ""), 60),
+        source: truncateForAgent(String(flow.source ?? ""), 30),
+        draft: truncateForAgent(String(flow.draft ?? ""), 80),
+        verificationMode: flow.verificationMode,
+        entry: flow.entry ? truncateForAgent(String(flow.entry), 80) : undefined,
+        changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 80)),
+        reviewQuestion: flow.reviewQuestion
+          ? truncateForAgent(String(flow.reviewQuestion), 100)
+          : undefined,
+        successSignal: flow.successSignal
+          ? truncateForAgent(String(flow.successSignal), 100)
+          : undefined,
+        steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 60)),
+        selectors: flow.selectors.slice(0, 1).map((selector) => truncateForAgent(selector, 60)),
+        existingEvidence: flow.existingEvidence
+          ?.slice(0, 1)
+          .map((file) => truncateForAgent(file, 80)),
+      }
+    : secondaryAgentFlow(flow, { title: 55, source: 24, draft: 60, file: 60, question: 80, success: 80 }));
   const emergencyTraces = leanTraces.slice(0, 1);
   const emergencySummary = {
     schema: summary.schema,
@@ -808,24 +818,26 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
       assertions: [],
     })),
   }));
-  const floorFlows = emergencyFlows.slice(0, 1).map((flow) => ({
-    ...flow,
-    title: truncateForAgent(String(flow.title ?? ""), 45),
-    draft: truncateForAgent(String(flow.draft ?? ""), 60),
-    entry: flow.entry ? truncateForAgent(String(flow.entry), 60) : undefined,
-    changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 60)),
-    reviewQuestion: flow.reviewQuestion
-      ? truncateForAgent(String(flow.reviewQuestion), 75)
-      : undefined,
-    successSignal: flow.successSignal
-      ? truncateForAgent(String(flow.successSignal), 75)
-      : undefined,
-    steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 45)),
-    selectors: flow.selectors.slice(0, 1).map((selector) => truncateForAgent(selector, 45)),
-    existingEvidence: flow.existingEvidence
-      ?.slice(0, 1)
-      .map((file) => truncateForAgent(file, 60)),
-  }));
+  const floorFlows = emergencyFlows.slice(0, 2).map((flow, index) => index === 0
+    ? {
+        ...flow,
+        title: truncateForAgent(String(flow.title ?? ""), 45),
+        draft: truncateForAgent(String(flow.draft ?? ""), 60),
+        entry: flow.entry ? truncateForAgent(String(flow.entry), 60) : undefined,
+        changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 60)),
+        reviewQuestion: flow.reviewQuestion
+          ? truncateForAgent(String(flow.reviewQuestion), 75)
+          : undefined,
+        successSignal: flow.successSignal
+          ? truncateForAgent(String(flow.successSignal), 75)
+          : undefined,
+        steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 45)),
+        selectors: flow.selectors.slice(0, 1).map((selector) => truncateForAgent(selector, 45)),
+        existingEvidence: flow.existingEvidence
+          ?.slice(0, 1)
+          .map((file) => truncateForAgent(file, 60)),
+      }
+    : secondaryAgentFlow(flow, { title: 45, source: 18, draft: 45, file: 45, question: 60, success: 60 }));
   return JSON.stringify({
     schema: summary.schema,
     base: truncateForAgent(String(summary.base ?? ""), 80),
@@ -863,6 +875,37 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
 
 function numericCount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function secondaryAgentFlow(
+  flow: CompactAgentFlowShape,
+  limits: {
+    title?: number;
+    source?: number;
+    draft?: number;
+    file?: number;
+    question?: number;
+    success?: number;
+  } = {},
+): AgentSummaryShape["flows"][number] {
+  return {
+    title: truncateForAgent(String(flow.title ?? ""), limits.title ?? 60),
+    source: truncateForAgent(String(flow.source ?? ""), limits.source ?? 30),
+    draft: truncateForAgent(String(flow.draft ?? ""), limits.draft ?? 70),
+    verificationMode: flow.verificationMode,
+    changedFiles: flow.changedFiles
+      .slice(0, 1)
+      .map((file) => truncateForAgent(file, limits.file ?? 70)),
+    reviewQuestion: flow.reviewQuestion
+      ? truncateForAgent(String(flow.reviewQuestion), limits.question ?? 90)
+      : undefined,
+    successSignal: flow.successSignal
+      ? truncateForAgent(String(flow.successSignal), limits.success ?? 90)
+      : undefined,
+    steps: [],
+    selectors: [],
+    evidence: [],
+  };
 }
 
 function selectAgentLifecycleStages<T>(stages: T[], limit: number): T[] {

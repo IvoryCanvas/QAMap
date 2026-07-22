@@ -1,16 +1,16 @@
 # Release Validation
 
-## 0.4.7 candidate - 2026-07-19
+## 0.4.7 candidate - 2026-07-22
 
-Validated as a decision-contract, executable-draft, exact-test-routing, public-regression, and compounding-repository-context candidate. QAMap now exposes one canonical route after it reads a change: either complete an optional automation draft or run a repository validation command. It also connects item-level actions to repository-backed prerequisites, ranks exact changed Python regression tests, adds a provenance-pinned public PR reduction, and proves that one reviewed manifest correction improves both the current PR and the next related PR without another prompt:
+Validated as a decision-contract, executable-draft, exact-test-routing, public-regression, compounding-repository-context, and multi-flow agent-handoff candidate. QAMap now exposes one canonical route after it reads a change: either complete an optional automation draft or run a repository validation command. It also connects item-level actions to repository-backed prerequisites, ranks exact changed Python regression tests, adds a provenance-pinned public PR reduction, proves that one reviewed manifest correction improves both the current PR and the next related PR without another prompt, and preserves a second distinct QA flow when a large result must be compacted below the agent payload limit:
 
 | Gate | Current result |
 | --- | --- |
 | `pnpm release:check` | Passed end to end without changing the published package version |
-| `pnpm test` | 192/192 passing |
+| `pnpm test` | 207/207 passing |
 | `pnpm scan` | 0 findings |
 | `pnpm bench:ci` | 19/19 targets pass across React, Vue, SvelteKit, Expo, JavaScript and Python API services, shared components, configuration, test-only, CLI/analyzer, and a provenance-pinned public PR reduction |
-| Coverage | Lines 88.86%, branches 85.41%, functions 95.94% |
+| Coverage | Lines 88.91%, branches 85.48%, functions 95.87% |
 | Canonical route | Agent output reports one `route.basis`, unambiguous status, next action, and exact repository command when available; the older readiness score remains compatibility detail |
 | Public PR regression | A behavior-preserving reduction of Cal.com PR #27765 recovers the edit -> validation trigger -> correction -> submit lifecycle, exact diff evidence, and related existing regression test |
 | Executable nested-action draft | In an isolated testless web repository, the generated draft filled the entity input, created the required item, exercised the diff-added item action, asserted the visible outcome, and passed 1/1 in Chromium |
@@ -18,12 +18,14 @@ Validated as a decision-contract, executable-draft, exact-test-routing, public-r
 | Repository QA memory | A generic flow is corrected through `.qamap/manifest.yaml`, the same PR becomes manifest-backed, and a later PR automatically reuses the reviewed flow, route, steps, and selectors |
 | Framework-neutral state inference | React Hook Form timing changes are recognized only when both old and new modes occur in form-shaped evidence; an unrelated non-form `mode` change remains a negative control |
 | CLI command contract | CLI-only and mixed analyzer/package-surface changes route to repository validation such as `pnpm test` instead of a blocked product E2E draft |
-| Compact agent handoff | Every benchmark remains below 4KB while preserving the canonical route; the public PR payload is 4,011 bytes and the largest mobile lifecycle payload is 4,059 bytes |
-| Package preview | `pnpm pack --dry-run` and `npm pack --dry-run` pass for the unchanged `@ivorycanvas/qamap@0.4.6` candidate source; 143 files, 886.8 kB packed |
+| Compact agent handoff | Every benchmark remains below 4KB while preserving the canonical route. An additional read-only large multi-surface canary found four flows and retained two distinct flows, their changed files, review questions, and success signals in 3,670 bytes instead of collapsing to only the first flow; two omitted flows remain disclosed |
+| Package preview | `pnpm pack --dry-run` and `npm pack --dry-run` pass for the unchanged `@ivorycanvas/qamap@0.4.6` candidate source; 146 files, 903.3 kB packed |
 
 The public fixture records its upstream repository, pull request URL, base and head SHAs, license, and reduction method. It is not described as a verbatim repository snapshot. Its contract fails if QAMap loses the changed validation timing, exact source location, related test evidence, or the four observable state boundaries a reviewer needs to reason about the regression.
 
 The manifest lifecycle is intentionally not a one-shot generation demo. The first heuristic result is preserved, a human supplies team language and stable evidence once, and both the current and subsequent related changes are reevaluated against that committed knowledge. This is the measurable distinction between repository-local QA context and repeatedly prompting an agent with the same explanation.
+
+Compact output prioritizes breadth before secondary detail. The first retained flow keeps its full decision context, while a second distinct flow keeps enough repository evidence to continue review without confusing it with the first. The output still reports total, retained, and omitted counts; it does not claim that every detected flow fits inside the 4KB handoff.
 
 The canonical `route` is the decision agents and integrations should consume first. Product behavior can still lead toward Playwright, Maestro, or manual E2E artifacts. Analyzer rules, CLI command contracts, configuration, documentation, generated output, and existing tests instead point at repository validation. In both cases `execution.status` remains `not-run`; QAMap selects and explains work but does not claim that the target application or command passed.
 

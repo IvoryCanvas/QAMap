@@ -82,7 +82,7 @@ Each target can declare:
 | `mustRecommendCommands` | Commands the setup or validation path must expose. |
 | `maxBlankActions` | Maximum malformed or empty draft steps; public fixtures keep this at zero. |
 | `maxGenericTitles` | Maximum titles ending in generic `primary journey` or `smoke flow` wording. |
-| `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. Production output has a global 4KB ceiling and preserves the highest-priority retained intent/flow plus omitted counts. |
+| `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. Production output has a global 4KB ceiling and preserves the highest-priority intent, a detailed primary flow, a compact second flow for multi-surface changes, and omitted counts. |
 | `minReadinessScore` | Minimum aggregate draft-readiness score after self-check, TODO, required-action, and execution-blocker penalties. |
 | `allowedReadinessLevels` | Accepted aggregate levels: `ready`, `near-runnable`, `needs-work`, or `blocked`. Use this to prevent a semantically plausible but unusable draft from satisfying the contract. |
 | `minTryableDrafts` | Minimum files classified as `runnable-candidate` or `near-runnable`. |

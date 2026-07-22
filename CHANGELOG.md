@@ -15,6 +15,7 @@
 
 ### Changed
 
+- Emergency 4KB agent output now keeps a compact second affected flow with its supporting file, review question, and success signal instead of collapsing every multi-surface PR to one detailed flow.
 - A single change intent that spans distinct feature, route, or screen surfaces now produces surface-scoped QA flows. Each flow keeps its own files, lifecycle, scenarios, and observable outcome while shared import evidence remains traceable.
 - An existing success message can now ground a flow when it is the only success-shaped outcome on that surface and the same file has direct diff evidence; newly added success copy still takes priority.
 - Working-tree analysis now compares the selected merge base directly with the final worktree, so intermediate files removed later in the branch do not survive as stale changed-file or diff evidence.
