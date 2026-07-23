@@ -195,6 +195,12 @@ function traceArtifact(input: QaTraceArtifactInput): QaTraceArtifact {
 
 function riskStatement(intent: ChangeIntent, scenario: IntentQaScenario): string {
   if (scenario.kind === "primary") {
+    if (hasSourceRole(scenario.evidence, intent.evidence, "analysis-rule")) {
+      return "The changed analyzer may miss intended evidence or report unrelated behavior as a finding.";
+    }
+    if (hasSourceRole(scenario.evidence, intent.evidence, "command")) {
+      return "The changed command may accept invalid input or produce incorrect output, artifacts, or exit status.";
+    }
     return `The changed behavior "${intent.title}" may not reach its intended observable outcome.`;
   }
   if (scenario.kind === "failure") {
@@ -204,6 +210,16 @@ function riskStatement(intent: ChangeIntent, scenario: IntentQaScenario): string
     return `${scenario.title} may produce a result outside the intended boundary.`;
   }
   return `${scenario.title} may leave stale or inconsistent state after the change.`;
+}
+
+function hasSourceRole(
+  scenarioEvidence: ChangeIntentEvidence[],
+  intentEvidence: ChangeIntentEvidence[],
+  role: ChangeIntentEvidence["sourceRole"],
+): boolean {
+  const locatedScenarioEvidence = scenarioEvidence.filter((item) => item.kind === "diff" && item.file);
+  const evidence = locatedScenarioEvidence.length > 0 ? locatedScenarioEvidence : intentEvidence;
+  return evidence.some((item) => item.sourceRole === role);
 }
 
 function strongestTraceEvidence(evidence: ChangeIntentEvidence[], limit: number): ChangeIntentEvidence[] {

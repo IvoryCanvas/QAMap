@@ -165,9 +165,7 @@ function scoreTarget(target, plan, qa, durationMs) {
     notCompiledScenarioReceipts: scenarioReceipts.filter((receipt) => receipt.status === "not-compiled").length,
     mappedScenarioSteps: scenarioReceipts.reduce((sum, receipt) => sum + receipt.mappedSteps, 0),
     mappedScenarioAssertions: scenarioReceipts.reduce((sum, receipt) => sum + receipt.mappedAssertions, 0),
-    requiredScenarioGaps: scenarioReceipts.filter(
-      (receipt) => receipt.decision === "required" && receipt.status !== "compiled"
-    ).length,
+    requiredScenarioGaps: qa.readiness.requiredScenarioGaps,
     untracedCriticalScenarios: qaScenarios.filter((scenario) =>
       scenario.priority === "critical" &&
       !scenario.evidence.some((item) =>
@@ -321,6 +319,7 @@ function evaluateContract(expect, result, plan, qa) {
   appendMissingTerms(failures, "intent title", result.intentTitles, expect.mustNameIntents);
   appendUnexpectedTerms(failures, "intent title", result.intentTitles, expect.mustNotNameIntents);
   appendMissingTerms(failures, "intent lifecycle", result.intentLifecycle, expect.mustIncludeLifecycle);
+  appendUnexpectedTerms(failures, "intent lifecycle", result.intentLifecycle, expect.mustNotIncludeLifecycle);
   appendMissingTerms(failures, "intent QA scenario", result.intentScenarios, expect.mustIncludeQaScenarios);
   appendUnexpectedTerms(failures, "intent QA scenario", result.intentScenarios, expect.mustNotIncludeQaScenarios);
   appendMissingTerms(failures, "intent evidence", result.intentEvidence, expect.mustFindIntentEvidence);

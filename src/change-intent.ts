@@ -883,7 +883,9 @@ function buildIntentQaScenarios(
     /\b(?:is|has|can|should|show|hide)[A-Z_\w]*|eligible|available|loaded|loading|empty|ready|selected/i,
     /color|theme|style|class|layout|size|width|height|dark|light/i,
   );
-  if (changedConditionEvidence.length > 0 && !/toggle|enable|disable|permission|authoriz|auth|guard/.test(searchable)) {
+  const hasUiProductEvidence = productEvidence.some(isUiBehaviorEvidence);
+  if (changedConditionEvidence.length > 0 && hasUiProductEvidence &&
+    !/toggle|enable|disable|permission|authoriz|auth|guard/.test(searchable)) {
     scenarios.push(makeScenario(intentId, "conditional-fallback", "state-transition", "recommended", "Changed conditional state and fallback", [
       "Prepare the changed condition as true and false, including loading, unknown, or empty state when the diff exposes one.",
     ], [
@@ -1019,6 +1021,12 @@ function buildIntentQaScenarios(
     const routingEvidencePattern = explicitOpenDestination
       ? /open|navigat|redirect|route|deep.?link|payload|destination/i
       : /navigat|redirect|route|deep.?link|payload|destination/i;
+    const routingEvidence = scenarioEvidenceFor(
+      productLifecycle,
+      productEvidence,
+      routingEvidencePattern,
+      /navigation\.setoptions/i,
+    );
     scenarios.push(makeScenario(intentId, "entry-routing", "failure", "critical", "Entry payload and destination routing", [
       "Prepare valid, missing, and stale entry payloads.",
     ], [
@@ -1027,15 +1035,16 @@ function buildIntentQaScenarios(
     ], [
       "Verify a valid payload opens the matching destination and state.",
       "Verify invalid context fails safely without opening unrelated data.",
-    ], ["Missing payload", "Stale identifier", "Repeated entry"], scenarioEvidenceFor(
-      productLifecycle,
-      productEvidence,
-      routingEvidencePattern,
-      /navigation\.setoptions/i,
-    )));
+    ], ["Missing payload", "Stale identifier", "Repeated entry"], routingEvidence));
   }
 
-  if (/fetch|request|network|endpoint|api|mutation|response|timeout/.test(searchable)) {
+  const networkSearchable = searchable.replace(/\b(?:export|package|public)\s+(?:root\s+)?api\b/gi, "");
+  const networkEvidence = scenarioEvidenceFor(
+    productLifecycle,
+    productEvidence,
+    /fetch|request|network|endpoint|api|mutation|response|timeout/i,
+  );
+  if (/fetch|request|network|endpoint|api|mutation|response|timeout/.test(networkSearchable)) {
     scenarios.push(makeScenario(intentId, "network-failure", "failure", "recommended", "Failure, timeout, and retry handling", [
       "Prepare success, empty, unauthorized, timeout, and server-error responses.",
     ], [
@@ -1044,7 +1053,7 @@ function buildIntentQaScenarios(
     ], [
       "Verify each response produces the intended visible or persisted state.",
       "Verify retries do not duplicate requests or side effects.",
-    ], ["Unauthorized", "Timeout", "Server error", "Duplicate retry"], scenarioEvidenceFor(productLifecycle, productEvidence, /fetch|request|network|endpoint|api|mutation|response|timeout/i)));
+    ], ["Unauthorized", "Timeout", "Server error", "Duplicate retry"], networkEvidence));
   }
 
   const shareEvidence = scenarioEvidenceFor(
@@ -1117,6 +1126,11 @@ function buildIntentQaScenarios(
     ], ["Mismatched identity", "Malformed storage", "Repeated completion", "Second tab or re-entry"], scopedStorageEvidence));
   }
 
+  const stateReentryEvidence = scenarioEvidenceFor(
+    productLifecycle,
+    productEvidence,
+    /sync|persist|storage|cache|reload|re.?entry|save|store/i,
+  );
   if (/sync|persist|storage|cache|reload|re.?entry|save|store/.test(searchable)) {
     scenarios.push(makeScenario(intentId, "state-reentry", "state-transition", "recommended", "Re-entry and stale state recovery", [
       "Prepare current and stale persisted state.",
@@ -1126,7 +1140,7 @@ function buildIntentQaScenarios(
     ], [
       "Verify the latest state survives or is invalidated intentionally.",
       "Verify stale state cannot overwrite the changed result.",
-    ], ["Stale cache", "App restart", "Repeated synchronization"], scenarioEvidenceFor(productLifecycle, productEvidence, /sync|persist|storage|cache|reload|re.?entry|save|store/i)));
+    ], ["Stale cache", "App restart", "Repeated synchronization"], stateReentryEvidence));
   }
 
   return rankIntentQaScenarios(uniqueScenarios(scenarios)).slice(0, maxQaScenariosPerIntent);
@@ -1371,12 +1385,16 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
       }
       for (const [side, lines] of [["head", hunk.lines], ["base", hunk.removedLines ?? []]] as const) {
         for (const line of lines) {
+          if (isStaticVocabularyOrMetadataLine(line.text)) {
+            continue;
+          }
           const calendarMatch = line.text.match(
             /(timezone|scheduledAt|\bschedule\w*\b|\breminder\w*\b|\bcalendar\b|\btomorrow\b|\bdaily\b)/i,
           );
           const recordsCurrentTimestamp = /^timezone$/i.test(calendarMatch?.[1] ?? "") &&
             /\btimezone\.now\s*\(/i.test(line.text);
-          if (calendarMatch && !recordsCurrentTimestamp) {
+          const schedulerInfrastructure = /^scheduler$/i.test(calendarMatch?.[1] ?? "");
+          if (calendarMatch && !recordsCurrentTimestamp && !schedulerInfrastructure) {
             evidence.push(diffRiskEvidence(
               file,
               hunk,
@@ -1526,6 +1544,25 @@ function detectFormValidationTimingChange(
     return undefined;
   }
   return { before: before.mode, after: after.mode, line: after.line };
+}
+
+function isStaticVocabularyOrMetadataLine(text: string): boolean {
+  const trimmed = text.trim();
+  if (/^["'`][A-Z][A-Z0-9_]+["'`],?$/.test(trimmed)) {
+    return true;
+  }
+  return /\/(?:\\.|[^/\n]){3,}\/[dgimsuvy]*\.test\s*\(/i.test(trimmed) ||
+    /\b(?:vocabulary|pattern|matcher|regex)\w*\s*=\s*\/(?:\\.|[^/\n]){3,}\/[dgimsuvy]*/i.test(trimmed);
+}
+
+function isUiBehaviorEvidence(evidence: ChangeIntentEvidence): boolean {
+  const file = evidence.file?.replaceAll("\\", "/");
+  if (!file) {
+    return false;
+  }
+  return /\.(?:tsx|jsx|vue|svelte)$/i.test(file) ||
+    /(?:^|\/)(?:components?|pages?|screens?|views?|ui)(?:\/|$)/i.test(file) ||
+    /\.component\.ts$/i.test(file);
 }
 
 function sharingCapabilitySymbol(text: string): string | undefined {

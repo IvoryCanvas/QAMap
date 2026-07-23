@@ -312,7 +312,11 @@
         "compiled": { "type": "integer", "minimum": 0 },
         "partial": { "type": "integer", "minimum": 0 },
         "notCompiled": { "type": "integer", "minimum": 0 },
-        "requiredGaps": { "type": "integer", "minimum": 0 }
+        "requiredGaps": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Required scenarios missing executable draft mapping. Always 0 when automationApplicable is false because repository validation, not product E2E compilation, is the applicable route."
+        }
       }
     },
     "traceCount": {

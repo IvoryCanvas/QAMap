@@ -315,7 +315,12 @@
         "minReasoningTraces": 3,
         "maxMissingReasoningTraces": 0,
         "maxUntraceableRequiredScenarios": 0,
-        "mustReachFiles": ["src/rules/rule-engine.ts", "src/cli.ts"],
+        "mustReachFiles": [
+          "src/rules/rule-engine.ts",
+          "src/repository-plan.ts",
+          "src/git-context.ts",
+          "src/cli.ts"
+        ],
         "mustIncludeQaScenarios": [
           "Changed analysis rule positive and negative controls",
           "Changed CLI arguments, output, and exit behavior"
@@ -325,6 +330,9 @@
           "Removed guard or validation behavior",
           "Entry payload and destination routing"
         ],
+        "mustNotIncludeLifecycle": [
+          "is finite"
+        ],
         "mustNotFindEvidence": [
           "Network response setup",
           "Fixture data setup",
@@ -333,6 +341,7 @@
         "mustTraceScenarioFiles": ["src/rules/rule-engine.ts", "src/cli.ts"],
         "maxUntracedCriticalScenarios": 0,
         "maxMissingScenarioReceipts": 0,
+        "maxRequiredScenarioGaps": 0,
         "maxBlankActions": 0,
         "maxGenericTitles": 0,
         "maxAgentBytes": 4096

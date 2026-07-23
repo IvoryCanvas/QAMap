@@ -2885,15 +2885,18 @@ function isCliCommandFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean 
 }
 
 function isAnalysisRuleFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
-  return hasOnlyAnalysisRuleDiffEvidence(flow.intentEvidence);
+  return hasAnalysisRuleFocusedDiffEvidence(flow.intentEvidence);
 }
 
-function hasOnlyAnalysisRuleDiffEvidence(evidence: ChangeIntentEvidence[] | undefined): boolean {
+function hasAnalysisRuleFocusedDiffEvidence(evidence: ChangeIntentEvidence[] | undefined): boolean {
   const locatedEvidence = (evidence ?? []).filter(
     (evidence) => evidence.kind === "diff" && evidence.sourceRole !== undefined,
   );
   return locatedEvidence.some((evidence) => evidence.sourceRole === "analysis-rule") &&
-    locatedEvidence.every((evidence) => evidence.sourceRole === "analysis-rule");
+    locatedEvidence.every((evidence) =>
+      evidence.sourceRole === "analysis-rule" ||
+      (evidence.sourceRole === "product" && evidence.relation !== "direct")
+    );
 }
 
 function inferFlowEdgeCases(flow: Omit<E2eFlow, "languageBrief">): string[] {
@@ -5732,7 +5735,7 @@ async function buildFlow(
   if (files.length === 0) {
     return undefined;
   }
-  const analysisRuleFocused = hasOnlyAnalysisRuleDiffEvidence(candidate.intentEvidence);
+  const analysisRuleFocused = hasAnalysisRuleFocusedDiffEvidence(candidate.intentEvidence);
   const coverage = candidate.coverage ?? buildCoverageTargets(candidate.kind, files, runner);
   const setupHints = analysisRuleFocused
     ? []
