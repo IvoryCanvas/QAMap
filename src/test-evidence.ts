@@ -183,12 +183,12 @@ function findRelatedTestFiles(flow: FlowCoverageInput, files: TestSuiteEvidenceF
       const testStem = sourceFileStem(file.path);
       const matchingStem = !genericFileStems.has(testStem) && flowStems.has(testStem);
       const sharedOwner = sharedOwners.size > 0;
+      // Shared ownership only supports generic source files when an independent behavior token also matches.
       const related =
         directImport ||
         matchingStem ||
         overlap >= 2 ||
-        (overlap >= 1 && sharedOwner) ||
-        (sharedOwner && !hasSpecificFlowStem);
+        (sharedOwner && !hasSpecificFlowStem && overlap >= 1);
       return {
         file,
         related,
@@ -240,6 +240,10 @@ const structuralPathSegments = new Set([
   "test",
   "tests",
   "__tests__",
+  "util",
+  "utils",
+  "view",
+  "views",
 ]);
 
 function ownershipPathSegments(value: string): string[] {
@@ -512,7 +516,7 @@ function meaningfulTokens(text: string): string[] {
       .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
       .split(/[^a-zA-Z0-9]+/)
       .map((part) => part.toLowerCase())
-      .filter((part) => part.length > 2 && !ignored.has(part)),
+      .filter((part) => part.length > 2 && !ignored.has(part) && !structuralPathSegments.has(part)),
   );
 }
 

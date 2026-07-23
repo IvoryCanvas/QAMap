@@ -10,6 +10,7 @@ import {
   analyzeVerificationManifestContext,
   buildDoctorResult,
   collectAddedDiffEvidence,
+  evaluateFlowCoverageEvidence,
   explainVerificationManifest,
   evaluateChangeReadiness,
   formatVerificationManifestContextResult,
@@ -2645,7 +2646,7 @@ test("generateE2ePlan evaluates existing test suite coverage evidence", async ()
   assert.match(markdown, /covered Loading, empty, error, and success states/);
 });
 
-test("generateE2ePlan keeps generic test filenames from overmatching unrelated services", async () => {
+test("generateE2ePlan does not promote same-domain generic tests without a direct relation", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, "in_app_purchases/services"), { recursive: true });
@@ -2680,7 +2681,7 @@ test("generateE2ePlan keeps generic test filenames from overmatching unrelated s
 
   assert.ok(flow);
   assert.ok(plan.testSuite.frameworkSignals.includes("pytest"));
-  assert.ok(evidenceFiles.includes("in_app_purchases/tests/test_views.py"));
+  assert.equal(evidenceFiles.includes("in_app_purchases/tests/test_views.py"), false);
   assert.equal(evidenceFiles.includes("listings/tests/test_services.py"), false);
 });
 
@@ -2731,6 +2732,127 @@ test("generateE2ePlan does not treat generic index tests in another package as f
   );
 
   assert.equal(evidenceFiles.includes("packages/correlation/src/index.test.ts"), false);
+});
+
+test("generateE2ePlan excludes a neighboring feature test without an import or exact path relation", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/features/orders/components"), { recursive: true });
+  await mkdir(path.join(root, "src/features/orders/__tests__"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: { test: "vitest run" },
+      dependencies: { vite: "^7.0.0", react: "^19.0.0" },
+      devDependencies: { vitest: "^3.0.0" },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/features/orders/components/OrderTimeline.tsx"),
+    "export function OrderTimeline() { return <main>Order timeline</main>; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/features/orders/components/OrderList.tsx"),
+    "export function OrderList() { return <main>Order list</main>; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/features/orders/__tests__/OrderTimeline.test.tsx"),
+    [
+      "import { OrderTimeline } from '../components/OrderTimeline';",
+      "it('renders the order timeline success state', () => expect(OrderTimeline).toBeDefined());",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "src/features/orders/__tests__/OrderList.test.tsx"),
+    [
+      "import { OrderList } from '../components/OrderList';",
+      "it('renders the order list success state', () => expect(OrderList).toBeDefined());",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/order-timeline"]);
+  await writeFile(
+    path.join(root, "src/features/orders/components/OrderTimeline.tsx"),
+    "export function OrderTimeline() { return <main data-testid=\"order-timeline\">Order timeline</main>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: expose order timeline"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const evidenceFiles = plan.flows.flatMap((flow) =>
+    flow.coverageEvidence.flatMap((evidence) => evidence.files),
+  );
+
+  assert.ok(evidenceFiles.includes("src/features/orders/__tests__/OrderTimeline.test.tsx"));
+  assert.equal(
+    evidenceFiles.includes("src/features/orders/__tests__/OrderList.test.tsx"),
+    false,
+    JSON.stringify(plan.flows.map((flow) => ({
+      title: flow.title,
+      files: flow.files,
+      evidence: flow.coverageEvidence.flatMap((item) => item.files),
+    }))),
+  );
+});
+
+test("coverage evidence does not promote arbitrary tests for package configuration files", () => {
+  const evidence = evaluateFlowCoverageEvidence(
+    {
+      title: "Runtime / Portal configuration verification checklist",
+      files: ["packages/runtime/package.json", "services/portal/package.json"],
+      coverage: [{ title: "Primary success path", checks: [] }],
+      changedFiles: ["packages/runtime/package.json"],
+    },
+    {
+      hasTestSuite: true,
+      testFileCount: 1,
+      frameworkSignals: ["vitest"],
+      files: [
+        {
+          path: "services/portal/src/features/catalog/utils/catalogCache.test.ts",
+          testNames: ["restores the catalog cache success state"],
+          imports: ["./catalogCache"],
+          signals: ["success", "state transition"],
+        },
+      ],
+    },
+  );
+
+  assert.deepEqual(evidence[0].files, []);
+  assert.equal(evidence[0].status, "missing");
+  assert.equal(evidence[0].reason, "No related test files were found for the changed flow.");
+});
+
+test("coverage evidence ignores generic view terminology across neighboring surfaces", () => {
+  const evidence = evaluateFlowCoverageEvidence(
+    {
+      title: "Catalog presentation flow",
+      files: ["apps/store/src/features/catalog/fragments/OfficialCatalogView/index.tsx"],
+      coverage: [{ title: "Primary success path", checks: [] }],
+      changedFiles: ["apps/store/src/features/catalog/fragments/OfficialCatalogView/index.tsx"],
+    },
+    {
+      hasTestSuite: true,
+      testFileCount: 1,
+      frameworkSignals: ["vitest"],
+      files: [
+        {
+          path: "apps/admin/src/features/catalog/utils/catalogPrefillError.test.ts",
+          testNames: ["get catalog prefill error view"],
+          imports: ["./catalogPrefillError"],
+          signals: ["error"],
+        },
+      ],
+    },
+  );
+
+  assert.deepEqual(evidence[0].files, []);
+  assert.equal(evidence[0].status, "missing");
 });
 
 test("generateE2ePlan prefers a Python test that imports the changed module", async () => {
