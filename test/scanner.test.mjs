@@ -7098,6 +7098,10 @@ test("a single diff-added action grounds the primary scenario without inventing 
   const promotionDraft = draft.files.find((file) => /workspace promotion/i.test(file.flowTitle));
   assert.ok(promotionDraft, JSON.stringify(draft.files));
   const spec = await readFile(path.join(root, promotionDraft.path), "utf8");
+  const selectorValues = draft.plan.flows.flatMap((flow) => flow.selectors.map((selector) => selector.value));
+  assert.ok(selectorValues.includes("Try a workspace plan"), JSON.stringify(selectorValues));
+  assert.equal(selectorValues.includes("/offers"), false, JSON.stringify(selectorValues));
+  assert.equal(selectorValues.includes("true"), false, JSON.stringify(selectorValues));
   assert.match(spec, /page\.getByRole\("button", \{ name: "Browse offers" \}\)\.click\(\)/);
   assert.doesNotMatch(spec, /expect\(page\.getByText\("Browse offers"\)\)\.toBeVisible\(\)/);
   assert.doesNotMatch(spec, /page\.getByRole\("button", \{ name: "true" \}\)/);
@@ -7110,6 +7114,54 @@ test("a single diff-added action grounds the primary scenario without inventing 
   assert.equal(primaryReceipt?.mappedSteps, 1);
   assert.equal(primaryReceipt?.mappedAssertions, 0);
   assert.equal(primaryReceipt?.status, "partial");
+});
+
+test("rendered Vue computed copy stays visible evidence without leaking script literals", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ scripts: { test: "playwright test" }, dependencies: { vue: "^3.5.0", "@playwright/test": "^1.56.0" } }),
+  );
+  await writeFile(
+    path.join(root, "src/pages/workspaces.vue"),
+    "<template><main><h1>Workspaces</h1></main></template>\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/workspace-readiness"]);
+  await writeFile(
+    path.join(root, "src/pages/workspaces.vue"),
+    [
+      "<script setup lang=\"ts\">",
+      "import { computed, ref } from \"vue\";",
+      "const isReady = ref(false);",
+      "const statusCopy = computed(() => isReady.value ? \"Workspace ready\" : \"Preparing workspace\");",
+      "const openWorkspace = () => { window.location.href = \"/workspace\"; };",
+      "const internalConfig = { enabled: true };",
+      "</script>",
+      "<template>",
+      "  <main>",
+      "    <h1>Workspaces</h1>",
+      "    <p>{{ statusCopy }}</p>",
+      "    <button @click=\"openWorkspace\">Open workspace</button>",
+      "  </main>",
+      "</template>",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: show workspace readiness"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const selectorValues = plan.flows.flatMap((flow) => flow.selectors.map((selector) => selector.value));
+
+  assert.ok(selectorValues.includes("Workspace ready"), JSON.stringify(selectorValues));
+  assert.ok(selectorValues.includes("Preparing workspace"), JSON.stringify(selectorValues));
+  assert.equal(selectorValues.includes("/workspace"), false, JSON.stringify(selectorValues));
+  assert.equal(selectorValues.includes("true"), false, JSON.stringify(selectorValues));
 });
 
 test("multiple diff-added actions remain ungrounded when the primary scenario is ambiguous", async () => {

@@ -1598,12 +1598,24 @@ test("Vue storage evidence compiles the same persistence proof without framework
   assert.ok(file);
   const spec = await readFile(path.join(root, file.path), "utf8");
   const primaryReceipt = file.scenarioAutomation.find((receipt) => receipt.kind === "primary");
+  const conditionalReceipt = file.scenarioAutomation.find((receipt) =>
+    receipt.kind === "state-transition" && /conditional state and fallback/i.test(receipt.title)
+  );
 
   assert.match(spec, /const persistedField = page\.getByLabel\("Draft title"\)/);
   assert.match(spec, /Repository evidence links sessionStorage key "draft-title"/);
   assert.match(spec, /await page\.reload\(\)/);
   assert.match(spec, /await expect\(persistedField\)\.toHaveValue\(persistedValue\)/);
-  assert.equal(spec.match(/getByTestId\("draft-save"\)\.click\(\)/g)?.length, 1);
+  assert.equal(
+    spec.match(/getByTestId\("draft-save"\)\.click\(\)/g)?.length,
+    2,
+    "The persistence proof and transient completion-state proof each exercise the save action.",
+  );
+  assert.equal(conditionalReceipt?.status, "compiled");
+  assert.equal(
+    spec.match(/expect\(page\.getByText\("Draft saved"\)\)\.not\.toBeVisible\(\)/g)?.length,
+    2,
+  );
   assert.match(file.languageBrief.trigger, /save draft/i);
   assert.doesNotMatch(file.languageBrief.trigger, /re-entry/i);
   assert.equal(
@@ -2504,6 +2516,10 @@ test("Vue conditional actions retain changed UI evidence without unrelated payme
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".generated-e2e" });
   const file = draft.files.find((candidate) => candidate.source === "change-intent");
   assert.ok(file);
+  const stateReceipt = file.scenarioAutomation.find((receipt) =>
+    receipt.kind === "state-transition" && /conditional state and fallback/i.test(receipt.title)
+  );
+  assert.equal(stateReceipt?.status, "not-compiled");
   const spec = await readFile(path.join(root, file.path), "utf8");
   assert.match(spec, /page\.getByRole\("button", \{ name: "Import document" \}\)\.click\(\)/);
   assert.match(spec, /page\.getByText\("Document imported"\)/);
@@ -2554,9 +2570,122 @@ test("React conditional UI produces state QA from changed behavior evidence", as
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".generated-e2e" });
   const file = draft.files.find((candidate) => candidate.source === "change-intent");
   assert.ok(file);
+  const stateReceipt = file.scenarioAutomation.find((receipt) =>
+    receipt.kind === "state-transition" && /conditional state and fallback/i.test(receipt.title)
+  );
+  assert.equal(stateReceipt?.status, "compiled");
+  assert.equal(stateReceipt?.mappedSteps, 2);
+  assert.equal(stateReceipt?.mappedAssertions, 2);
   const spec = await readFile(path.join(root, file.path), "utf8");
   assert.match(spec, /page\.getByRole\("button", \{ name: "Send notification" \}\)\.click\(\)/);
   assert.match(spec, /page\.getByText\("Notification queued"\)/);
+  assert.match(spec, /expect\(page\.getByText\("Notification queued"\)\)\.not\.toBeVisible\(\)/);
+  assert.match(spec, /await page\.reload\(\)/);
+});
+
+test("Vue local state transitions compile visible outcome and re-entry proof", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { vue: "3.5.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await write(
+    root,
+    "src/pages/workspaces.vue",
+    "<template><main><h1>Workspaces</h1></main></template>\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/workspace-ready-state");
+
+  await write(
+    root,
+    "src/pages/workspaces.vue",
+    [
+      "<script setup lang=\"ts\">",
+      "import { ref } from 'vue';",
+      "const isWorkspaceReady = ref(false);",
+      "function revealWorkspace() { isWorkspaceReady.value = true; }",
+      "</script>",
+      "<template>",
+      "  <main>",
+      "    <h1>Workspaces</h1>",
+      "    <button type=\"button\" @click=\"revealWorkspace\">Reveal workspace</button>",
+      "    <p v-if=\"isWorkspaceReady\">Workspace ready</p>",
+      "  </main>",
+      "</template>",
+    ].join("\n"),
+  );
+  commit(root, "feat: reveal workspace ready state");
+
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".generated-e2e" });
+  const file = draft.files.find((candidate) => candidate.source === "change-intent");
+  assert.ok(file);
+  const stateReceipt = file.scenarioAutomation.find((receipt) =>
+    receipt.kind === "state-transition" && /conditional state and fallback/i.test(receipt.title)
+  );
+  assert.equal(stateReceipt?.status, "compiled");
+  assert.equal(stateReceipt?.mappedSteps, 2);
+  assert.equal(stateReceipt?.mappedAssertions, 2);
+
+  const spec = await readFile(path.join(root, file.path), "utf8");
+  assert.match(spec, /page\.getByRole\("button", \{ name: "Reveal workspace" \}\)\.click\(\)/);
+  assert.match(spec, /expect\(page\.getByText\("Workspace ready"\)\)\.not\.toBeVisible\(\)/);
+  assert.match(spec, /expect\(page\.getByText\("Workspace ready"\)\)\.toBeVisible\(\)/);
+  assert.match(spec, /await page\.reload\(\)/);
+});
+
+test("state changes outside a user handler do not borrow a nearby action", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { react: "19.0.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await write(
+    root,
+    "src/pages/status.tsx",
+    "export function StatusPage() { return <main><h1>Status</h1></main>; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/automatic-status");
+
+  await write(
+    root,
+    "src/pages/status.tsx",
+    [
+      "export function StatusPage() {",
+      "  const [isStatusReady, setStatusReady] = useState(false);",
+      "  function inspectStatus() { console.info('status inspected'); }",
+      "  useEffect(() => { setStatusReady(true); }, []);",
+      "  return <main>",
+      "    <h1>Status</h1>",
+      "    <button onClick={inspectStatus}>Inspect status</button>",
+      "    {isStatusReady && <p>Status ready</p>}",
+      "  </main>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "feat: show automatic readiness state");
+
+  const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: ".generated-e2e" });
+  const file = draft.files.find((candidate) => candidate.source === "change-intent");
+  assert.ok(file);
+  const stateReceipt = file.scenarioAutomation.find((receipt) =>
+    receipt.kind === "state-transition" && /conditional state and fallback/i.test(receipt.title)
+  );
+  assert.equal(stateReceipt?.status, "not-compiled");
+
+  const spec = await readFile(path.join(root, file.path), "utf8");
+  assert.doesNotMatch(spec, /Routed QA scenario:.*conditional state and fallback/is);
 });
 
 test("URL-backed UI modes become restoration QA with representative controls", async (t) => {

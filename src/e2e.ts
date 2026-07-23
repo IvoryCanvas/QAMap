@@ -4940,6 +4940,7 @@ type DraftE2eFlow = E2eFlow & {
   manifestMatch?: VerificationManifestMatch;
   manifestCheckMatches?: VerificationManifestMatch[];
   persistenceProbe?: PlaywrightPersistenceProbe;
+  conditionalStateProbe?: PlaywrightConditionalStateProbe;
 };
 type AnalyzedChangeIntent = ChangeIntentAnalysis["intents"][number];
 
@@ -4950,6 +4951,11 @@ interface PlaywrightPersistenceProbe {
   inputSelector: E2eSelector;
   actionSelector: E2eSelector;
   sampleValue: string;
+}
+
+interface PlaywrightConditionalStateProbe {
+  actionSelector: E2eSelector;
+  outcomeSelector: E2eSelector;
 }
 
 interface IntentFlowScope {
@@ -7890,15 +7896,18 @@ async function buildDraftFlows(
   if (plan.recommendedRunner.name !== "playwright") {
     return draftFlows;
   }
-  return Promise.all(draftFlows.map(async (flow) => ({
-    ...flow,
-    persistenceProbe: await inferPlaywrightPersistenceProbe(
-      plan.root,
-      flow,
-      addedDiffText,
-      analysisRevisionForPlan(plan),
-    ),
-  })));
+  return Promise.all(draftFlows.map(async (flow) => {
+    const revision = analysisRevisionForPlan(plan);
+    const [persistenceProbe, conditionalStateProbe] = await Promise.all([
+      inferPlaywrightPersistenceProbe(plan.root, flow, addedDiffText, revision),
+      inferPlaywrightConditionalStateProbe(plan.root, flow, addedDiffText, revision),
+    ]);
+    return {
+      ...flow,
+      persistenceProbe,
+      conditionalStateProbe,
+    };
+  }));
 }
 
 function analysisRevisionForPlan(plan: E2ePlanResult): AnalysisRevision {
@@ -8809,6 +8818,240 @@ function persistenceSampleValue(type: string | undefined, selector: string): str
   return type === "number" ? "42" : playwrightSampleInput(selector);
 }
 
+interface ConditionalStateMutation {
+  state: string;
+  handler: string;
+  offset: number;
+}
+
+interface ConditionalRenderedOutcome {
+  state: string;
+  value: string;
+}
+
+async function inferPlaywrightConditionalStateProbe(
+  root: string,
+  flow: DraftE2eFlow,
+  addedDiffText: Record<string, string>,
+  analysisRevision: AnalysisRevision = { head: "HEAD", includeWorkingTree: false },
+): Promise<PlaywrightConditionalStateProbe | undefined> {
+  if (
+    !primaryRouteEntrypoint(flow) ||
+    !flow.qaScenarios?.some((scenario) =>
+      scenario.kind === "state-transition" && /changed conditional state and fallback/i.test(scenario.title)
+    )
+  ) {
+    return undefined;
+  }
+
+  for (const file of flow.files.slice(0, maxFilesPerFlow)) {
+    if (!isUiImplementationFile(file)) {
+      continue;
+    }
+    const text = await readAnalyzedText(root, file, analysisRevision);
+    const addedText = addedDiffText[file] ?? "";
+    if (!text || !addedText) {
+      continue;
+    }
+    const mutations = extractConditionalStateMutations(text, addedText);
+    if (mutations.length === 0) {
+      continue;
+    }
+    const outcomes = extractConditionalRenderedOutcomes(text, new Set(mutations.map((mutation) => mutation.state)));
+    for (const mutation of mutations) {
+      const handlerBody = namedHandlerBodyAtOffset(text, mutation.handler, mutation.offset);
+      if (!handlerBody || handlerLeavesCurrentSurface(handlerBody)) {
+        continue;
+      }
+      const actionSelector = persistenceActionSelector(flow.selectors, { file, text }, mutation.handler);
+      if (!actionSelector) {
+        continue;
+      }
+      const outcomeSelector = outcomes
+        .filter((outcome) => outcome.state === mutation.state)
+        .map((outcome) => flow.selectors.find((selector) =>
+          selector.file === file &&
+          selector.kind === "visible-text" &&
+          selector.addedInDiff &&
+          selector.value === outcome.value
+        ))
+        .find((selector): selector is E2eSelector =>
+          selector !== undefined &&
+          selector.value.trim().toLowerCase() !== actionSelector.value.trim().toLowerCase()
+        );
+      if (!outcomeSelector) {
+        continue;
+      }
+      return { actionSelector, outcomeSelector };
+    }
+  }
+  return undefined;
+}
+
+function extractConditionalStateMutations(text: string, addedText: string): ConditionalStateMutation[] {
+  const mutations: ConditionalStateMutation[] = [];
+  const reactStateMatcher =
+    /\bconst\s*\[\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*useState(?:<[^>\n]{1,120}>)?\s*\(\s*false\s*\)/g;
+  for (const state of text.matchAll(reactStateMatcher)) {
+    const stateName = state[1];
+    const setterName = state[2];
+    const setterMatcher = new RegExp(`\\b${escapeRegExp(setterName)}\\s*\\(\\s*true\\s*\\)`, "g");
+    if (!setterMatcher.test(addedText)) {
+      continue;
+    }
+    setterMatcher.lastIndex = 0;
+    for (const call of text.matchAll(setterMatcher)) {
+      const offset = call.index ?? 0;
+      const handler = enclosingNamedHandler(text, offset);
+      if (handler) {
+        mutations.push({ state: stateName, handler, offset });
+      }
+    }
+  }
+
+  const vueStateMatcher =
+    /\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*ref(?:<[^>\n]{1,120}>)?\s*\(\s*false\s*\)/g;
+  for (const state of text.matchAll(vueStateMatcher)) {
+    const stateName = state[1];
+    const assignmentMatcher = new RegExp(`\\b${escapeRegExp(stateName)}\\.value\\s*=\\s*true\\b`, "g");
+    if (!assignmentMatcher.test(addedText)) {
+      continue;
+    }
+    assignmentMatcher.lastIndex = 0;
+    for (const assignment of text.matchAll(assignmentMatcher)) {
+      const offset = assignment.index ?? 0;
+      const handler = enclosingNamedHandler(text, offset);
+      if (handler) {
+        mutations.push({ state: stateName, handler, offset });
+      }
+    }
+  }
+  return mutations;
+}
+
+function extractConditionalRenderedOutcomes(
+  text: string,
+  stateNames: Set<string>,
+): ConditionalRenderedOutcome[] {
+  const outcomes: ConditionalRenderedOutcome[] = [];
+  for (const stateName of stateNames) {
+    const escapedState = escapeRegExp(stateName);
+    const matchers = [
+      new RegExp(
+        `\\{\\s*${escapedState}\\s*&&\\s*<([A-Za-z][\\w.-]*)\\b[^>]*>([\\s\\S]{0,400}?)<\\/\\1>\\s*\\}`,
+        "g",
+      ),
+      new RegExp(
+        `\\{\\s*${escapedState}\\s*\\?\\s*<([A-Za-z][\\w.-]*)\\b[^>]*>([\\s\\S]{0,400}?)<\\/\\1>\\s*:\\s*(?:null|false)\\s*\\}`,
+        "g",
+      ),
+      new RegExp(
+        `<([A-Za-z][\\w.-]*)\\b(?=[^>]*\\bv-if\\s*=\\s*["']${escapedState}(?:\\.value)?["'])[^>]*>([\\s\\S]{0,400}?)<\\/\\1>`,
+        "g",
+      ),
+    ];
+    for (const matcher of matchers) {
+      for (const match of text.matchAll(matcher)) {
+        const value = normalizeRenderedText(match[2]);
+        if (value && isUsefulSelector(value) && isUsefulVisibleText(value)) {
+          outcomes.push({ state: stateName, value });
+        }
+      }
+    }
+  }
+  return uniqueConditionalRenderedOutcomes(outcomes);
+}
+
+function uniqueConditionalRenderedOutcomes(outcomes: ConditionalRenderedOutcome[]): ConditionalRenderedOutcome[] {
+  const seen = new Set<string>();
+  return outcomes.filter((outcome) => {
+    const key = `${outcome.state}\u0000${outcome.value}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function namedHandlerBodyAtOffset(text: string, handler: string, offset: number): string | undefined {
+  const prefix = text.slice(0, offset);
+  const matcher = new RegExp(
+    `(?:\\bfunction\\s+${escapeRegExp(handler)}\\s*\\([^)]*\\)|\\b(?:const|let)\\s+${escapeRegExp(handler)}\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|[A-Za-z_$][\\w$]*)\\s*=>)\\s*\\{`,
+    "g",
+  );
+  let openingBrace = -1;
+  for (const match of prefix.matchAll(matcher)) {
+    openingBrace = (match.index ?? 0) + match[0].lastIndexOf("{");
+  }
+  if (openingBrace < 0) {
+    return undefined;
+  }
+  const closingBrace = matchingClosingBrace(text, openingBrace);
+  return closingBrace > offset
+    ? text.slice(openingBrace + 1, closingBrace)
+    : undefined;
+}
+
+function matchingClosingBrace(text: string, openingBrace: number): number {
+  let depth = 0;
+  let quote: "'" | "\"" | "`" | undefined;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let index = openingBrace; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (lineComment) {
+      if (char === "\n") lineComment = false;
+      continue;
+    }
+    if (blockComment) {
+      if (char === "*" && next === "/") {
+        blockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (char === "/" && next === "/") {
+      lineComment = true;
+      index += 1;
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      blockComment = true;
+      index += 1;
+      continue;
+    }
+    if (char === "'" || char === "\"" || char === "`") {
+      quote = char;
+      continue;
+    }
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+function handlerLeavesCurrentSurface(body: string): boolean {
+  return /\b(?:router\.(?:push|replace)|navigate)\s*\(|\b(?:window\.)?location(?:\.href|\.(?:assign|replace))\s*(?:=|\()|\bwindow\.open\s*\(/i.test(
+    body,
+  );
+}
+
 function buildScenarioAutomationReceipts(
   flow: E2eFlow,
   runner: E2eRunnerName,
@@ -9613,6 +9856,10 @@ function playwrightPersistenceProbeForFlow(flow: E2eFlow): PlaywrightPersistence
   return (flow as DraftE2eFlow).persistenceProbe;
 }
 
+function playwrightConditionalStateProbeForFlow(flow: E2eFlow): PlaywrightConditionalStateProbe | undefined {
+  return (flow as DraftE2eFlow).conditionalStateProbe;
+}
+
 function appendPlaywrightPersistencePreparation(
   lines: string[],
   probe: PlaywrightPersistenceProbe | undefined,
@@ -9687,6 +9934,11 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
     if (selection.decision === "review-only") {
       continue;
     }
+    const conditionalStateDraft = playwrightConditionalStateScenarioDraft(flow, scenario, routeDraft);
+    if (conditionalStateDraft) {
+      drafts.push(conditionalStateDraft);
+      continue;
+    }
     const shareDraft = playwrightShareScenarioDraft(flow, scenario, routeDraft);
     if (shareDraft) {
       drafts.push(shareDraft);
@@ -9746,6 +9998,41 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
     });
   }
   return drafts;
+}
+
+function playwrightConditionalStateScenarioDraft(
+  flow: E2eFlow,
+  scenario: IntentQaScenario,
+  routeDraft: PlaywrightRouteDraft,
+): PlaywrightRoutedScenarioDraft | undefined {
+  if (
+    scenario.kind !== "state-transition" ||
+    !/changed conditional state and fallback/i.test(scenario.title)
+  ) {
+    return undefined;
+  }
+  const probe = playwrightConditionalStateProbeForFlow(flow);
+  if (!probe) {
+    return undefined;
+  }
+  const testName = `${flow.title}: ${scenario.title}`.replaceAll('"', "'");
+  const actionLocator = playwrightLocator(probe.actionSelector);
+  const outcomeLocator = playwrightLocator(probe.outcomeSelector);
+  return {
+    scenarioId: scenario.id,
+    mappedSteps: scenario.steps.length,
+    mappedAssertions: scenario.assertions.length,
+    lines: [
+      `test("${testName}", async ({ page }) => {`,
+      `  await page.goto(${routeDraft.expression});`,
+      `  await expect(${outcomeLocator}).not.toBeVisible();`,
+      `  await ${actionLocator}.click();`,
+      `  await expect(${outcomeLocator}).toBeVisible();`,
+      "  await page.reload();",
+      `  await expect(${outcomeLocator}).not.toBeVisible();`,
+      "});",
+    ],
+  };
 }
 
 function preferredPublicRouteEntrypoint(flow: E2eFlow): E2eEntrypoint | undefined {
@@ -11791,6 +12078,11 @@ function extractRenderedStateSelectors(file: string, text: string): E2eSelector[
     }
   }
   for (const stateName of renderedNames) {
+    for (const value of renderedLiteralValues(text, stateName)) {
+      if (isUsefulVisibleText(value)) {
+        selectors.push({ kind: "visible-text", value, file });
+      }
+    }
     const stateDeclaration = new RegExp(
       `\\bconst\\s*\\[\\s*${escapeRegExp(stateName)}\\s*,\\s*([A-Za-z_$][\\w$]*)\\s*\\]\\s*=\\s*useState\\b`,
     ).exec(text);

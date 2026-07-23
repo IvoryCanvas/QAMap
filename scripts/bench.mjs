@@ -108,6 +108,11 @@ function scoreTarget(target, plan, qa, durationMs) {
   const scenarioReceipts = [...new Map(
     qa.flows.flatMap((flow) => flow.scenarioAutomation ?? []).map((receipt) => [receipt.scenarioId, receipt]),
   ).values()];
+  const scenarioById = new Map(qaScenarios.map((scenario) => [scenario.id, scenario]));
+  const compiledScenarioTitles = scenarioReceipts
+    .filter((receipt) => receipt.status === "compiled")
+    .map((receipt) => scenarioById.get(receipt.scenarioId)?.title)
+    .filter(Boolean);
   const primaryFlowAutomation = qa.flows.map((flow) => ({
     flowTitle: flow.title,
     receipt: (flow.scenarioAutomation ?? []).find((receipt) => receipt.kind === "primary"),
@@ -177,6 +182,7 @@ function scoreTarget(target, plan, qa, durationMs) {
     routedRecommendedScenarios: scenarioReceipts.filter((receipt) => receipt.decision === "recommended").length,
     routedReviewOnlyScenarios: scenarioReceipts.filter((receipt) => receipt.decision === "review-only").length,
     compiledScenarioReceipts: scenarioReceipts.filter((receipt) => receipt.status === "compiled").length,
+    compiledScenarioTitles,
     partialScenarioReceipts: scenarioReceipts.filter((receipt) => receipt.status === "partial").length,
     notCompiledScenarioReceipts: scenarioReceipts.filter((receipt) => receipt.status === "not-compiled").length,
     mappedScenarioSteps: scenarioReceipts.reduce((sum, receipt) => sum + receipt.mappedSteps, 0),
@@ -338,6 +344,18 @@ function evaluateContract(expect, result, plan, qa) {
   appendUnexpectedTerms(failures, "intent lifecycle", result.intentLifecycle, expect.mustNotIncludeLifecycle);
   appendMissingTerms(failures, "intent QA scenario", result.intentScenarios, expect.mustIncludeQaScenarios);
   appendUnexpectedTerms(failures, "intent QA scenario", result.intentScenarios, expect.mustNotIncludeQaScenarios);
+  appendMissingTerms(
+    failures,
+    "compiled QA scenario",
+    result.compiledScenarioTitles,
+    expect.mustCompileQaScenarios,
+  );
+  appendUnexpectedTerms(
+    failures,
+    "compiled QA scenario",
+    result.compiledScenarioTitles,
+    expect.mustNotCompileQaScenarios,
+  );
   appendMissingTerms(failures, "intent evidence", result.intentEvidence, expect.mustFindIntentEvidence);
   appendMissingTerms(failures, "scenario source file", result.scenarioSourceFiles, expect.mustTraceScenarioFiles);
   appendMissingTerms(failures, "existing test evidence", result.existingEvidencePaths, expect.mustFindExistingEvidence);
@@ -354,6 +372,22 @@ function evaluateContract(expect, result, plan, qa) {
   }
   if (expect.minScenarioReceipts !== undefined && result.scenarioReceipts < expect.minScenarioReceipts) {
     failures.push(`expected at least ${expect.minScenarioReceipts} scenario receipt(s), got ${result.scenarioReceipts}`);
+  }
+  if (
+    expect.minCompiledScenarioReceipts !== undefined &&
+    result.compiledScenarioReceipts < expect.minCompiledScenarioReceipts
+  ) {
+    failures.push(
+      `expected at least ${expect.minCompiledScenarioReceipts} compiled scenario receipt(s), got ${result.compiledScenarioReceipts}`,
+    );
+  }
+  if (
+    expect.maxCompiledScenarioReceipts !== undefined &&
+    result.compiledScenarioReceipts > expect.maxCompiledScenarioReceipts
+  ) {
+    failures.push(
+      `compiled scenario receipts ${result.compiledScenarioReceipts} exceed ${expect.maxCompiledScenarioReceipts}`,
+    );
   }
   if (
     expect.minPrimaryFlowReceipts !== undefined &&

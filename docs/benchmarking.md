@@ -59,6 +59,8 @@ Each target can declare:
 | `mustIncludeLifecycle` | Trigger, condition, action, state, effect, or outcome terms that must survive in the ordered lifecycle. |
 | `mustIncludeQaScenarios` | Failure, boundary, state-transition, or primary QA terms that must be proposed before runner compilation. |
 | `mustNotIncludeQaScenarios` | QA scenario terms that would be false positives for the fixture and must not be proposed. |
+| `mustCompileQaScenarios` | QA scenario terms that must be fully mapped into generated test commands and assertions. |
+| `mustNotCompileQaScenarios` | QA scenario terms that must remain uncompiled when the repository does not prove a safe automation path. |
 | `mustFindIntentEvidence` | Commit or diff terms that must remain attached to intent provenance. |
 | `mustTraceScenarioFiles` | Changed files that must appear in at least one scenario's exact direct/supporting base- or head-side diff source. |
 | `maxUntracedCriticalScenarios` | Maximum critical scenarios without a direct/supporting diff source carrying a file and line number. Contextual commit evidence cannot satisfy this contract; lifecycle fixtures keep it at zero. |
@@ -66,6 +68,8 @@ Each target can declare:
 | `maxMissingReasoningTraces` | Maximum routed scenarios with no corresponding QA reasoning trace. Public trace fixtures keep this at zero. |
 | `maxUntraceableRequiredScenarios` | Maximum required scenarios whose diff evidence cannot be joined to an evidence-linked lifecycle stage. Public trace fixtures keep this at zero. |
 | `minScenarioReceipts` | Minimum routed scenario receipts emitted by the E2E adapter. |
+| `minCompiledScenarioReceipts` | Minimum scenarios fully mapped into generated test commands and assertions. |
+| `maxCompiledScenarioReceipts` | Maximum scenarios allowed to be fully mapped, useful for false-positive controls. |
 | `maxMissingScenarioReceipts` | Maximum selected QA scenarios with no corresponding automation receipt. Public lifecycle fixtures keep this at zero. |
 | `minPrimaryFlowReceipts` | Minimum affected flows with their own primary scenario automation receipt. Unlike intent-level receipt counts, this cannot be satisfied twice by one strong flow. |
 | `maxMissingPrimaryFlowReceipts` | Maximum affected flows whose primary scenario has no automation receipt. |

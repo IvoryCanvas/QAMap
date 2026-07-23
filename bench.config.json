@@ -134,6 +134,7 @@
         "mustFindSelectors": ["Import document", "Document imported"],
         "mustFindSuccessSignals": ["Document imported"],
         "mustNotFindEvidence": ["Payment sandbox", "Network response setup"],
+        "mustNotCompileQaScenarios": ["Changed conditional state and fallback"],
         "maxBlankActions": 0,
         "maxGenericTitles": 0,
         "maxAgentBytes": 8192
@@ -155,6 +156,10 @@
         "mustFindEntrypoints": ["/notifications"],
         "mustFindSelectors": ["Send notification", "Notification queued"],
         "mustFindSuccessSignals": ["Notification queued"],
+        "mustCompileQaScenarios": ["Changed conditional state and fallback"],
+        "minCompiledScenarioReceipts": 1,
+        "minMappedScenarioSteps": 2,
+        "minMappedScenarioAssertions": 2,
         "maxBlankActions": 0,
         "maxGenericTitles": 0,
         "maxAgentBytes": 8192
