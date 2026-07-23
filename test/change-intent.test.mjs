@@ -2058,6 +2058,101 @@ test("state setter evidence does not compile a second user interaction", async (
   assert.match(spec, /page\.getByText\("Pinned record appears first"\)/);
 });
 
+test("unrelated callback props do not become the representative action for broad changes", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/components/SharedPanel.tsx";
+  await write(
+    root,
+    file,
+    "export function SharedPanel() { return <section>Shared panel</section>; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/shared-component-foundation");
+
+  await write(
+    root,
+    file,
+    [
+      "export function SharedPanel({ onClose }) {",
+      "  return <section>",
+      "    <button onClick={onClose}>Dismiss</button>",
+      "    <p>Shared panel</p>",
+      "  </section>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "feat: adopt shared component foundation");
+
+  const analysis = await analyze(root, [file]);
+  const [intent] = analysis.intents;
+  const primary = intent.scenarios.find((scenario) => scenario.kind === "primary");
+  assert.ok(primary);
+  assert.equal(primary.steps.some((step) => /\bclose\b/i.test(step)), false);
+  assert.ok(primary.steps.some((step) => /shared component foundation/i.test(step)));
+  assert.equal(intent.lifecycle.some((stage) => /\bclose\b/i.test(stage.label)), false);
+  assert.equal(primary.evidence.some((item) => item.symbol === "onClose"), false);
+});
+
+test("callback props remain representative when the commit explicitly changes that action", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/components/NotificationPanel.tsx";
+  await write(
+    root,
+    file,
+    "export function NotificationPanel() { return <section>Notifications</section>; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/notification-panel-close");
+
+  await write(
+    root,
+    file,
+    [
+      "export function NotificationPanel({ onClose }) {",
+      "  return <section>",
+      "    <button onClick={onClose}>Close notifications</button>",
+      "  </section>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "feat: close notification panel");
+
+  const analysis = await analyze(root, [file]);
+  const primary = analysis.intents[0].scenarios.find((scenario) => scenario.kind === "primary");
+  assert.ok(primary);
+  assert.ok(primary.steps.some((step) => /\bclose\b/i.test(step)));
+});
+
+test("callback action synonyms retain behavior supported by the commit intent", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/components/ItemPreview.tsx";
+  await write(
+    root,
+    file,
+    "export function ItemPreview() { return <section>Item</section>; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/item-preview");
+
+  await write(
+    root,
+    file,
+    [
+      "export function ItemPreview({ onView }) {",
+      "  return <section>",
+      "    <button onClick={onView}>Show item preview</button>",
+      "  </section>;",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "feat: show item preview");
+
+  const analysis = await analyze(root, [file]);
+  const primary = analysis.intents[0].scenarios.find((scenario) => scenario.kind === "primary");
+  assert.ok(primary);
+  assert.ok(primary.steps.some((step) => /\bview\b/i.test(step)));
+});
+
 test("evidence-routed failure QA does not reuse an unrelated action selector", async (t) => {
   const root = await makeRepo(t);
   await write(
@@ -2513,6 +2608,12 @@ test("form validation mode changes produce edit-trigger-correction QA across unr
   assert.equal(scenario.priority, "critical");
   assert.ok(scenario.evidence.some((item) => item.file === file && item.side === "head"));
   assert.ok(scenario.assertions.some((assertion) => /correcting the value clears stale feedback/i.test(assertion)));
+  assert.ok(
+    analysis.intents[0].lifecycle.some((stage) =>
+      stage.kind === "condition" &&
+      stage.evidence.some((item) => item.symbol === "form-validation-mode" && item.startLine)
+    ),
+  );
 });
 
 test("non-form interaction mode changes do not fabricate validation timing QA", async (t) => {
