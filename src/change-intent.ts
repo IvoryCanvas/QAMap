@@ -602,7 +602,25 @@ function buildLifecycle(
 
   stages.push(...lifecycleFromSourceRoles(roleEvidence));
 
-  return limitLifecycleStages(stages);
+  return limitLifecycleStages(removeRedundantOutcomeTimingTriggers(stages));
+}
+
+function removeRedundantOutcomeTimingTriggers(
+  stages: BehaviorLifecycleStage[],
+): BehaviorLifecycleStage[] {
+  const outcomeLabels = stages
+    .filter((stage) => stage.kind === "observable-outcome")
+    .map((stage) => stripTerminalPunctuation(stage.label).toLowerCase());
+  return stages.filter((stage) => {
+    if (!isCommitOnlyCausalTrigger(stage)) {
+      return true;
+    }
+    if (/\b(?:clicked|pressed|selected|submitted|tapped)\b/i.test(stage.label)) {
+      return true;
+    }
+    const timingPhrase = stripTerminalPunctuation(stage.label).toLowerCase();
+    return !outcomeLabels.some((outcome) => outcome.includes(timingPhrase));
+  });
 }
 
 function lifecycleFromCodeSignals(signals: CodeBehaviorSignal[]): BehaviorLifecycleStage[] {
@@ -735,6 +753,9 @@ function buildIntentQaScenarios(
   const locatedOutcomeStages = outcomeStages.filter((stage) => hasActionableLocatedDiffEvidence(stage.evidence));
   const outcomes = (locatedOutcomeStages.length > 0 ? locatedOutcomeStages : outcomeStages)
     .map((stage) => assertionForStage(stage));
+  const stateChanges = lifecycle
+    .filter(isDurableStateChangeRequirement)
+    .map((stage) => assertionForStage(stage));
   const sideEffects = lifecycle.filter((stage) => stage.kind === "side-effect").map((stage) => assertionForStage(stage));
   const primaryEvidence = lifecycleEvidence(lifecycle, evidence);
   const primaryHasActionableEvidence = hasActionableLocatedDiffEvidence(primaryEvidence);
@@ -745,8 +766,11 @@ function buildIntentQaScenarios(
     title,
     rationale: "Commit and diff evidence describe this changed behavior lifecycle; verify the complete observable path before merge.",
     setup: conditions.length > 0 ? conditions : ["Prepare representative pre-change and changed-branch state."],
-    steps: actions.length > 0 ? actions : lifecycle.map((stage) => stage.label),
-    assertions: outcomes.length > 0 ? outcomes : sideEffects.slice(0, 2),
+    steps: actions,
+    assertions: uniqueStrings([
+      ...(outcomes.length > 0 ? outcomes : sideEffects.slice(0, 2)),
+      ...stateChanges,
+    ]).slice(0, 4),
     edgeCases: [],
     evidence: primaryEvidence.slice(0, 8),
     confidence,
@@ -1199,12 +1223,9 @@ function selectPrimaryLifecycleSteps(lifecycle: BehaviorLifecycleStage[]): strin
   const hasCommitBackedAction = lifecycle.some((stage) =>
     stage.kind === "action" && stage.evidence.some((item) => item.kind === "commit"),
   );
-  const hasUserAction = lifecycle.some((stage) => stage.kind === "action");
   const limits: Partial<Record<BehaviorLifecycleStageKind, number>> = {
     trigger: 1,
     action: 1,
-    "state-change": 2,
-    "side-effect": 2,
   };
   const counts = new Map<BehaviorLifecycleStageKind, number>();
   const steps: string[] = [];
@@ -1212,14 +1233,11 @@ function selectPrimaryLifecycleSteps(lifecycle: BehaviorLifecycleStage[]): strin
     if (
       !hasActionableLocatedDiffEvidence(stage.evidence) &&
       stage.evidence.every((item) => item.kind === "commit") &&
-      isContextOnlyCommitLifecycleStep(stage.label)
+      (isContextOnlyCommitLifecycleStep(stage.label) || isCommitOnlyCausalTrigger(stage))
     ) {
       continue;
     }
     if (hasCommitBackedAction && isImplementationShapedTriggerStage(stage)) {
-      continue;
-    }
-    if (hasUserAction && isImplementationShapedStateChangeStage(stage)) {
       continue;
     }
     const limit = limits[stage.kind] ?? 0;
@@ -1240,6 +1258,13 @@ function isContextOnlyCommitLifecycleStep(label: string): boolean {
   return /\b(?:affected|changed|intended|related)\s+(?:product\s+)?(?:behavior|flow|result|state|surface|view)\b/i.test(label);
 }
 
+function isCommitOnlyCausalTrigger(stage: BehaviorLifecycleStage): boolean {
+  return stage.kind === "trigger" &&
+    stage.evidence.length > 0 &&
+    stage.evidence.every((item) => item.kind === "commit") &&
+    /^(?:after|before|if|once|when|while)\b/i.test(stage.label);
+}
+
 function isImplementationShapedTriggerStage(stage: BehaviorLifecycleStage): boolean {
   if (stage.kind !== "trigger" || stage.evidence.some((item) => item.kind === "commit")) {
     return false;
@@ -1248,10 +1273,13 @@ function isImplementationShapedTriggerStage(stage: BehaviorLifecycleStage): bool
 }
 
 function isImplementationShapedStateChangeStage(stage: BehaviorLifecycleStage): boolean {
-  if (stage.kind !== "state-change" || stage.evidence.some((item) => item.kind === "commit")) {
-    return false;
-  }
   return /^Update state through (?:set|update|dispatch|emit|mutate|use)[A-Z0-9_]/.test(stage.label);
+}
+
+function isDurableStateChangeRequirement(stage: BehaviorLifecycleStage): boolean {
+  return stage.kind === "state-change" &&
+    !isImplementationShapedStateChangeStage(stage) &&
+    /\b(?:cache|persist|re-?entry|reload|resync|retain|store|survive|sync)\b/i.test(stage.label);
 }
 
 function lifecycleStepsDescribeSameAction(left: string, right: string): boolean {
@@ -1939,8 +1967,10 @@ function extractTriggerPhrases(statement: string): string[] {
 
 function splitIntentClauses(statement: string): string[] {
   const stripped = stripTerminalPunctuation(statement.trim());
+  const lifecycleVerb =
+    "(?:cache|cancel|clear|click|complete|delete|display|emit|fetch|fire|invalidate|navigate|notify|open|persist|post|publish|redirect|remove|render|request|resync|reset|save|schedule|select|send|show|store|submit|surface|sync|tap|toggle|track|update|upload)";
   const clauses = stripped
-    .split(/\s+(?:and then|then|and)\s+/i)
+    .split(new RegExp(`(?:,\\s*(?=${lifecycleVerb}\\b)|,?\\s+(?:and then|then|and)\\s+)`, "i"))
     .map((clause) => clause.trim())
     .filter((clause) => clause.length >= 4);
   return clauses.length > 0 ? clauses : [stripped];

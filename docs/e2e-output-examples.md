@@ -17,26 +17,27 @@ The output should be specific enough to paste into a PR comment. This excerpt us
 
 At a Glance
 - Product QA execution: not run; static analysis and draft mapping only
-- Change intent: Submit notification preferences and show the saved state [high]
-- Behavior lifecycle: trigger: submit preferences -> state-change: update saved state -> side-effect: invoke fetch -> observable-outcome: show saved state
-- Affected behavior: Submit notification preferences and show the saved state
+- Change intent: Submit notification preferences, persist the selected timezone, and show the saved state [high]
+- Behavior lifecycle: trigger: submit notification preferences -> state-change: persist the selected timezone -> side-effect: invoke fetch -> observable-outcome: show the saved state
+- Affected behavior: Submit notification preferences, persist the selected timezone, and show the saved state
 
 QA Reasoning Trace
 - trace:preferences-primary [traceable]
   1. Diff evidence: src/pages/preferences.tsx:7, symbol fetch
   2. Affected behavior: side-effect: invoke fetch [evidence-linked]
   3. Risk: the changed behavior may not reach its observable saved state
-  4. QA scenario: [required] Submit notification preferences and show the saved state
-  5. Expected proof: the saved state becomes observable
+  4. QA scenario: [required] Submit notification preferences, persist the selected timezone, and show the saved state
+  5. Expected proof: visible text "Preferences saved" appears; the selected timezone persists
   6. Optional artifact: tests/e2e/submit-notification-preferences.spec.ts, partially mapped (not executed)
   7. Execution: not run
 
 Change Intent Evidence
 - Commit: feat: submit notification preferences, persist the selected timezone, and show the saved state after the request completes
-- Critical scenario: Submit notification preferences and show the saved state
-  - Routing: required; 3 supporting diff hunks
-  - E2E draft mapping: partially mapped (not executed); steps 0/3, assertions 1/1
-  - Assert: the saved state becomes observable
+- Critical scenario: Submit notification preferences, persist the selected timezone, and show the saved state
+  - Routing: required; direct and supporting diff hunks
+  - E2E draft mapping: partially mapped (not executed); steps 1/1, assertions 1/2
+  - Assert: visible text "Preferences saved" appears
+  - Unmapped proof: the selected timezone persists
 - Recommended scenario: Failure, timeout, and retry handling
   - Routing: recommended; 1 supporting diff hunk
   - E2E draft mapping: not mapped; no deterministic failure compiler matched all required evidence
@@ -45,13 +46,13 @@ Summary
 - Project: Web
 - Automation adapter: Playwright
 - Manifest: not found; using repo signals and PR diff only
-- Stage: setup needed (1 of 4); readiness 37/100
-- Scenario routing: 2 required, 2 recommended, 0 review-only
-- E2E draft mapping: 0 fully mapped, 1 partially mapped, 3 not mapped; no tests executed
+- Stage: setup needed (1 of 4); readiness 40/100
+- Scenario routing: 2 required, 3 recommended, 0 review-only
+- E2E draft mapping: 0 fully mapped, 1 partially mapped, 4 not mapped; no tests executed
 
 PR Comment Draft
-- Affected flow: Submit notification preferences and show the saved state
-- User journey: User -> Open route /preferences -> Submit preferences
+- Affected flow: Submit notification preferences, persist the selected timezone, and show the saved state
+- User journey: User -> Open route /preferences -> Submit notification preferences
 - Success signal: visible text "Preferences saved" appears
 - Changed files: src/pages/preferences.tsx
 
@@ -62,8 +63,8 @@ Suggested E2E / QA Draft
 - Assert visible text "Preferences saved" appears.
 
 Scenario draft mapping receipts
-- [required] Submit notification preferences and show the saved state: partially mapped (not executed) (steps 0/3, assertions 1/1)
-  - Blocker: three selected action steps remain outside executable coverage
+- [required] Submit notification preferences, persist the selected timezone, and show the saved state: partially mapped (not executed) (steps 1/1, assertions 1/2)
+  - Blocker: persistence is still an explicit QA requirement because the draft has no reload or re-entry proof
 - [recommended] Failure, timeout, and retry handling: not mapped (steps 0/2, assertions 0/2)
   - Blocker: no deterministic failure compiler matched an entrypoint, action, fixture boundary, and observable outcome
 

@@ -1309,11 +1309,41 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.equal(plan.flows[0].intentId, plan.changeAnalysis.intents[0].id);
   assert.match(plan.flows[0].title, /Submit account preferences/i);
   assert.doesNotMatch(plan.flows[0].title, /primary journey|smoke flow/i);
-  assert.ok(plan.flows[0].steps.some((step) => /persist the selected timezone/i.test(step)));
+  assert.ok(
+    plan.flows[0].lifecycle.some((stage) => /persist the selected timezone/i.test(stage.label)),
+    "the reasoning lifecycle should retain the intended persistence effect",
+  );
+  assert.ok(
+    plan.flows[0].lifecycle.some((stage) => /fetch|saved timezone/i.test(stage.label)),
+    "the reasoning lifecycle should retain implementation effects",
+  );
+  assert.equal(
+    plan.flows[0].lifecycle.some(
+      (stage) => stage.kind === "trigger" && /^after the request completes/i.test(stage.label),
+    ),
+    false,
+    "outcome timing should not replace the actual user trigger",
+  );
+  assert.doesNotMatch(
+    plan.flows[0].steps.filter((step) => !/^verify\b/i.test(step)).join("\n"),
+    /persist the selected timezone|setSavedTimezone|invoke fetch/i,
+  );
   assert.ok(
     plan.flows[0].steps.some((step) => /verify visible text "Preferences saved" appears/i.test(step)),
     `expected observable outcome in flow steps, got: ${JSON.stringify(plan.flows[0].steps)}`,
   );
+  const primaryScenario = plan.flows[0].qaScenarios.find((scenario) => scenario.kind === "primary");
+  assert.ok(
+    primaryScenario?.assertions.some((assertion) => /persist the selected timezone/i.test(assertion)),
+    "persistence should remain an explicit QA requirement even when the draft cannot prove it",
+  );
+  assert.doesNotMatch(
+    plan.flows[0].steps.join("\n"),
+    /verify persist the selected timezone/i,
+    "an unproven persistence requirement should not become a fake executable assertion",
+  );
+  assert.match(plan.flows[0].languageBrief.trigger, /submit account preferences/i);
+  assert.doesNotMatch(plan.flows[0].languageBrief.trigger, /after the request completes/i);
   assert.match(plan.flows[0].languageBrief.successSignal, /Preferences saved/i);
   assert.ok(plan.behaviorGraph.nodes.some((node) => node.kind === "contract" && node.label === plan.flows[0].title));
   assert.ok(plan.behaviorGraph.nodes.some((node) => node.evidence.some((item) => item.kind === "commit")));
@@ -1368,6 +1398,20 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.match(spec, /trace:[a-f0-9]{12}/);
   assert.match(spec, /Diff source: src\/pages\/preferences\.tsx:\d+/);
   assert.match(spec, /Failure, timeout, and retry handling/);
+  assert.equal(
+    spec.match(/getByTestId\("preferences-save"\)\.click\(\)/g)?.length,
+    1,
+    "the generated primary path should perform the user action once",
+  );
+  assert.doesNotMatch(spec, /test\.fixme/);
+  const primaryReceipt = writtenDraft.files[0].scenarioAutomation.find(
+    (receipt) => receipt.kind === "primary",
+  );
+  assert.equal(primaryReceipt?.status, "partial", JSON.stringify(primaryReceipt));
+  assert.equal(primaryReceipt?.mappedSteps, primaryReceipt?.totalSteps);
+  assert.equal(primaryReceipt?.mappedAssertions, 1);
+  assert.equal(primaryReceipt?.totalAssertions, 2);
+  assert.match(primaryReceipt?.blockers.join("\n") ?? "", /1 selected assertion.*did not map/i);
 
   const staleReadinessQa = structuredClone(qa);
   staleReadinessQa.readiness.requiredScenarios = 40;

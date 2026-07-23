@@ -380,6 +380,14 @@ function evaluateContract(expect, result, plan, qa) {
     );
   }
   if (
+    expect.minPartialPrimaryFlows !== undefined &&
+    result.partialPrimaryFlows < expect.minPartialPrimaryFlows
+  ) {
+    failures.push(
+      `expected at least ${expect.minPartialPrimaryFlows} partial primary flow(s), got ${result.partialPrimaryFlows}`,
+    );
+  }
+  if (
     expect.maxReviewOnlyPrimaryFlows !== undefined &&
     result.reviewOnlyPrimaryFlows > expect.maxReviewOnlyPrimaryFlows
   ) {

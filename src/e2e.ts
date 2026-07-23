@@ -688,29 +688,67 @@ function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flow
     }
     const concreteAssertion = `Verify ${flow.languageBrief.successSignal}.`;
     const originalAssertions = [...assertionSource.assertions];
-    const replaceSingleAssertion = originalAssertions.length === 1;
-    const assertions = originalAssertions.map((assertion) =>
-      replaceSingleAssertion || assertion === genericAssertion
-        ? concreteAssertion
-        : assertion,
-    );
-    if (assertions.every((assertion, index) => assertion === originalAssertions[index])) {
-      continue;
-    }
-    if (!hasMultipleFlows) {
-      primary.assertions = assertions;
-    }
-    if (flowScenario) {
-      flowScenario.assertions = [...assertions];
-    }
+    const replaceSingleAssertion = originalAssertions.length === 1 &&
+      !isUncompiledPersistenceAssertion(flow, originalAssertions[0]);
+    let replacedObservableAssertion = false;
+    const assertions = originalAssertions.map((assertion) => {
+      const replaceAssertion = replaceSingleAssertion ||
+        assertion === genericAssertion ||
+        (!replacedObservableAssertion && isBroadObservableIntentAssertion(assertion));
+      if (!replaceAssertion) {
+        return assertion;
+      }
+      replacedObservableAssertion = true;
+      return concreteAssertion;
+    });
     const replacedAssertions = new Set(
       originalAssertions.filter((assertion, index) => assertion !== assertions[index]),
     );
-    flow.steps = flow.steps.map((step) => replacedAssertions.has(step) ? concreteAssertion : step);
-    for (const target of flow.coverage) {
-      target.checks = target.checks.map((check) => replacedAssertions.has(check) ? concreteAssertion : check);
+    if (replacedAssertions.size > 0) {
+      if (!hasMultipleFlows) {
+        primary.assertions = assertions;
+      }
+      if (flowScenario) {
+        flowScenario.assertions = [...assertions];
+      }
+      flow.steps = flow.steps.map((step) => replacedAssertions.has(step) ? concreteAssertion : step);
+      for (const target of flow.coverage) {
+        target.checks = target.checks.map((check) => replacedAssertions.has(check) ? concreteAssertion : check);
+      }
     }
+    const scenarioAssertions = new Set(assertions);
+    flow.steps = flow.steps.filter((step) =>
+      !scenarioAssertions.has(step) || hasConcreteAssertionEvidence(flow, step)
+    );
   }
+}
+
+function isBroadObservableIntentAssertion(assertion: string): boolean {
+  return /\b(?:is visible|appears|externally observable)\.$/i.test(assertion);
+}
+
+function hasConcreteAssertionEvidence(flow: E2eFlow, assertion: string): boolean {
+  if (isUncompiledPersistenceAssertion(flow, assertion)) {
+    return false;
+  }
+  const visibleText = assertion.match(/^Verify visible text "(.+)" appears\.$/u)?.[1];
+  if (visibleText) {
+    return flow.selectors.some((selector) =>
+      selector.kind === "visible-text" && selector.value === visibleText
+    );
+  }
+  return flow.selectors.some((selector) =>
+    selectorCanSupportStepAssertion(selector, assertion) &&
+    selectorMatchesStep(selector, assertion)
+  );
+}
+
+function isUncompiledPersistenceAssertion(flow: E2eFlow, assertion: string): boolean {
+  return (flow.lifecycle ?? []).some((stage) =>
+    stage.kind === "state-change" &&
+    /\b(?:cache|persist|re-?entry|reload|resync|retain|store|survive|sync)\b/i.test(stage.label) &&
+    assertion === `Verify ${lowercaseFirst(stripTerminalPunctuation(stage.label))}.`
+  );
 }
 
 function behaviorSurfaceForProject(projectType: E2eProjectType): BehaviorSurfaceKind {

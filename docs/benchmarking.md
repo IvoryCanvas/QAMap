@@ -20,7 +20,7 @@ The command fails when any target violates its declared expectations. The corpus
 - a nested React item action that must create the required item through same-entity controls before exercising the changed action;
 - a React change spanning two user surfaces that must produce two independent primary scenario receipts, actions, assertions, and compiled drafts;
 - a presentation-only React condition that must not create behavioral state-transition QA;
-- a web preferences change that must become submit, persistence, request-failure, and re-entry QA instead of a generic journey;
+- a web preferences change that must execute the submit action once, map the immediate visible outcome, and keep unproven persistence, request-failure, and re-entry QA explicit instead of manufacturing passing coverage;
 - a mobile reminder change that must become scheduling, calendar, duplicate, resynchronization, and entry-routing QA;
 - a CLI plus static-analysis-rule change that must verify command I/O and positive/negative controls without turning rule vocabulary into product scheduling, routing, API, or fixture QA;
 - an Expo app with Maestro;
@@ -69,6 +69,7 @@ Each target can declare:
 | `minPrimaryFlowReceipts` | Minimum affected flows with their own primary scenario automation receipt. Unlike intent-level receipt counts, this cannot be satisfied twice by one strong flow. |
 | `maxMissingPrimaryFlowReceipts` | Maximum affected flows whose primary scenario has no automation receipt. |
 | `minCompiledPrimaryFlows` | Minimum affected flows whose primary scenario is fully mapped into its own draft. |
+| `minPartialPrimaryFlows` | Minimum affected flows whose draft maps some behavior but keeps at least one unproven requirement explicit. |
 | `maxReviewOnlyPrimaryFlows` | Maximum affected flows whose primary scenario lost located evidence and remained review-only. |
 | `minPrimaryFlowsWithMappedSteps` | Minimum affected flows whose primary receipt maps at least one behavior step to generated commands. |
 | `minPrimaryFlowsWithMappedAssertions` | Minimum affected flows whose primary receipt maps at least one observable assertion. |
