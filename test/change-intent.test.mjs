@@ -603,6 +603,13 @@ test("source roles distinguish product behavior from commands and analysis rules
   );
   assert.equal(
     classifyChangeSourceRole(
+      "src/git-context.ts",
+      "export function resolveBaseRef(value: string) { if (!Number.isFinite(value.length)) throw new Error('invalid ref'); return value; }",
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
+    classifyChangeSourceRole(
       "src/qa-trace.ts",
       "export function buildReasoningTrace(intent, evidence) { return routeQaScenario(intent.scenarios[0]); }",
     ).role,
@@ -769,6 +776,10 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
   assert.equal(qa.readiness.basis, "repository-validation");
   assert.equal(qa.readiness.automationApplicable, false);
   assert.equal(qa.readiness.verificationStatus, "command-needed");
+  assert.equal(qa.readiness.requiredScenarioGaps, 0);
+  assert.ok(qa.traces.some((trace) =>
+    /miss intended evidence or report unrelated behavior/i.test(trace.risk.statement),
+  ));
   assert.equal(qa.flows[0].why.some((reason) => /positive, negative, and neighboring-rule controls/i.test(reason)), true);
   assert.equal(qa.prChecklist.some((item) => /manifest init/i.test(item)), false);
   assert.match(qaMarkdown, /Repository verification stage: validation command needed/);
@@ -804,8 +815,10 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
   assert.equal(compactSummary.route.status, "verification-command-needed");
   assert.equal(compactSummary.route.nextAction, "define-repository-command");
   assert.equal(compactSummary.scenarioCoverage.automationApplicable, false);
+  assert.equal(compactSummary.scenarioCoverage.requiredGaps, 0);
   assert.ok(compactSummary.traces.length > 0);
   assert.equal(typeof compactSummary.traces[0].source.file, "string");
+  assert.match(compactSummary.traces[0].risk.statement, /miss intended evidence or report unrelated behavior/i);
   assert.ok(compactSummary.intents[0].scenarios[0].sources.length > 0);
   assert.equal(compactSummary.flows[0].source, qa.flows[0].source);
   assert.ok(compactSummary.flows[0].changedFiles.length > 0);
@@ -862,8 +875,18 @@ test("repository analysis plumbing does not become product boundary QA", async (
 
   const analysis = await analyze(root, ["src/repository-plan.ts", "src/git-context.ts"]);
   const titles = analysis.intents.flatMap((intent) => intent.scenarios.map((scenario) => scenario.title));
+  const lifecycleLabels = analysis.intents.flatMap((intent) =>
+    intent.lifecycle.map((stage) => stage.label),
+  );
+  const gitContextEvidence = analysis.intents
+    .flatMap((intent) => intent.evidence)
+    .filter((item) => item.file === "src/git-context.ts");
 
   assert.ok(analysis.intents.flatMap((intent) => intent.evidence).some((item) => item.sourceRole === "analysis-rule"));
+  assert.ok(gitContextEvidence.length > 0);
+  assert.ok(gitContextEvidence.every((item) => item.sourceRole === "analysis-rule"));
+  assert.equal(lifecycleLabels.some((label) => /\bis finite\b/i.test(label)), false);
+  assert.ok(lifecycleLabels.some((label) => /positive and negative controls/i.test(label)));
   assert.ok(titles.some((title) => /analysis rule positive and negative controls/i.test(title)));
   assert.equal(titles.some((title) => /Scheduling, calendar/i.test(title)), false);
   assert.equal(titles.some((title) => /Destination path|destination routing/i.test(title)), false);

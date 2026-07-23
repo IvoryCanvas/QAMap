@@ -236,6 +236,7 @@ function buildQaReadiness(
   }
   return {
     ...readiness,
+    requiredScenarioGaps: 0,
     basis: "repository-validation",
     automationApplicable: false,
     verificationStatus: suggestedCommands.length > 0 ? "ready-to-run" : "command-needed",
@@ -645,7 +646,10 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     risk: trace.risk
       ? {
           kind: trace.risk.kind,
-          statement: compactAgentRiskStatement(trace.risk.kind),
+          statement: truncateForAgent(
+            String(trace.risk.statement ?? compactAgentRiskStatement(trace.risk.kind)),
+            90,
+          ),
         }
       : undefined,
     scenario: trace.scenario

@@ -11,6 +11,9 @@
 - Static matcher vocabulary, CI environment variable names, and background-service labels no longer fabricate scheduling, navigation, or conditional UI QA. Actual product scheduling and destination changes remain covered by the existing positive benchmark contracts.
 - Package root or public API exports no longer imply network timeout and retry QA without network behavior evidence.
 - Analyzer-focused changes no longer borrow unrelated mock handlers or fixture endpoints from benchmark and test directories as product E2E guidance.
+- Repository and Git context analyzers no longer surface implementation guards such as numeric finiteness checks as affected product lifecycle stages.
+- Repository-validation routes no longer report missing product E2E compilation as a required scenario gap when automation is explicitly not applicable.
+- Analyzer reasoning traces, including emergency 4KB agent output, now retain the concrete false-negative and false-positive risk instead of falling back to a generic product outcome regression.
 
 ## 0.4.7 - 2026-07-22
 

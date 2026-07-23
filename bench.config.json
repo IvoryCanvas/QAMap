@@ -330,6 +330,9 @@
           "Removed guard or validation behavior",
           "Entry payload and destination routing"
         ],
+        "mustNotIncludeLifecycle": [
+          "is finite"
+        ],
         "mustNotFindEvidence": [
           "Network response setup",
           "Fixture data setup",
@@ -338,6 +341,7 @@
         "mustTraceScenarioFiles": ["src/rules/rule-engine.ts", "src/cli.ts"],
         "maxUntracedCriticalScenarios": 0,
         "maxMissingScenarioReceipts": 0,
+        "maxRequiredScenarioGaps": 0,
         "maxBlankActions": 0,
         "maxGenericTitles": 0,
         "maxAgentBytes": 4096
