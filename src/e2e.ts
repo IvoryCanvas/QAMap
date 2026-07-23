@@ -11147,14 +11147,14 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
       (selector) => isInputSelector(selector) && selectorMatchesStep(selector, step),
     );
     if (matched) {
-      return matched;
+      return consumeSelectorAliasesAfterAction(selectors, matched, step);
     }
     const fallbackInput = takePreferredSelector(
       selectors,
       (selector) => Boolean(selector.addedInDiff) && isInputSelector(selector),
     );
     if (fallbackInput) {
-      return fallbackInput;
+      return consumeSelectorAliasesAfterAction(selectors, fallbackInput, step);
     }
   }
   if (!isInteractionStep(step) && !isVerificationStep(step) && !canUsePrimarySelector(step)) {
@@ -11168,7 +11168,7 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
         selectorMatchesStep(selector, step),
     );
     if (changedAction) {
-      return changedAction;
+      return consumeSelectorAliasesAfterAction(selectors, changedAction, step);
     }
     return undefined;
   }
@@ -11184,7 +11184,7 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
       diffGateForStep(selector),
   );
   if (matched) {
-    return matched;
+    return consumeSelectorAliasesAfterAction(selectors, matched, step);
   }
   if (isAssertionStep(step)) {
     const assertionCandidates = selectors.filter(
@@ -11204,10 +11204,32 @@ function takeSelectorForStep(selectors: E2eSelector[], step: string): E2eSelecto
       (selector) => Boolean(selector.addedInDiff) && selectorCanDriveInteraction(selector),
     );
     if (fallback) {
-      return fallback;
+      return consumeSelectorAliasesAfterAction(selectors, fallback, step);
     }
   }
   return undefined;
+}
+
+function consumeSelectorAliasesAfterAction(
+  selectors: E2eSelector[],
+  selected: E2eSelector,
+  step: string,
+): E2eSelector {
+  if (isAssertionStep(step) || (!selectorCanDriveInteraction(selected) && !isInputSelector(selected))) {
+    return selected;
+  }
+  const selectedValue = selected.value.trim().toLowerCase();
+  for (let index = selectors.length - 1; index >= 0; index -= 1) {
+    const candidate = selectors[index];
+    if (
+      candidate.file === selected.file &&
+      candidate.value.trim().toLowerCase() === selectedValue &&
+      selectorCanSupportAssertion(candidate)
+    ) {
+      selectors.splice(index, 1);
+    }
+  }
+  return selected;
 }
 
 function selectorMatchesStep(selector: E2eSelector, step: string): boolean {
@@ -11760,9 +11782,14 @@ function extractRenderedStateSelectors(file: string, text: string): E2eSelector[
       }
     }
   }
-  const renderedNames = new Set(
-    [...text.matchAll(/>\s*\{\s*([A-Za-z_$][\w$]*)\s*\}\s*</g)].map((match) => match[1]),
-  );
+  const renderedNames = new Set<string>();
+  for (const segment of text.matchAll(/>([^<>]{0,500})</g)) {
+    for (const interpolation of segment[1].matchAll(
+      /\{\{\s*([A-Za-z_$][\w$]*)\s*\}\}|\{\s*([A-Za-z_$][\w$]*)\s*\}/g,
+    )) {
+      renderedNames.add(interpolation[1] ?? interpolation[2]);
+    }
+  }
   for (const stateName of renderedNames) {
     const stateDeclaration = new RegExp(
       `\\bconst\\s*\\[\\s*${escapeRegExp(stateName)}\\s*,\\s*([A-Za-z_$][\\w$]*)\\s*\\]\\s*=\\s*useState\\b`,
@@ -11779,14 +11806,6 @@ function extractRenderedStateSelectors(file: string, text: string): E2eSelector[
           selectors.push({ kind: "visible-text", value, file });
         }
       }
-    }
-  }
-  const interpolatedNames = new Set(
-    [...text.matchAll(/\{\{?\s*([A-Za-z_$][\w$]*)\s*\}?\}/g)].map((match) => match[1]),
-  );
-  for (const name of interpolatedNames) {
-    for (const value of renderedLiteralValues(text, name)) {
-      selectors.push({ kind: "visible-text", value, file });
     }
   }
   return selectors;

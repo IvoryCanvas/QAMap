@@ -7070,17 +7070,18 @@ test("a single diff-added action grounds the primary scenario without inventing 
   await writeFile(
     path.join(root, "app/workspaces/page.tsx"),
     [
-      "export default function WorkspacesPage({ navigate }) {",
+      "export default function WorkspacesPage({ variation, navigate }) {",
+      "  const isPromotionVariant = variation === \"B\";",
+      "  const title = isPromotionVariant ? \"Try a workspace plan\" : \"Workspaces\";",
       "  function handleExplore() { navigate(\"/offers\"); }",
       "  return <main>",
-      "    <h1>Workspaces</h1>",
-      "    <section>",
-      "      <h2>Discover a better workspace plan</h2>",
+      "    <h1>{title}</h1>",
+      "    {isPromotionVariant ? <section>",
       "      <ActionButton onClick={handleExplore}>",
       "        <span>Browse offers</span>",
       "        <Icon aria-hidden=\"true\" size={16} />",
       "      </ActionButton>",
-      "    </section>",
+      "    </section> : null}",
       "  </main>;",
       "}",
     ].join("\n"),
@@ -7098,7 +7099,9 @@ test("a single diff-added action grounds the primary scenario without inventing 
   assert.ok(promotionDraft, JSON.stringify(draft.files));
   const spec = await readFile(path.join(root, promotionDraft.path), "utf8");
   assert.match(spec, /page\.getByRole\("button", \{ name: "Browse offers" \}\)\.click\(\)/);
+  assert.doesNotMatch(spec, /expect\(page\.getByText\("Browse offers"\)\)\.toBeVisible\(\)/);
   assert.doesNotMatch(spec, /page\.getByRole\("button", \{ name: "true" \}\)/);
+  assert.doesNotMatch(spec, /visible-text: (?:\/offers|true) /);
 
   const primaryScenario = promotionDraft.qaScenarios?.find((scenario) => scenario.kind === "primary");
   assert.match(primaryScenario?.steps[0] ?? "", /Browse Offers/);
