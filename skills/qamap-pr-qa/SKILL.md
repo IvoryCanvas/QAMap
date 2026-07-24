@@ -36,6 +36,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
 4. Read and verify intent before generating code. In agent format:
    - `route` — the canonical applicable decision. Use `status`, `nextAction`, and the optional exact `command` before looking at legacy readiness scores. A `verification-*` status means use repository validation; a `draft-*` status describes optional automation preparation.
    - `intents[]` — commit/diff evidence, confidence, `reviewRequired`, ordered lifecycle, and primary/failure/boundary/state-transition scenarios. Read each scenario's structured `sources` before accepting it; a diff source carries `file`, head-side line numbers, symbol, and hunk.
+   - `testContracts` — behavior declared by tests added in this diff, with framework and `file:line`. Preserve these expectations, but do not report them as passed while `execution` is `not-run`.
    - If `reviewRequired` is true or the lifecycle conflicts with the PR, ask a human to confirm the intended behavior before promoting a draft.
    - `flows[]` — affected flows with `draft` path, `runnable` status, entry route, evidence-matched `focus`, capped steps, and selectors. Prefer `focus.action` and `focus.assertion` when stating what changed and what should be observed; `steps[0]` may only be setup.
    - `requiredEvidence[]` — evidence that must exist before the PR can be trusted; `recommendedEvidenceCount` for the rest.
@@ -82,6 +83,7 @@ QAMap QA
 - Change intent and confidence:
 - Behavior lifecycle:
 - Required QA scenarios:
+- Changed repository test contracts:
 - Scenario source files/lines:
 - Affected flow:
 - Suggested E2E/checklist:

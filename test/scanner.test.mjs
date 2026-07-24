@@ -10,6 +10,7 @@ import {
   analyzeVerificationManifestContext,
   buildDoctorResult,
   collectAddedDiffEvidence,
+  collectChangedTestContracts,
   evaluateFlowCoverageEvidence,
   explainVerificationManifest,
   evaluateChangeReadiness,
@@ -58,6 +59,45 @@ import { VERSION } from "../dist/version.js";
 const cliPath = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const execFileAsync = promisify(execFile);
+
+test("collectChangedTestContracts preserves non-Latin pytest contracts from diff evidence", () => {
+  const contracts = collectChangedTestContracts({
+    "catalog/tests/test_visibility.py": [{
+      file: "catalog/tests/test_visibility.py",
+      startLine: 120,
+      endLine: 123,
+      hunkHeader: "@@ -119,0 +120,4 @@",
+      lines: [
+        { line: 120, text: "def test_비공개_항목은_목록에서_제외된다(client):" },
+        { line: 121, text: "    assert client.get('/items').status_code == 200" },
+      ],
+    }],
+    "tests/e2e/visibility.spec.ts": [{
+      file: "tests/e2e/visibility.spec.ts",
+      startLine: 8,
+      endLine: 9,
+      hunkHeader: "@@ -7,0 +8,2 @@",
+      lines: [
+        { line: 8, text: "test('unlisted record stays directly accessible', async () => {" },
+      ],
+    }],
+  });
+
+  assert.deepEqual(contracts, [
+    {
+      file: "catalog/tests/test_visibility.py",
+      title: "비공개 항목은 목록에서 제외된다",
+      line: 120,
+      framework: "pytest",
+    },
+    {
+      file: "tests/e2e/visibility.spec.ts",
+      title: "unlisted record stays directly accessible",
+      line: 8,
+      framework: "javascript",
+    },
+  ]);
+});
 
 test("scanProject reports common AI agent repository risks", async () => {
   const root = await makeTempRepo();
@@ -1830,6 +1870,9 @@ test("generateE2ePlan treats test-only changes as evidence verification, not pro
     runner: "playwright",
     output: "docs/e2e",
   });
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const qaMarkdown = formatMarkdownQaDraft(qa);
+  const agentSummary = JSON.parse(formatAgentQaDraft(qa));
   const draftFile = draft.files.find((file) => file.flowTitle === "Changed test evidence verification checklist");
 
   assert.deepEqual(plan.flows.map((flow) => flow.title), ["Changed test evidence verification checklist"]);
@@ -1843,6 +1886,25 @@ test("generateE2ePlan treats test-only changes as evidence verification, not pro
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
   assert.match(spec, /Flow: Changed test evidence verification checklist/);
   assert.doesNotMatch(spec, /Domain scenario: Admin/);
+  assert.deepEqual(qa.changedTestContracts, [{
+    file: "tests/e2e/admin-primary-journey.spec.ts",
+    title: "admin primary journey handles empty state",
+    line: 2,
+    framework: "javascript",
+  }]);
+  assert.match(qaMarkdown, /## Repository-backed QA Contracts/);
+  assert.match(qaMarkdown, /admin primary journey handles empty state/);
+  assert.match(qaMarkdown, /not proof that the tests passed/);
+  assert.deepEqual(agentSummary.testContracts, {
+    declared: 1,
+    execution: "not-run",
+    items: [{
+      title: "admin primary journey handles empty state",
+      file: "tests/e2e/admin-primary-journey.spec.ts",
+      line: 2,
+      framework: "javascript",
+    }],
+  });
 });
 
 test("generateE2ePlan treats Maestro-only changes as test evidence", async () => {
@@ -2321,6 +2383,117 @@ test("generateE2ePlan keeps UI actors when API-adjacent screen files change", as
   const draftFile = draft.files.find((file) => file.flowTitle === "Vendors Open");
   assert.ok(draftFile);
   assert.equal(draftFile.languageBrief.actor, "User");
+});
+
+test("generateE2ePlan prioritizes a directly changed route over unrelated reverse-import surfaces", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/public/items"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/account"), { recursive: true });
+  await mkdir(path.join(root, "src/pages/admin"), { recursive: true });
+  await mkdir(path.join(root, "src/shared/types"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: { test: "vitest run" },
+      dependencies: { next: "^15.0.0", react: "^19.0.0", "react-dom": "^19.0.0" },
+      devDependencies: { vitest: "^3.0.0" },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/shared/types/item.ts"),
+    "export interface Item { id: number; title: string; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/pages/public/items/[id].tsx"),
+    [
+      "import type { Item } from '../../../shared/types/item';",
+      "export default function ItemPage({ item }: { item: Item }) {",
+      "  return <main>{item.title}</main>;",
+      "}",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "src/pages/account/history.tsx"),
+    "import type { Item } from '../../shared/types/item'; export default function History({ items }: { items: Item[] }) { return <main>{items.length}</main>; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/pages/admin/items.tsx"),
+    "import type { Item } from '../../shared/types/item'; export default function AdminItems({ items }: { items: Item[] }) { return <main>{items.length}</main>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/public-item-visibility"]);
+  await writeFile(
+    path.join(root, "src/shared/types/item.ts"),
+    "export interface Item { id: number; title: string; is_listed?: boolean; }\n",
+  );
+  await writeFile(
+    path.join(root, "src/pages/public/items/[id].tsx"),
+    [
+      "import Head from 'next/head';",
+      "import type { Item } from '../../../shared/types/item';",
+      "export default function ItemPage({ item }: { item: Item }) {",
+      "  const robots = item.is_listed === false",
+      "    ? 'noindex,nofollow'",
+      "    : 'index,follow';",
+      "  return <main><Head><meta name=\"robots\" content={robots} /></Head>{item.title}</main>;",
+      "}",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: keep unlisted public items out of search"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const markdown = formatMarkdownQaDraft(qa);
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    runner: "playwright",
+    output: "tests/e2e",
+  });
+  const uiFlow = plan.flows.find((flow) => flow.files.includes("src/pages/public/items/[id].tsx"));
+  const draftFile = draft.files.find((file) => file.flowTitle === "Keep unlisted public items out of search");
+
+  assert.ok(uiFlow, JSON.stringify(plan.flows.map((flow) => ({
+    title: flow.title,
+    files: flow.files,
+    entrypoints: flow.entrypoints,
+  })), null, 2));
+  assert.ok(uiFlow.files.includes("src/pages/public/items/[id].tsx"));
+  assert.ok(uiFlow.files.includes("src/shared/types/item.ts"));
+  assert.equal(uiFlow.files.includes("src/pages/account/history.tsx"), false);
+  assert.equal(uiFlow.files.includes("src/pages/admin/items.tsx"), false);
+  assert.ok(uiFlow.entrypoints.some((entrypoint) => entrypoint.value === "/public/items/:id"));
+  assert.ok(
+    qa.changeAnalysis.intents.some((intent) =>
+      intent.lifecycle.some((stage) =>
+        stage.kind === "condition" && /item is listed equals false/i.test(stage.label)
+      )
+    ),
+  );
+  assert.ok(
+    qa.changeAnalysis.intents.some((intent) =>
+      intent.lifecycle.some((stage) =>
+        stage.kind === "observable-outcome" && /robots metadata value noindex,nofollow/i.test(stage.label)
+      )
+    ),
+  );
+  assert.match(markdown, /robots metadata value noindex,nofollow/i);
+  assert.doesNotMatch(markdown, /account history|admin items/i);
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+  assert.match(spec, /page\.locator\('meta\[name="robots"\]'\)/);
+  assert.match(spec, /toHaveAttribute\("content", "noindex,nofollow"\)/);
+  assert.doesNotMatch(spec, /test\.fixme/);
+  assert.equal(draftFile.executionBlockers?.some((blocker) => /stable data-testid|selectors/i.test(blocker)), false);
+  assert.equal(
+    draftFile.scenarioAutomation?.find((receipt) => receipt.title === "Keep unlisted public items out of search")?.status,
+    "compiled",
+  );
 });
 
 test("generateE2eDraft scopes entrypoint hints to each domain scenario", async () => {

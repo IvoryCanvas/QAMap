@@ -206,6 +206,28 @@
         "files": { "type": "number", "minimum": 0 }
       }
     },
+    "testContracts": {
+      "type": "object",
+      "description": "Behavioral expectations declared by tests added in this diff. They are repository-authored contracts and have not been executed by QAMap.",
+      "required": ["declared", "execution", "items"],
+      "properties": {
+        "declared": { "type": "integer", "minimum": 0 },
+        "execution": { "const": "not-run" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "file", "line", "framework"],
+            "properties": {
+              "title": { "type": "string" },
+              "file": { "type": "string" },
+              "line": { "type": "integer", "minimum": 1 },
+              "framework": { "type": "string", "enum": ["javascript", "pytest", "go"] }
+            }
+          }
+        }
+      }
+    },
     "intents": {
       "type": "array",
       "description": "Evidence-backed change intents derived before runner selection (capped).",

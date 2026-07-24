@@ -15,6 +15,9 @@ import type { ChangeIntentEvidence, IntentQaScenario } from "./change-intent.js"
 import { buildQaReasoningTraces, summarizeQaTraceEvidence } from "./qa-trace.js";
 import type { QaReasoningTrace, QaTraceEvidenceSummary } from "./qa-trace.js";
 import { routeQaScenario } from "./scenario-routing.js";
+import { collectChangedTestContracts } from "./test-evidence.js";
+import type { ChangedTestContract } from "./test-evidence.js";
+import { collectAddedDiffEvidence } from "./test-plan.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
 export interface QaDraftOptions extends Omit<E2eDraftOptions, "dryRun" | "output"> {}
@@ -37,6 +40,7 @@ export interface QaDraftResult {
   noLlmToken: true;
   execution: QaExecutionReceipt;
   testSuite: E2eDraftResult["plan"]["testSuite"];
+  changedTestContracts: ChangedTestContract[];
   bootstrap: E2eDraftResult["plan"]["bootstrap"];
   runnerSetup: E2eDraftResult["plan"]["runnerSetup"];
   changeAnalysis: E2eDraftResult["plan"]["changeAnalysis"];
@@ -127,6 +131,13 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     ...options,
     dryRun: true,
   });
+  const addedDiffEvidence = await collectAddedDiffEvidence(root, {
+    base: draft.plan.base,
+    head: draft.plan.head,
+    workspaceRoot: options.workspaceRoot,
+    includeWorkingTree: draft.plan.includeWorkingTree,
+  });
+  const changedTestContracts = collectChangedTestContracts(addedDiffEvidence);
   const qaFiles = draft.plan.changedFiles.length > 0 ? draft.files : [];
   const flows = qaFiles.map((file) => qaFlowFromDraftFile(file));
   const changedFiles = draft.plan.changedFiles.map((file) => file.path);
@@ -186,6 +197,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
       scope: "static-analysis-and-draft-mapping",
     },
     testSuite: draft.plan.testSuite,
+    changedTestContracts,
     bootstrap: draft.plan.bootstrap,
     runnerSetup: draft.plan.runnerSetup,
     changeAnalysis: draft.plan.changeAnalysis,
@@ -195,8 +207,8 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     readiness,
     flows,
     missingEvidence,
-    prChecklist: buildPrChecklist(draft, flows, suggestedCommands),
-    agentHandoff: buildAgentHandoff(draft, flows, missingEvidence, suggestedCommands),
+    prChecklist: buildPrChecklist(draft, flows, changedTestContracts, suggestedCommands),
+    agentHandoff: buildAgentHandoff(draft, flows, changedTestContracts, missingEvidence, suggestedCommands),
     suggestedCommands,
   };
 }
@@ -496,6 +508,16 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
       execution: trace.execution,
     })),
     testSuite: { present: result.testSuite.hasTestSuite, files: result.testSuite.testFileCount },
+    testContracts: {
+      declared: result.changedTestContracts.length,
+      execution: "not-run",
+      items: result.changedTestContracts.slice(0, 3).map((contract) => ({
+        title: truncateForAgent(contract.title, 100),
+        file: truncateForAgent(contract.file, 120),
+        line: contract.line,
+        framework: contract.framework,
+      })),
+    },
     intentCount: result.changeAnalysis.intents.length,
     omittedIntentCount: Math.max(0, result.changeAnalysis.intents.length - 3),
     intents: result.changeAnalysis.intents.slice(0, 3).map((intent) => ({
@@ -1257,6 +1279,15 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
       );
     }
   }
+  if (result.changedTestContracts.length > 0) {
+    const contractTitles = result.changedTestContracts.slice(0, 3).map((contract) => contract.title);
+    const moreContracts = result.changedTestContracts.length > contractTitles.length
+      ? `; and ${result.changedTestContracts.length - contractTitles.length} more`
+      : "";
+    lines.push(
+      `- Repository-authored behavior: ${contractTitles.map(escapeMarkdownInline).join("; ")}${moreContracts}. Execution not run by QAMap.`,
+    );
+  }
   const nextCommand = nextStepCommand(result);
   if (nextCommand) {
     lines.push(`- Repository validation: \`${escapeMarkdownInline(nextCommand)}\``);
@@ -1357,6 +1388,25 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("- QA analysis and scenario routing do not require the optional automation runner to be installed.");
   lines.push(`- Draft flows: ${result.flows.length}`);
   lines.push("");
+
+  if (result.changedTestContracts.length > 0) {
+    lines.push("## Repository-backed QA Contracts");
+    lines.push("");
+    lines.push(
+      `QAMap found ${result.changedTestContracts.length} test contract${result.changedTestContracts.length === 1 ? "" : "s"} declared in changed test code. These are repository-authored expectations, not proof that the tests passed.`,
+    );
+    lines.push("");
+    for (const contract of result.changedTestContracts.slice(0, 12)) {
+      lines.push(
+        `- ${escapeMarkdownInline(contract.title)} — \`${escapeMarkdownInline(contract.file)}:${contract.line}\` (${contract.framework})`,
+      );
+    }
+    if (result.changedTestContracts.length > 12) {
+      lines.push(`- ... ${result.changedTestContracts.length - 12} more contracts are available in \`--format json\`.`);
+    }
+    lines.push("- Execution status: not run by QAMap; use the selected repository validation command and record its result.");
+    lines.push("");
+  }
 
   appendQaDecisionLayers(lines, result, nextCommand);
 
@@ -1935,13 +1985,13 @@ function uniqueMissingEvidence(items: QaDraftMissingEvidence[]): QaDraftMissingE
 function buildPrChecklist(
   draft: E2eDraftResult,
   flows: QaDraftFlow[],
+  changedTestContracts: ChangedTestContract[],
   suggestedCommands: string[],
 ): string[] {
   const testEvidenceLabel = flows[0]?.verificationMode === "existing-test-evidence"
     ? "changed test evidence"
     : "related test evidence";
-  const checklist = [
-    flows[0]?.existingEvidencePaths.length
+  const evidenceChecklist = flows[0]?.existingEvidencePaths.length
       ? `Run the ${testEvidenceLabel}: ${flows[0].existingEvidencePaths.slice(0, 4).join(", ")}.`
       : flows[0]?.verificationMode
         ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${suggestedCommands[0] ?? "the nearest repository validation command"}.`
@@ -1949,18 +1999,22 @@ function buildPrChecklist(
         ? `Review the proposed QA scenarios and their sources for: ${draft.plan.changeAnalysis.intents[0].title}.`
       : flows.length > 0
         ? `Review the affected-flow evidence for: ${flows.map((flow) => flow.title).slice(0, 3).join(", ")}.`
-      : "Run QAMap again after adding branch or working tree changes.",
+      : "Run QAMap again after adding branch or working tree changes.";
+  const checklist = [
+    changedTestContracts.length > 0
+      ? `Confirm the changed repository test contracts: ${changedTestContracts.slice(0, 3).map((contract) => contract.title).join("; ")}.`
+      : evidenceChecklist,
+    changedTestContracts.length > 0 ? evidenceChecklist : undefined,
     flows[0]?.userJourney?.reviewQuestion
       ? `Answer the reviewer question: ${flows[0].userJourney.reviewQuestion}`
       : "Name the user-visible behavior or contract this PR can break.",
-  ];
+  ].filter((item): item is string => Boolean(item));
 
   const validationCommand = suggestedCommands.find((command) => /\b(?:e2e|test|playwright|maestro)\b/i.test(command))
     ?? suggestedCommands[0];
   if (validationCommand) {
     checklist.push(`Run local validation: ${validationCommand}`);
   }
-
   if (!draft.plan.verificationManifestPath && flows.some((flow) => !flow.verificationMode)) {
     checklist.push("If this recommendation is useful, run `qamap manifest init .` later and review the generated manifest as team QA memory.");
   }
@@ -1971,6 +2025,7 @@ function buildPrChecklist(
 function buildAgentHandoff(
   draft: E2eDraftResult,
   flows: QaDraftFlow[],
+  changedTestContracts: ChangedTestContract[],
   missingEvidence: QaDraftMissingEvidence[],
   suggestedCommands: string[],
 ): string[] {
@@ -1991,6 +2046,9 @@ function buildAgentHandoff(
         : undefined,
     missingEvidence.length > 0
       ? "Treat selector, fixture, runner, and draft-mapping gaps as optional automation work; they do not replace review of the QA reasoning."
+      : undefined,
+    changedTestContracts.length > 0
+      ? `Preserve these repository-authored QA contracts when editing or generating tests: ${changedTestContracts.slice(0, 3).map((contract) => contract.title).join("; ")}.`
       : undefined,
     flows.some((flow) => !flow.verificationMode)
       ? "A wrong flow recommendation should become a manifest correction, so future PRs improve without another prompt."
