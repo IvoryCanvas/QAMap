@@ -1463,6 +1463,7 @@ function collectCodeBehaviorSignals(
       for (const line of hunk.lines) {
         collectCodeBehaviorSignalsFromText(signals, file, line.text, hunk, line.line);
       }
+      collectRenderedMetadataSignals(signals, file, hunk);
     }
   }
   for (const [file, text] of Object.entries(addedDiffText)) {
@@ -1473,6 +1474,51 @@ function collectCodeBehaviorSignals(
     collectCodeBehaviorSignalsFromText(signals, file, text);
   }
   return selectCodeSignals(signals);
+}
+
+function collectRenderedMetadataSignals(
+  signals: CodeBehaviorSignal[],
+  file: string,
+  hunk: AddedDiffHunk,
+): void {
+  const text = hunk.lines.map((line) => line.text).join("\n");
+  const matcher =
+    /\b(?:const|let|var)\s+(robots)\s*=\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*(===|!==)\s*(true|false)\s*\?\s*["'`]([^"'`]+)["'`]/g;
+  for (const match of text.matchAll(matcher)) {
+    const metadataName = match[1];
+    const subject = match[2];
+    const operator = match[3] === "===" ? "equals" : "does not equal";
+    const comparedValue = match[4];
+    const metadataValue = match[5];
+    const conditionLine = hunk.lines.find((candidate) =>
+      candidate.text.includes(subject) && candidate.text.includes(comparedValue)
+    )?.line ?? hunk.startLine;
+    const outcomeLine = hunk.lines.find((candidate) => candidate.text.includes(metadataValue))?.line ?? conditionLine;
+    const conditionLabel = `Check whether ${humanizeIdentifier(subject)} ${operator} ${comparedValue}.`;
+    const outcomeLabel = `Observe ${humanizeIdentifier(metadataName)} metadata value ${metadataValue}.`;
+    signals.push(
+      {
+        kind: "condition",
+        label: conditionLabel,
+        file,
+        symbol: subject,
+        evidence: {
+          ...codeSignalEvidence(conditionLabel, file, subject, hunk, conditionLine),
+          relation: "direct",
+        },
+      },
+      {
+        kind: "observable-outcome",
+        label: outcomeLabel,
+        file,
+        symbol: `${metadataName}:${metadataValue}`,
+        evidence: {
+          ...codeSignalEvidence(outcomeLabel, file, metadataName, hunk, outcomeLine),
+          relation: "direct",
+        },
+      },
+    );
+  }
 }
 
 function selectCodeSignals(signals: CodeBehaviorSignal[]): CodeBehaviorSignal[] {
