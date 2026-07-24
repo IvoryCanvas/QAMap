@@ -6499,6 +6499,8 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.equal(agentSummary.route.basis, "optional-automation");
   assert.match(agentSummary.route.status, /^draft-/);
   assert.equal(agentSummary.scenarioCoverage.automationApplicable, true);
+  assert.deepEqual(agentSummary.evidenceSummary, qa.evidenceSummary);
+  assert.equal(agentSummary.evidenceSummary.totalTraces, agentSummary.traceCount);
   assert.equal(Array.isArray(agentSummary.requiredEvidence), true);
   assert.equal(Array.isArray(agentSummary.prChecklist), true);
   assert.equal(agentSummary.firstDraftCommand, undefined);

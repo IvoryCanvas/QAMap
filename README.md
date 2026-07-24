@@ -75,6 +75,8 @@ QAMap keeps QA selection and test generation as two separate decisions:
 | **Behavior inference** | Connect commit intent and changed symbols into a trigger, condition, state change, side effect, and observable outcome. |
 | **Scenario routing** | Mark each scenario `required`, `recommended`, or `review-only`, with the exact diff hunk or commit that supports it. |
 | **QA reasoning trace** | Give every scenario a stable ID that connects diff line -> affected lifecycle -> risk -> routing decision -> optional draft, while keeping execution explicitly `not-run`. |
+| **Evidence disposition** | Distinguish a confirmed causal chain from a missing diff source (`source-gap`) or an unjoined behavior path (`mapping-gap`), and count repeated citations only once. |
+| **Manifest feedback** | Point an incorrect trace to the exact repo-local manifest target or a concrete flow candidate. QAMap proposes the correction; a human must approve it. |
 | **Automation receipt** | Report whether the selected scenario is fully, partially, or not mapped into a draft, including the missing selector, fixture, entrypoint, or assertion evidence. Machine output keeps the compatible values `compiled`, `partial`, and `not-compiled`; none of them means a test ran or passed. |
 
 The human report preserves all important scenarios even when the repository has no test runner. It then separates **Important QA And Risk Map**, **Executable Evidence Available Now**, and **Manual Or Agent QA Contracts**. A `static-runnable` draft passed QAMap's structural self-checks, but the target application was not launched; only explicit execution can produce pass or fail evidence.
@@ -95,8 +97,10 @@ Verify before merge: does the changed flow produce visible text
 Scenario routing: 1 required, 1 recommended, 0 review-only
 E2E draft mapping: 1 fully mapped, 1 not mapped; no tests executed
 Reasoning trace: 2/2 scenarios traced
+Evidence status: 2 confirmed, 0 source gaps, 0 mapping gaps across 1 unique source
 
 QA reasoning trace: trace:ab8f9b137d27 [traceable]
+  Evidence status: confirmed
   Diff evidence: src/pages/records.tsx:15, symbol setPinned
   Risk: the changed behavior may not reach its intended observable outcome
   QA scenario: [required] Pin a workspace record and show it first
@@ -104,6 +108,7 @@ QA reasoning trace: trace:ab8f9b137d27 [traceable]
   Optional artifact: tests/e2e/pin-a-workspace-record-and-show-it-first.spec.ts
                      fully mapped (not executed), steps 1/1, assertions 1/1
   Execution: not run
+  If wrong: review .qamap/manifest.yaml > flows; human approval is required
 ```
 
 The resulting primary Playwright path is repository-backed rather than a generic body-visible smoke test:

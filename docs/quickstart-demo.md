@@ -148,6 +148,7 @@ Output
 - ordered behavior lifecycle
 - primary, failure, boundary, and state-transition QA scenarios
 - scenario-level confidence, review status, and exact commit or head-side `file:line` sources
+- evidence disposition (`confirmed`, `source-gap`, or `mapping-gap`) with repeated source references deduplicated
 - changed domain language
 - candidate user flow
 - manifest evidence when a repo-local flow/check matches
@@ -158,6 +159,7 @@ Output
 - self-check status
 - required action items
 - blockers that explain why a draft is not ready yet
+- an exact manifest correction target when the reasoning path is wrong, always gated by human approval
 ```
 
 The result should not stop at "selector needed" or "fixture needed." A useful QAMap report should say which behavior changed, which scenarios follow, which exact hunk supports each scenario, what remains uncertain, and where to update the manifest if the recommendation is wrong. Automation comes after that review.

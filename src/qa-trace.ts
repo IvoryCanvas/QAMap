@@ -12,6 +12,8 @@ import type { QaScenarioDecision } from "./scenario-routing.js";
 
 export type QaReasoningTraceStatus = "traceable" | "partial" | "review-only";
 export type QaTraceBehaviorRelation = "evidence-linked" | "intent-context";
+export type QaTraceEvidenceDisposition = "confirmed" | "source-gap" | "mapping-gap";
+export type QaTraceManifestCorrectionKind = "review-existing" | "add-or-correct-flow";
 
 export interface QaTraceArtifactInput {
   scenarioId: string;
@@ -22,6 +24,13 @@ export interface QaTraceArtifactInput {
   totalSteps: number;
   mappedAssertions: number;
   totalAssertions: number;
+  manifestUpdatePath?: string;
+}
+
+export interface QaTraceManifestContextInput {
+  flowTitle: string;
+  changedFiles: string[];
+  manifestUpdatePath: string;
 }
 
 export interface QaTraceBehavior {
@@ -57,15 +66,46 @@ export interface QaTraceArtifact {
   flows: Array<Omit<QaTraceArtifactInput, "scenarioId">>;
 }
 
+export interface QaTraceEvidenceAssessment {
+  disposition: QaTraceEvidenceDisposition;
+  reason: string;
+  uniqueSourceCount: number;
+}
+
+export interface QaTraceManifestCorrection {
+  kind: QaTraceManifestCorrectionKind;
+  target: string;
+  reason: string;
+  action: string;
+  candidate: {
+    scenarioId: string;
+    checkTitle: string;
+    sourceFile?: string;
+    sourceSymbol?: string;
+    sourceLine?: number;
+  };
+  requiresHumanApproval: true;
+}
+
+export interface QaTraceEvidenceSummary {
+  totalTraces: number;
+  confirmed: number;
+  sourceGaps: number;
+  mappingGaps: number;
+  uniqueSources: number;
+}
+
 export interface QaReasoningTrace {
   id: string;
   intentId: string;
   status: QaReasoningTraceStatus;
   sources: ChangeIntentEvidence[];
+  evidenceAssessment: QaTraceEvidenceAssessment;
   behavior: QaTraceBehavior[];
   risk: QaTraceRisk;
   scenario: QaTraceScenario;
   artifact?: QaTraceArtifact;
+  manifestCorrection: QaTraceManifestCorrection;
   execution: "not-run";
   gaps: string[];
 }
@@ -77,6 +117,7 @@ export function qaTraceIdForScenario(scenarioId: string): string {
 export function buildQaReasoningTraces(
   intents: ChangeIntent[],
   artifacts: QaTraceArtifactInput[],
+  manifestContexts: QaTraceManifestContextInput[] = [],
 ): QaReasoningTrace[] {
   const artifactsByScenario = new Map<string, QaTraceArtifactInput[]>();
   for (const artifact of artifacts) {
@@ -98,6 +139,7 @@ export function buildQaReasoningTraces(
     const artifact = artifactInputs.length > 0 ? traceArtifact(artifactInputs) : undefined;
     const hasLocatedSource = sources.some(isLocatedDiffSource);
     const hasEvidenceLinkedBehavior = behavior.some((stage) => stage.relation === "evidence-linked");
+    const evidenceAssessment = assessTraceEvidence(sources, hasLocatedSource, hasEvidenceLinkedBehavior);
     const gaps = [
       hasLocatedSource ? undefined : "No located diff source supports this scenario.",
       hasEvidenceLinkedBehavior ? undefined : "No lifecycle stage shares this scenario's diff evidence.",
@@ -112,10 +154,11 @@ export function buildQaReasoningTraces(
       intentId: intent.id,
       status: routing.decision === "review-only"
         ? "review-only"
-        : hasLocatedSource && hasEvidenceLinkedBehavior
+        : evidenceAssessment.disposition === "confirmed"
           ? "traceable"
           : "partial",
       sources,
+      evidenceAssessment,
       behavior,
       risk: {
         kind: scenario.kind,
@@ -129,10 +172,30 @@ export function buildQaReasoningTraces(
         assertions: scenario.assertions.slice(0, 3),
       },
       artifact,
+      manifestCorrection: traceManifestCorrection(
+        scenario,
+        sources,
+        artifactInputs,
+        manifestContexts,
+        evidenceAssessment,
+      ),
       execution: "not-run",
       gaps,
     };
   }));
+}
+
+export function summarizeQaTraceEvidence(traces: QaReasoningTrace[]): QaTraceEvidenceSummary {
+  const uniqueSources = new Set(
+    traces.flatMap((trace) => trace.sources.map(evidenceKey)),
+  );
+  return {
+    totalTraces: traces.length,
+    confirmed: traces.filter((trace) => trace.evidenceAssessment.disposition === "confirmed").length,
+    sourceGaps: traces.filter((trace) => trace.evidenceAssessment.disposition === "source-gap").length,
+    mappingGaps: traces.filter((trace) => trace.evidenceAssessment.disposition === "mapping-gap").length,
+    uniqueSources: uniqueSources.size,
+  };
 }
 
 function traceBehavior(
@@ -195,6 +258,75 @@ function traceArtifact(inputs: QaTraceArtifactInput[]): QaTraceArtifact {
     flowCount: inputs.length,
     compiledFlowCount,
     flows: inputs.map(({ scenarioId: _scenarioId, ...input }) => input),
+  };
+}
+
+function assessTraceEvidence(
+  sources: ChangeIntentEvidence[],
+  hasLocatedSource: boolean,
+  hasEvidenceLinkedBehavior: boolean,
+): QaTraceEvidenceAssessment {
+  const uniqueSourceCount = new Set(sources.map(evidenceKey)).size;
+  if (!hasLocatedSource) {
+    return {
+      disposition: "source-gap",
+      reason: "The scenario has context, but no exact changed-file line supports it.",
+      uniqueSourceCount,
+    };
+  }
+  if (!hasEvidenceLinkedBehavior) {
+    return {
+      disposition: "mapping-gap",
+      reason: "A changed-file source exists, but it could not be joined to an affected lifecycle stage.",
+      uniqueSourceCount,
+    };
+  }
+  return {
+    disposition: "confirmed",
+    reason: "An exact diff source is joined to an affected lifecycle stage.",
+    uniqueSourceCount,
+  };
+}
+
+function traceManifestCorrection(
+  scenario: IntentQaScenario,
+  sources: ChangeIntentEvidence[],
+  artifactInputs: QaTraceArtifactInput[],
+  manifestContexts: QaTraceManifestContextInput[],
+  assessment: QaTraceEvidenceAssessment,
+): QaTraceManifestCorrection {
+  const artifactTarget = artifactInputs
+    .map((input) => input.manifestUpdatePath)
+    .find((target): target is string => Boolean(target));
+  const sourceFiles = new Set(
+    sources.map((source) => source.file).filter((file): file is string => Boolean(file)),
+  );
+  const matchedContext = manifestContexts.find((context) =>
+    context.changedFiles.some((file) => sourceFiles.has(file))
+  );
+  const contextTarget = matchedContext?.manifestUpdatePath;
+  const existingTarget = artifactTarget ?? contextTarget;
+  const matchedFlowTitle = artifactInputs.find((input) => input.manifestUpdatePath === artifactTarget)?.flowTitle ??
+    matchedContext?.flowTitle;
+  const source = sources.find(isLocatedDiffSource) ?? sources.find((item) => Boolean(item.file));
+  const action = existingTarget
+    ? `Review the matched "${matchedFlowTitle ?? scenario.title}" anchors and checks, then refine or remove the mapping if the team rejects it.`
+    : assessment.disposition === "source-gap"
+      ? `Add a concrete changed-file anchor and observable check for "${scenario.title}", or keep the scenario out of shared policy.`
+      : `Bind the located source to the correct flow anchor and check for "${scenario.title}", or remove the scenario from shared policy.`;
+  return {
+    kind: existingTarget ? "review-existing" : "add-or-correct-flow",
+    target: existingTarget ?? ".qamap/manifest.yaml > flows",
+    reason: "Repo-local QA memory should change only after a reviewer confirms the correction.",
+    action,
+    candidate: {
+      scenarioId: scenario.id,
+      checkTitle: scenario.title,
+      sourceFile: source?.file,
+      sourceSymbol: source?.symbol,
+      sourceLine: source?.startLine,
+    },
+    requiresHumanApproval: true,
   };
 }
 

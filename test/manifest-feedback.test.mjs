@@ -252,6 +252,29 @@ test("a repo-local manifest correction sharpens the same PR and is reused by the
   assert.ok(correctedFlow.selectorHints.some((selector) => selector.includes("action-submit")));
   assert.ok(correctedFlow.draftSteps.some((step) => /publish the current review decision/i.test(step)));
   assert.match(correctedFlow.manifestUpdatePath ?? "", /\.qamap\/manifest\.yaml/);
+  const correctedTrace = corrected.traces.find((trace) =>
+    /flows\.publish-review-decision\.anchors/.test(trace.manifestCorrection.target)
+  );
+  assert.ok(
+    correctedTrace,
+    `expected a reasoning trace for the human-corrected flow: ${JSON.stringify({
+      traces: corrected.traces.map((trace) => ({
+        scenario: trace.scenario,
+        target: trace.manifestCorrection.target,
+      })),
+      flows: corrected.flows.map((flow) => ({
+        title: flow.title,
+        manifestUpdatePath: flow.manifestUpdatePath,
+        scenarios: flow.scenarioAutomation.map((receipt) => receipt.scenarioId),
+      })),
+    })}`,
+  );
+  assert.equal(correctedTrace.manifestCorrection.kind, "review-existing");
+  assert.match(
+    correctedTrace.manifestCorrection.target,
+    /\.qamap\/manifest\.yaml > flows\.publish-review-decision\.anchors/,
+  );
+  assert.equal(correctedTrace.manifestCorrection.requiresHumanApproval, true);
 
   await git(root, ["add", ".qamap/manifest.yaml"]);
   await git(root, ["commit", "-m", "docs: record review QA flow"]);

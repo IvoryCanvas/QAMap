@@ -8,7 +8,11 @@ import ts from "typescript";
 import { analyzeChangeIntents } from "../dist/change-intent.js";
 import { generateE2eDraft, generateE2ePlan } from "../dist/e2e.js";
 import { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "../dist/qa.js";
-import { buildQaReasoningTraces, qaTraceIdForScenario } from "../dist/qa-trace.js";
+import {
+  buildQaReasoningTraces,
+  qaTraceIdForScenario,
+  summarizeQaTraceEvidence,
+} from "../dist/qa-trace.js";
 import { routeQaScenario } from "../dist/scenario-routing.js";
 import { classifyChangeSourceRole } from "../dist/source-role.js";
 import {
@@ -59,7 +63,12 @@ test("QA reasoning traces expose weak links without claiming product execution",
   const [reviewTrace] = buildQaReasoningTraces([reviewIntent], []);
   assert.equal(reviewTrace.id, qaTraceIdForScenario(reviewScenario.id));
   assert.equal(reviewTrace.status, "review-only");
+  assert.equal(reviewTrace.evidenceAssessment.disposition, "source-gap");
+  assert.equal(reviewTrace.evidenceAssessment.uniqueSourceCount, 1);
   assert.equal(reviewTrace.behavior[0].relation, "evidence-linked");
+  assert.equal(reviewTrace.manifestCorrection.kind, "add-or-correct-flow");
+  assert.equal(reviewTrace.manifestCorrection.target, ".qamap/manifest.yaml > flows");
+  assert.equal(reviewTrace.manifestCorrection.requiresHumanApproval, true);
   assert.equal(reviewTrace.execution, "not-run");
   assert.ok(reviewTrace.gaps.some((gap) => /No located diff source/.test(gap)));
   assert.ok(reviewTrace.gaps.some((gap) => /No optional automation artifact/.test(gap)));
@@ -85,6 +94,7 @@ test("QA reasoning traces expose weak links without claiming product execution",
     totalSteps: 1,
     mappedAssertions: 0,
     totalAssertions: 1,
+    manifestUpdatePath: ".qamap/manifest.yaml > flows.preferences.anchors",
   }, {
     scenarioId: partialScenario.id,
     flowTitle: "Preferences",
@@ -96,14 +106,32 @@ test("QA reasoning traces expose weak links without claiming product execution",
     totalAssertions: 1,
   }]);
   assert.equal(partialTrace.status, "partial");
+  assert.equal(partialTrace.evidenceAssessment.disposition, "mapping-gap");
   assert.equal(partialTrace.behavior[0].relation, "intent-context");
   assert.equal(partialTrace.artifact?.draftPath, "tests/e2e/preferences-review.md");
   assert.equal(partialTrace.artifact?.status, "partial");
   assert.equal(partialTrace.artifact?.flowCount, 2);
   assert.equal(partialTrace.artifact?.compiledFlowCount, 1);
   assert.equal(partialTrace.artifact?.flows.length, 2);
+  assert.equal(partialTrace.manifestCorrection.kind, "review-existing");
+  assert.equal(partialTrace.manifestCorrection.target, ".qamap/manifest.yaml > flows.preferences.anchors");
+  assert.equal(partialTrace.manifestCorrection.candidate.sourceFile, "src/preferences.ts");
+  assert.equal(partialTrace.manifestCorrection.candidate.sourceSymbol, "savePreferences");
+  assert.equal(partialTrace.manifestCorrection.candidate.sourceLine, 12);
   assert.ok(partialTrace.gaps.some((gap) => /1 of 2 affected flow artifacts/.test(gap)));
   assert.ok(partialTrace.gaps.some((gap) => /No lifecycle stage shares/.test(gap)));
+
+  const evidenceSummary = summarizeQaTraceEvidence([
+    partialTrace,
+    { ...partialTrace, id: "trace:duplicate-source" },
+  ]);
+  assert.deepEqual(evidenceSummary, {
+    totalTraces: 2,
+    confirmed: 0,
+    sourceGaps: 0,
+    mappingGaps: 2,
+    uniqueSources: 1,
+  });
 });
 
 test("diff evidence preserves renamed paths and head-side hunk locations", async (t) => {
@@ -821,6 +849,11 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
   assert.equal(compactSummary.route.nextAction, "define-repository-command");
   assert.equal(compactSummary.scenarioCoverage.automationApplicable, false);
   assert.equal(compactSummary.scenarioCoverage.requiredGaps, 0);
+  assert.deepEqual(compactSummary.evidenceSummary, qa.evidenceSummary);
+  if (qa.evidenceSummary.sourceGaps + qa.evidenceSummary.mappingGaps > 0) {
+    assert.equal(compactSummary.manifestCorrection.requiresHumanApproval, true);
+    assert.match(compactSummary.manifestCorrection.target, /\.qamap\/manifest\.yaml/);
+  }
   assert.ok(compactSummary.traces.length > 0);
   assert.equal(typeof compactSummary.traces[0].source.file, "string");
   assert.match(compactSummary.traces[0].risk.statement, /miss intended evidence or report unrelated behavior/i);
@@ -1364,6 +1397,14 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.equal(agentSummary.intents[0].scenarioCount, plan.changeAnalysis.intents[0].scenarios.length);
   assert.ok(agentSummary.intents[0].omittedScenarioCount > 0);
   const agentCalendarScenario = agentSummary.intents[0].scenarios.find((scenario) => /calendar/i.test(scenario.title));
+  assert.ok(
+    agentCalendarScenario,
+    `expected the compact agent payload to retain calendar evidence: ${JSON.stringify({
+      bytes: Buffer.byteLength(formatAgentQaDraft(qa)),
+      compaction: agentSummary.compaction,
+      scenarios: agentSummary.intents[0].scenarios.map((scenario) => scenario.title),
+    })}`,
+  );
   assert.match(agentCalendarScenario.sources[0].symbol, /timezone/i);
   assert.equal(agentCalendarScenario.sources[0].relation, "direct");
   assert.equal(agentCalendarScenario.sources[0].side, "head");
@@ -1375,11 +1416,18 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   const requiredTrace = qa.traces.find((trace) => trace.scenario.decision === "required");
   assert.ok(requiredTrace);
   assert.equal(requiredTrace.status, "traceable");
+  assert.equal(requiredTrace.evidenceAssessment.disposition, "confirmed");
   assert.ok(requiredTrace.sources.some((source) => source.file === "src/pages/preferences.tsx" && source.startLine));
   assert.ok(requiredTrace.behavior.some((stage) => stage.relation === "evidence-linked"));
   assert.ok(requiredTrace.artifact?.draftPath.endsWith(".spec.ts"));
+  assert.equal(requiredTrace.manifestCorrection.requiresHumanApproval, true);
   assert.equal(requiredTrace.execution, "not-run");
   assert.equal(agentSummary.traceCount, qa.traces.length);
+  assert.deepEqual(agentSummary.evidenceSummary, qa.evidenceSummary);
+  assert.equal(
+    agentSummary.evidenceSummary.uniqueSources,
+    new Set(qa.traces.flatMap((trace) => trace.sources.map((source) => JSON.stringify(source)))).size,
+  );
   assert.ok(agentSummary.traces.length > 0);
   assert.ok(agentSummary.traces.every((trace) => trace.source?.file && trace.behavior?.phase));
   assert.ok(agentSummary.traces.every((trace) => trace.execution === "not-run"));
@@ -1387,7 +1435,10 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.match(qaMarkdown, /confidence: (?:medium|high)/);
   assert.match(qaMarkdown, /Scenario routing:/);
   assert.match(qaMarkdown, /E2E draft mapping:/);
+  assert.match(qaMarkdown, /Evidence status: \d+ confirmed/);
   assert.match(qaMarkdown, /## QA Reasoning Trace/);
+  assert.match(qaMarkdown, /Evidence status: `confirmed`/);
+  assert.match(qaMarkdown, /If this trace is wrong: review `\.qamap\/manifest\.yaml > flows`/);
   assert.match(qaMarkdown, /1\. Diff evidence:[\s\S]*2\. Affected behavior:[\s\S]*3\. Risk:[\s\S]*4\. QA scenario:/);
   assert.match(qaMarkdown, /Product QA execution: not run/);
   assert.equal(agentSummary.execution.status, "not-run");

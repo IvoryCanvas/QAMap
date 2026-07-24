@@ -78,7 +78,7 @@ export {
 } from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 export { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
-export { buildQaReasoningTraces, qaTraceIdForScenario } from "./qa-trace.js";
+export { buildQaReasoningTraces, qaTraceIdForScenario, summarizeQaTraceEvidence } from "./qa-trace.js";
 export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 export { isRequiredScenarioEvidence, routeQaScenario } from "./scenario-routing.js";
 export { collectChangedFiles, resolveBaseRef, resolveMergeBase } from "./git-context.js";
@@ -305,6 +305,12 @@ export type {
   QaTraceArtifactInput,
   QaTraceBehavior,
   QaTraceBehaviorRelation,
+  QaTraceEvidenceAssessment,
+  QaTraceEvidenceDisposition,
+  QaTraceEvidenceSummary,
+  QaTraceManifestContextInput,
+  QaTraceManifestCorrection,
+  QaTraceManifestCorrectionKind,
   QaTraceRisk,
   QaTraceScenario,
 } from "./qa-trace.js";

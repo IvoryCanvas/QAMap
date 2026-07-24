@@ -5,12 +5,15 @@
 ### Added
 
 - Added a domain-neutral two-surface React benchmark and per-flow compilation contracts. A benchmark can now require every affected flow to retain a primary scenario receipt, mapped action, mapped assertion, and fully compiled draft independently.
+- Added deterministic trace evidence dispositions for confirmed causal chains, missing source locations, and failed behavior joins. Human and machine output now count unique sources instead of treating repeated citations as stronger evidence.
+- Added human-approved manifest correction proposals to QA traces. A wrong judgment points to an existing flow anchor or a concrete repo-local flow target even when no automation artifact exists yet.
 
 ### Changed
 
 - Repository test planning and changed-file inspection code now stays on the analyzer-verification path when direct product behavior evidence is absent. Supporting utility conditions no longer turn an analyzer-focused change into product automation work.
 - Primary intent scenarios now retain located diff evidence alongside commit and lifecycle context. When a commit phrase and a code signal describe the same behavior, their provenance is merged instead of discarding the source hunk.
 - Multi-flow reasoning traces and compact agent output now aggregate every artifact for the same logical scenario and disclose `flowCoverage`. A compiled draft on one surface can no longer hide a partial or unmapped draft on another.
+- Compact agent output preserves evidence-gap counts and the highest-priority manifest correction target through emergency 4KB compaction.
 
 ### Fixed
 

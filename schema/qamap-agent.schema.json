@@ -329,6 +329,27 @@
         }
       }
     },
+    "evidenceSummary": {
+      "type": "object",
+      "description": "Trace-level evidence dispositions with source references deduplicated across scenarios. This is not a quality or correctness score.",
+      "required": ["totalTraces", "confirmed", "sourceGaps", "mappingGaps", "uniqueSources"],
+      "properties": {
+        "totalTraces": { "type": "integer", "minimum": 0 },
+        "confirmed": { "type": "integer", "minimum": 0 },
+        "sourceGaps": { "type": "integer", "minimum": 0 },
+        "mappingGaps": { "type": "integer", "minimum": 0 },
+        "uniqueSources": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "manifestCorrection": {
+      "type": "object",
+      "description": "The highest-priority repo-local correction target when a trace has a source or mapping gap. QAMap never applies it without explicit human approval.",
+      "required": ["target", "requiresHumanApproval"],
+      "properties": {
+        "target": { "type": "string" },
+        "requiresHumanApproval": { "const": true }
+      }
+    },
     "traceCount": {
       "type": "integer",
       "minimum": 0,

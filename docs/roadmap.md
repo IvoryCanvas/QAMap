@@ -56,6 +56,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Keep scenario selection and static draft mapping independently measurable: exact diff evidence routes each scenario as required, recommended, or review-only, then runner receipts report compatible `compiled`, `partial`, or `not-compiled` machine states while human output says mapped and not executed. Required mapping gaps must lower readiness instead of hiding behind a green smoke assertion.
 - Measure multi-surface compilation per affected flow, not only per logical intent scenario. One compiled artifact must never hide a sibling flow with missing action, assertion, or located evidence.
 - Keep stable QA trace IDs across human, JSON, agent, and generated artifact output. Benchmark fixtures must reject missing scenario traces and required scenarios whose diff evidence cannot be joined to an affected lifecycle stage.
+- Classify trace provenance as confirmed, source-gap, or mapping-gap, deduplicate repeated evidence references, and route incorrect judgments back to an exact manifest target without changing shared QA memory until a human approves it.
 - Require every new shared heuristic to pass unrelated web/mobile or UI/service fixtures plus a negative control. Product-specific vocabulary stays in fixtures and optional manifests, never in global rules.
 - Keep `verify`, `e2e`, and `manifest` as deeper layers behind `qa`; freeze new scanner, doctor, eval, domains, flows, and history features until the core QA contract is consistently useful.
 

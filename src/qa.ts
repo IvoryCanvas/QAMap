@@ -12,8 +12,8 @@ import type {
   E2eScenarioAutomationReceipt,
 } from "./e2e.js";
 import type { ChangeIntentEvidence, IntentQaScenario } from "./change-intent.js";
-import { buildQaReasoningTraces } from "./qa-trace.js";
-import type { QaReasoningTrace } from "./qa-trace.js";
+import { buildQaReasoningTraces, summarizeQaTraceEvidence } from "./qa-trace.js";
+import type { QaReasoningTrace, QaTraceEvidenceSummary } from "./qa-trace.js";
 import { routeQaScenario } from "./scenario-routing.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
@@ -41,6 +41,7 @@ export interface QaDraftResult {
   runnerSetup: E2eDraftResult["plan"]["runnerSetup"];
   changeAnalysis: E2eDraftResult["plan"]["changeAnalysis"];
   traces: QaReasoningTrace[];
+  evidenceSummary: QaTraceEvidenceSummary;
   route: QaRouteDecision;
   readiness: QaReadinessSummary;
   flows: QaDraftFlow[];
@@ -149,8 +150,17 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
       totalSteps: receipt.totalSteps,
       mappedAssertions: receipt.mappedAssertions,
       totalAssertions: receipt.totalAssertions,
+      manifestUpdatePath: flow.manifestUpdatePath,
     }))),
+    flows
+      .filter((flow): flow is QaDraftFlow & { manifestUpdatePath: string } => Boolean(flow.manifestUpdatePath))
+      .map((flow) => ({
+        flowTitle: flow.title,
+        changedFiles: flow.changedFiles,
+        manifestUpdatePath: flow.manifestUpdatePath,
+      })),
   );
+  const evidenceSummary = summarizeQaTraceEvidence(traces);
   const readiness = buildQaReadiness(draft.readinessSummary, flows, suggestedCommands, changedFiles);
   const route = buildQaRouteDecision(readiness, suggestedCommands);
 
@@ -180,6 +190,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     runnerSetup: draft.plan.runnerSetup,
     changeAnalysis: draft.plan.changeAnalysis,
     traces,
+    evidenceSummary,
     route,
     readiness,
     flows,
@@ -413,6 +424,9 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
     .filter((step) => step.status === "required" && step.category !== "runner")
     .slice(0, 3)
     .map((step) => ({ title: truncateForAgent(step.title, 80), action: truncateForAgent(step.action) }));
+  const firstCorrection = result.traces.find(
+    (trace) => trace.evidenceAssessment.disposition !== "confirmed",
+  )?.manifestCorrection;
   const summary = {
     schema: { name: "qamap.qa", version: 1 },
     base: result.base,
@@ -440,6 +454,13 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
       notCompiled: result.readiness.notCompiledScenarios,
       requiredGaps: result.readiness.requiredScenarioGaps,
     },
+    evidenceSummary: result.evidenceSummary,
+    manifestCorrection: firstCorrection
+      ? {
+          target: truncateForAgent(firstCorrection.target, 120),
+          requiresHumanApproval: true,
+        }
+      : undefined,
     traceCount: result.traces.length,
     omittedTraceCount: Math.max(0, result.traces.length - 2),
     traces: result.traces.slice(0, 2).map((trace) => ({
@@ -481,7 +502,7 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
       title: truncateForAgent(intent.title, 100),
       confidence: intent.confidence,
       reviewRequired: intent.reviewRequired,
-      evidence: intent.evidence.slice(0, 2).map((item) => truncateForAgent(item.value, 100)),
+      evidence: intent.evidence.slice(0, 1).map((item) => truncateForAgent(item.value, 100)),
       sources: strongestEvidence(intent.evidence, 1).map(formatAgentEvidenceSource),
       lifecycle: selectAgentLifecycleStages(intent.lifecycle.map((stage) => ({
         phase: stage.kind,
@@ -831,6 +852,8 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     route: summary.route,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
+    evidenceSummary: summary.evidenceSummary,
+    manifestCorrection: summary.manifestCorrection,
     traceCount: summary.traceCount,
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - leanTraces.length),
     traces: leanTraces,
@@ -921,6 +944,8 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     route: summary.route,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
+    evidenceSummary: summary.evidenceSummary,
+    manifestCorrection: summary.manifestCorrection,
     traceCount: summary.traceCount,
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - emergencyTraces.length),
     traces: emergencyTraces,
@@ -947,8 +972,8 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     ...intent,
     title: truncateForAgent(String(intent.title ?? ""), 45),
     lifecycle: selectAgentLifecycleStages(intent.lifecycle, 2),
-    omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
-    scenarios: intent.scenarios.slice(0, 1).map((scenario) => ({
+    omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 2),
+    scenarios: intent.scenarios.slice(0, 2).map((scenario) => ({
       ...scenario,
       title: truncateForAgent(String(scenario.title ?? ""), 45),
       sources: scenario.sources?.slice(0, 1),
@@ -976,7 +1001,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
           .map((file) => truncateForAgent(file, 60)),
       }
     : secondaryAgentFlow(flow, { title: 45, source: 18, draft: 45, file: 45, question: 60, success: 60 }));
-  return JSON.stringify({
+  const floorSummary = {
     schema: summary.schema,
     base: truncateForAgent(String(summary.base ?? ""), 80),
     head: truncateForAgent(String(summary.head ?? ""), 80),
@@ -987,6 +1012,8 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     route: summary.route,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
+    evidenceSummary: summary.evidenceSummary,
+    manifestCorrection: summary.manifestCorrection,
     traceCount: summary.traceCount,
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - emergencyTraces.length),
     traces: emergencyTraces,
@@ -1008,6 +1035,21 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
       emergency: true,
       floor: true,
     },
+  };
+  const floorPayload = JSON.stringify(floorSummary);
+  if (Buffer.byteLength(floorPayload) <= agentPayloadByteLimit) {
+    return floorPayload;
+  }
+
+  const boundedIntents = floorIntents.map((intent) => ({
+    ...intent,
+    omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
+    scenarios: intent.scenarios.slice(0, 1),
+  }));
+  return JSON.stringify({
+    ...floorSummary,
+    omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - boundedIntents.length),
+    intents: boundedIntents,
   });
 }
 
@@ -1288,6 +1330,12 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
         `- Reasoning trace: ${result.traces.length}/${routedScenarios} scenario${routedScenarios === 1 ? "" : "s"} traced; ` +
           `${traceable} fully connect diff evidence to affected behavior, risk, and QA routing.`,
       );
+      lines.push(
+        `- Evidence status: ${result.evidenceSummary.confirmed} confirmed, ` +
+          `${result.evidenceSummary.sourceGaps} source gap${result.evidenceSummary.sourceGaps === 1 ? "" : "s"}, ` +
+          `${result.evidenceSummary.mappingGaps} mapping gap${result.evidenceSummary.mappingGaps === 1 ? "" : "s"} ` +
+          `across ${result.evidenceSummary.uniqueSources} unique source${result.evidenceSummary.uniqueSources === 1 ? "" : "s"}.`,
+      );
     }
   }
   lines.push("");
@@ -1533,6 +1581,11 @@ function appendQaReasoningTraceMarkdown(lines: string[], result: QaDraftResult):
   for (const trace of result.traces.slice(0, 6)) {
     lines.push(`### \`${escapeMarkdownInline(trace.id)}\` [${trace.status}]`);
     lines.push("");
+    lines.push(
+      `- Evidence status: \`${trace.evidenceAssessment.disposition}\` - ` +
+        `${escapeMarkdownInline(trace.evidenceAssessment.reason)} ` +
+        `(${trace.evidenceAssessment.uniqueSourceCount} unique source${trace.evidenceAssessment.uniqueSourceCount === 1 ? "" : "s"})`,
+    );
     if (trace.sources.length > 0) {
       lines.push(
         `1. Diff evidence: ${trace.sources.slice(0, 2).map((source) => `${formatEvidenceReference(source)} - ${escapeMarkdownInline(source.value)}`).join("; ")}`,
@@ -1580,6 +1633,10 @@ function appendQaReasoningTraceMarkdown(lines: string[], result: QaDraftResult):
     for (const gap of relevantGaps.slice(0, 2)) {
       lines.push(`- Trace gap: ${escapeMarkdownInline(gap)}`);
     }
+    lines.push(
+      `- If this trace is wrong: review \`${escapeMarkdownInline(trace.manifestCorrection.target)}\`. ` +
+        `${escapeMarkdownInline(trace.manifestCorrection.action)} Human approval is required before repo-local QA memory changes.`,
+    );
     lines.push("");
   }
   if (result.traces.length > 6) {
