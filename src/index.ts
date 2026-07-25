@@ -90,7 +90,12 @@ export {
   qamapPackageName,
   recommendedQaScripts,
 } from "./script-init.js";
-export { collectTestSuiteInventory, evaluateFlowCoverageEvidence, summarizeTestSuiteInventory } from "./test-evidence.js";
+export {
+  collectChangedTestContracts,
+  collectTestSuiteInventory,
+  evaluateFlowCoverageEvidence,
+  summarizeTestSuiteInventory,
+} from "./test-evidence.js";
 export {
   addedDiffTextFromEvidence,
   collectAddedDiffEvidence,
@@ -155,6 +160,7 @@ export type {
   CoverageEvidence,
   CoverageEvidenceConfidence,
   CoverageEvidenceStatus,
+  ChangedTestContract,
   FlowCoverageInput,
   TestSuiteEvidenceFile,
   TestSuiteInventory,

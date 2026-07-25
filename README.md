@@ -75,6 +75,7 @@ QAMap keeps QA selection and test generation as two separate decisions:
 | **Behavior inference** | Connect commit intent and changed symbols into a trigger, condition, state change, side effect, and observable outcome. |
 | **Scenario routing** | Mark each scenario `required`, `recommended`, or `review-only`, with the exact diff hunk or commit that supports it. |
 | **QA reasoning trace** | Give every scenario a stable ID that connects diff line -> affected lifecycle -> risk -> routing decision -> optional draft, while keeping execution explicitly `not-run`. |
+| **Repository test contracts** | Preserve test cases added by the PR, including non-English pytest names, as repository-authored behavior requirements with `file:line` evidence. They remain `not-run` until the selected command is executed. |
 | **Evidence disposition** | Distinguish a confirmed causal chain from a missing diff source (`source-gap`) or an unjoined behavior path (`mapping-gap`), and count repeated citations only once. |
 | **Manifest feedback** | Point an incorrect trace to the exact repo-local manifest target or a concrete flow candidate. QAMap proposes the correction; a human must approve it. |
 | **Automation receipt** | Report whether the selected scenario is fully, partially, or not mapped into a draft, including the missing selector, fixture, entrypoint, or assertion evidence. Machine output keeps the compatible values `compiled`, `partial`, and `not-compiled`; none of them means a test ran or passed. |
@@ -82,6 +83,8 @@ QAMap keeps QA selection and test generation as two separate decisions:
 The human report preserves all important scenarios even when the repository has no test runner. It then separates **Important QA And Risk Map**, **Executable Evidence Available Now**, and **Manual Or Agent QA Contracts**. A `static-runnable` draft passed QAMap's structural self-checks, but the target application was not launched; only explicit execution can produce pass or fail evidence.
 
 When one change intent reaches multiple user surfaces, QAMap keeps a separate draft and automation receipt for each flow. Human and agent output report `flow coverage` across those artifacts, so one fully mapped screen cannot hide another screen whose action or assertion is still missing.
+
+When a PR changes both a route and a shared type or utility, the directly changed route remains the primary QA surface. Reverse-import expansion is used as fallback context instead of replacing that route with every unrelated consumer.
 
 Changes limited to analyzer rules, configuration, documentation, generated artifacts, or existing tests are routed to repository validation. QAMap does not mislabel them as blocked product E2E work, and it never claims that a suggested command has already passed.
 

@@ -4941,6 +4941,7 @@ type DraftE2eFlow = E2eFlow & {
   manifestCheckMatches?: VerificationManifestMatch[];
   persistenceProbe?: PlaywrightPersistenceProbe;
   conditionalStateProbe?: PlaywrightConditionalStateProbe;
+  metadataProbe?: PlaywrightMetadataProbe;
 };
 type AnalyzedChangeIntent = ChangeIntentAnalysis["intents"][number];
 
@@ -4956,6 +4957,13 @@ interface PlaywrightPersistenceProbe {
 interface PlaywrightConditionalStateProbe {
   actionSelector: E2eSelector;
   outcomeSelector: E2eSelector;
+}
+
+interface PlaywrightMetadataProbe {
+  name: "robots";
+  expectedValue: string;
+  action: string;
+  assertion: string;
 }
 
 interface IntentFlowScope {
@@ -5058,14 +5066,25 @@ function buildFlowCandidates(
     const role = classifyChangeSourceRole(file, addedDiffText[file] ?? "").role;
     return isReleaseMetadataFile(file) || role === "product" || role === "command" || role === "configuration";
   });
-  const impactSurfaceFiles = importImpacts.map((impact) => impact.surface).filter((surface) => !candidateFiles.includes(surface));
+  const directUiFiles = candidateFiles.filter(isUserFacingFile);
+  const directRouteFiles = candidateFiles.filter(isRoutableSurfaceFile);
+  const relevantImportImpacts = directRouteFiles.length > 0
+    ? importImpacts.filter((impact) => directRouteFiles.includes(impact.surface))
+    : importImpacts;
+  const impactSurfaceFiles = relevantImportImpacts
+    .map((impact) => impact.surface)
+    .filter((surface) => !candidateFiles.includes(surface));
   // Backend route modules often live under `routes/`, which is also a common
   // frontend surface directory. Once the repository is classified as an API
   // service, keep those files in contract analysis instead of inventing a UI
   // journey that the project cannot run.
   const uiFiles = projectType === "api-service"
     ? []
-    : uniqueStrings([...impactSurfaceFiles, ...candidateFiles.filter(isUserFacingFile)]);
+    : uniqueStrings(
+        directRouteFiles.length > 0
+          ? directUiFiles
+          : [...impactSurfaceFiles, ...directUiFiles],
+      );
   const apiFiles = candidateFiles.filter(isApiLikeFile);
   const apiServiceSourceFiles =
     projectType === "api-service"
@@ -5093,16 +5112,20 @@ function buildFlowCandidates(
   const candidates: FlowCandidate[] = [];
 
   if (uiFiles.length > 0) {
-    const subjectFiles = impactSurfaceFiles.length > 0 ? impactSurfaceFiles : uiFiles;
+    const subjectFiles = directRouteFiles.length > 0
+      ? directRouteFiles
+      : impactSurfaceFiles.length > 0
+        ? impactSurfaceFiles
+        : directUiFiles;
     const subject = summarizeFlowSubject(subjectFiles, "Changed", domainLanguage);
-    const impactReason = importImpacts.length > 0
-      ? ` Changed shared files reach these surfaces through imports: ${importImpacts.slice(0, 3).map(describeImportChain).join("; ")}.`
+    const impactReason = relevantImportImpacts.length > 0
+      ? ` Changed shared files reach these surfaces through imports: ${relevantImportImpacts.slice(0, 3).map(describeImportChain).join("; ")}.`
       : "";
     candidates.push({
       kind: "ui",
       title: `${subject} UI smoke flow`,
       reason: `User-facing route, screen, navigation, or component files changed, so the draft should open the touched surface and cover the primary visible action.${impactReason}`,
-      files: uniqueStrings([...uiFiles, ...importImpacts.map((impact) => impact.changedFile)]),
+      files: uniqueStrings([...uiFiles, ...relevantImportImpacts.map((impact) => impact.changedFile)]),
       steps: [
         "Launch the app.",
         "Navigate to the changed screen or component surface.",
@@ -5428,7 +5451,10 @@ function buildIntentFlowScopes(
   intent: AnalyzedChangeIntent,
   importImpacts: ImportImpact[],
 ): IntentFlowScope[] {
-  const relatedImportImpacts = importImpacts.filter((impact) => intent.files.includes(impact.changedFile));
+  const directSurfaceFiles = intent.files.filter(isRoutableSurfaceFile);
+  const relatedImportImpacts = importImpacts
+    .filter((impact) => intent.files.includes(impact.changedFile))
+    .filter((impact) => directSurfaceFiles.length === 0 || directSurfaceFiles.includes(impact.surface));
   const groupedFiles = new Map<string, string[]>();
 
   for (const file of intent.files) {
@@ -7902,12 +7928,53 @@ async function buildDraftFlows(
       inferPlaywrightPersistenceProbe(plan.root, flow, addedDiffText, revision),
       inferPlaywrightConditionalStateProbe(plan.root, flow, addedDiffText, revision),
     ]);
+    const metadataProbe = inferPlaywrightMetadataProbe(flow, addedDiffText);
     return {
       ...flow,
       persistenceProbe,
       conditionalStateProbe,
+      metadataProbe,
+      missingTestability: metadataProbe
+        ? flow.missingTestability.filter((gap) => !/selectors?.+controls? this flow taps or types into/i.test(gap))
+        : flow.missingTestability,
     };
   }));
+}
+
+function inferPlaywrightMetadataProbe(
+  flow: DraftE2eFlow,
+  addedDiffText: Record<string, string>,
+): PlaywrightMetadataProbe | undefined {
+  if (!primaryRouteEntrypoint(flow)) {
+    return undefined;
+  }
+  const primaryScenario = flow.qaScenarios?.find((scenario) => scenario.kind === "primary");
+  if (!primaryScenario || primaryScenario.steps.length === 0) {
+    return undefined;
+  }
+  for (const file of flow.files) {
+    const text = addedDiffText[file] ?? "";
+    const match = text.match(
+      /\b(?:const|let|var)\s+(robots)\s*=\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*(?:===|!==)\s*(?:true|false)\s*\?\s*["'`]([^"'`]+)["'`]/,
+    );
+    if (!match) {
+      continue;
+    }
+    const expectedValue = match[2];
+    const assertion = primaryScenario.assertions.find((candidate) =>
+      /\brobots metadata\b/i.test(candidate) && candidate.includes(expectedValue)
+    );
+    if (!assertion) {
+      continue;
+    }
+    return {
+      name: "robots",
+      expectedValue,
+      action: primaryScenario.steps[0],
+      assertion,
+    };
+  }
+  return undefined;
 }
 
 function analysisRevisionForPlan(plan: E2ePlanResult): AnalysisRevision {
@@ -9753,6 +9820,7 @@ function maestroCommandForStep(
 function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow, addedDiffText: Record<string, string> = {}): string {
   const testName = flow.title.replaceAll('"', "'");
   const persistenceProbe = playwrightPersistenceProbeForFlow(flow);
+  const metadataProbe = playwrightMetadataProbeForFlow(flow);
   const selectorQueue = persistenceProbe
     ? [
         persistenceProbe.actionSelector,
@@ -9804,7 +9872,9 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow, addedDiffText:
     `await page.goto(${routeDraft.expression});`,
   ]);
   appendPlaywrightPersistencePreparation(lines, persistenceProbe);
-  for (const step of draftExecutableSteps(flow, "playwright")) {
+  for (const step of draftExecutableSteps(flow, "playwright").filter(
+    (candidate) => !metadataProbeCoversStep(metadataProbe, candidate),
+  )) {
     const manifestCheck = manifestCheckForDraftStep(flow, step);
     const manifestBody = manifestCheck ? playwrightActionForManifestCheck(manifestCheck, step) : undefined;
     const failureBody = manifestBody ? undefined : playwrightFailureActionForStep(flow, step);
@@ -9816,6 +9886,7 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow, addedDiffText:
         : playwrightFallbackActionForStep(step));
     appendPlaywrightTestStep(lines, step, body);
   }
+  appendPlaywrightMetadataAssertion(lines, metadataProbe);
   appendPlaywrightPersistenceAssertion(lines, persistenceProbe);
   appendObservedResponseAssertion(lines, flow, addedDiffText);
   appendDomainScenarioComments(lines, flow, "  //");
@@ -9858,6 +9929,31 @@ function playwrightPersistenceProbeForFlow(flow: E2eFlow): PlaywrightPersistence
 
 function playwrightConditionalStateProbeForFlow(flow: E2eFlow): PlaywrightConditionalStateProbe | undefined {
   return (flow as DraftE2eFlow).conditionalStateProbe;
+}
+
+function playwrightMetadataProbeForFlow(flow: E2eFlow): PlaywrightMetadataProbe | undefined {
+  return (flow as DraftE2eFlow).metadataProbe;
+}
+
+function metadataProbeCoversStep(
+  probe: PlaywrightMetadataProbe | undefined,
+  step: string,
+): boolean {
+  return Boolean(probe && (step === probe.action || step === probe.assertion));
+}
+
+function appendPlaywrightMetadataAssertion(
+  lines: string[],
+  probe: PlaywrightMetadataProbe | undefined,
+): void {
+  if (!probe) {
+    return;
+  }
+  appendPlaywrightTestStep(lines, probe.assertion, [
+    `// Step intent: ${probe.action}`,
+    `// Step intent: ${probe.assertion}`,
+    `await expect(page.locator('meta[name="${probe.name}"]')).toHaveAttribute("content", "${quoteJs(probe.expectedValue)}");`,
+  ]);
 }
 
 function appendPlaywrightPersistencePreparation(

@@ -1,5 +1,6 @@
 import path from "node:path";
 import { collectProjectFiles } from "./fs.js";
+import type { AddedDiffEvidence } from "./test-plan.js";
 import type { ProjectFile } from "./types.js";
 
 export type CoverageEvidenceStatus = "covered" | "partial" | "missing";
@@ -37,6 +38,13 @@ export interface TestSuiteSummary {
   frameworkSignals: string[];
 }
 
+export interface ChangedTestContract {
+  file: string;
+  title: string;
+  line: number;
+  framework: "javascript" | "pytest" | "go";
+}
+
 export interface CoverageEvidence {
   targetTitle: string;
   status: CoverageEvidenceStatus;
@@ -48,6 +56,7 @@ export interface CoverageEvidence {
 
 const maxInventoryFiles = 20000;
 const maxEvidenceFiles = 6;
+const maxChangedTestContracts = 24;
 
 export async function collectTestSuiteInventory(root: string): Promise<TestSuiteInventory> {
   const projectFiles = await collectProjectFiles(root, maxInventoryFiles);
@@ -72,6 +81,29 @@ export function summarizeTestSuiteInventory(inventory: TestSuiteInventory): Test
     testFileCount: inventory.testFileCount,
     frameworkSignals: inventory.frameworkSignals,
   };
+}
+
+export function collectChangedTestContracts(evidence: AddedDiffEvidence): ChangedTestContract[] {
+  const contracts: ChangedTestContract[] = [];
+  for (const [file, hunks] of Object.entries(evidence)) {
+    if (!isTestLikeFile(file)) {
+      continue;
+    }
+    for (const hunk of hunks) {
+      for (const line of hunk.lines) {
+        contracts.push(...changedTestContractsFromLine(file, line.line, line.text));
+      }
+    }
+  }
+  const seen = new Set<string>();
+  return contracts.filter((contract) => {
+    const key = `${contract.file}:${contract.line}:${contract.title}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  }).slice(0, maxChangedTestContracts);
 }
 
 export function evaluateFlowCoverageEvidence(
@@ -296,11 +328,61 @@ function extractTestNames(text: string): string[] {
   for (const match of text.matchAll(matcher)) {
     names.push(normalizeText(match[2]));
   }
-  const pythonMatcher = /^(?:async\s+)?def\s+(test_[A-Za-z0-9_]+)\s*\(/gm;
+  const pythonMatcher = /^(?:async\s+)?def\s+(test_[\p{L}\p{N}_]+)\s*\(/gmu;
   for (const match of text.matchAll(pythonMatcher)) {
     names.push(normalizeText(match[1].replace(/^test_/, "").replaceAll("_", " ")));
   }
   return uniqueStrings(names).slice(0, 40);
+}
+
+function changedTestContractsFromLine(
+  file: string,
+  line: number,
+  text: string,
+): ChangedTestContract[] {
+  const contracts: ChangedTestContract[] = [];
+  if (/(?:^|\/)test_[^/]+\.py$|(?:^|\/)[^/]+_test\.py$/i.test(file)) {
+    const match = text.match(/^\s*(?:async\s+)?def\s+(test_[\p{L}\p{N}_]+)\s*\(/u);
+    if (match) {
+      contracts.push({
+        file,
+        line,
+        framework: "pytest",
+        title: normalizeTestIdentifier(match[1], /^test_/),
+      });
+    }
+    return contracts;
+  }
+
+  if (/(?:^|\/)[^/]+_test\.go$/i.test(file)) {
+    const match = text.match(/^\s*func\s+(Test[\p{L}\p{N}_]+)\s*\(/u);
+    if (match) {
+      contracts.push({
+        file,
+        line,
+        framework: "go",
+        title: normalizeTestIdentifier(match[1], /^Test/),
+      });
+    }
+    return contracts;
+  }
+
+  if (/(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file)) {
+    const matcher = /\b(?:it|test)\s*(?:\.\w+)?\s*\(\s*(["'`])([^"'`]+)\1/g;
+    for (const match of text.matchAll(matcher)) {
+      contracts.push({
+        file,
+        line,
+        framework: "javascript",
+        title: normalizeText(match[2]),
+      });
+    }
+  }
+  return contracts;
+}
+
+function normalizeTestIdentifier(value: string, prefix: RegExp): string {
+  return normalizeText(value.replace(prefix, "").replaceAll("_", " "));
 }
 
 function extractImports(text: string): string[] {
