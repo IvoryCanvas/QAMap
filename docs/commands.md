@@ -81,7 +81,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap eval . --base origin/main --head HEAD --pr-body-file pr-body.md` | Score change readiness across intent, risk, tests, and review size. |
 | `qamap github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `qamap test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
-| `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. |
+| `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. A single changed declared workspace package is selected automatically. |
 | `qamap qa . --base origin/main --head HEAD --format agent` | The same decision content as one compact JSON line for coding agents — a versioned contract documented in [docs/agent-format.md](agent-format.md). |
 | `qamap e2e plan . --base origin/main --head HEAD` | Derive change intent and QA scenarios, then map them to coverage, test evidence, testability gaps, and an automation adapter. |
 | `qamap e2e plan . --base origin/main --head HEAD --record-history` | Save a compact local run snapshot under `.qamap/runs/` while keeping JSON/Markdown output usable. |
@@ -103,7 +103,9 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap init --agent .` | One-command agent onboarding: add a marked QAMap Pre-PR QA section to `AGENTS.md`, install the packaged skill to `.claude/skills/qamap-pr-qa/SKILL.md`, and create `qamap.config.json` if missing. Idempotent; existing `AGENTS.md` content is preserved. |
 | `qamap init --scripts .` | Add collision-safe `qa`, `qa:local`, and `qa:e2e` package scripts for repeat use in a JavaScript repository. |
 
-For monorepos, pass `--workspace-root` when scanning a package. Package-local checks still use the package directory, while repo-level guardrails such as `AGENTS.md`, `.github/workflows`, `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` are read from the workspace root.
+For monorepos, run `qamap qa` at the repository root first. When every changed file belongs to exactly one recognized package declared by `workspaces` or `pnpm-workspace.yaml`, `qa` automatically analyzes that package and reports `automatic-package` as its analysis scope. Package-local routes, scripts, fixtures, and runner settings are used while repo-level guardrails remain available. If multiple packages changed, a root file is also part of the diff, or the package type is unknown, QAMap keeps repository-wide scope and lists the package candidates rather than silently choosing one.
+
+Pass `--workspace-root` when explicitly running another command against a package, or when overriding an ambiguous `qa` result. Package-local checks still use the package directory, while repo-level guardrails such as `AGENTS.md`, `.github/workflows`, `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` are read from the workspace root.
 
 Suggested validation commands follow the changed ownership boundary where possible. JavaScript workspaces receive package-scoped commands, and Python repositories can receive related pytest paths through a detected Compose service and container runner. These are commands to run, never pre-recorded pass results.
 

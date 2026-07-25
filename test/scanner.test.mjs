@@ -881,16 +881,162 @@ test("generateE2ePlan surfaces package-scoped targets for monorepo root changes"
   assert.equal(mobileTarget.packageName, "@fixture/mobile");
   assert.equal(mobileTarget.project.type, "expo-react-native");
   assert.equal(mobileTarget.recommendedRunner.name, "maestro");
+  assert.equal(mobileTarget.changedFileCount, 1);
   assert.match(mobileTarget.suggestedCommand, /qamap e2e plan apps\/mobile --workspace-root \. --base main --head HEAD/);
   assert.ok(listingTarget);
   assert.equal(listingTarget.packageName, "@fixture/listing");
   assert.equal(listingTarget.project.type, "web");
   assert.equal(listingTarget.recommendedRunner.name, "playwright");
+  assert.equal(listingTarget.changedFileCount, 1);
   assert.match(listingTarget.suggestedCommand, /qamap e2e plan services\/listing --workspace-root \. --base main --head HEAD/);
   assert.ok(plan.bootstrap.steps.some((step) => step.title === "Run package-scoped E2E plans for changed targets"));
   assert.match(markdown, /Changed App\/Package Targets/);
   assert.match(markdown, /services\/listing/);
   assert.match(markdown, /apps\/mobile/);
+});
+
+test("generateQaDraft automatically uses the only changed workspace package", async () => {
+  const { root, listingRoot } = await createQaWorkspaceFixture();
+  await git(root, ["switch", "-c", "feature/listing-submit"]);
+  await mkdir(path.join(listingRoot, "src/generated"), { recursive: true });
+  for (let index = 0; index < 21; index += 1) {
+    await writeFile(
+      path.join(listingRoot, `src/generated/offer-${index}.ts`),
+      `export const offer${index} = ${index};\n`,
+    );
+  }
+  await writeFile(
+    path.join(listingRoot, "app/offers/page.tsx"),
+    [
+      "export default function OffersPage() {",
+      "  return (",
+      "    <main>",
+      "      <h1>Offers</h1>",
+      "      <button data-testid=\"offer-submit\">Submit offer</button>",
+      "      <p>Offer saved</p>",
+      "    </main>",
+      "  );",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add offer submission"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const markdown = formatMarkdownQaDraft(qa);
+  const agent = JSON.parse(formatAgentQaDraft(qa));
+  const agentSchema = JSON.parse(await readFile(path.join(repositoryRoot, "schema/qamap-agent.schema.json"), "utf8"));
+
+  assert.equal(qa.analysisScope.mode, "automatic-package");
+  assert.equal(qa.analysisScope.workspaceRoot, root);
+  assert.equal(qa.analysisScope.selectedPath, "services/listing");
+  assert.equal(qa.analysisScope.packageName, "@fixture/listing");
+  assert.equal(qa.root, listingRoot);
+  assert.equal(qa.project, "web");
+  assert.equal(qa.runner, "playwright");
+  assert.equal(qa.analysisScope.candidates[0].changedFiles, 22);
+  assert.ok(qa.changeAnalysis.intents.flatMap((intent) => intent.files).every((file) => !file.startsWith("services/listing/")));
+  assert.deepEqual(
+    qa.analysisScope.candidates.map((candidate) => candidate.path),
+    ["services/listing"],
+  );
+  assert.match(markdown, /automatically selected workspace package services\/listing/);
+  assert.match(markdown, /Workspace root: .*qamap-test-/);
+  assert.equal(agent.analysisScope.mode, "automatic-package");
+  assert.equal(agent.analysisScope.selectedPath, "services/listing");
+  assert.deepEqual(collectSchemaViolations(agentSchema, agent), []);
+  assert.match(
+    agent.automation.draftCommand,
+    /qamap e2e draft services\/listing --workspace-root \. --base main --head HEAD/,
+  );
+
+  const explicit = await generateQaDraft(listingRoot, {
+    base: "main",
+    head: "HEAD",
+    workspaceRoot: root,
+  });
+  assert.equal(explicit.analysisScope.mode, "explicit-package");
+  assert.equal(explicit.analysisScope.selectedPath, "services/listing");
+});
+
+test("generateQaDraft keeps repository scope when multiple workspace packages change", async () => {
+  const { root, listingRoot, mobileRoot } = await createQaWorkspaceFixture();
+  await git(root, ["switch", "-c", "feature/cross-app-change"]);
+  await writeFile(
+    path.join(listingRoot, "app/offers/page.tsx"),
+    "export default function OffersPage() { return <main>Offer submitted</main>; }\n",
+  );
+  await writeFile(
+    path.join(mobileRoot, "src/screens/OfferScreen.tsx"),
+    "export function OfferScreen() { return <Text>Offer submitted</Text>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update offer surfaces"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const agent = JSON.parse(formatAgentQaDraft(qa));
+
+  assert.equal(qa.analysisScope.mode, "repository-root");
+  assert.equal(qa.root, root);
+  assert.deepEqual(
+    qa.analysisScope.candidates.map((candidate) => candidate.path).sort(),
+    ["apps/mobile", "services/listing"],
+  );
+  assert.match(qa.analysisScope.reason, /2 declared workspace packages changed/);
+  assert.equal(agent.analysisScope.selectedPath, undefined);
+  assert.equal(agent.analysisScope.candidates.length, 2);
+});
+
+test("generateQaDraft does not hide root changes behind a package scope", async () => {
+  const { root, listingRoot } = await createQaWorkspaceFixture();
+  await git(root, ["switch", "-c", "feature/package-and-policy"]);
+  await writeFile(
+    path.join(listingRoot, "app/offers/page.tsx"),
+    "export default function OffersPage() { return <main>Offer archived</main>; }\n",
+  );
+  await writeFile(path.join(root, "README.md"), "# Fixture workspace\n\nOffer policy changed.\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update offer policy"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+  assert.equal(qa.analysisScope.mode, "repository-root");
+  assert.equal(qa.root, root);
+  assert.deepEqual(
+    qa.analysisScope.candidates.map((candidate) => candidate.path),
+    ["services/listing"],
+  );
+  assert.match(qa.analysisScope.reason, /1 file outside that package/);
+});
+
+test("generateQaDraft ignores nested packages outside declared workspaces", async () => {
+  const { root } = await createQaWorkspaceFixture();
+  const exampleRoot = path.join(root, "examples/demo");
+  await mkdir(path.join(exampleRoot, "app"), { recursive: true });
+  await writeFile(
+    path.join(exampleRoot, "package.json"),
+    JSON.stringify({ name: "@fixture/demo", dependencies: { next: "^15.0.0" } }),
+  );
+  await writeFile(
+    path.join(exampleRoot, "app/page.tsx"),
+    "export default function DemoPage() { return <main>Demo</main>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add undeclared example"]);
+  await git(root, ["switch", "-c", "feature/demo-only"]);
+  await writeFile(
+    path.join(exampleRoot, "app/page.tsx"),
+    "export default function DemoPage() { return <main>Updated demo</main>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update undeclared example"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+  assert.equal(qa.analysisScope.mode, "repository-root");
+  assert.deepEqual(qa.analysisScope.candidates, []);
+  assert.match(qa.analysisScope.reason, /No changed file mapped to a declared workspace package/);
 });
 
 test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
@@ -8892,6 +9038,67 @@ function collectSchemaViolations(schema, value, location = "$", rootSchema = sch
     }
   }
   return violations;
+}
+
+async function createQaWorkspaceFixture() {
+  const root = await makeTempRepo();
+  const listingRoot = path.join(root, "services/listing");
+  const mobileRoot = path.join(root, "apps/mobile");
+  await initGitRepo(root);
+  await mkdir(path.join(listingRoot, "app/offers"), { recursive: true });
+  await mkdir(path.join(mobileRoot, "src/screens"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      private: true,
+      packageManager: "pnpm@10.32.1",
+      workspaces: ["apps/*", "services/*"],
+    }),
+  );
+  await writeFile(path.join(root, "README.md"), "# Fixture workspace\n");
+  await writeFile(
+    path.join(listingRoot, "package.json"),
+    JSON.stringify({
+      name: "@fixture/listing",
+      scripts: {
+        test: "vitest run",
+        typecheck: "tsc --noEmit",
+      },
+      dependencies: {
+        next: "^15.0.0",
+        react: "^19.0.0",
+        "react-dom": "^19.0.0",
+      },
+    }),
+  );
+  await writeFile(path.join(listingRoot, "next.config.mjs"), "export default {};\n");
+  await writeFile(
+    path.join(listingRoot, "app/offers/page.tsx"),
+    "export default function OffersPage() { return <main><h1>Offers</h1></main>; }\n",
+  );
+  await writeFile(
+    path.join(mobileRoot, "package.json"),
+    JSON.stringify({
+      name: "@fixture/mobile",
+      scripts: {
+        test: "jest",
+      },
+      dependencies: {
+        expo: "^54.0.0",
+        react: "^19.0.0",
+        "react-native": "^0.81.0",
+      },
+    }),
+  );
+  await writeFile(path.join(mobileRoot, "app.json"), JSON.stringify({ expo: { name: "Fixture", slug: "fixture" } }));
+  await writeFile(
+    path.join(mobileRoot, "src/screens/OfferScreen.tsx"),
+    "export function OfferScreen() { return <Text>Offers</Text>; }\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+  return { root, listingRoot, mobileRoot };
 }
 
 async function makeTempRepo() {

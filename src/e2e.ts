@@ -1,4 +1,4 @@
-import { promises as fs, type Dirent } from "node:fs";
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
 import { analyzeBehaviorGraph, createInferredFlowBehaviorAdapter } from "./behavior.js";
@@ -146,6 +146,7 @@ export interface E2eWorkspaceTarget {
   project: E2eProjectProfile;
   recommendedRunner: E2eRunnerRecommendation;
   changedFiles: string[];
+  changedFileCount: number;
   reason: string;
   suggestedCommand: string;
 }
@@ -514,24 +515,6 @@ interface AnalysisRevision {
 }
 
 const maxFilesPerFlow = 8;
-const workspacePackageSearchLimit = 200;
-const workspacePackageIgnoredDirectories = new Set([
-  ".git",
-  ".hg",
-  ".svn",
-  "node_modules",
-  "dist",
-  "build",
-  "coverage",
-  ".next",
-  ".nuxt",
-  ".turbo",
-  ".cache",
-  ".worktree",
-  ".worktrees",
-  "vendor",
-]);
-
 export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions = {}): Promise<E2ePlanResult> {
   const root = path.resolve(rootInput);
   const testPlan = await generateTestPlan(root, options);
@@ -568,7 +551,7 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     addedDiffEvidence,
   });
   const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows, domains, addedDiffText);
-  const workspaceTargets = await buildWorkspaceTargets(root, testPlan);
+  const workspaceTargets = await resolveE2eWorkspaceTargets(root, testPlan);
   const flows = await buildFlows(
     root,
     testPlan.changedFiles,
@@ -4766,7 +4749,10 @@ function executionProfileConfidence(
   return evidence.length >= 3 ? "medium" : "low";
 }
 
-async function buildWorkspaceTargets(root: string, testPlan: TestPlanResult): Promise<E2eWorkspaceTarget[]> {
+export async function resolveE2eWorkspaceTargets(
+  root: string,
+  testPlan: TestPlanResult,
+): Promise<E2eWorkspaceTarget[]> {
   const workspaceRoot = testPlan.workspaceRoot ?? root;
   if (path.resolve(root) !== path.resolve(workspaceRoot) || testPlan.changedFiles.length === 0) {
     return [];
@@ -4800,6 +4786,7 @@ async function buildWorkspaceTargets(root: string, testPlan: TestPlanResult): Pr
       project,
       recommendedRunner,
       changedFiles: uniqueStrings(changedFiles).slice(0, 20),
+      changedFileCount: uniqueStrings(changedFiles).length,
       reason: workspaceTargetReason(packagePath, project, changedFiles.length),
       suggestedCommand: workspaceTargetCommand(packagePath, testPlan),
     });
@@ -4809,47 +4796,19 @@ async function buildWorkspaceTargets(root: string, testPlan: TestPlanResult): Pr
 }
 
 async function discoverWorkspacePackageDirectories(root: string): Promise<string[]> {
+  const packageJson = await readPackageJson(root);
+  const patterns = await readWorkspaceMemberPatterns(root, packageJson);
+  if (patterns.length === 0) {
+    return [];
+  }
+  const declaredDirectories = await expandWorkspaceMemberPatterns(root, patterns);
   const directories: string[] = [];
-
-  async function walk(directory: string): Promise<void> {
-    if (directories.length >= workspacePackageSearchLimit) {
-      return;
-    }
-
-    let entries: Dirent<string>[];
-    try {
-      entries = await fs.readdir(directory, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    entries.sort((left, right) => left.name.localeCompare(right.name));
-    if (
-      directory !== root &&
-      entries.some((entry) => entry.name === ".git" && (entry.isFile() || entry.isDirectory()))
-    ) {
-      return;
-    }
-    if (directory !== root && entries.some((entry) => entry.isFile() && entry.name === "package.json")) {
-      directories.push(toPosixPath(path.relative(root, directory)));
-      if (directories.length >= workspacePackageSearchLimit) {
-        return;
-      }
-    }
-
-    for (const entry of entries) {
-      if (directories.length >= workspacePackageSearchLimit) {
-        return;
-      }
-      if (!entry.isDirectory() || workspacePackageIgnoredDirectories.has(entry.name)) {
-        continue;
-      }
-      await walk(path.join(directory, entry.name));
+  for (const directory of declaredDirectories) {
+    if (await exists(path.join(root, directory, "package.json"))) {
+      directories.push(directory);
     }
   }
-
-  await walk(root);
-  return directories.sort((left, right) => right.length - left.length);
+  return uniqueStrings(directories).sort((left, right) => right.length - left.length);
 }
 
 function nearestPackageDirectory(filePath: string, packageDirectories: string[]): string | undefined {

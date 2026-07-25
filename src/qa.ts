@@ -1,5 +1,9 @@
 import path from "node:path";
-import { formatDraftReadinessStage, generateE2eDraft } from "./e2e.js";
+import {
+  formatDraftReadinessStage,
+  generateE2eDraft,
+  resolveE2eWorkspaceTargets,
+} from "./e2e.js";
 import type {
   E2eDraftActionItem,
   E2eDraftFile,
@@ -10,6 +14,7 @@ import type {
   E2eProjectType,
   E2eRunnerName,
   E2eScenarioAutomationReceipt,
+  E2eWorkspaceTarget,
 } from "./e2e.js";
 import type { ChangeIntentEvidence, IntentQaScenario } from "./change-intent.js";
 import { buildQaReasoningTraces, summarizeQaTraceEvidence } from "./qa-trace.js";
@@ -17,10 +22,12 @@ import type { QaReasoningTrace, QaTraceEvidenceSummary } from "./qa-trace.js";
 import { routeQaScenario } from "./scenario-routing.js";
 import { collectChangedTestContracts } from "./test-evidence.js";
 import type { ChangedTestContract } from "./test-evidence.js";
-import { collectAddedDiffEvidence } from "./test-plan.js";
+import { collectAddedDiffEvidence, generateTestPlan } from "./test-plan.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
-export interface QaDraftOptions extends Omit<E2eDraftOptions, "dryRun" | "output"> {}
+export interface QaDraftOptions extends Omit<E2eDraftOptions, "dryRun" | "output"> {
+  automaticWorkspaceScope?: boolean;
+}
 
 export interface QaDraftResult {
   tool: {
@@ -38,6 +45,7 @@ export interface QaDraftResult {
   manifestPath?: string;
   noCloud: true;
   noLlmToken: true;
+  analysisScope: QaAnalysisScope;
   execution: QaExecutionReceipt;
   testSuite: E2eDraftResult["plan"]["testSuite"];
   changedTestContracts: ChangedTestContract[];
@@ -89,6 +97,25 @@ export interface QaExecutionReceipt {
   scope: "static-analysis-and-draft-mapping";
 }
 
+export type QaAnalysisScopeMode = "repository-root" | "automatic-package" | "explicit-package";
+
+export interface QaAnalysisScopeCandidate {
+  path: string;
+  packageName?: string;
+  project: E2eProjectType;
+  runner: E2eRunnerName;
+  changedFiles: number;
+}
+
+export interface QaAnalysisScope {
+  mode: QaAnalysisScopeMode;
+  workspaceRoot: string;
+  selectedPath?: string;
+  packageName?: string;
+  candidates: QaAnalysisScopeCandidate[];
+  reason: string;
+}
+
 export interface QaDraftFlow {
   title: string;
   source: string;
@@ -127,14 +154,53 @@ export interface QaDraftMissingEvidence {
 
 export async function generateQaDraft(rootInput: string, options: QaDraftOptions = {}): Promise<QaDraftResult> {
   const root = path.resolve(rootInput);
+  const {
+    automaticWorkspaceScope = true,
+    ...e2eOptions
+  } = options;
+  let detectedScope: QaAnalysisScope | undefined;
+
+  if (automaticWorkspaceScope && !e2eOptions.workspaceRoot) {
+    const preflight = await generateTestPlan(root, e2eOptions);
+    const workspaceTargets = await resolveE2eWorkspaceTargets(root, preflight);
+    const candidates = workspaceTargets.map(qaScopeCandidate);
+    const selected = selectAutomaticWorkspaceTarget(workspaceTargets, preflight.changedFiles.map((file) => file.path));
+    if (selected) {
+      const scoped = await generateQaDraft(path.join(root, selected.path), {
+        ...e2eOptions,
+        base: preflight.base,
+        head: preflight.head,
+        workspaceRoot: root,
+        automaticWorkspaceScope: false,
+      });
+      return {
+        ...scoped,
+        analysisScope: {
+          mode: "automatic-package",
+          workspaceRoot: root,
+          selectedPath: selected.path,
+          packageName: selected.packageName,
+          candidates,
+          reason: `${selected.changedFileCount} changed file${selected.changedFileCount === 1 ? "" : "s"} belong to one declared workspace package, so QAMap used that package's routes, scripts, fixtures, and runner settings.`,
+        },
+      };
+    }
+    detectedScope = {
+      mode: "repository-root",
+      workspaceRoot: root,
+      candidates,
+      reason: workspaceRootScopeReason(workspaceTargets, preflight.changedFiles.map((file) => file.path)),
+    };
+  }
+
   const draft = await generateE2eDraft(root, {
-    ...options,
+    ...e2eOptions,
     dryRun: true,
   });
   const addedDiffEvidence = await collectAddedDiffEvidence(root, {
     base: draft.plan.base,
     head: draft.plan.head,
-    workspaceRoot: options.workspaceRoot,
+    workspaceRoot: e2eOptions.workspaceRoot,
     includeWorkingTree: draft.plan.includeWorkingTree,
   });
   const changedTestContracts = collectChangedTestContracts(addedDiffEvidence);
@@ -191,6 +257,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     manifestPath: draft.plan.verificationManifestPath,
     noCloud: true,
     noLlmToken: true,
+    analysisScope: detectedScope ?? explicitOrRootAnalysisScope(root, e2eOptions.workspaceRoot),
     execution: {
       status: "not-run",
       performed: false,
@@ -211,6 +278,112 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     agentHandoff: buildAgentHandoff(draft, flows, changedTestContracts, missingEvidence, suggestedCommands),
     suggestedCommands,
   };
+}
+
+function qaScopeCandidate(target: E2eWorkspaceTarget): QaAnalysisScopeCandidate {
+  return {
+    path: target.path,
+    packageName: target.packageName,
+    project: target.project.type,
+    runner: target.recommendedRunner.name,
+    changedFiles: target.changedFileCount,
+  };
+}
+
+function selectAutomaticWorkspaceTarget(
+  targets: E2eWorkspaceTarget[],
+  changedFiles: string[],
+): E2eWorkspaceTarget | undefined {
+  if (targets.length !== 1 || changedFiles.length === 0) {
+    return undefined;
+  }
+  const target = targets[0];
+  if (target.project.type === "unknown") {
+    return undefined;
+  }
+  return changedFiles.every((file) => workspaceTargetOwnsFile(target, file)) ? target : undefined;
+}
+
+function workspaceRootScopeReason(targets: E2eWorkspaceTarget[], changedFiles: string[]): string {
+  if (targets.length === 0) {
+    return "No changed file mapped to a declared workspace package, so QAMap analyzed the repository root.";
+  }
+  if (targets.length > 1) {
+    return `${targets.length} declared workspace packages changed, so QAMap kept the repository-wide scope instead of silently selecting one package.`;
+  }
+  const outsideTarget = changedFiles.filter((file) => !workspaceTargetOwnsFile(targets[0], file));
+  if (outsideTarget.length > 0) {
+    return `Changes span ${targets[0].path} and ${outsideTarget.length} file${outsideTarget.length === 1 ? "" : "s"} outside that package, so QAMap kept the repository-wide scope.`;
+  }
+  return `${targets[0].path} lacks enough project evidence for a safe automatic package selection.`;
+}
+
+function workspaceTargetOwnsFile(target: E2eWorkspaceTarget, file: string): boolean {
+  const normalizedFile = toPosixPath(file).replace(/^\.\/+/, "");
+  const normalizedPackage = toPosixPath(target.path).replace(/\/+$/, "");
+  return normalizedFile === `${normalizedPackage}/package.json` ||
+    normalizedFile.startsWith(`${normalizedPackage}/`);
+}
+
+function explicitOrRootAnalysisScope(root: string, workspaceRootInput: string | undefined): QaAnalysisScope {
+  const workspaceRoot = workspaceRootInput ? path.resolve(workspaceRootInput) : root;
+  const selectedPath = workspaceRootInput
+    ? toPosixPath(path.relative(workspaceRoot, root))
+    : undefined;
+  if (selectedPath && selectedPath !== "." && !selectedPath.startsWith("..")) {
+    return {
+      mode: "explicit-package",
+      workspaceRoot,
+      selectedPath,
+      candidates: [],
+      reason: "The caller explicitly selected this workspace package.",
+    };
+  }
+  return {
+    mode: "repository-root",
+    workspaceRoot,
+    candidates: [],
+    reason: "QAMap analyzed the requested repository root.",
+  };
+}
+
+function formatAnalysisScope(scope: QaAnalysisScope): string {
+  if (scope.mode === "automatic-package" && scope.selectedPath) {
+    const packageLabel = scope.packageName ? ` (${scope.packageName})` : "";
+    return `automatically selected workspace package ${scope.selectedPath}${packageLabel}. ${scope.reason}`;
+  }
+  if (scope.mode === "explicit-package" && scope.selectedPath) {
+    return `explicit workspace package ${scope.selectedPath}. ${scope.reason}`;
+  }
+  const candidates = scope.candidates.length > 0
+    ? ` Changed package candidates: ${scope.candidates.map((candidate) => candidate.path).join(", ")}.`
+    : "";
+  return `repository root. ${scope.reason}${candidates}`;
+}
+
+function e2eDraftCommand(result: QaDraftResult): string {
+  const selectedPath = result.analysisScope.selectedPath;
+  const args = [
+    "qamap",
+    "e2e",
+    "draft",
+    selectedPath ?? ".",
+  ];
+  if (selectedPath) {
+    args.push("--workspace-root", ".");
+  }
+  args.push("--base", result.base, "--head", result.head);
+  return args.map(shellCommandArgument).join(" ");
+}
+
+function shellCommandArgument(value: string): string {
+  return /^[A-Za-z0-9_./:@=-]+$/.test(value)
+    ? value
+    : `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function toPosixPath(value: string): string {
+  return value.split(path.sep).join("/");
 }
 
 function buildQaRouteDecision(
@@ -447,6 +620,13 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
     project: result.project,
     runner: result.runner,
     manifest: result.manifestPath ?? null,
+    analysisScope: {
+      mode: result.analysisScope.mode,
+      selectedPath: result.analysisScope.selectedPath,
+      packageName: result.analysisScope.packageName,
+      candidates: result.analysisScope.candidates.slice(0, 4),
+      reason: truncateForAgent(result.analysisScope.reason, 180),
+    },
     execution: result.execution,
     route: result.route,
     readiness: {
@@ -573,7 +753,7 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
           optIn: true,
           adapter: result.runner,
           setupStatus: result.runnerSetup.status,
-          draftCommand: `qamap e2e draft . --base ${result.base} --head ${result.head}`,
+          draftCommand: e2eDraftCommand(result),
           setupCommand: result.runnerSetup.status === "proposed" ? result.runnerSetup.setupCommand : undefined,
         }
       : undefined,
@@ -699,6 +879,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
 
   const compact = {
     ...summary,
+    analysisScope: compactAgentAnalysisScope(summary.analysisScope, true),
     traces: summary.traces.slice(0, 2),
     intents: summary.intents.slice(0, 2).map((intent) => ({
       ...intent,
@@ -870,6 +1051,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     project: summary.project,
     runner: summary.runner,
     manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 120) : null,
+    analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
     execution: summary.execution,
     route: summary.route,
     readiness: summary.readiness,
@@ -962,6 +1144,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     project: summary.project,
     runner: summary.runner,
     manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 180) : null,
+    analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
     execution: summary.execution,
     route: summary.route,
     readiness: summary.readiness,
@@ -1030,6 +1213,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     project: summary.project,
     runner: summary.runner,
     manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 80) : null,
+    analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
     execution: summary.execution,
     route: summary.route,
     readiness: summary.readiness,
@@ -1077,6 +1261,52 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
 
 function numericCount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function compactAgentAnalysisScope(value: unknown, includeCandidates: boolean): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const scope = value as Record<string, unknown>;
+  const mode = typeof scope.mode === "string" ? scope.mode : "repository-root";
+  const rawCandidates = Array.isArray(scope.candidates) ? scope.candidates : [];
+  if (mode === "repository-root" && !scope.selectedPath && rawCandidates.length === 0) {
+    return undefined;
+  }
+  const candidates = includeCandidates
+    ? rawCandidates
+        .filter((candidate): candidate is Record<string, unknown> =>
+          Boolean(candidate) && typeof candidate === "object" && !Array.isArray(candidate)
+        )
+        .slice(0, 2)
+        .map((candidate) => ({
+          path: truncateForAgent(String(candidate.path ?? ""), 70),
+          packageName: candidate.packageName
+            ? truncateForAgent(String(candidate.packageName), 50)
+            : undefined,
+          project: String(candidate.project ?? "unknown"),
+          runner: String(candidate.runner ?? "manual"),
+          changedFiles: numericCount(candidate.changedFiles),
+        }))
+    : [];
+  const defaultReason = mode === "automatic-package"
+    ? "One declared package owns every changed file."
+    : mode === "explicit-package"
+      ? "The caller selected this workspace package."
+      : "Repository scope was retained.";
+  return {
+    mode,
+    selectedPath: scope.selectedPath
+      ? truncateForAgent(String(scope.selectedPath), 70)
+      : undefined,
+    packageName: scope.packageName
+      ? truncateForAgent(String(scope.packageName), 50)
+      : undefined,
+    candidates,
+    reason: includeCandidates && scope.reason
+      ? truncateForAgent(String(scope.reason), 90)
+      : defaultReason,
+  };
 }
 
 function secondaryAgentFlow(
@@ -1240,6 +1470,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("## At a Glance");
   lines.push("");
   lines.push("- Product QA execution: not run; this command performed static analysis and draft mapping only.");
+  lines.push(`- Analysis scope: ${escapeMarkdownInline(formatAnalysisScope(result.analysisScope))}`);
   const primaryIntent = result.changeAnalysis.intents[0];
   if (primaryIntent) {
     lines.push(`- Change intent: ${escapeMarkdownInline(primaryIntent.title)} [${primaryIntent.confidence}]`);
@@ -1290,7 +1521,10 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   }
   const nextCommand = nextStepCommand(result);
   if (nextCommand) {
-    lines.push(`- Repository validation: \`${escapeMarkdownInline(nextCommand)}\``);
+    const commandLocation = result.analysisScope.selectedPath
+      ? ` from \`${escapeMarkdownInline(result.analysisScope.selectedPath)}\``
+      : "";
+    lines.push(`- Repository validation${commandLocation}: \`${escapeMarkdownInline(nextCommand)}\``);
   }
   const verificationOnly = result.readiness.basis === "repository-validation";
   const blocking = result.missingEvidence.filter((item) => item.priority === "required").slice(0, 2);
@@ -1373,6 +1607,10 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("## Summary");
   lines.push("");
   lines.push(`- Root: \`${escapeMarkdownInline(result.root)}\``);
+  if (result.analysisScope.workspaceRoot !== result.root) {
+    lines.push(`- Workspace root: \`${escapeMarkdownInline(result.analysisScope.workspaceRoot)}\``);
+  }
+  lines.push(`- Analysis scope: ${escapeMarkdownInline(formatAnalysisScope(result.analysisScope))}`);
   lines.push(`- Base: \`${escapeMarkdownInline(result.base)}\``);
   lines.push(`- Base selection: ${escapeMarkdownInline(result.baseResolution.reason)}`);
   lines.push(`- Head: \`${escapeMarkdownInline(result.head)}\``);
