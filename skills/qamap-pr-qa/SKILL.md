@@ -27,7 +27,10 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
    Drop `--format agent` when a human will read the output directly; the default markdown report is written for people.
    The agent JSON is a versioned contract (`schema: qamap.qa` v1, additive-only): see docs/agent-format.md in the QAMap repository.
 
-3. If the repository is a monorepo and the changed files are clearly inside one package, run a scoped pass too:
+3. Read `analysisScope` before interpreting package-relative evidence or commands.
+   - `automatic-package` means the root command already reran analysis with the selected package's routes, scripts, fixtures, and runner settings. Run package-relative `commands` from `selectedPath`; use the workspace-aware `automation.draftCommand` as printed.
+   - `repository-root` means QAMap could not safely select one package. Review `candidates` and `reason`; do not silently choose a package for a cross-package or root-spanning change.
+   - Use an explicit scoped pass only when a human wants to override that decision:
 
    ```sh
    npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa <package-path> --workspace-root . --base <base> --head HEAD

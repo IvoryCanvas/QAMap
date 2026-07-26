@@ -90,6 +90,8 @@ Changes limited to analyzer rules, configuration, documentation, generated artif
 
 Suggested repository commands are scoped to affected workspace packages and related tests when the repo exposes enough evidence. Python projects can reuse root Compose variants and their primary application service; background workers are not selected as the default test entrypoint merely because they share an image.
 
+In a declared JavaScript monorepo, `qamap qa` automatically uses the changed package when every changed file belongs to one recognized package. The report names the selected package and uses its routes, scripts, fixtures, and runner settings while retaining repository-level guardrails. Changes spanning packages or including root files stay repository-wide instead of being silently narrowed.
+
 Trimmed real output from the same demo:
 
 ```txt

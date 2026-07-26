@@ -48,6 +48,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Keep `qa --format agent` below 4KB without dropping the highest-priority intent, routed scenarios, primary affected flow, a compact second flow for multi-surface changes, and omitted counts needed for an agent handoff.
 - Improve changed-file impact mapping from shared symbols and components to consuming routes, screens, API contracts, and manifest flows.
 - Keep directly changed routes and screens ahead of reverse-import consumers, so a shared type edit cannot replace the touched product surface with unrelated pages.
+- Automatically use one changed declared workspace package for `qa`, while retaining repository-wide analysis for cross-package, root-spanning, undeclared, or unknown-package changes. Expose that decision to humans and agents instead of requiring a second manual discovery pass.
 - Preserve behavioral contracts declared by changed tests, including non-English test names, and route their exact files into repository validation without claiming execution.
 - Keep long-PR intent clustering conservative: package scopes and one-word keyword bridges must not collapse unrelated commits into one high-confidence QA lifecycle.
 - Keep the [release validation checklist](release-validation.md), [manifest guide](manifest.md), public [E2E output examples](e2e-output-examples.md), and README examples aligned with captured output from the public fixtures.

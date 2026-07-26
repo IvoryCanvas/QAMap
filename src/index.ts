@@ -31,6 +31,7 @@ export {
   formatMarkdownE2eSetup,
   generateE2eDraft,
   generateE2ePlan,
+  resolveE2eWorkspaceTargets,
   setupE2eRunner,
 } from "./e2e.js";
 export { evaluateChangeReadiness, formatEvalReport, formatMarkdownEvalReport } from "./eval.js";
@@ -203,6 +204,7 @@ export type {
   E2eValidationMatrixCategory,
   E2eValidationMatrixRow,
   E2eValidationMatrixStatus,
+  E2eWorkspaceTarget,
   E2eDraftFile,
   E2eDraftOptions,
   E2eDraftResult,
@@ -292,6 +294,9 @@ export type {
 export type { QAMapConfig, Finding, ScanCounts, ScanOptions, ScanResult, Severity } from "./types.js";
 export type { VerifyOptions, VerifyResult } from "./verify.js";
 export type {
+  QaAnalysisScope,
+  QaAnalysisScopeCandidate,
+  QaAnalysisScopeMode,
   QaDraftFlow,
   QaDraftMissingEvidence,
   QaDraftOptions,

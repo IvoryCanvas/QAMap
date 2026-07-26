@@ -127,6 +127,34 @@
       "type": ["string", "null"],
       "description": "Path of the verification manifest in use, or null when the run used repo signals and the PR diff only."
     },
+    "analysisScope": {
+      "type": "object",
+      "description": "Repository or workspace package selected for this analysis. Automatic selection occurs only when every changed file belongs to one declared, recognizable workspace package.",
+      "required": ["mode", "candidates", "reason"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["repository-root", "automatic-package", "explicit-package"]
+        },
+        "selectedPath": { "type": "string" },
+        "packageName": { "type": "string" },
+        "reason": { "type": "string" },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "project", "runner", "changedFiles"],
+            "properties": {
+              "path": { "type": "string" },
+              "packageName": { "type": "string" },
+              "project": { "type": "string" },
+              "runner": { "type": "string", "enum": ["maestro", "playwright", "manual"] },
+              "changedFiles": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
     "execution": {
       "type": "object",
       "description": "Explicit receipt for product QA execution. The qa command performs static analysis and draft mapping only; it never claims the target application was exercised.",

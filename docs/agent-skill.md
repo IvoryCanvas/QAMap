@@ -32,7 +32,7 @@ Run this before writing a PR body or asking for review. Agents should prefer the
 npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa . --base origin/main --head HEAD --format agent
 ```
 
-The result carries a canonical `route` decision, `intents[]` with scenario-level structured diff `sources`, `testContracts` for behavior declared by tests added in the PR, `flows[]` (affected behavior, entry route, evidence-matched `focus`, steps, selectors), `requiredEvidence[]`, optional `automation`, `prChecklist[]`, and `commands[]` under `schema: qamap.qa`. Read `route.status`, `route.nextAction`, and its optional exact repository command before compatibility readiness scores. Treat `testContracts.execution: "not-run"` literally: test names are repository-authored expectations, not a passing receipt. Within a flow, prefer `focus.action` and `focus.assertion` when summarizing what changed and what must be observed; the ordered step list may begin with setup. The one-off command uses npm directly so an agent does not trigger Corepack or rewrite the target repository's `packageManager` metadata.
+The result carries `analysisScope`, a canonical `route` decision, `intents[]` with scenario-level structured diff `sources`, `testContracts` for behavior declared by tests added in the PR, `flows[]` (affected behavior, entry route, evidence-matched `focus`, steps, selectors), `requiredEvidence[]`, optional `automation`, `prChecklist[]`, and `commands[]` under `schema: qamap.qa`. Read `analysisScope` first: a single changed declared workspace package is selected automatically, while ambiguous or cross-package changes remain repository-wide. Run package-relative commands from `analysisScope.selectedPath`; the optional automation draft command is already workspace-aware. Then read `route.status`, `route.nextAction`, and its optional exact repository command before compatibility readiness scores. Treat `testContracts.execution: "not-run"` literally: test names are repository-authored expectations, not a passing receipt. Within a flow, prefer `focus.action` and `focus.assertion` when summarizing what changed and what must be observed; the ordered step list may begin with setup. The one-off command uses npm directly so an agent does not trigger Corepack or rewrite the target repository's `packageManager` metadata.
 
 For a human-readable report, drop the flag; for installed projects write it to a file:
 
@@ -79,6 +79,7 @@ If your agent supports symlinked skills, point its skill directory at `skills/qa
 Use `Change Intent Evidence` and the `PR Comment Draft` as review context:
 
 - canonical route: complete an optional draft, run an existing repository command, or define one
+- analysis scope: selected workspace package or the reason repository-wide analysis was retained
 - commit-backed intent, confidence, and whether human review is required
 - ordered behavior lifecycle
 - primary, failure, boundary, and state-transition QA scenarios
