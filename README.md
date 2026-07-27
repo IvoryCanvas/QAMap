@@ -23,11 +23,11 @@ commit + diff -> behavior lifecycle -> QA routing -> QA trace -> optional automa
 
 ## See It Work
 
-This is the current CLI running against the committed, manifest-free React state-transition fixture. The recording shows real deterministic output: QAMap identifies the change, exposes the reasoning path, and writes the Playwright draft shown at the end. It does **not** launch the fixture application or claim that product QA passed.
+This is the current CLI running against a committed React subscription-renewal fixture with optional JSDoc QA annotations. The recording uses real deterministic output: QAMap reads the duplicate-request guard, connects it to the `/renewal` user flow and visible outcome, exposes the exact reasoning trace, and writes the Playwright draft shown at the end. It does **not** launch the fixture application or claim that product QA passed.
 
-![QAMap reads a PR diff, routes QA scenarios, and reports E2E automation readiness](docs/assets/qamap-30s-demo.gif)
+![QAMap reads a subscription-renewal diff, traces the affected flow, and writes an E2E draft](docs/assets/qamap-domain-demo.gif)
 
-_Recorded from the current source against `test/benchmarks/web-react-record-pinning`; no hand-written or simulated result blocks._
+_Recorded from the current source against `test/benchmarks/web-symbol-annotated-renewal`; no hand-written or simulated result blocks._
 
 ## Quick Start
 
