@@ -40,12 +40,14 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Keep `qamap.change-intent` as a direct Behavior Graph adapter while moving more source observations out of the compatibility adapter.
 - Preserve `qa` as the static, read-only product surface while designing explicit execution behind `verify`; never turn a scan into implicit project-code execution.
 - Treat the committed [benchmark contract](benchmarking.md) as the quality gate for recommendations, not only implementation correctness. Reduce real failures into public fixtures and require `pnpm bench:ci` on every PR.
+- Keep a separate execution contract for deterministic automation compilers. It must generate an artifact once, fail that artifact against a seeded regression for the intended assertion, and pass it against the fixed source; setup errors and unrelated crashes do not count as caught regressions.
 - Keep provenance-pinned public PR reductions beside synthetic controls. A real case must record repository, PR URL, base/head commits, license, and the human QA expectation it is meant to protect.
 - Keep execution readiness separate from validation completeness. A draft may be locally runnable while still requiring failure coverage, fixture confirmation, or reviewer approval before it becomes trusted PR evidence.
 - Keep optional automation readiness separate from repository verification readiness. Analyzer rules, configuration, documentation, generated output, and existing tests must point to repository validation without being mislabeled as blocked product E2E work.
 - Expose one canonical machine route that survives payload compaction and tells agents whether to complete a draft, run an existing command, or define missing repository validation. Compatibility scores must never be the only applicable decision.
 - Make `qa` the primary product surface. Its first screen and `--format agent` payload must agree on change intent, lifecycle, QA scenarios, affected behavior, repository evidence, draft path, and missing trust requirements.
 - Keep `qa --format agent` below 4KB without dropping the highest-priority intent, routed scenarios, primary affected flow, a compact second flow for multi-surface changes, and omitted counts needed for an agent handoff.
+- Keep one vendor-neutral QAMap skill source, install it through the open `.agents/skills` project path plus explicit compatibility paths, and make any future plugin a thin distribution wrapper around the same local CLI and `qamap.qa` contract.
 - Improve changed-file impact mapping from shared symbols and components to consuming routes, screens, API contracts, and manifest flows.
 - Keep directly changed routes and screens ahead of reverse-import consumers, so a shared type edit cannot replace the touched product surface with unrelated pages.
 - Automatically use one changed declared workspace package for `qa`, while retaining repository-wide analysis for cross-package, root-spanning, undeclared, or unknown-package changes. Expose that decision to humans and agents instead of requiring a second manual discovery pass.
@@ -68,9 +70,10 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Move route, screen, endpoint, selector, fixture, test, and contract discovery into analyzer adapters, starting with TypeScript web stacks and reusing one web behavior model across Next.js, React Router, Vue/Nuxt, and SvelteKit.
 - Compare base and head Behavior Graphs, then select impacted graph paths before refining deterministic success, validation, failure, empty, loading, auth, and contract scenarios.
 - Add policy-controlled temporary execution so selected scenarios can produce normalized pass, fail, blocked, and not-verifiable evidence without modifying the target repository.
-- Add an execution benchmark that injects known regressions and requires QAMap to select and fail the relevant scenario without changing the fixture repository.
+- Expand the execution benchmark beyond repeated-action and persisted-state protection to validation recovery and a non-browser adapter, with one shared framework-neutral contract.
 - Compile critical success and failure scenarios into concrete runner actions before execution, so a green smoke assertion cannot satisfy a lifecycle or coverage contract by itself.
-- Add symbol-level anchors for exported components, hooks, API clients, handlers, schemas, and queries after the public import-impact fixture stays stable.
+- Expand the initial JS/TS JSDoc symbol-anchor adapter beyond changed top-level exports, then add equivalent language adapters without making annotations mandatory.
+- Expose the shared symbol parser and diagnostics through an editor-neutral adapter before adding lightweight editor integrations. Editor surfaces should navigate to evidence and suggest annotations, while the CLI remains the single analysis engine.
 - Add a manifest correction command that proposes the exact flow/anchor patch and applies it only after human approval, avoiding routine hand-edits to YAML.
 - Add stronger deterministic draft adapters for Playwright and Maestro while keeping `manual` output for API, CLI, token, and catalog repositories; runner detection itself is not a product success metric.
 - Expand the public benchmark corpus with package-scoped monorepos, auth/session changes, dynamic routes, API failure fixtures, and non-JavaScript services.

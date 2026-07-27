@@ -16,13 +16,14 @@ The fastest way to make a repository agent-ready is:
 npx @ivorycanvas/qamap init --agent .
 ```
 
-It performs three idempotent steps:
+It performs four idempotent steps:
 
 - adds a marked `Pre-PR QA (QAMap)` section to `AGENTS.md` (created if missing, appended if present; re-runs refresh only the marked section and never touch your own content)
-- installs the packaged skill to `.claude/skills/qamap-pr-qa/SKILL.md` so Claude Code discovers it as a project skill (a locally modified copy is left alone unless you pass `--force`)
+- installs the packaged skill to `.agents/skills/qamap-pr-qa/SKILL.md` so Codex and compatible Agent Skills hosts can discover it
+- installs the same skill to `.claude/skills/qamap-pr-qa/SKILL.md` for Claude Code compatibility
 - creates a starter `qamap.config.json` when the repository has none
 
-After that, agents that read `AGENTS.md` or project skills will run the QA pass below on their own. The rest of this document explains what that pass does and how to wire it manually on other agent surfaces.
+Both skill copies preserve local changes unless you explicitly pass `--force`. After setup, agents that read `AGENTS.md` or either project-skill location can discover the same QA workflow without receiving a different prompt contract. The rest of this document explains what that pass does and how to wire it manually on other agent surfaces.
 
 ## Recommended Agent Step
 
@@ -73,6 +74,12 @@ cat skills/qamap-pr-qa/SKILL.md
 ```
 
 If your agent supports symlinked skills, point its skill directory at `skills/qamap-pr-qa`. If it only supports instruction text, copy the contents of `SKILL.md` into that system's reusable instruction format.
+
+## Plugin Boundary
+
+The local skill is the integration contract. It invokes the installed or one-off QAMap CLI, consumes the versioned agent JSON, and asks the host LLM to inspect only the evidence it still needs. QAMap itself does not call an LLM or upload repository source.
+
+A future installable plugin should package this same skill without creating a second QA prompt or analysis engine. It does not need an MCP server merely to execute QAMap: the CLI already runs inside the checked-out repository. An MCP layer is justified only if a separate host cannot launch local commands, and it must preserve the same `qamap.qa` schema and local-first boundary.
 
 ## What The Agent Should Do With The Output
 

@@ -100,7 +100,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap doctor services/listing --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `qamap context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `qamap init .` | Create a starter `qamap.config.json`. |
-| `qamap init --agent .` | One-command agent onboarding: add a marked QAMap Pre-PR QA section to `AGENTS.md`, install the packaged skill to `.claude/skills/qamap-pr-qa/SKILL.md`, and create `qamap.config.json` if missing. Idempotent; existing `AGENTS.md` content is preserved. |
+| `qamap init --agent .` | One-command agent onboarding: add a marked QAMap Pre-PR QA section to `AGENTS.md`, install the same packaged skill to the portable `.agents/skills/qamap-pr-qa/SKILL.md` path and the Claude-compatible `.claude/skills/qamap-pr-qa/SKILL.md` path, and create `qamap.config.json` if missing. Idempotent; existing instructions and locally modified skills are preserved. |
 | `qamap init --scripts .` | Add collision-safe `qa`, `qa:local`, and `qa:e2e` package scripts for repeat use in a JavaScript repository. |
 
 For monorepos, run `qamap qa` at the repository root first. When every changed file belongs to exactly one recognized package declared by `workspaces` or `pnpm-workspace.yaml`, `qa` automatically analyzes that package and reports `automatic-package` as its analysis scope. Package-local routes, scripts, fixtures, and runner settings are used while repo-level guardrails remain available. If multiple packages changed, a root file is also part of the diff, or the package type is unknown, QAMap keeps repository-wide scope and lists the package candidates rather than silently choosing one.
@@ -128,6 +128,8 @@ For pnpm, these become `pnpm qa`, `pnpm qa:local`, and `pnpm qa:e2e`. npm uses `
 `qamap test-plan` turns changed file paths into a review-ready domain test checklist. It also discovers common validation commands from `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, Gradle files, and Maven `pom.xml`. Add `--include-working-tree` for local, uncommitted changes while iterating.
 
 `qamap e2e plan` first reads behavior-bearing commits in the selected base/head range. Related `feat`, `fix`, `hotfix`, `perf`, and supporting `refactor` commits are grouped into change intents, then connected to added diff symbols. The result is an evidence-backed lifecycle and a set of runner-independent primary, failure, boundary, and state-transition scenarios. Low-confidence or working-tree-only intent remains review-required instead of becoming trusted regression policy.
+
+Most repositories need no annotations. When one important exported JavaScript or TypeScript symbol is repeatedly misunderstood, optional [`@qamapFlow`, `@qamapStage`, `@qamapOutcome`, and `@qamapRisk` JSDoc context](symbol-annotations.md) can refine its lifecycle. QAMap applies that context only when the declaration overlaps the diff; changing the comment alone cannot create a QA scenario.
 
 After that judgment, QAMap detects whether the target looks like Expo/React Native, web, API/service, CLI, or another repository shape and selects a Maestro, Playwright, or manual output adapter. The plan compares scenario targets with existing test evidence, identifies required mocks and fixtures, and reports missing stable selectors such as `testID` or `data-testid`. Runner detection is an implementation detail, not the first value shown to the user.
 

@@ -1,5 +1,22 @@
 # Release Validation
 
+## Unreleased
+
+The next patch candidate adds the first CI-enforced seeded-regression execution contracts. QAMap generates browser artifacts from repeated-action and persisted-state changes, then proves that each artifact fails for its intended assertion when the behavior is broken and passes again when the fixed source is restored:
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end with the execution contract included |
+| `pnpm test` | 250/250 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 22/22 static recommendation contracts passing |
+| `pnpm bench:execution` | 2/2 execution contracts passing; duplicate-request and missing-persistence regressions caught; fixed sources report `2 passed` and `1 passed` |
+| Coverage | Lines 89.29%, branches 85.90%, functions 95.76% |
+| Compact agent handoff | Current branch output is 4,082 bytes, retains three detected flows with one disclosed omission, and keeps execution explicitly `not-run` |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.7`; version remains unchanged until release approval |
+
+The execution result is intentionally scoped to committed public fixtures. It does not claim that QAMap executed or passed QA in a user's repository. Its value is narrower and measurable: evidence-compiled tests can distinguish known broken implementations from their fixes, and an unrelated setup failure cannot be counted as a caught regression. SHA-256 checks also prevent regeneration from silently changing the test between comparisons.
+
 ## 0.4.7 - 2026-07-22
 
 Validated as a decision-contract, executable-draft, exact-test-routing, public-regression, compounding-repository-context, and multi-flow agent-handoff release. QAMap now exposes one canonical route after it reads a change: either complete an optional automation draft or run a repository validation command. It also connects item-level actions to repository-backed prerequisites, ranks exact changed Python regression tests, adds a provenance-pinned public PR reduction, proves that one reviewed manifest correction improves both the current PR and the next related PR without another prompt, and preserves a second distinct QA flow when a large result must be compacted below the agent payload limit:
@@ -279,7 +296,7 @@ Run these from a clean checkout of QAMap before any release candidate:
 pnpm run release:check
 ```
 
-`release:check` expands to the required local suite: `pnpm test`, `pnpm scan`, `pnpm bench:ci`, `git diff --check`, coverage thresholds, and `pnpm pack --dry-run`. If a release candidate fails, run the individual command directly to inspect the failure.
+`release:check` expands to the required local suite: `pnpm test`, `pnpm scan`, `pnpm bench:ci`, `pnpm bench:execution`, `git diff --check`, coverage thresholds, and `pnpm pack --dry-run`. The execution benchmark runs only committed public fixtures in temporary repositories. If a release candidate fails, run the individual command directly to inspect the failure.
 
 Run the npm publish preview after the local release gate passes:
 

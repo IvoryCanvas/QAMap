@@ -22,7 +22,10 @@ export interface AgentInitResult {
 const SECTION_START = "<!-- qamap:agent:start -->";
 const SECTION_END = "<!-- qamap:agent:end -->";
 const SKILL_RELATIVE_PATH = path.join("skills", "qamap-pr-qa", "SKILL.md");
-const SKILL_TARGET_RELATIVE_PATH = path.join(".claude", "skills", "qamap-pr-qa", "SKILL.md");
+const SKILL_TARGET_RELATIVE_PATHS = [
+  path.join(".agents", "skills", "qamap-pr-qa", "SKILL.md"),
+  path.join(".claude", "skills", "qamap-pr-qa", "SKILL.md"),
+];
 
 export async function initAgentSetup(rootInput: string, options: { force?: boolean } = {}): Promise<AgentInitResult> {
   const root = path.resolve(rootInput);
@@ -31,7 +34,9 @@ export async function initAgentSetup(rootInput: string, options: { force?: boole
 
   const files: AgentInitFile[] = [];
   files.push(await upsertAgentsSection(root, dlxCommand));
-  files.push(await copyPackagedSkill(root, options.force ?? false));
+  for (const targetPath of SKILL_TARGET_RELATIVE_PATHS) {
+    files.push(await copyPackagedSkill(root, targetPath, options.force ?? false));
+  }
   files.push(await ensureDefaultConfig(root));
 
   return { root, files, nextCommand };
@@ -52,7 +57,7 @@ export function buildAgentQaSection(dlxCommand: string): string {
     "- Address every `requiredEvidence` item before handing the pull request to a human.",
     "- Treat `automation` as opt-in. Generate or set up an E2E adapter only after the scenario and source evidence are accepted.",
     "- Treat the result as QA planning evidence, not as proof that browser, device, or manual QA passed.",
-    "- The full agent workflow lives in `.claude/skills/qamap-pr-qa/SKILL.md` when installed via `qamap init --agent`.",
+    "- The full workflow lives in `.agents/skills/qamap-pr-qa/SKILL.md`; Claude Code also receives `.claude/skills/qamap-pr-qa/SKILL.md`.",
     SECTION_END,
   ].join("\n");
 }
@@ -86,10 +91,14 @@ async function upsertAgentsSection(root: string, dlxCommand: string): Promise<Ag
   return { path: relativePath, status: "updated", detail: "appended the QAMap Pre-PR QA section; existing content untouched" };
 }
 
-async function copyPackagedSkill(root: string, force: boolean): Promise<AgentInitFile> {
+async function copyPackagedSkill(
+  root: string,
+  targetRelativePath: string,
+  force: boolean,
+): Promise<AgentInitFile> {
   const sourcePath = path.join(packageRoot(), SKILL_RELATIVE_PATH);
-  const targetPath = path.join(root, SKILL_TARGET_RELATIVE_PATH);
-  const relativePath = SKILL_TARGET_RELATIVE_PATH;
+  const targetPath = path.join(root, targetRelativePath);
+  const relativePath = targetRelativePath;
 
   const skillContent = await fs.readFile(sourcePath, "utf8");
 
@@ -131,7 +140,7 @@ export function formatAgentInitReport(result: AgentInitResult): string {
     lines.push(`- [${file.status}] \`${file.path}\` — ${file.detail}`);
   }
   lines.push("");
-  lines.push("Agents that read `AGENTS.md` (or the installed skill) will now run QAMap before handing off a pull request.");
+  lines.push("Agents that read `AGENTS.md` or project skills will now run QAMap before handing off a pull request.");
   lines.push("");
   lines.push("Try it yourself:");
   lines.push("");

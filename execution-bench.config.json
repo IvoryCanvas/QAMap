@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "contracts": [
+    {
+      "name": "web-repeated-action-guard",
+      "fixture": "test/benchmarks/web-symbol-annotated-renewal",
+      "output": "tests/e2e",
+      "installCommand": [
+        "pnpm",
+        "install",
+        "--ignore-scripts",
+        "--no-frozen-lockfile"
+      ],
+      "prepareCommands": [
+        [
+          "pnpm",
+          "exec",
+          "playwright",
+          "install",
+          "--with-deps",
+          "chromium"
+        ]
+      ],
+      "validateCommand": [
+        "pnpm",
+        "run",
+        "test:e2e"
+      ],
+      "regressionName": "duplicate request guard removed",
+      "regressionOverlay": "base",
+      "fixedOverlay": "head",
+      "minimumGeneratedFiles": 1,
+      "minimumCompiledScenarios": 1,
+      "mustCompileScenarios": [
+        "Duplicate renewal request"
+      ],
+      "mustGenerateFiles": [
+        "tests/e2e/renewal-renew-subscription.spec.ts"
+      ],
+      "regressionOutputIncludes": [
+        "receivedDuplicateRequest",
+        "Expected: false",
+        "Received: true"
+      ],
+      "fixedOutputIncludes": [
+        "2 passed"
+      ]
+    },
+    {
+      "name": "web-persisted-state-restoration",
+      "fixture": "test/benchmarks/web-persisted-workspace-setting",
+      "commitMessage": "feat: persist workspace density",
+      "output": "tests/e2e",
+      "installCommand": [
+        "pnpm",
+        "install",
+        "--ignore-scripts",
+        "--no-frozen-lockfile"
+      ],
+      "prepareCommands": [
+        [
+          "pnpm",
+          "exec",
+          "playwright",
+          "install",
+          "--with-deps",
+          "chromium"
+        ]
+      ],
+      "validateCommand": [
+        "pnpm",
+        "run",
+        "test:e2e"
+      ],
+      "regressionName": "persisted state write removed",
+      "regressionOverlay": "regression",
+      "fixedOverlay": "head",
+      "minimumGeneratedFiles": 1,
+      "minimumCompiledScenarios": 1,
+      "mustCompileScenarios": [
+        "Persist workspace density"
+      ],
+      "mustGenerateFiles": [
+        "tests/e2e/persist-workspace-density.spec.ts"
+      ],
+      "regressionOutputIncludes": [
+        "QAMap sample value",
+        "Received: null"
+      ],
+      "fixedOutputIncludes": [
+        "1 passed"
+      ]
+    }
+  ]
+}

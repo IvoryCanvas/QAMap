@@ -35,9 +35,10 @@
     "coverage": "pnpm build && node --test --experimental-test-coverage --test-coverage-include=\"dist/**/*.js\" --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 test/*.test.mjs",
     "scan": "pnpm build && node dist/cli.js scan .",
     "report": "pnpm build && node dist/cli.js report . --output QAMAP_REPORT.md",
-    "release:check": "pnpm test && pnpm scan && pnpm bench:ci && git diff --check && pnpm run coverage && pnpm pack --dry-run",
+    "release:check": "pnpm test && pnpm scan && pnpm bench:ci && pnpm bench:execution && git diff --check && pnpm run coverage && pnpm pack --dry-run",
     "bench": "pnpm build && node scripts/bench.mjs",
-    "bench:ci": "pnpm build && node scripts/bench.mjs --config bench.config.json --assert"
+    "bench:ci": "pnpm build && node scripts/bench.mjs --config bench.config.json --assert",
+    "bench:execution": "pnpm build && node scripts/execution-bench.mjs --config execution-bench.config.json"
   },
   "keywords": [
     "ai",

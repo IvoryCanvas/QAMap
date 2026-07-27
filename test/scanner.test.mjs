@@ -8031,6 +8031,9 @@ test("package root exports the public QA API and declarations", async () => {
   assert.equal(packageJson.exports["."].types, "./dist/index.d.ts");
   assert.equal(typeof publicApi.generateQaDraft, "function");
   assert.equal(typeof publicApi.formatAgentQaDraft, "function");
+  assert.equal(typeof publicApi.parseQaSymbolAnnotations, "function");
+  assert.equal(typeof publicApi.collectChangedQaSymbolAnnotations, "function");
+  assert.ok(publicApi.qaSymbolAnnotationTags.includes("@qamapRisk"));
 });
 
 test("e2e draft can use an external verification manifest for read-only adoption preview", async () => {
@@ -8898,26 +8901,39 @@ test("reviewProject uses workspace root guardrails for package branches", async 
   );
 });
 
-test("initAgentSetup creates AGENTS.md, installs the packaged skill, and stays idempotent", async () => {
+test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stays idempotent", async () => {
   const { initAgentSetup, formatAgentInitReport } = await import("../dist/agent-init.js");
   const root = await makeTempRepo();
   await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "smoke" }));
 
   const first = await initAgentSetup(root);
-  assert.deepEqual(first.files.map((file) => file.status), ["created", "created", "created"]);
+  assert.deepEqual(first.files.map((file) => file.status), ["created", "created", "created", "created"]);
   const agents = await readFile(path.join(root, "AGENTS.md"), "utf8");
   assert.match(agents, /<!-- qamap:agent:start -->/);
   assert.match(agents, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
   assert.match(agents, /requiredEvidence/);
   assert.match(agents, /intents\[\]\.scenarios\[\]\.sources/);
   assert.match(agents, /Treat `automation` as opt-in/);
+  assert.match(agents, /\.agents\/skills\/qamap-pr-qa\/SKILL\.md/);
+  assert.match(agents, /\.claude\/skills\/qamap-pr-qa\/SKILL\.md/);
   assert.doesNotMatch(agents, /firstDraftCommand/);
-  const skill = await readFile(path.join(root, ".claude", "skills", "qamap-pr-qa", "SKILL.md"), "utf8");
-  assert.match(skill, /name: qamap-pr-qa/);
+  const portableSkill = await readFile(
+    path.join(root, ".agents", "skills", "qamap-pr-qa", "SKILL.md"),
+    "utf8",
+  );
+  const claudeSkill = await readFile(
+    path.join(root, ".claude", "skills", "qamap-pr-qa", "SKILL.md"),
+    "utf8",
+  );
+  assert.match(portableSkill, /name: qamap-pr-qa/);
+  assert.equal(claudeSkill, portableSkill);
   await stat(path.join(root, "qamap.config.json"));
 
   const second = await initAgentSetup(root);
-  assert.deepEqual(second.files.map((file) => file.status), ["unchanged", "unchanged", "unchanged"]);
+  assert.deepEqual(
+    second.files.map((file) => file.status),
+    ["unchanged", "unchanged", "unchanged", "unchanged"],
+  );
   const report = formatAgentInitReport(second);
   assert.match(report, /# QAMap Agent Setup/);
   assert.match(report, /npx @ivorycanvas\/qamap qa \./);
@@ -8948,9 +8964,11 @@ test("initAgentSetup appends to an existing AGENTS.md and refreshes only its own
     "locally modified",
   );
   const skipped = await initAgentSetup(root);
-  assert.equal(skipped.files[1].status, "skipped");
+  assert.equal(skipped.files[1].status, "unchanged");
+  assert.equal(skipped.files[2].status, "skipped");
   const forced = await initAgentSetup(root, { force: true });
-  assert.equal(forced.files[1].status, "updated");
+  assert.equal(forced.files[1].status, "unchanged");
+  assert.equal(forced.files[2].status, "updated");
   const skill = await readFile(path.join(root, ".claude", "skills", "qamap-pr-qa", "SKILL.md"), "utf8");
   assert.match(skill, /name: qamap-pr-qa/);
 });

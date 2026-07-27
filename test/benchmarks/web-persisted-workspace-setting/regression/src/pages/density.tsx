@@ -7,7 +7,6 @@ export function DensityPage() {
   const [saved, setSaved] = useState(false);
 
   function saveDensity() {
-    window.localStorage.setItem("workspace-density", density);
     setSaved(true);
   }
 

@@ -349,6 +349,6 @@ Start with `manifest init`, but do not expect the first baseline to be perfect. 
 - add failure, edge, contract, and visual checks where they are truly required
 - keep path patterns narrow enough that recommendations stay explainable
 - review context-derived validation commands and safety rules before treating them as team policy
-- prefer manifest anchors over inline code comments until symbol-level anchors are intentionally adopted
+- keep team-wide policy in the manifest; use [symbol QA annotations](symbol-annotations.md) only for important exported JS/TS symbols that repeatedly need local semantic context
 
 For private or complex products, the manifest is the place to encode what humans already know but do not want to repeat in every PR review.

@@ -19,7 +19,7 @@ commit range + base/head diff
   -> normalized evidence and verdict
 ```
 
-The repository, not a model session, is the source of truth. Commit subjects and bodies provide author intent, source code supplies observable structure, and `.qamap/manifest.yaml` supplies reviewed product intent that commits and code alone cannot prove.
+The repository, not a model session, is the source of truth. Commit subjects and bodies provide author intent, source code supplies observable structure, optional symbol QA annotations bind important exports to local semantics, and `.qamap/manifest.yaml` supplies reviewed team-wide product intent that commits and code alone cannot prove.
 
 ## Change Intent
 
@@ -33,6 +33,8 @@ Each intent contains:
 - runner-independent primary, failure, boundary, and state-transition QA scenarios.
 
 One richly evidenced squash commit can reach high confidence. A title without connected diff evidence cannot. Working-tree-only inference is always low confidence and review-required. Release, docs, style, CI, and test-only commits do not become product intents.
+
+The initial JS/TS symbol adapter reads `@qamapFlow`, `@qamapStage`, `@qamapOutcome`, and `@qamapRisk` from JSDoc attached to named top-level exports. It activates the context only when the declaration overlaps the current diff. The annotation is retained as contextual source evidence while the changed line remains the evidence required for scenario routing, so adding a comment alone cannot manufacture a behavior change.
 
 The analysis is deterministic and local. It does not execute repository code, contact GitHub, upload source, or call an LLM.
 

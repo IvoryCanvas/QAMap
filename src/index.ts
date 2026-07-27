@@ -84,6 +84,13 @@ export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from ".
 export { isRequiredScenarioEvidence, routeQaScenario } from "./scenario-routing.js";
 export { collectChangedFiles, resolveBaseRef, resolveMergeBase } from "./git-context.js";
 export { classifyChangeSourceRole } from "./source-role.js";
+export {
+  collectChangedQaSymbolAnnotations,
+  formatQaSymbolAnnotationDiagnostic,
+  parseQaSymbolAnnotations,
+  qaSymbolAnnotationTags,
+  qaSymbolStageKinds,
+} from "./symbol-annotations.js";
 export { scanProject } from "./scanner.js";
 export {
   formatQaScriptInitReport,
@@ -153,10 +160,26 @@ export type {
   ChangeIntentEvidence,
   ChangeIntentEvidenceKind,
   ChangeIntentEvidenceRelation,
+  ChangeIntentSymbolAnnotationSummary,
   IntentQaScenario,
   IntentQaScenarioKind,
   IntentQaScenarioPriority,
 } from "./change-intent.js";
+export type {
+  ChangedQaSymbolAnnotation,
+  ChangedQaSymbolAnnotationResult,
+  CollectChangedQaSymbolAnnotationsOptions,
+  QaSymbolAnnotation,
+  QaSymbolAnnotationDiagnostic,
+  QaSymbolAnnotationDiagnosticCode,
+  QaSymbolAnnotationDiagnosticSeverity,
+  QaSymbolAnnotationParseResult,
+  QaSymbolAnnotationTag,
+  QaSymbolAnnotationValue,
+  QaSymbolDeclarationKind,
+  QaSymbolStageAnnotation,
+  QaSymbolStageKind,
+} from "./symbol-annotations.js";
 export type {
   CoverageEvidence,
   CoverageEvidenceConfidence,

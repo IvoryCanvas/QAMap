@@ -23,11 +23,13 @@ commit + diff -> behavior lifecycle -> QA routing -> QA trace -> optional automa
 
 ## See It Work
 
-This is the current CLI running against the committed, manifest-free React state-transition fixture. The recording shows real deterministic output: QAMap identifies the change, exposes the reasoning path, and writes the Playwright draft shown at the end. It does **not** launch the fixture application or claim that product QA passed.
+This is the current CLI running against a committed React subscription-renewal fixture with optional JSDoc QA annotations. QAMap reads the duplicate-request guard, connects it to the `/renewal` user flow and visible outcome, exposes the exact reasoning trace, writes a Playwright spec with a primary flow and an evidence-compiled duplicate-request check, and then runs both tests against the fixture application.
 
-![QAMap reads a PR diff, routes QA scenarios, and reports E2E automation readiness](docs/assets/qamap-30s-demo.gif)
+![QAMap reads a subscription-renewal diff, traces the affected flow, writes E2E coverage, and runs two browser tests](docs/assets/qamap-domain-demo.gif)
 
-_Recorded from the current source against `test/benchmarks/web-react-record-pinning`; no hand-written or simulated result blocks._
+_Recorded from the current source against `test/benchmarks/web-symbol-annotated-renewal`; the final `2 passed` is a real Playwright run, not a simulated result. It proves this committed fixture only. The broader failure/timeout scenario remains explicitly unmapped because the fixture has no visible recovery behavior._
+
+The green run is also regression-checked. QAMap generates each spec once and replays the **same artifact** against fixed and seeded-regression source. CI currently requires two independent contracts to hold: a repeated action must not escape as a second request, and a saved field must survive reload. See the [execution benchmark contract](docs/benchmarking.md#run-the-execution-contract).
 
 ## Quick Start
 
@@ -148,6 +150,22 @@ npx --yes @ivorycanvas/qamap@latest manifest init
 
 Review and commit `.qamap/manifest.yaml`. Future PRs reuse the team's domains, flows, checks, routes, selectors, and validation policy instead of rebuilding that context in every agent session.
 
+For one important exported JS/TS symbol that static inference repeatedly misunderstands, add optional JSDoc context instead of broad path rules:
+
+```ts
+/**
+ * @qamapFlow campaign-application
+ * @qamapStage action Submit the application
+ * @qamapOutcome Application status becomes submitted
+ * @qamapRisk Duplicate submission
+ */
+export async function submitApplication(input) {
+  return saveApplication(input);
+}
+```
+
+QAMap uses this context only when the annotated declaration overlaps the PR diff. Comment-only changes and annotations on unchanged neighboring symbols do not create QA scenarios. See [symbol QA annotations](docs/symbol-annotations.md).
+
 ## For Coding Agents
 
 Give an agent the same decisions in a versioned JSON contract under 4 KB:
@@ -164,7 +182,7 @@ Install the portable project skill so compatible agents can call QAMap before re
 npx --yes skills add IvoryCanvas/QAMap --skill qamap-pr-qa
 ```
 
-Or run `qamap init --agent` to add the repo instructions and packaged skill. See the [agent format contract](docs/agent-format.md) and [agent skill guide](docs/agent-skill.md).
+Or run `qamap init --agent` to add the repo instructions and install the same packaged skill for `.agents/skills` consumers and Claude Code. See the [agent format contract](docs/agent-format.md) and [agent skill guide](docs/agent-skill.md).
 
 Tools that embed QAMap can consume the same public contract without launching a shell:
 
@@ -180,7 +198,7 @@ const context = JSON.parse(formatAgentQaDraft(draft));
 ## Why QAMap
 
 - **Evidence over guesses.** Every routed scenario carries commit or line-level diff provenance.
-- **Real PR regressions.** Public benchmark reductions pin their PR URL, commits, license, and human QA expectation instead of relying only on invented demos.
+- **Regressions, not plausible prose.** Public PR reductions preserve human QA expectations, and execution contracts require generated tests to fail on seeded defects and pass on their fixes.
 - **Traceable consequences.** The optional test draft points back to the same stable trace that explains the changed behavior and risk.
 - **Judgment before generation.** QAMap decides what deserves verification before choosing a runner.
 - **Honest automation.** Missing evidence lowers readiness instead of becoming a fake smoke test or guaranteed-failing assertion.
@@ -210,6 +228,7 @@ Playwright나 Maestro를 먼저 권하는 것이 목적이 아닙니다. **무�
 | [Quick start walkthrough](docs/quickstart-demo.md) | First run and output walkthrough |
 | [Command reference](docs/commands.md) | Commands, formats, and E2E draft pipeline |
 | [Verification manifest](docs/manifest.md) | Repo-local QA memory and correction loop |
+| [Symbol QA annotations](docs/symbol-annotations.md) | Optional JSDoc context for important changed exports |
 | [Adoption & rollout](docs/adoption.md) | Local use, CI adoption, and positioning |
 | [Agent integration](docs/agent-skill.md) | Skill installation and agent workflow |
 | [Benchmarking](docs/benchmarking.md) | Pinned cross-framework regression cases |
