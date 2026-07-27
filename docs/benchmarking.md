@@ -48,7 +48,12 @@ The committed contract in `execution-bench.config.json`:
 4. overlays a seeded regression without regenerating the artifact and requires a relevant failure;
 5. restores the fixed source and requires the same artifact to pass again.
 
-The first contract removes a repeated-action guard. Its generated browser test must observe the escaped second request in the regression and the visible successful outcome in the fixed implementation. A setup failure, missing browser, or unrelated crash cannot satisfy the contract because both failure and success output are checked.
+The execution corpus currently protects two unrelated behavior shapes:
+
+- a repeated-action contract removes a request guard; the generated browser test must observe the escaped second request in the regression and the visible successful outcome in the fixed implementation;
+- a manifest-free persistence contract removes a repository-observed storage write; the generated browser test must observe the missing stored value in the regression and the restored field after reload in the fixed implementation.
+
+A setup failure, missing browser, or unrelated crash cannot satisfy either contract because both failure and success output are checked. The runner also hashes every generated file and fails if an overlay or test run changes the artifact between the fixed and regression executions.
 
 This command installs dependencies and executes **only the small public fixture committed under `test/benchmarks/`**. It never executes a private benchmark target or a user's repository, and it deletes its temporary working copy unless `--keep` is explicitly passed to the underlying script for debugging.
 

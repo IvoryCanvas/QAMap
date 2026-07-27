@@ -70,7 +70,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Move route, screen, endpoint, selector, fixture, test, and contract discovery into analyzer adapters, starting with TypeScript web stacks and reusing one web behavior model across Next.js, React Router, Vue/Nuxt, and SvelteKit.
 - Compare base and head Behavior Graphs, then select impacted graph paths before refining deterministic success, validation, failure, empty, loading, auth, and contract scenarios.
 - Add policy-controlled temporary execution so selected scenarios can produce normalized pass, fail, blocked, and not-verifiable evidence without modifying the target repository.
-- Expand the execution benchmark from repeated-action protection to unrelated lifecycle shapes such as validation recovery and persisted-state restoration, with one shared framework-neutral contract.
+- Expand the execution benchmark beyond repeated-action and persisted-state protection to validation recovery and a non-browser adapter, with one shared framework-neutral contract.
 - Compile critical success and failure scenarios into concrete runner actions before execution, so a green smoke assertion cannot satisfy a lifecycle or coverage contract by itself.
 - Expand the initial JS/TS JSDoc symbol-anchor adapter beyond changed top-level exports, then add equivalent language adapters without making annotations mandatory.
 - Expose the shared symbol parser and diagnostics through an editor-neutral adapter before adding lightweight editor integrations. Editor surfaces should navigate to evidence and suggest annotations, while the CLI remains the single analysis engine.

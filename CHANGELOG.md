@@ -6,7 +6,7 @@
 
 - Added optional JS/TS symbol QA annotations through `@qamapFlow`, `@qamapStage`, `@qamapOutcome`, and `@qamapRisk`. QAMap applies them only when the attached named export overlaps the diff, preserves the changed line as routing evidence, and reports malformed or stale annotations instead of silently trusting them.
 - Added an evidence-gated repeated-action compiler. QAMap emits a runnable duplicate-request check only when the selected scenario, user action, request boundary, route, and visible outcome are connected by repository evidence.
-- Added a committed execution benchmark that generates one browser spec, requires it to fail against a seeded duplicate-request regression for the intended assertion, and requires the same artifact to pass before and after the regression replay.
+- Added committed execution benchmarks that generate browser specs once, require them to fail against seeded repeated-action and persisted-state regressions for the intended assertions, and require the same byte-identical artifacts to pass against their fixes.
 - Added portable project-skill installation through `qamap init --agent` for `.agents/skills` and explicit compatibility paths, while preserving local edits unless `--force` is requested.
 - Added a domain-neutral two-surface React benchmark and per-flow compilation contracts. A benchmark can now require every affected flow to retain a primary scenario receipt, mapped action, mapped assertion, and fully compiled draft independently.
 - Added deterministic trace evidence dispositions for confirmed causal chains, missing source locations, and failed behavior joins. Human and machine output now count unique sources instead of treating repeated citations as stronger evidence.

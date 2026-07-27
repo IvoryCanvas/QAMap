@@ -29,7 +29,7 @@ This is the current CLI running against a committed React subscription-renewal f
 
 _Recorded from the current source against `test/benchmarks/web-symbol-annotated-renewal`; the final `2 passed` is a real Playwright run, not a simulated result. It proves this committed fixture only. The broader failure/timeout scenario remains explicitly unmapped because the fixture has no visible recovery behavior._
 
-The green run is also regression-checked. QAMap generates the spec once, runs it against the fixed branch, removes the duplicate-request guard in an isolated copy, and runs the **same generated spec** again. CI passes only when the fixed code reports `2 passed` and the seeded regression fails because a second request escaped. See the [execution benchmark contract](docs/benchmarking.md#run-the-execution-contract).
+The green run is also regression-checked. QAMap generates each spec once and replays the **same artifact** against fixed and seeded-regression source. CI currently requires two independent contracts to hold: a repeated action must not escape as a second request, and a saved field must survive reload. See the [execution benchmark contract](docs/benchmarking.md#run-the-execution-contract).
 
 ## Quick Start
 
@@ -198,7 +198,7 @@ const context = JSON.parse(formatAgentQaDraft(draft));
 ## Why QAMap
 
 - **Evidence over guesses.** Every routed scenario carries commit or line-level diff provenance.
-- **Regressions, not plausible prose.** Public PR reductions preserve human QA expectations, and the execution contract requires a generated test to fail on a seeded defect and pass on the fix.
+- **Regressions, not plausible prose.** Public PR reductions preserve human QA expectations, and execution contracts require generated tests to fail on seeded defects and pass on their fixes.
 - **Traceable consequences.** The optional test draft points back to the same stable trace that explains the changed behavior and risk.
 - **Judgment before generation.** QAMap decides what deserves verification before choosing a runner.
 - **Honest automation.** Missing evidence lowers readiness instead of becoming a fake smoke test or guaranteed-failing assertion.

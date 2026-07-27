@@ -134,6 +134,12 @@ function validateConfig(value) {
         throw new Error(`Execution benchmark contract requires ${field}.`);
       }
     }
+    if (
+      contract.commitMessage !== undefined &&
+      (typeof contract.commitMessage !== "string" || contract.commitMessage.trim().length === 0)
+    ) {
+      throw new Error("Execution benchmark commitMessage must be a non-empty string when provided.");
+    }
     for (const field of ["installCommand", "validateCommand"]) {
       validateCommand(contract[field], field);
     }
@@ -168,7 +174,12 @@ async function materializeContract(contract) {
   await git(targetRoot, ["switch", "-c", "benchmark/change"]);
   await fs.cp(headRoot, targetRoot, { recursive: true, force: true });
   await git(targetRoot, ["add", "-A"]);
-  await git(targetRoot, ["commit", "--allow-empty", "-m", "execution benchmark change"]);
+  await git(targetRoot, [
+    "commit",
+    "--allow-empty",
+    "-m",
+    contract.commitMessage ?? "execution benchmark change",
+  ]);
 
   return { fixtureRoot, repositoryRoot: targetRoot, tempRoot };
 }
