@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.8 - 2026-07-27
+
 ### Added
 
 - Added optional JS/TS symbol QA annotations through `@qamapFlow`, `@qamapStage`, `@qamapOutcome`, and `@qamapRisk`. QAMap applies them only when the attached named export overlaps the diff, preserves the changed line as routing evidence, and reports malformed or stale annotations instead of silently trusting them.

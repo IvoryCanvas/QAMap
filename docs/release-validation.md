@@ -1,8 +1,8 @@
 # Release Validation
 
-## Unreleased
+## 0.4.8 - 2026-07-27
 
-The next patch candidate adds the first CI-enforced seeded-regression execution contracts. QAMap generates browser artifacts from repeated-action and persisted-state changes, then proves that each artifact fails for its intended assertion when the behavior is broken and passes again when the fixed source is restored:
+QAMap 0.4.8 adds the first CI-enforced seeded-regression execution contracts. QAMap generates browser artifacts from repeated-action and persisted-state changes, then proves that each artifact fails for its intended assertion when the behavior is broken and passes again when the fixed source is restored:
 
 | Gate | Current result |
 | --- | --- |
@@ -11,9 +11,9 @@ The next patch candidate adds the first CI-enforced seeded-regression execution 
 | `pnpm scan` | 0 findings |
 | `pnpm bench:ci` | 22/22 static recommendation contracts passing |
 | `pnpm bench:execution` | 2/2 execution contracts passing; duplicate-request and missing-persistence regressions caught; fixed sources report `2 passed` and `1 passed` |
-| Coverage | Lines 89.29%, branches 85.90%, functions 95.76% |
+| Coverage | Lines 89.29%, branches 85.91%, functions 95.76% |
 | Compact agent handoff | Current branch output is 4,082 bytes, retains three detected flows with one disclosed omission, and keeps execution explicitly `not-run` |
-| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.7`; version remains unchanged until release approval |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.8` |
 
 The execution result is intentionally scoped to committed public fixtures. It does not claim that QAMap executed or passed QA in a user's repository. Its value is narrower and measurable: evidence-compiled tests can distinguish known broken implementations from their fixes, and an unrelated setup failure cannot be counted as a caught regression. SHA-256 checks also prevent regeneration from silently changing the test between comparisons.
 
