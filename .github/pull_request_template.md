@@ -10,6 +10,7 @@
 
 - [ ] `pnpm test`
 - [ ] `pnpm scan` <!-- Required for scanner, security rule, or repository policy changes. -->
+- [ ] `pnpm bench:execution` <!-- Required for deterministic automation compiler or execution-fixture changes. -->
 - [ ] Relevant `qamap verify`, `qamap test-plan`, or `qamap e2e plan/draft` output reviewed.
 
 ## E2E / Manual Coverage

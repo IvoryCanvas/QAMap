@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "contracts": [
+    {
+      "name": "web-repeated-action-guard",
+      "fixture": "test/benchmarks/web-symbol-annotated-renewal",
+      "output": "tests/e2e",
+      "installCommand": [
+        "pnpm",
+        "install",
+        "--ignore-scripts",
+        "--no-frozen-lockfile"
+      ],
+      "prepareCommands": [
+        [
+          "pnpm",
+          "exec",
+          "playwright",
+          "install",
+          "--with-deps",
+          "chromium"
+        ]
+      ],
+      "validateCommand": [
+        "pnpm",
+        "run",
+        "test:e2e"
+      ],
+      "regressionName": "duplicate request guard removed",
+      "regressionOverlay": "base",
+      "fixedOverlay": "head",
+      "minimumGeneratedFiles": 1,
+      "minimumCompiledScenarios": 1,
+      "mustCompileScenarios": [
+        "Duplicate renewal request"
+      ],
+      "mustGenerateFiles": [
+        "tests/e2e/renewal-renew-subscription.spec.ts"
+      ],
+      "regressionOutputIncludes": [
+        "receivedDuplicateRequest",
+        "Expected: false",
+        "Received: true"
+      ],
+      "fixedOutputIncludes": [
+        "2 passed"
+      ]
+    }
+  ]
+}

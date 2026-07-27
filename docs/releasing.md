@@ -42,9 +42,12 @@ The gate must pass:
 - `pnpm test`
 - `pnpm scan`
 - `pnpm bench:ci`
+- `pnpm bench:execution`
 - `git diff --check`
 - coverage thresholds for lines, branches, and functions
 - `pnpm pack --dry-run`
+
+`bench:execution` may install a local browser runtime, but it executes only committed public fixtures in temporary repositories. It must never discover or run private local benchmark targets.
 
 If the gate fails, fix the product or documentation issue before publishing. Do not publish with a known failing gate.
 

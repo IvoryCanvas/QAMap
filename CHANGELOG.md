@@ -5,12 +5,17 @@
 ### Added
 
 - Added optional JS/TS symbol QA annotations through `@qamapFlow`, `@qamapStage`, `@qamapOutcome`, and `@qamapRisk`. QAMap applies them only when the attached named export overlaps the diff, preserves the changed line as routing evidence, and reports malformed or stale annotations instead of silently trusting them.
+- Added an evidence-gated repeated-action compiler. QAMap emits a runnable duplicate-request check only when the selected scenario, user action, request boundary, route, and visible outcome are connected by repository evidence.
+- Added a committed execution benchmark that generates one browser spec, requires it to fail against a seeded duplicate-request regression for the intended assertion, and requires the same artifact to pass before and after the regression replay.
+- Added portable project-skill installation through `qamap init --agent` for `.agents/skills` and explicit compatibility paths, while preserving local edits unless `--force` is requested.
 - Added a domain-neutral two-surface React benchmark and per-flow compilation contracts. A benchmark can now require every affected flow to retain a primary scenario receipt, mapped action, mapped assertion, and fully compiled draft independently.
 - Added deterministic trace evidence dispositions for confirmed causal chains, missing source locations, and failed behavior joins. Human and machine output now count unique sources instead of treating repeated citations as stronger evidence.
 - Added human-approved manifest correction proposals to QA traces. A wrong judgment points to an existing flow anchor or a concrete repo-local flow target even when no automation artifact exists yet.
 
 ### Changed
 
+- The README demo now uses a committed runnable application and real generated tests, and the release gate verifies both its green result and its ability to catch the seeded defect.
+- Agent setup uses the packaged vendor-neutral `qamap-pr-qa` skill as its single workflow source. Future editor or plugin wrappers are documented as thin consumers of the same local CLI and versioned agent contract.
 - Repository test planning and changed-file inspection code now stays on the analyzer-verification path when direct product behavior evidence is absent. Supporting utility conditions no longer turn an analyzer-focused change into product automation work.
 - Primary intent scenarios now retain located diff evidence alongside commit and lifecycle context. When a commit phrase and a code signal describe the same behavior, their provenance is merged instead of discarding the source hunk.
 - Multi-flow reasoning traces and compact agent output now aggregate every artifact for the same logical scenario and disclose `flowCoverage`. A compiled draft on one surface can no longer hide a partial or unmapped draft on another.

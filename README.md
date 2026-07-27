@@ -23,11 +23,13 @@ commit + diff -> behavior lifecycle -> QA routing -> QA trace -> optional automa
 
 ## See It Work
 
-This is the current CLI running against a committed React subscription-renewal fixture with optional JSDoc QA annotations. QAMap reads the duplicate-request guard, connects it to the `/renewal` user flow and visible outcome, exposes the exact reasoning trace, writes two mapped Playwright scenarios, and then runs them against the fixture application.
+This is the current CLI running against a committed React subscription-renewal fixture with optional JSDoc QA annotations. QAMap reads the duplicate-request guard, connects it to the `/renewal` user flow and visible outcome, exposes the exact reasoning trace, writes a Playwright spec with a primary flow and an evidence-compiled duplicate-request check, and then runs both tests against the fixture application.
 
 ![QAMap reads a subscription-renewal diff, traces the affected flow, writes E2E coverage, and runs two browser tests](docs/assets/qamap-domain-demo.gif)
 
 _Recorded from the current source against `test/benchmarks/web-symbol-annotated-renewal`; the final `2 passed` is a real Playwright run, not a simulated result. It proves this committed fixture only. The broader failure/timeout scenario remains explicitly unmapped because the fixture has no visible recovery behavior._
+
+The green run is also regression-checked. QAMap generates the spec once, runs it against the fixed branch, removes the duplicate-request guard in an isolated copy, and runs the **same generated spec** again. CI passes only when the fixed code reports `2 passed` and the seeded regression fails because a second request escaped. See the [execution benchmark contract](docs/benchmarking.md#run-the-execution-contract).
 
 ## Quick Start
 
@@ -196,7 +198,7 @@ const context = JSON.parse(formatAgentQaDraft(draft));
 ## Why QAMap
 
 - **Evidence over guesses.** Every routed scenario carries commit or line-level diff provenance.
-- **Real PR regressions.** Public benchmark reductions pin their PR URL, commits, license, and human QA expectation instead of relying only on invented demos.
+- **Regressions, not plausible prose.** Public PR reductions preserve human QA expectations, and the execution contract requires a generated test to fail on a seeded defect and pass on the fix.
 - **Traceable consequences.** The optional test draft points back to the same stable trace that explains the changed behavior and risk.
 - **Judgment before generation.** QAMap decides what deserves verification before choosing a runner.
 - **Honest automation.** Missing evidence lowers readiness instead of becoming a fake smoke test or guaranteed-failing assertion.

@@ -10,7 +10,7 @@ pnpm test
 pnpm bench:ci
 ```
 
-Use `pnpm scan` when changing scanner, security, or repository-policy behavior. Run `pnpm release:check` before a release PR.
+Use `pnpm bench:execution` when changing a deterministic automation compiler or its execution fixture. Use `pnpm scan` when changing scanner, security, or repository-policy behavior. Run `pnpm release:check` before a release PR.
 
 ## Branches
 

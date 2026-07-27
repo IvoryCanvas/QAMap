@@ -40,6 +40,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Keep `qamap.change-intent` as a direct Behavior Graph adapter while moving more source observations out of the compatibility adapter.
 - Preserve `qa` as the static, read-only product surface while designing explicit execution behind `verify`; never turn a scan into implicit project-code execution.
 - Treat the committed [benchmark contract](benchmarking.md) as the quality gate for recommendations, not only implementation correctness. Reduce real failures into public fixtures and require `pnpm bench:ci` on every PR.
+- Keep a separate execution contract for deterministic automation compilers. It must generate an artifact once, fail that artifact against a seeded regression for the intended assertion, and pass it against the fixed source; setup errors and unrelated crashes do not count as caught regressions.
 - Keep provenance-pinned public PR reductions beside synthetic controls. A real case must record repository, PR URL, base/head commits, license, and the human QA expectation it is meant to protect.
 - Keep execution readiness separate from validation completeness. A draft may be locally runnable while still requiring failure coverage, fixture confirmation, or reviewer approval before it becomes trusted PR evidence.
 - Keep optional automation readiness separate from repository verification readiness. Analyzer rules, configuration, documentation, generated output, and existing tests must point to repository validation without being mislabeled as blocked product E2E work.
@@ -69,7 +70,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Move route, screen, endpoint, selector, fixture, test, and contract discovery into analyzer adapters, starting with TypeScript web stacks and reusing one web behavior model across Next.js, React Router, Vue/Nuxt, and SvelteKit.
 - Compare base and head Behavior Graphs, then select impacted graph paths before refining deterministic success, validation, failure, empty, loading, auth, and contract scenarios.
 - Add policy-controlled temporary execution so selected scenarios can produce normalized pass, fail, blocked, and not-verifiable evidence without modifying the target repository.
-- Add an execution benchmark that injects known regressions and requires QAMap to select and fail the relevant scenario without changing the fixture repository.
+- Expand the execution benchmark from repeated-action protection to unrelated lifecycle shapes such as validation recovery and persisted-state restoration, with one shared framework-neutral contract.
 - Compile critical success and failure scenarios into concrete runner actions before execution, so a green smoke assertion cannot satisfy a lifecycle or coverage contract by itself.
 - Expand the initial JS/TS JSDoc symbol-anchor adapter beyond changed top-level exports, then add equivalent language adapters without making annotations mandatory.
 - Expose the shared symbol parser and diagnostics through an editor-neutral adapter before adding lightweight editor integrations. Editor surfaces should navigate to evidence and suggest annotations, while the CLI remains the single analysis engine.
