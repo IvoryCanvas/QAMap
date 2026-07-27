@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 
 /**
  * @qamapFlow subscription-renewal
@@ -27,5 +27,7 @@ export default function RenewalPage() {
 }
 
 async function renewSubscription() {
-  return { ok: true };
+  const response = await fetch("/api/subscriptions/renew", { method: "POST" });
+  if (!response.ok) throw new Error("Could not renew subscription");
+  return response.json();
 }

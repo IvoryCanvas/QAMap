@@ -3201,6 +3201,11 @@ test("symbol QA outcomes keep repository-visible success assertions executable",
     "    {status === 'active' ? <p>Subscription active</p> : null}",
     "  </main>;",
     "}",
+    "async function renewSubscription() {",
+    "  const response = await fetch('/api/subscriptions/renew', { method: 'POST' });",
+    "  if (!response.ok) throw new Error('Could not renew subscription');",
+    "  return response.json();",
+    "}",
   ].filter(Boolean).join("\n");
   await write(root, file, source(""));
   commit(root, "benchmark baseline");
@@ -3217,6 +3222,225 @@ test("symbol QA outcomes keep repository-visible success assertions executable",
     selector.kind === "visible-text" && selector.value === "Subscription active"
   ));
   assert.ok(flow.qaScenarios.some((scenario) => scenario.title === "Duplicate renewal request"));
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: ".generated-e2e",
+  });
+  const fileDraft = draft.files.find((candidate) => candidate.intentId === flow.intentId);
+  const duplicateReceipt = fileDraft?.scenarioAutomation.find((receipt) =>
+    receipt.title === "Duplicate renewal request"
+  );
+  assert.ok(fileDraft);
+  assert.equal(duplicateReceipt?.status, "compiled");
+  assert.equal(duplicateReceipt?.mappedSteps, 2);
+  assert.equal(duplicateReceipt?.mappedAssertions, 2);
+
+  const spec = await readFile(path.join(root, fileDraft.path), "utf8");
+  assert.match(spec, /page\.route\("\*\*\/api\/subscriptions\/renew"/);
+  assert.match(spec, /await repeatedAction\.click\(\)/);
+  assert.match(spec, /element\.click\(\)/);
+  assert.match(spec, /expect\(requestCount\)\.toBe\(1\)/);
+  assert.match(spec, /page\.getByText\("Subscription active"\)/);
+});
+
+test("duplicate action QA stays uncompiled without an observable request boundary", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { react: "19.0.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  const file = "src/pages/export.tsx";
+  const source = (guard) => [
+    "/**",
+    " * @qamapFlow document-export",
+    " * @qamapStage action Export the document",
+    " * @qamapOutcome Document export becomes ready",
+    " * @qamapRisk Duplicate export request",
+    " */",
+    "export default function ExportPage() {",
+    "  const [exporting, setExporting] = useState(false);",
+    "  const [ready, setReady] = useState(false);",
+    "  async function exportDocument() {",
+    guard,
+    "    setExporting(true);",
+    "    await Promise.resolve();",
+    "    setReady(true);",
+    "    setExporting(false);",
+    "  }",
+    "  return <main>",
+    "    <button data-testid=\"export-document\" disabled={exporting} onClick={exportDocument}>Export document</button>",
+    "    {ready ? <p>Document export ready</p> : null}",
+    "  </main>;",
+    "}",
+  ].filter(Boolean).join("\n");
+  await write(root, file, source(""));
+  commit(root, "benchmark baseline");
+  branch(root, "fix/export-duplicate");
+  await write(root, file, source("    if (exporting) return;"));
+  commit(root, "fix: prevent duplicate document exports");
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: ".generated-e2e",
+  });
+  const fileDraft = draft.files.find((candidate) =>
+    candidate.scenarioAutomation.some((receipt) => receipt.title === "Duplicate export request")
+  );
+  const duplicateReceipt = fileDraft?.scenarioAutomation.find((receipt) =>
+    receipt.title === "Duplicate export request"
+  );
+
+  assert.ok(fileDraft);
+  assert.equal(duplicateReceipt?.status, "not-compiled");
+  const spec = await readFile(path.join(root, fileDraft.path), "utf8");
+  assert.doesNotMatch(spec, /qamap-repeated-action-check/);
+  assert.doesNotMatch(spec, /let requestCount = 0/);
+});
+
+test("duplicate domain options do not become a repeated-action browser test", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { react: "19.0.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  const file = "src/pages/export-formats.tsx";
+  const source = (formats) => [
+    "/**",
+    " * @qamapFlow document-export",
+    " * @qamapStage action Export the document",
+    " * @qamapOutcome Document export becomes ready",
+    " * @qamapRisk Duplicate export formats",
+    " */",
+    "export default function ExportFormatsPage() {",
+    `  const formats = ${JSON.stringify(formats)};`,
+    "  async function exportDocument() {",
+    "    await fetch('/api/documents/export', { method: 'POST' });",
+    "  }",
+    "  return <main>",
+    "    <button data-testid=\"export-document\" onClick={exportDocument}>Export document</button>",
+    "    <p>Document export ready</p>",
+    "    <span>{formats.join(', ')}</span>",
+    "  </main>;",
+    "}",
+  ].join("\n");
+  await write(root, file, source(["pdf"]));
+  commit(root, "benchmark baseline");
+  branch(root, "feat/export-formats");
+  await write(root, file, source(["pdf", "docx"]));
+  commit(root, "feat: support multiple document export formats");
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: ".generated-e2e",
+  });
+  const fileDraft = draft.files.find((candidate) =>
+    candidate.scenarioAutomation.some((receipt) => receipt.title === "Duplicate export formats")
+  );
+  const optionReceipt = fileDraft?.scenarioAutomation.find((receipt) =>
+    receipt.title === "Duplicate export formats"
+  );
+
+  assert.ok(fileDraft);
+  assert.equal(optionReceipt?.status, "not-compiled");
+  const spec = await readFile(path.join(root, fileDraft.path), "utf8");
+  assert.doesNotMatch(spec, /qamap-repeated-action-check/);
+});
+
+test("duplicate action QA follows an annotated service into a Vue user flow", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { vue: "3.5.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  const serviceFile = "src/services/save-document.ts";
+  const serviceSource = (guard) => [
+    "let saving = false;",
+    "/**",
+    " * @qamapFlow document-save",
+    " * @qamapStage action Save the document",
+    " * @qamapOutcome Document status becomes saved",
+    " * @qamapRisk Duplicate save request",
+    " */",
+    "export async function saveDocument() {",
+    guard,
+    "  saving = true;",
+    "  try {",
+    "    const response = await fetch('/api/documents/save', { method: 'POST' });",
+    "    if (!response.ok) throw new Error('Could not save document');",
+    "    return response.json();",
+    "  } finally {",
+    "    saving = false;",
+    "  }",
+    "}",
+  ].filter(Boolean).join("\n");
+  await write(root, serviceFile, serviceSource(""));
+  await write(
+    root,
+    "src/pages/documents.vue",
+    [
+      "<script setup lang=\"ts\">",
+      "import { ref } from 'vue';",
+      "import { saveDocument } from '../services/save-document';",
+      "const saved = ref(false);",
+      "async function save() {",
+      "  await saveDocument();",
+      "  saved.value = true;",
+      "}",
+      "</script>",
+      "<template>",
+      "  <main>",
+      "    <button data-testid=\"save-document\" @click=\"save\">Save document</button>",
+      "    <p v-if=\"saved\">Document saved</p>",
+      "  </main>",
+      "</template>",
+    ].join("\n"),
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/document-save-duplicate");
+  await write(root, serviceFile, serviceSource("  if (saving) return;"));
+  commit(root, "fix: prevent duplicate document save requests");
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: ".generated-e2e",
+  });
+  const fileDraft = draft.files.find((candidate) =>
+    candidate.scenarioAutomation.some((receipt) => receipt.title === "Duplicate save request")
+  );
+  const duplicateReceipt = fileDraft?.scenarioAutomation.find((receipt) =>
+    receipt.title === "Duplicate save request"
+  );
+
+  assert.ok(fileDraft);
+  assert.equal(duplicateReceipt?.status, "compiled");
+  assert.equal(duplicateReceipt?.mappedSteps, 2);
+  assert.equal(duplicateReceipt?.mappedAssertions, 2);
+  const spec = await readFile(path.join(root, fileDraft.path), "utf8");
+  assert.match(spec, /page\.goto\("\/documents"\)/);
+  assert.match(spec, /page\.route\("\*\*\/api\/documents\/save"/);
+  assert.match(spec, /page\.getByTestId\("save-document"\)/);
+  assert.match(spec, /page\.getByText\("Document saved"\)/);
+  assert.match(spec, /expect\(requestCount\)\.toBe\(1\)/);
 });
 
 test("symbol annotations inside analyzer rules do not become product QA", async (t) => {

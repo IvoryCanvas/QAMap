@@ -10011,6 +10011,11 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
       drafts.push(conditionalStateDraft);
       continue;
     }
+    const repeatedActionDraft = playwrightRepeatedActionScenarioDraft(flow, scenario, routeDraft);
+    if (repeatedActionDraft) {
+      drafts.push(repeatedActionDraft);
+      continue;
+    }
     const shareDraft = playwrightShareScenarioDraft(flow, scenario, routeDraft);
     if (shareDraft) {
       drafts.push(shareDraft);
@@ -10070,6 +10075,102 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
     });
   }
   return drafts;
+}
+
+function playwrightRepeatedActionScenarioDraft(
+  flow: E2eFlow,
+  scenario: IntentQaScenario,
+  routeDraft: PlaywrightRouteDraft,
+): PlaywrightRoutedScenarioDraft | undefined {
+  if (scenario.kind !== "boundary" || !isRepeatedActionBoundaryScenario(scenario)) {
+    return undefined;
+  }
+  const scenarioText = [flow.title, scenario.title, ...scenario.steps, ...scenario.assertions].join(" ");
+  const endpoint = playwrightMockableEndpointForScenario(flow, scenarioText);
+  const actionSelector = routedScenarioSelector(
+    flow.selectors,
+    scenarioText,
+    (selector) => !isInputSelector(selector) && selectorCanDriveInteraction(selector),
+  );
+  const outcomeSelector = routedScenarioSelector(
+    flow.selectors,
+    `${flow.title} ${scenario.assertions.join(" ")}`,
+    (selector) =>
+      selector.kind === "visible-text" &&
+      selectorCanSupportAssertion(selector) &&
+      !isFailureOutcomeText(selector.value),
+  );
+  if (!endpoint || !actionSelector || !outcomeSelector) {
+    return undefined;
+  }
+
+  const testName = `${flow.title}: ${scenario.title}`.replaceAll('"', "'");
+  const routePattern = playwrightMockRoutePattern(endpoint);
+  const actionLocator = playwrightLocator(actionSelector);
+  const outcomeLocator = playwrightLocator(outcomeSelector);
+  return {
+    scenarioId: scenario.id,
+    mappedSteps: Math.min(2, scenario.steps.length),
+    mappedAssertions: Math.min(2, scenario.assertions.length),
+    lines: [
+      `test("${testName}", async ({ page }) => {`,
+      "  let releasePendingRequest = () => {};",
+      "  const pendingRequest = new Promise<void>((resolve) => { releasePendingRequest = resolve; });",
+      "  let requestCount = 0;",
+      `  await page.route("${quoteJs(routePattern)}", async (route) => {`,
+      "    requestCount += 1;",
+      "    await pendingRequest;",
+      "    await route.fulfill({",
+      "      status: 200,",
+      '      contentType: "application/json",',
+      '      body: JSON.stringify({ ok: true, source: "qamap-repeated-action-check" }),',
+      "    });",
+      "  });",
+      `  await page.goto(${routeDraft.expression});`,
+      `  const repeatedAction = ${actionLocator};`,
+      "  await repeatedAction.click();",
+      "  await expect.poll(() => requestCount).toBe(1);",
+      `  const duplicateRequest = page.waitForRequest("${quoteJs(routePattern)}", { timeout: 250 })`,
+      "    .then(() => true)",
+      "    .catch(() => false);",
+      "  await repeatedAction.evaluate((element: HTMLElement) => element.click());",
+      "  const receivedDuplicateRequest = await duplicateRequest;",
+      "  releasePendingRequest();",
+      "  expect(receivedDuplicateRequest).toBe(false);",
+      `  await expect(${outcomeLocator}).toBeVisible();`,
+      "  expect(requestCount).toBe(1);",
+      "});",
+    ],
+  };
+}
+
+function isRepeatedActionBoundaryScenario(scenario: IntentQaScenario): boolean {
+  const title = scenario.title.trim();
+  const repeatedAction = /\bidempoten(?:t|cy)\b/i.test(title) ||
+    /\b(?:concurrent|double|duplicate|rapid|repeat(?:ed)?)\b(?=[^.!?\n]{0,40}\b(?:actions?|attempts?|clicks?|invocations?|operations?|requests?|side[\s-]?effects?|submissions?)\b)/i.test(title) ||
+    /\bmultiple\b(?=[^.!?\n]{0,40}\b(?:actions?|attempts?|clicks?|invocations?|requests?|submissions?)\b)/i.test(title) ||
+    /(?:동시|두\s*번|중복|연속|재실행)(?=[^.!?\n]{0,24}(?:동작|시도|클릭|실행|호출|요청|제출|처리))/.test(title);
+  const mixedTemporalBoundary = /\b(?:calendar|date|day|month|schedule|time|timezone)\b/i.test(title) ||
+    /(?:날짜|달력|스케줄|시간|타임존)/.test(title);
+  return repeatedAction && !mixedTemporalBoundary;
+}
+
+function playwrightMockableEndpointForScenario(flow: E2eFlow, context: string): string | undefined {
+  const observedEndpoints = observedEndpointsForFlow(flow);
+  const candidates = flow.fixtureReadiness.apiEndpoints.filter(
+    (endpoint) => !endpointMatchesAny(endpoint, observedEndpoints),
+  );
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+  const keywords = keywordsForStep(context);
+  const ranked = candidates
+    .map((endpoint) => ({
+      endpoint,
+      score: keywords.filter((keyword) => endpoint.toLowerCase().includes(keyword)).length,
+    }))
+    .sort((left, right) => right.score - left.score || left.endpoint.localeCompare(right.endpoint));
+  return ranked[0]?.score ? ranked[0].endpoint : undefined;
 }
 
 function playwrightConditionalStateScenarioDraft(

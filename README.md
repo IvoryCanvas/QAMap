@@ -23,11 +23,11 @@ commit + diff -> behavior lifecycle -> QA routing -> QA trace -> optional automa
 
 ## See It Work
 
-This is the current CLI running against a committed React subscription-renewal fixture with optional JSDoc QA annotations. The recording uses real deterministic output: QAMap reads the duplicate-request guard, connects it to the `/renewal` user flow and visible outcome, exposes the exact reasoning trace, and writes the Playwright draft shown at the end. It does **not** launch the fixture application or claim that product QA passed.
+This is the current CLI running against a committed React subscription-renewal fixture with optional JSDoc QA annotations. QAMap reads the duplicate-request guard, connects it to the `/renewal` user flow and visible outcome, exposes the exact reasoning trace, writes two mapped Playwright scenarios, and then runs them against the fixture application.
 
-![QAMap reads a subscription-renewal diff, traces the affected flow, and writes an E2E draft](docs/assets/qamap-domain-demo.gif)
+![QAMap reads a subscription-renewal diff, traces the affected flow, writes E2E coverage, and runs two browser tests](docs/assets/qamap-domain-demo.gif)
 
-_Recorded from the current source against `test/benchmarks/web-symbol-annotated-renewal`; no hand-written or simulated result blocks._
+_Recorded from the current source against `test/benchmarks/web-symbol-annotated-renewal`; the final `2 passed` is a real Playwright run, not a simulated result. It proves this committed fixture only. The broader failure/timeout scenario remains explicitly unmapped because the fixture has no visible recovery behavior._
 
 ## Quick Start
 
