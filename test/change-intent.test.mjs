@@ -3035,6 +3035,243 @@ test("non-form interaction mode changes do not fabricate validation timing QA", 
   );
 });
 
+test("symbol QA annotations refine a changed lifecycle without replacing diff evidence", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/recovery.ts";
+  await write(
+    root,
+    file,
+    [
+      "/**",
+      " * @qamapFlow account-recovery",
+      " * @qamapStage action Submit the recovery request",
+      " * @qamapOutcome Recovery request is accepted",
+      " * @qamapRisk Duplicate recovery request",
+      " */",
+      "export async function submitRecovery(input) {",
+      "  return requestRecovery(input);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/account-recovery");
+  await write(
+    root,
+    file,
+    [
+      "/**",
+      " * @qamapFlow account-recovery",
+      " * @qamapStage action Submit the recovery request",
+      " * @qamapOutcome Recovery request is accepted",
+      " * @qamapRisk Duplicate recovery request",
+      " */",
+      "export async function submitRecovery(input) {",
+      "  return requestRecovery({ ...input, retry: true });",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "fix: preserve account recovery retries");
+
+  const analysis = await analyze(root, [file]);
+  const intent = analysis.intents[0];
+  const riskScenario = intent.scenarios.find((scenario) => scenario.title === "Duplicate recovery request");
+
+  assert.deepEqual(analysis.symbolAnnotations, {
+    applied: 1,
+    files: [file],
+    symbols: ["submitRecovery"],
+    flows: ["account-recovery"],
+    diagnostics: 0,
+  });
+  assert.ok(intent.lifecycle.some((stage) =>
+    stage.kind === "action" &&
+    stage.label === "Submit the recovery request." &&
+    stage.evidence.some((item) => item.kind === "diff" && item.startLine === 8)
+  ));
+  assert.ok(intent.lifecycle.some((stage) =>
+    stage.kind === "observable-outcome" &&
+    stage.label === "Recovery request is accepted." &&
+    stage.evidence.some((item) => item.value.includes("@qamapOutcome"))
+  ));
+  assert.ok(riskScenario);
+  assert.equal(routeQaScenario(riskScenario).decision, "recommended");
+  assert.ok(riskScenario.evidence.some((item) =>
+    item.kind === "diff" &&
+    item.symbol === "submitRecovery" &&
+    item.startLine === 8 &&
+    item.value.includes("@qamapRisk")
+  ));
+  assert.ok(riskScenario.evidence.some((item) =>
+    item.kind === "source" &&
+    item.startLine === 5 &&
+    item.value === "@qamapRisk Duplicate recovery request"
+  ));
+  assert.ok(riskScenario.assertions.some((assertion) => /Recovery request is accepted/i.test(assertion)));
+});
+
+test("symbol QA annotations preserve service outcomes and state-transition risks", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/publication.ts";
+  await write(
+    root,
+    file,
+    [
+      "/**",
+      " * @qamapFlow document-publication",
+      " * @qamapStage side-effect Publish the document",
+      " * @qamapOutcome Document status becomes published",
+      " * @qamapRisk Stale publication callback",
+      " */",
+      "export async function publishDocument(document) {",
+      "  return sendPublication(document);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/document-publication");
+  await write(
+    root,
+    file,
+    [
+      "/**",
+      " * @qamapFlow document-publication",
+      " * @qamapStage side-effect Publish the document",
+      " * @qamapOutcome Document status becomes published",
+      " * @qamapRisk Stale publication callback",
+      " */",
+      "export async function publishDocument(document) {",
+      "  const response = await sendPublication(document);",
+      "  return persistPublicationStatus(document.id, response.status);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: persist document publication completion");
+
+  const analysis = await analyze(root, [file]);
+  const riskScenario = analysis.intents[0].scenarios.find((scenario) =>
+    scenario.title === "Stale publication callback"
+  );
+
+  assert.equal(analysis.symbolAnnotations?.applied, 1);
+  assert.ok(analysis.intents[0].lifecycle.some((stage) =>
+    stage.kind === "side-effect" && stage.label === "Publish the document."
+  ));
+  assert.ok(analysis.intents[0].lifecycle.some((stage) =>
+    stage.kind === "observable-outcome" && stage.label === "Document status becomes published."
+  ));
+  assert.ok(riskScenario);
+  assert.equal(riskScenario.kind, "state-transition");
+  assert.equal(routeQaScenario(riskScenario).decision, "recommended");
+});
+
+test("symbol QA outcomes keep repository-visible success assertions executable", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { react: "19.0.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  const file = "src/pages/renewal.tsx";
+  const source = (guard) => [
+    "/**",
+    " * @qamapFlow subscription-renewal",
+    " * @qamapStage action Renew the subscription",
+    " * @qamapOutcome Subscription status becomes active",
+    " * @qamapRisk Duplicate renewal request",
+    " */",
+    "export default function RenewalPage() {",
+    "  const [status, setStatus] = useState('idle');",
+    "  const [renewing, setRenewing] = useState(false);",
+    "  async function renew() {",
+    guard,
+    "    setRenewing(true);",
+    "    await renewSubscription();",
+    "    setStatus('active');",
+    "  }",
+    "  return <main>",
+    "    <button data-testid=\"renew-subscription\" onClick={renew}>Renew subscription</button>",
+    "    {status === 'active' ? <p>Subscription active</p> : null}",
+    "  </main>;",
+    "}",
+  ].filter(Boolean).join("\n");
+  await write(root, file, source(""));
+  commit(root, "benchmark baseline");
+  branch(root, "fix/renewal-duplicate");
+  await write(root, file, source("    if (renewing) return;"));
+  commit(root, "fix: prevent duplicate subscription renewal requests");
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const flow = plan.flows.find((candidate) => /subscription/i.test(candidate.title));
+
+  assert.ok(flow);
+  assert.equal(flow.languageBrief.successSignal, 'visible text "Subscription active" appears');
+  assert.ok(flow.selectors.some((selector) =>
+    selector.kind === "visible-text" && selector.value === "Subscription active"
+  ));
+  assert.ok(flow.qaScenarios.some((scenario) => scenario.title === "Duplicate renewal request"));
+});
+
+test("symbol annotations inside analyzer rules do not become product QA", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/rules/route-analyzer.ts";
+  await write(
+    root,
+    file,
+    [
+      "/**",
+      " * @qamapFlow product-checkout",
+      " * @qamapOutcome Checkout succeeds",
+      " * @qamapRisk Fabricated checkout failure",
+      " */",
+      "export function analyzeRouteEvidence(value) {",
+      "  const evidencePattern = /route|destination/;",
+      "  return evidencePattern.test(value);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/route-analysis");
+  await write(
+    root,
+    file,
+    [
+      "/**",
+      " * @qamapFlow product-checkout",
+      " * @qamapOutcome Checkout succeeds",
+      " * @qamapRisk Fabricated checkout failure",
+      " */",
+      "export function analyzeRouteEvidence(value) {",
+      "  const evidencePattern = /route|destination|redirect/;",
+      "  return evidencePattern.test(value);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "fix: cover redirect evidence in route analysis");
+
+  const analysis = await analyze(root, [file]);
+
+  assert.equal(analysis.symbolAnnotations, undefined);
+  assert.equal(
+    analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+      scenario.title === "Fabricated checkout failure"
+    ),
+    false,
+  );
+  assert.ok(analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+    /analysis rule positive and negative controls/i.test(scenario.title)
+  ));
+});
+
 async function analyze(root, files) {
   const addedDiffEvidence = await collectAddedDiffEvidence(root, { base: "main", head: "HEAD" });
   const addedDiffText = addedDiffTextFromEvidence(addedDiffEvidence);

@@ -4,6 +4,13 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { classifyChangeSourceRole } from "./source-role.js";
 import type { ChangeSourceRole } from "./source-role.js";
+import {
+  collectChangedQaSymbolAnnotations,
+  formatQaSymbolAnnotationDiagnostic,
+} from "./symbol-annotations.js";
+import type {
+  ChangedQaSymbolAnnotation,
+} from "./symbol-annotations.js";
 import type { AddedDiffEvidence, AddedDiffHunk, TestPlanChangedFile } from "./test-plan.js";
 
 const execFileAsync = promisify(execFile);
@@ -90,7 +97,16 @@ export interface ChangeIntentAnalysis {
   source: "commits-and-diff" | "commits" | "diff-only" | "none";
   commits: ChangeIntentCommit[];
   intents: ChangeIntent[];
+  symbolAnnotations?: ChangeIntentSymbolAnnotationSummary;
   diagnostics: string[];
+}
+
+export interface ChangeIntentSymbolAnnotationSummary {
+  applied: number;
+  files: string[];
+  symbols: string[];
+  flows: string[];
+  diagnostics: number;
 }
 
 export interface ChangeIntentAnalysisOptions {
@@ -210,8 +226,34 @@ export async function analyzeChangeIntents(
   const diagnostics: string[] = [];
   const commits = await collectCommitEvidence(gitRoot, options.base, options.head, relativeRoot, diagnostics);
   const parsedCommits = commits.map(parseCommit);
-  const codeSignals = collectCodeBehaviorSignals(options.addedDiffText ?? {}, options.addedDiffEvidence ?? {});
-  const riskEvidence = collectDiffRiskEvidence(options.addedDiffEvidence ?? {});
+  const annotationAnalysis = await collectChangedQaSymbolAnnotations(root, {
+    head: options.head,
+    workspaceRoot: options.workspaceRoot,
+    includeWorkingTree: options.includeWorkingTree,
+    changedFiles: options.changedFiles,
+    addedDiffEvidence: options.addedDiffEvidence ?? {},
+  });
+  diagnostics.push(...annotationAnalysis.diagnostics.map(formatQaSymbolAnnotationDiagnostic));
+  const productAnnotations = annotationAnalysis.annotations.filter((annotation) =>
+    classifyChangeSourceRole(
+      annotation.file,
+      [
+        annotation.symbol,
+        ...(options.addedDiffEvidence?.[annotation.file] ?? [])
+          .flatMap((hunk) => hunk.lines.map((line) => line.text)),
+      ].join("\n"),
+    ).role === "product"
+  );
+  const annotationSignals = collectQaSymbolAnnotationSignals(productAnnotations);
+  const annotationEvidence = collectQaSymbolAnnotationEvidence(productAnnotations);
+  const codeSignals = selectCodeSignals([
+    ...annotationSignals,
+    ...collectCodeBehaviorSignals(options.addedDiffText ?? {}, options.addedDiffEvidence ?? {}),
+  ]);
+  const riskEvidence = uniqueEvidence([
+    ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}),
+    ...collectQaSymbolAnnotationRiskEvidence(productAnnotations),
+  ]);
   const changedFiles = options.changedFiles.map((file) => file.path);
   const commitClusters = clusterBehaviorCommits(parsedCommits);
   const intents = commitClusters
@@ -224,6 +266,7 @@ export async function analyzeChangeIntents(
         options.addedDiffText ?? {},
         codeSignals,
         riskEvidence,
+        annotationEvidence,
       )
     )
     .filter((intent) => intent.files.length > 0);
@@ -239,6 +282,7 @@ export async function analyzeChangeIntents(
         const file = evidence.file ?? evidence.previousFile;
         return file !== undefined && residualFileSet.has(file);
       }),
+      annotationEvidence.filter((evidence) => evidence.file && residualFileSet.has(evidence.file)),
       options.includeWorkingTree ?? false,
     );
     if (diffIntent) {
@@ -260,6 +304,9 @@ export async function analyzeChangeIntents(
     source: changeIntentSource(intents, commits, codeSignals),
     commits,
     intents,
+    symbolAnnotations: productAnnotations.length > 0 || annotationAnalysis.diagnostics.length > 0
+      ? summarizeQaSymbolAnnotations(productAnnotations, annotationAnalysis.diagnostics.length)
+      : undefined,
     diagnostics: uniqueStrings(diagnostics),
   };
 }
@@ -431,6 +478,7 @@ function buildCommitIntent(
   addedDiffText: Record<string, string>,
   codeSignals: CodeBehaviorSignal[],
   riskEvidence: ChangeIntentEvidence[],
+  annotationEvidence: ChangeIntentEvidence[],
 ): ChangeIntent {
   const keywords = uniqueStrings(commits.flatMap((commit) => commit.keywords));
   const files = selectIntentFiles(
@@ -445,6 +493,7 @@ function buildCommitIntent(
     keywords,
   ).filter((signal) => !isUnalignedGenericCallbackSignal(signal, keywords));
   const relevantRiskEvidence = riskEvidence.filter((item) => item.file && files.includes(item.file));
+  const relevantAnnotationEvidence = annotationEvidence.filter((item) => item.file && files.includes(item.file));
   const lifecycle = buildLifecycle(commits, relevantSignals, relevantRiskEvidence);
   const confidence = confidenceForIntent(commits, lifecycle, relevantSignals);
   const titleCommit = commits.find((commit) => commit.conventionalType === "feat" || commit.conventionalType === "feature") ??
@@ -462,6 +511,7 @@ function buildCommitIntent(
       ...signal.evidence,
     })),
     ...selectRiskEvidence(relevantRiskEvidence, 12),
+    ...relevantAnnotationEvidence,
   ]);
   const id = stableId("intent", `${index}:${commits.map((commit) => commit.sha).join(":")}:${title}`);
   const summary = commits
@@ -489,6 +539,7 @@ function buildDiffOnlyIntent(
   changedFiles: string[],
   codeSignals: CodeBehaviorSignal[],
   riskEvidence: ChangeIntentEvidence[],
+  annotationEvidence: ChangeIntentEvidence[],
   includesWorkingTree: boolean,
 ): ChangeIntent | undefined {
   const roleEvidence = riskEvidence.filter((item) =>
@@ -500,23 +551,32 @@ function buildDiffOnlyIntent(
   ]);
   const stageKinds = new Set(lifecycle.map((stage) => stage.kind));
   const hasRecognizedSourceRole = roleEvidence.length > 0;
-  if ((!hasRecognizedSourceRole && (lifecycle.length < 3 || stageKinds.size < 3)) || lifecycle.length < 2) {
+  const hasSymbolAnnotation = annotationEvidence.length > 0;
+  if (
+    (!hasRecognizedSourceRole && !hasSymbolAnnotation && (lifecycle.length < 3 || stageKinds.size < 3)) ||
+    lifecycle.length < 2
+  ) {
     return undefined;
   }
   const files = uniqueStrings([
     ...codeSignals.map((signal) => signal.file),
     ...roleEvidence.map((item) => item.file ?? "").filter(Boolean),
   ]).slice(0, maxIntentFiles);
-  const titleSubject = diffIntentSubject(files[0], roleEvidence[0]?.sourceRole);
+  const annotatedFlow = firstQaAnnotationFlow(annotationEvidence);
+  const titleSubject = annotatedFlow
+    ? humanizeIdentifier(annotatedFlow)
+    : diffIntentSubject(files[0], roleEvidence[0]?.sourceRole);
   const title = `${titleSubject} ${includesWorkingTree ? "working-tree" : "changed"} behavior`;
   const evidence = uniqueEvidence([
     ...codeSignals.slice(0, 16).map((signal) => signal.evidence),
     ...selectRiskEvidence(riskEvidence, 24),
+    ...annotationEvidence,
   ]);
   const id = stableId("intent", `${includesWorkingTree ? "working-tree" : "diff"}:${files.join(":")}`);
   const keywords = extractKeywords([
     ...codeSignals.map((signal) => `${signal.symbol} ${signal.label}`),
     ...riskEvidence.map((item) => `${item.symbol ?? ""} ${item.value}`),
+    ...annotationEvidence.map((item) => `${item.symbol ?? ""} ${item.value}`),
   ].join(" "));
   return {
     id,
@@ -834,6 +894,31 @@ function buildIntentQaScenarios(
   }
 
   const scenarios = [primary];
+  for (const annotatedRisk of qaAnnotationRiskScenarios(evidence).slice(0, 3)) {
+    const riskScenario = makeScenario(
+      intentId,
+      `annotated-risk:${annotatedRisk.symbol}:${annotatedRisk.risk}`,
+      qaAnnotationRiskKind(annotatedRisk.risk),
+      "recommended",
+      sentenceTitle(annotatedRisk.risk),
+      [
+        `Prepare the affected flow and the state that can expose ${stripTerminalPunctuation(annotatedRisk.risk).toLowerCase()}.`,
+      ],
+      [
+        `Exercise ${humanizeIdentifier(annotatedRisk.symbol)} through its normal entry point.`,
+        "Repeat the changed behavior under the declared risk condition.",
+      ],
+      uniqueStrings([
+        `Verify ${stripTerminalPunctuation(annotatedRisk.risk).toLowerCase()} is prevented or handled explicitly.`,
+        ...annotatedRisk.outcomes.map((outcome) => `Verify ${stripTerminalPunctuation(outcome)}.`),
+      ]),
+      [annotatedRisk.risk],
+      annotatedRisk.evidence,
+    );
+    riskScenario.rationale =
+      "A repo-authored QAMap symbol annotation links this risk to a changed exported symbol; review the declaration and diff before accepting it as policy.";
+    scenarios.push(riskScenario);
+  }
   const hasExplicitProductDiffEvidence = evidence.some((item) =>
     item.kind === "diff" && (item.sourceRole === undefined || item.sourceRole === "product")
   );
@@ -1444,6 +1529,188 @@ function makeScenario(
     evidence: evidence.slice(0, 6),
     confidence: preciseEvidence ? "medium" : "low",
     reviewRequired: true,
+  };
+}
+
+interface QaAnnotationRiskScenario {
+  symbol: string;
+  risk: string;
+  outcomes: string[];
+  evidence: ChangeIntentEvidence[];
+}
+
+function collectQaSymbolAnnotationSignals(
+  annotations: ChangedQaSymbolAnnotation[],
+): CodeBehaviorSignal[] {
+  const signals: CodeBehaviorSignal[] = [];
+  for (const annotation of annotations) {
+    for (const stage of annotation.stages) {
+      const label = sentenceLabel(stage.label ?? codeSignalLabel(stage.kind, annotation.symbol));
+      signals.push({
+        kind: stage.kind,
+        label,
+        file: annotation.file,
+        symbol: annotation.symbol,
+        evidence: qaAnnotationDiffEvidence(
+          annotation,
+          `QAMap @qamapStage maps ${annotation.symbol} to ${stage.kind}${stage.label ? `: ${stage.label}` : ""}.`,
+        ),
+      });
+    }
+    for (const outcome of annotation.outcomes) {
+      signals.push({
+        kind: "observable-outcome",
+        label: sentenceLabel(outcome.value),
+        file: annotation.file,
+        symbol: annotation.symbol,
+        evidence: qaAnnotationDiffEvidence(
+          annotation,
+          `QAMap @qamapOutcome declares "${outcome.value}" for ${annotation.symbol}.`,
+        ),
+      });
+    }
+  }
+  return signals;
+}
+
+function collectQaSymbolAnnotationEvidence(
+  annotations: ChangedQaSymbolAnnotation[],
+): ChangeIntentEvidence[] {
+  const evidence: ChangeIntentEvidence[] = [];
+  for (const annotation of annotations) {
+    for (const flow of annotation.flows) {
+      evidence.push(
+        qaAnnotationDiffEvidence(
+          annotation,
+          `QAMap @qamapFlow links ${annotation.symbol} to flow "${flow.value}".`,
+        ),
+        qaAnnotationSourceEvidence(annotation, "@qamapFlow", flow.value, flow.line),
+      );
+    }
+    for (const stage of annotation.stages) {
+      evidence.push(qaAnnotationSourceEvidence(annotation, "@qamapStage", stage.value, stage.line));
+    }
+    for (const outcome of annotation.outcomes) {
+      evidence.push(qaAnnotationSourceEvidence(annotation, "@qamapOutcome", outcome.value, outcome.line));
+    }
+    for (const risk of annotation.risks) {
+      evidence.push(qaAnnotationSourceEvidence(annotation, "@qamapRisk", risk.value, risk.line));
+    }
+  }
+  return uniqueEvidence(evidence);
+}
+
+function collectQaSymbolAnnotationRiskEvidence(
+  annotations: ChangedQaSymbolAnnotation[],
+): ChangeIntentEvidence[] {
+  const evidence: ChangeIntentEvidence[] = [];
+  for (const annotation of annotations) {
+    for (const risk of annotation.risks) {
+      evidence.push(
+        qaAnnotationDiffEvidence(
+          annotation,
+          `QAMap @qamapRisk declares "${risk.value}" for changed symbol ${annotation.symbol}.`,
+        ),
+        qaAnnotationSourceEvidence(annotation, "@qamapRisk", risk.value, risk.line),
+      );
+    }
+  }
+  return uniqueEvidence(evidence);
+}
+
+function qaAnnotationDiffEvidence(
+  annotation: ChangedQaSymbolAnnotation,
+  value: string,
+): ChangeIntentEvidence {
+  return {
+    kind: "diff",
+    value,
+    sourceRole: "product",
+    file: annotation.file,
+    previousFile: annotation.previousFile,
+    symbol: annotation.symbol,
+    relation: "direct",
+    side: "head",
+    startLine: annotation.changedLine,
+    endLine: annotation.changedLine,
+    hunkHeader: annotation.hunkHeader,
+  };
+}
+
+function qaAnnotationSourceEvidence(
+  annotation: ChangedQaSymbolAnnotation,
+  tag: "@qamapFlow" | "@qamapStage" | "@qamapOutcome" | "@qamapRisk",
+  value: string,
+  line: number,
+): ChangeIntentEvidence {
+  return {
+    kind: "source",
+    value: `${tag} ${value}`,
+    sourceRole: "product",
+    file: annotation.file,
+    symbol: annotation.symbol,
+    relation: "contextual",
+    side: "head",
+    startLine: line,
+    endLine: line,
+  };
+}
+
+function qaAnnotationRiskScenarios(evidence: ChangeIntentEvidence[]): QaAnnotationRiskScenario[] {
+  const risks = evidence.filter((item) => item.kind === "source" && item.value.startsWith("@qamapRisk "));
+  return risks.map((source) => {
+    const risk = source.value.slice("@qamapRisk ".length).trim();
+    const related = evidence.filter((item) =>
+      item.file === source.file &&
+      item.symbol === source.symbol &&
+      (
+        item.value === source.value ||
+        (item.kind === "diff" && item.value.includes("@qamapRisk") && item.value.includes(`"${risk}"`))
+      )
+    );
+    const outcomes = evidence
+      .filter((item) =>
+        item.kind === "source" &&
+        item.file === source.file &&
+        item.symbol === source.symbol &&
+        item.value.startsWith("@qamapOutcome ")
+      )
+      .map((item) => item.value.slice("@qamapOutcome ".length).trim());
+    return {
+      symbol: source.symbol ?? "changed symbol",
+      risk,
+      outcomes: uniqueStrings(outcomes),
+      evidence: uniqueEvidence(related),
+    };
+  });
+}
+
+function qaAnnotationRiskKind(risk: string): IntentQaScenarioKind {
+  if (/pending|re-?entry|recover|stale|state|transition/i.test(risk)) {
+    return "state-transition";
+  }
+  if (/denied|error|fail|invalid|reject|unauthor/i.test(risk)) {
+    return "failure";
+  }
+  return "boundary";
+}
+
+function firstQaAnnotationFlow(evidence: ChangeIntentEvidence[]): string | undefined {
+  const prefix = "@qamapFlow ";
+  const source = evidence.find((item) => item.kind === "source" && item.value.startsWith(prefix));
+  return source?.value.slice(prefix.length).trim() || undefined;
+}
+
+function summarizeQaSymbolAnnotations(
+  annotations: ChangedQaSymbolAnnotation[],
+  diagnosticCount: number,
+): ChangeIntentSymbolAnnotationSummary {
+  return {
+    applied: annotations.length,
+    files: uniqueStrings(annotations.map((annotation) => annotation.file)),
+    symbols: uniqueStrings(annotations.map((annotation) => annotation.symbol)),
+    flows: uniqueStrings(annotations.flatMap((annotation) => annotation.flows.map((flow) => flow.value))),
+    diagnostics: diagnosticCount,
   };
 }
 

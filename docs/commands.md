@@ -129,6 +129,8 @@ For pnpm, these become `pnpm qa`, `pnpm qa:local`, and `pnpm qa:e2e`. npm uses `
 
 `qamap e2e plan` first reads behavior-bearing commits in the selected base/head range. Related `feat`, `fix`, `hotfix`, `perf`, and supporting `refactor` commits are grouped into change intents, then connected to added diff symbols. The result is an evidence-backed lifecycle and a set of runner-independent primary, failure, boundary, and state-transition scenarios. Low-confidence or working-tree-only intent remains review-required instead of becoming trusted regression policy.
 
+Most repositories need no annotations. When one important exported JavaScript or TypeScript symbol is repeatedly misunderstood, optional [`@qamapFlow`, `@qamapStage`, `@qamapOutcome`, and `@qamapRisk` JSDoc context](symbol-annotations.md) can refine its lifecycle. QAMap applies that context only when the declaration overlaps the diff; changing the comment alone cannot create a QA scenario.
+
 After that judgment, QAMap detects whether the target looks like Expo/React Native, web, API/service, CLI, or another repository shape and selects a Maestro, Playwright, or manual output adapter. The plan compares scenario targets with existing test evidence, identifies required mocks and fixtures, and reports missing stable selectors such as `testID` or `data-testid`. Runner detection is an implementation detail, not the first value shown to the user.
 
 The plan also includes an execution profile: detected start command, test command, Playwright `baseURL`, mobile app id, runner config files, env fixture files, confidence, and blockers. This keeps generated E2E drafts honest about whether they are runnable candidates or still review-only scaffolds.

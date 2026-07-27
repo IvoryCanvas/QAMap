@@ -1937,8 +1937,32 @@ function appendQaChangeIntentMarkdown(lines: string[], result: QaDraftResult): v
   const verificationMode = result.flows.find((flow) => flow.verificationMode)?.verificationMode;
   lines.push("## Change Intent Evidence");
   lines.push("");
+  if (result.changeAnalysis.symbolAnnotations) {
+    const annotations = result.changeAnalysis.symbolAnnotations;
+    lines.push(
+      `- Symbol QA context: ${annotations.applied} changed exported symbol` +
+        `${annotations.applied === 1 ? "" : "s"} applied; ` +
+        `${annotations.diagnostics} annotation diagnostic${annotations.diagnostics === 1 ? "" : "s"}.`,
+    );
+    if (annotations.flows.length > 0) {
+      lines.push(
+        `- Declared flow context: ${annotations.flows.slice(0, 6).map((flow) => `\`${escapeMarkdownInline(flow)}\``).join(", ")}`,
+      );
+    }
+    for (
+      const diagnostic of result.changeAnalysis.diagnostics
+        .filter((item) => item.includes("[symbol-annotation/"))
+        .slice(0, 3)
+    ) {
+      lines.push(`- Annotation diagnostic: ${escapeMarkdownInline(diagnostic)}`);
+    }
+    lines.push("");
+  }
   if (result.changeAnalysis.intents.length === 0) {
     lines.push("No behavior-bearing commit intent was found. QAMap did not promote inferred names into trusted QA scenarios.");
+    for (const diagnostic of result.changeAnalysis.diagnostics.slice(0, 3)) {
+      lines.push(`- ${escapeMarkdownInline(diagnostic)}`);
+    }
     lines.push("");
     return;
   }

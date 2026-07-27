@@ -197,6 +197,31 @@
       }
     },
     {
+      "name": "web-symbol-annotated-renewal",
+      "fixture": "test/benchmarks/web-symbol-annotated-renewal",
+      "commitMessage": "fix: prevent duplicate subscription renewal requests",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 2,
+        "maxMissingReasoningTraces": 0,
+        "maxUntraceableRequiredScenarios": 0,
+        "minDiffAnchoredFlows": 1,
+        "mustReachFiles": ["src/pages/renewal.tsx"],
+        "mustNameFlows": ["subscription"],
+        "mustIncludeLifecycle": ["Renew the subscription", "Subscription status becomes active"],
+        "mustIncludeQaScenarios": ["Duplicate renewal request"],
+        "mustTraceScenarioFiles": ["src/pages/renewal.tsx"],
+        "mustFindEntrypoints": ["/renewal"],
+        "mustFindSelectors": ["renew-subscription", "Subscription active"],
+        "mustFindSuccessSignals": ["Subscription active"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "web-react-multi-surface-state",
       "fixture": "test/benchmarks/web-react-multi-surface-state",
       "commitMessage": "feat: save workspace changes and show updated state",

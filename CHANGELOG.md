@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added optional JS/TS symbol QA annotations through `@qamapFlow`, `@qamapStage`, `@qamapOutcome`, and `@qamapRisk`. QAMap applies them only when the attached named export overlaps the diff, preserves the changed line as routing evidence, and reports malformed or stale annotations instead of silently trusting them.
 - Added a domain-neutral two-surface React benchmark and per-flow compilation contracts. A benchmark can now require every affected flow to retain a primary scenario receipt, mapped action, mapped assertion, and fully compiled draft independently.
 - Added deterministic trace evidence dispositions for confirmed causal chains, missing source locations, and failed behavior joins. Human and machine output now count unique sources instead of treating repeated citations as stronger evidence.
 - Added human-approved manifest correction proposals to QA traces. A wrong judgment points to an existing flow anchor or a concrete repo-local flow target even when no automation artifact exists yet.

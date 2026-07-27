@@ -8031,6 +8031,9 @@ test("package root exports the public QA API and declarations", async () => {
   assert.equal(packageJson.exports["."].types, "./dist/index.d.ts");
   assert.equal(typeof publicApi.generateQaDraft, "function");
   assert.equal(typeof publicApi.formatAgentQaDraft, "function");
+  assert.equal(typeof publicApi.parseQaSymbolAnnotations, "function");
+  assert.equal(typeof publicApi.collectChangedQaSymbolAnnotations, "function");
+  assert.ok(publicApi.qaSymbolAnnotationTags.includes("@qamapRisk"));
 });
 
 test("e2e draft can use an external verification manifest for read-only adoption preview", async () => {

@@ -70,7 +70,8 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Add policy-controlled temporary execution so selected scenarios can produce normalized pass, fail, blocked, and not-verifiable evidence without modifying the target repository.
 - Add an execution benchmark that injects known regressions and requires QAMap to select and fail the relevant scenario without changing the fixture repository.
 - Compile critical success and failure scenarios into concrete runner actions before execution, so a green smoke assertion cannot satisfy a lifecycle or coverage contract by itself.
-- Add symbol-level anchors for exported components, hooks, API clients, handlers, schemas, and queries after the public import-impact fixture stays stable.
+- Expand the initial JS/TS JSDoc symbol-anchor adapter beyond changed top-level exports, then add equivalent language adapters without making annotations mandatory.
+- Expose the shared symbol parser and diagnostics through an editor-neutral adapter before adding lightweight editor integrations. Editor surfaces should navigate to evidence and suggest annotations, while the CLI remains the single analysis engine.
 - Add a manifest correction command that proposes the exact flow/anchor patch and applies it only after human approval, avoiding routine hand-edits to YAML.
 - Add stronger deterministic draft adapters for Playwright and Maestro while keeping `manual` output for API, CLI, token, and catalog repositories; runner detection itself is not a product success metric.
 - Expand the public benchmark corpus with package-scoped monorepos, auth/session changes, dynamic routes, API failure fixtures, and non-JavaScript services.

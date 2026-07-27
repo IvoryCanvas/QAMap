@@ -148,6 +148,22 @@ npx --yes @ivorycanvas/qamap@latest manifest init
 
 Review and commit `.qamap/manifest.yaml`. Future PRs reuse the team's domains, flows, checks, routes, selectors, and validation policy instead of rebuilding that context in every agent session.
 
+For one important exported JS/TS symbol that static inference repeatedly misunderstands, add optional JSDoc context instead of broad path rules:
+
+```ts
+/**
+ * @qamapFlow campaign-application
+ * @qamapStage action Submit the application
+ * @qamapOutcome Application status becomes submitted
+ * @qamapRisk Duplicate submission
+ */
+export async function submitApplication(input) {
+  return saveApplication(input);
+}
+```
+
+QAMap uses this context only when the annotated declaration overlaps the PR diff. Comment-only changes and annotations on unchanged neighboring symbols do not create QA scenarios. See [symbol QA annotations](docs/symbol-annotations.md).
+
 ## For Coding Agents
 
 Give an agent the same decisions in a versioned JSON contract under 4 KB:
@@ -210,6 +226,7 @@ Playwright나 Maestro를 먼저 권하는 것이 목적이 아닙니다. **무�
 | [Quick start walkthrough](docs/quickstart-demo.md) | First run and output walkthrough |
 | [Command reference](docs/commands.md) | Commands, formats, and E2E draft pipeline |
 | [Verification manifest](docs/manifest.md) | Repo-local QA memory and correction loop |
+| [Symbol QA annotations](docs/symbol-annotations.md) | Optional JSDoc context for important changed exports |
 | [Adoption & rollout](docs/adoption.md) | Local use, CI adoption, and positioning |
 | [Agent integration](docs/agent-skill.md) | Skill installation and agent workflow |
 | [Benchmarking](docs/benchmarking.md) | Pinned cross-framework regression cases |

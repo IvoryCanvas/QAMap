@@ -2836,7 +2836,7 @@ function repositorySuccessOutcome(
 }
 
 function isVisibleSuccessOutcome(value: string): boolean {
-  return /\b(?:confirmed|saved|scheduled|refreshed|succeeded|success|completed|created|updated|deleted|sent|approved|accepted|pinned|unpinned|enabled|disabled|activated|deactivated|connected|disconnected|published|archived|ready|queued)\b/i.test(value) ||
+  return /\b(?:active|confirmed|saved|scheduled|refreshed|succeeded|success|completed|created|updated|deleted|sent|approved|accepted|pinned|unpinned|enabled|disabled|activated|deactivated|connected|disconnected|published|archived|ready|queued)\b/i.test(value) ||
     /(?:완료|성공|예약(?:됨|됐|되)|저장(?:됨|됐|되)|등록(?:됨|됐|되)|제출(?:됨|됐|되)|승인(?:됨|됐|되))/.test(value);
 }
 
@@ -3291,6 +3291,23 @@ export function formatMarkdownE2ePlan(result: E2ePlanResult): string {
 function appendChangeIntentMarkdown(lines: string[], analysis: ChangeIntentAnalysis): void {
   lines.push("## Change Intent And Behavior Lifecycle");
   lines.push("");
+  if (analysis.symbolAnnotations) {
+    lines.push(
+      `- Symbol QA context: ${analysis.symbolAnnotations.applied} changed exported symbol` +
+        `${analysis.symbolAnnotations.applied === 1 ? "" : "s"} applied; ` +
+        `${analysis.symbolAnnotations.diagnostics} annotation diagnostic` +
+        `${analysis.symbolAnnotations.diagnostics === 1 ? "" : "s"}.`,
+    );
+    if (analysis.symbolAnnotations.flows.length > 0) {
+      lines.push(
+        `- Declared flow context: ${analysis.symbolAnnotations.flows.slice(0, 6).map((flow) => `\`${escapeMarkdownInline(flow)}\``).join(", ")}`,
+      );
+    }
+    for (const diagnostic of analysis.diagnostics.filter((item) => item.includes("[symbol-annotation/")).slice(0, 3)) {
+      lines.push(`- Annotation diagnostic: ${escapeMarkdownInline(diagnostic)}`);
+    }
+    lines.push("");
+  }
   if (analysis.intents.length === 0) {
     lines.push("No evidence-backed change intent was inferred. QAMap keeps heuristic flow suggestions review-only.");
     for (const diagnostic of analysis.diagnostics.slice(0, 3)) {
