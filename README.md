@@ -180,7 +180,7 @@ Install the portable project skill so compatible agents can call QAMap before re
 npx --yes skills add IvoryCanvas/QAMap --skill qamap-pr-qa
 ```
 
-Or run `qamap init --agent` to add the repo instructions and packaged skill. See the [agent format contract](docs/agent-format.md) and [agent skill guide](docs/agent-skill.md).
+Or run `qamap init --agent` to add the repo instructions and install the same packaged skill for `.agents/skills` consumers and Claude Code. See the [agent format contract](docs/agent-format.md) and [agent skill guide](docs/agent-skill.md).
 
 Tools that embed QAMap can consume the same public contract without launching a shell:
 
