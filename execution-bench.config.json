@@ -90,6 +90,52 @@
       "fixedOutputIncludes": [
         "1 passed"
       ]
+    },
+    {
+      "name": "web-validation-recovery",
+      "fixture": "test/benchmarks/web-validation-recovery",
+      "commitMessage": "fix: defer feedback email validation until first field exit and clear stale errors",
+      "output": "tests/e2e",
+      "installCommand": [
+        "pnpm",
+        "install",
+        "--ignore-scripts",
+        "--no-frozen-lockfile"
+      ],
+      "prepareCommands": [
+        [
+          "pnpm",
+          "exec",
+          "playwright",
+          "install",
+          "--with-deps",
+          "chromium"
+        ]
+      ],
+      "validateCommand": [
+        "pnpm",
+        "run",
+        "test:e2e"
+      ],
+      "regressionName": "corrected field keeps stale validation feedback",
+      "regressionOverlay": "regression",
+      "fixedOverlay": "head",
+      "minimumGeneratedFiles": 1,
+      "minimumCompiledScenarios": 1,
+      "mustCompileScenarios": [
+        "Validation timing across edit, blur, correction, and submit"
+      ],
+      "mustGenerateFiles": [
+        "tests/e2e/defer-feedback-email-validation-until-first-field-exit-and-clear-stale-errors.spec.ts"
+      ],
+      "regressionOutputIncludes": [
+        "email-error",
+        "Expected: not visible",
+        "Received: visible"
+      ],
+      "fixedOutputIncludes": [
+        "2 passed"
+      ]
     }
   ]
 }

@@ -22,6 +22,7 @@ The command fails when any target violates its declared expectations. The corpus
 - a presentation-only React condition that must not create behavioral state-transition QA;
 - a web preferences change that must execute the submit action once, map the immediate visible outcome, and keep unproven persistence, request-failure, and re-entry QA explicit instead of manufacturing passing coverage;
 - a repository-backed web persistence change that must connect one changed storage write to the matching read key, editable field, save action, route, and reload assertion before its primary draft can be fully mapped;
+- a form-validation timing change that must connect the changed trigger mode to one validated input, visible error, submit action, and success outcome before it can compile invalid-input, correction, and successful-submission coverage;
 - a mobile reminder change that must become scheduling, calendar, duplicate, resynchronization, and entry-routing QA;
 - a CLI plus static-analysis-rule change that must verify command I/O and positive/negative controls without turning rule vocabulary into product scheduling, routing, API, or fixture QA;
 - an Expo app with Maestro;
@@ -48,12 +49,13 @@ The committed contract in `execution-bench.config.json`:
 4. overlays a seeded regression without regenerating the artifact and requires a relevant failure;
 5. restores the fixed source and requires the same artifact to pass again.
 
-The execution corpus currently protects two unrelated behavior shapes:
+The execution corpus currently protects three unrelated behavior shapes:
 
 - a repeated-action contract removes a request guard; the generated browser test must observe the escaped second request in the regression and the visible successful outcome in the fixed implementation;
-- a manifest-free persistence contract removes a repository-observed storage write; the generated browser test must observe the missing stored value in the regression and the restored field after reload in the fixed implementation.
+- a manifest-free persistence contract removes a repository-observed storage write; the generated browser test must observe the missing stored value in the regression and the restored field after reload in the fixed implementation;
+- a validation-recovery contract changes first-touch revalidation into blur-only behavior; the generated browser test must observe stale error feedback after a valid correction in the regression, then prove error recovery and successful submission in the fixed implementation.
 
-A setup failure, missing browser, or unrelated crash cannot satisfy either contract because both failure and success output are checked. The runner also hashes every generated file and fails if an overlay or test run changes the artifact between the fixed and regression executions.
+A setup failure, missing browser, or unrelated crash cannot satisfy a contract because both failure and success output are checked. The runner also hashes every generated file and fails if an overlay or test run changes the artifact between the fixed and regression executions.
 
 This command installs dependencies and executes **only the small public fixture committed under `test/benchmarks/`**. It never executes a private benchmark target or a user's repository, and it deletes its temporary working copy unless `--keep` is explicitly passed to the underlying script for debugging.
 
@@ -165,6 +167,8 @@ The nested-action rule follows that contract. Independent note and record fixtur
 Cross-framework fixtures are semantic controls, not a claim that QAMap has separate product logic for each UI library. The same user-visible change is expressed through different syntax so a shared inference rule must survive both, while the negative control proves that merely seeing a condition is not enough to invent QA. Because every fixture is small, public, and deterministic, a regression can be reproduced without private source, network services, or a working application environment.
 
 The persistence compiler follows the same rule. React and Vue controls prove that one shared storage-to-field relationship can produce save, stored-value, reload, and restored-value commands. A mismatched read/write-key control must remain partial. Framework names and product vocabulary do not authorize the proof; the connected repository evidence does.
+
+The validation-recovery compiler is equally conservative. React and Vue controls prove that the same mode change can map to invalid input, the configured error boundary, correction, error clearing, valid submission, and a visible success result. A similarly named non-form `mode` change remains a negative control, and a form without a route, validated input, error locator, submit control, or success outcome stays uncompiled.
 
 Agent-focus regressions use the same evidence standard. Independent nested-action and persistence fixtures must preserve the changed action and observable proof under the 4KB handoff limit. A flow whose title and success signal are replaced with unrelated language must not receive a `focus` capsule, even when its old ordered steps remain present.
 

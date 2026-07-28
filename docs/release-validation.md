@@ -1,5 +1,21 @@
 # Release Validation
 
+## Unreleased
+
+The current patch candidate adds a third evidence-compiled browser contract for form validation recovery. QAMap requires a diff-backed timing change, route, validated field, visible error, submit action, and visible success outcome before it emits the invalid-input and correction path. The generated artifact then has to distinguish first-touch recovery from a seeded blur-only regression:
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 253/253 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 23/23 static recommendation contracts passing |
+| `pnpm bench:execution` | 3/3 execution contracts passing; duplicate-request, missing-persistence, and stale-validation regressions caught |
+| Coverage | Lines 89.27%, branches 85.82%, functions 95.79% |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.8` |
+
+The validation fixture proves two generated paths against a committed local application: a valid submission reaches its visible success result, and invalid input stays quiet before first blur, shows feedback after blur, clears that feedback after correction, and then submits successfully. The same byte-identical artifact fails at the stale-error assertion when the fixed first-touch mode is replaced with blur-only behavior.
+
 ## 0.4.8 - 2026-07-27
 
 QAMap 0.4.8 adds the first CI-enforced seeded-regression execution contracts. QAMap generates browser artifacts from repeated-action and persisted-state changes, then proves that each artifact fails for its intended assertion when the behavior is broken and passes again when the fixed source is restored:

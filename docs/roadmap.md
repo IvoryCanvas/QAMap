@@ -63,6 +63,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Keep stable QA trace IDs across human, JSON, agent, and generated artifact output. Benchmark fixtures must reject missing scenario traces and required scenarios whose diff evidence cannot be joined to an affected lifecycle stage.
 - Classify trace provenance as confirmed, source-gap, or mapping-gap, deduplicate repeated evidence references, and route incorrect judgments back to an exact manifest target without changing shared QA memory until a human approves it.
 - Require every new shared heuristic to pass unrelated web/mobile or UI/service fixtures plus a negative control. Product-specific vocabulary stays in fixtures and optional manifests, never in global rules.
+- Keep validation recovery evidence-gated: only compile edit, blur, correction, error clearing, and successful submission when the diff-backed timing mode connects to a route, validated field, visible error, submit action, and visible success result. React and Vue controls plus a misleading non-form mode change protect the framework-neutral boundary.
 - Keep `verify`, `e2e`, and `manifest` as deeper layers behind `qa`; freeze new scanner, doctor, eval, domains, flows, and history features until the core QA contract is consistently useful.
 
 ## Longer-Term Release Bar (No Scheduled 0.5.x Date)
@@ -70,7 +71,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Move route, screen, endpoint, selector, fixture, test, and contract discovery into analyzer adapters, starting with TypeScript web stacks and reusing one web behavior model across Next.js, React Router, Vue/Nuxt, and SvelteKit.
 - Compare base and head Behavior Graphs, then select impacted graph paths before refining deterministic success, validation, failure, empty, loading, auth, and contract scenarios.
 - Add policy-controlled temporary execution so selected scenarios can produce normalized pass, fail, blocked, and not-verifiable evidence without modifying the target repository.
-- Expand the execution benchmark beyond repeated-action and persisted-state protection to validation recovery and a non-browser adapter, with one shared framework-neutral contract.
+- Expand the execution benchmark beyond repeated-action, persisted-state, and validation-recovery protection to a non-browser adapter, with one shared framework-neutral evidence contract.
 - Compile critical success and failure scenarios into concrete runner actions before execution, so a green smoke assertion cannot satisfy a lifecycle or coverage contract by itself.
 - Expand the initial JS/TS JSDoc symbol-anchor adapter beyond changed top-level exports, then add equivalent language adapters without making annotations mandatory.
 - Expose the shared symbol parser and diagnostics through an editor-neutral adapter before adding lightweight editor integrations. Editor surfaces should navigate to evidence and suggest annotations, while the CLI remains the single analysis engine.
