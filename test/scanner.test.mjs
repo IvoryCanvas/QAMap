@@ -75,10 +75,11 @@ test("collectChangedTestContracts preserves non-Latin pytest contracts from diff
     "tests/e2e/visibility.spec.ts": [{
       file: "tests/e2e/visibility.spec.ts",
       startLine: 8,
-      endLine: 9,
-      hunkHeader: "@@ -7,0 +8,2 @@",
+      endLine: 10,
+      hunkHeader: "@@ -7,0 +8,3 @@",
       lines: [
         { line: 8, text: "test('unlisted record stays directly accessible', async () => {" },
+        { line: 9, text: "  const fixture = \"test('embedded fixture is not a contract', () => {})\";" },
       ],
     }],
   });
@@ -1410,6 +1411,78 @@ test("generateE2ePlan detects CLI packages and suggests command verification che
     command: "npm test",
   });
   assert.equal(agentSummary.readiness.automationApplicable, false);
+});
+
+test("generateQaDraft prefers changed repository test contracts over broad historical evidence", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, "test"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "reporting-cli",
+      bin: {
+        reporting: "./dist/cli.js",
+      },
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/report-command.ts"),
+    "export function createReport() { return { status: 'ready' }; }\n",
+  );
+  await writeFile(
+    path.join(root, "test/historical-rules.test.mjs"),
+    [
+      "import test from 'node:test';",
+      "test('command verification reports successful output and metadata', () => {});",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/report-summary"]);
+  await writeFile(
+    path.join(root, "src/report-command.ts"),
+    "export function createReport() { return { status: 'ready', summary: 'Weekly report' }; }\n",
+  );
+  await writeFile(
+    path.join(root, "test/report-command.test.mjs"),
+    [
+      "import test from 'node:test';",
+      "test('report command includes the generated summary', () => {});",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "test/cache-policy.test.mjs"),
+    [
+      "import test from 'node:test';",
+      "test('cache cleanup expires stale entries', () => {});",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add generated report summary"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const reportFlow = qa.flows.find((flow) => flow.changedFiles.includes("src/report-command.ts"));
+  const markdown = formatMarkdownQaDraft(qa);
+
+  assert.ok(reportFlow);
+  assert.deepEqual(reportFlow.existingEvidencePaths, ["test/report-command.test.mjs"]);
+  assert.equal(reportFlow.existingEvidencePaths.includes("test/historical-rules.test.mjs"), false);
+  assert.equal(reportFlow.existingEvidencePaths.includes("test/cache-policy.test.mjs"), false);
+  assert.ok(
+    qa.prChecklist.some((item) =>
+      /changed test evidence: test\/cache-policy\.test\.mjs, test\/report-command\.test\.mjs/.test(item)
+    ),
+  );
+  assert.equal(qa.prChecklist.some((item) => /historical-rules/.test(item)), false);
+  assert.match(markdown, /Existing test evidence: `test\/report-command\.test\.mjs`/);
+  assert.doesNotMatch(markdown, /Run existing test evidence: `test\/historical-rules\.test\.mjs`/);
 });
 
 test("generateE2ePlan detects design token packages and suggests artifact validation", async () => {
@@ -8925,8 +8998,18 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
     path.join(root, ".claude", "skills", "qamap-pr-qa", "SKILL.md"),
     "utf8",
   );
+  const portableMetadata = await readFile(
+    path.join(root, ".agents", "skills", "qamap-pr-qa", "agents", "openai.yaml"),
+    "utf8",
+  );
+  const claudeMetadata = await readFile(
+    path.join(root, ".claude", "skills", "qamap-pr-qa", "agents", "openai.yaml"),
+    "utf8",
+  );
   assert.match(portableSkill, /name: qamap-pr-qa/);
   assert.equal(claudeSkill, portableSkill);
+  assert.match(portableMetadata, /display_name: QAMap PR QA/);
+  assert.equal(claudeMetadata, portableMetadata);
   await stat(path.join(root, "qamap.config.json"));
 
   const second = await initAgentSetup(root);
@@ -8971,6 +9054,37 @@ test("initAgentSetup appends to an existing AGENTS.md and refreshes only its own
   assert.equal(forced.files[2].status, "updated");
   const skill = await readFile(path.join(root, ".claude", "skills", "qamap-pr-qa", "SKILL.md"), "utf8");
   assert.match(skill, /name: qamap-pr-qa/);
+  const metadata = await readFile(
+    path.join(root, ".claude", "skills", "qamap-pr-qa", "agents", "openai.yaml"),
+    "utf8",
+  );
+  assert.match(metadata, /allow_implicit_invocation: true/);
+});
+
+test("initAgentSetup upgrades skill-only installs with host metadata", async () => {
+  const { initAgentSetup } = await import("../dist/agent-init.js");
+  const root = await makeTempRepo();
+  const packagedSkill = await readFile(
+    path.join(repositoryRoot, "skills", "qamap-pr-qa", "SKILL.md"),
+    "utf8",
+  );
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "smoke" }));
+  for (const hostRoot of [".agents", ".claude"]) {
+    const skillPath = path.join(root, hostRoot, "skills", "qamap-pr-qa", "SKILL.md");
+    await mkdir(path.dirname(skillPath), { recursive: true });
+    await writeFile(skillPath, packagedSkill);
+  }
+
+  const result = await initAgentSetup(root);
+
+  assert.deepEqual(result.files.map((file) => file.status), ["created", "updated", "updated", "created"]);
+  for (const hostRoot of [".agents", ".claude"]) {
+    const metadata = await readFile(
+      path.join(root, hostRoot, "skills", "qamap-pr-qa", "agents", "openai.yaml"),
+      "utf8",
+    );
+    assert.match(metadata, /display_name: QAMap PR QA/);
+  }
 });
 
 test("generateAgentContext reflects npm scripts and repository boundaries", async () => {

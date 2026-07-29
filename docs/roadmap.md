@@ -47,7 +47,8 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Expose one canonical machine route that survives payload compaction and tells agents whether to complete a draft, run an existing command, or define missing repository validation. Compatibility scores must never be the only applicable decision.
 - Make `qa` the primary product surface. Its first screen and `--format agent` payload must agree on change intent, lifecycle, QA scenarios, affected behavior, repository evidence, draft path, and missing trust requirements.
 - Keep `qa --format agent` below 4KB without dropping the highest-priority intent, routed scenarios, primary affected flow, a compact second flow for multi-surface changes, and omitted counts needed for an agent handoff.
-- Keep one vendor-neutral QAMap skill source, install it through the open `.agents/skills` project path plus explicit compatibility paths, and make any future plugin a thin distribution wrapper around the same local CLI and `qamap.qa` contract.
+- Keep one vendor-neutral QAMap skill source, install it through the open `.agents/skills` project path plus explicit compatibility paths, and keep native Codex and Claude Code plugin manifests as thin distribution wrappers around the same local CLI and `qamap.qa` contract.
+- Measure the complete agent handoff: skill discovery, invocation, schema parsing, strongest-source verification, one canonical next action, and an execution receipt that remains separate from static analysis.
 - Improve changed-file impact mapping from shared symbols and components to consuming routes, screens, API contracts, and manifest flows.
 - Keep directly changed routes and screens ahead of reverse-import consumers, so a shared type edit cannot replace the touched product surface with unrelated pages.
 - Automatically use one changed declared workspace package for `qa`, while retaining repository-wide analysis for cross-package, root-spanning, undeclared, or unknown-package changes. Expose that decision to humans and agents instead of requiring a second manual discovery pass.
@@ -79,7 +80,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Add stronger deterministic draft adapters for Playwright and Maestro while keeping `manual` output for API, CLI, token, and catalog repositories; runner detection itself is not a product success metric.
 - Expand the public benchmark corpus with package-scoped monorepos, auth/session changes, dynamic routes, API failure fixtures, and non-JavaScript services.
 - Keep the `--format agent` output a stable, versioned contract that skills and MCP wrappers can rely on.
-- Continue expanding agent surface detection across popular coding-agent tools without making the public workflow depend on a single vendor.
+- Continue expanding agent surface detection and real-host compatibility across popular coding-agent tools without making the public workflow depend on a single vendor.
 
 These items do not imply that the next completed item triggers a minor release. Analyzer improvements, new deterministic scenarios, stronger adapters, and additional benchmark fixtures continue as `0.4.x` patches when they preserve the public CLI, schema, and safety contracts. A `0.5.0` candidate should be considered only when policy-controlled execution is useful across unrelated repositories, the target repository remains unmodified by default, and normalized evidence is stable enough to document as a new public capability.
 

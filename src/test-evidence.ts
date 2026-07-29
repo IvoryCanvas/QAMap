@@ -368,7 +368,7 @@ function changedTestContractsFromLine(
   }
 
   if (/(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file)) {
-    const matcher = /\b(?:it|test)\s*(?:\.\w+)?\s*\(\s*(["'`])([^"'`]+)\1/g;
+    const matcher = /^\s*(?:it|test)\s*(?:\.\w+)?\s*\(\s*(["'`])([^"'`]+)\1/g;
     for (const match of text.matchAll(matcher)) {
       contracts.push({
         file,

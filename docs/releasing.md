@@ -65,11 +65,15 @@ The tarball must include runtime output, public documentation, schemas, and pack
 - `dist`
 - `docs`
 - `skills`
+- `.codex-plugin`
+- `.claude-plugin`
 - `schema`
 - `README.md`
 - `CHANGELOG.md`
 - `LICENSE`
 - `package.json`
+
+The package version, CLI version constant, and both native plugin manifest versions must match before publication.
 
 The tarball should not include local run history, generated temporary output, private smoke artifacts, or dependency folders.
 

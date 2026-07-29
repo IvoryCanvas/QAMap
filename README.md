@@ -184,6 +184,8 @@ npx --yes skills add IvoryCanvas/QAMap --skill qamap-pr-qa
 
 Or run `qamap init --agent` to add the repo instructions and install the same packaged skill for `.agents/skills` consumers and Claude Code. See the [agent format contract](docs/agent-format.md) and [agent skill guide](docs/agent-skill.md).
 
+QAMap also ships native Codex and Claude Code plugin manifests. Both expose the same `qamap-pr-qa` skill and call the same local CLI; there is no second prompt or analysis engine. The manifests are ready for source-checkout validation while public marketplace distribution remains a separate release step.
+
 Tools that embed QAMap can consume the same public contract without launching a shell:
 
 ```js

@@ -1,0 +1,19 @@
+{
+  "name": "qamap",
+  "version": "0.4.8",
+  "description": "Turn PR changes into traceable local QA decisions and optional automation handoffs without an LLM call.",
+  "author": {
+    "name": "IvoryCanvas",
+    "url": "https://github.com/IvoryCanvas"
+  },
+  "homepage": "https://github.com/IvoryCanvas/QAMap#readme",
+  "repository": "https://github.com/IvoryCanvas/QAMap",
+  "license": "MIT",
+  "keywords": [
+    "qa",
+    "pull-request",
+    "local-first",
+    "agent-skill",
+    "e2e"
+  ]
+}

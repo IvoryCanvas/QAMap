@@ -1,0 +1,7 @@
+interface:
+  display_name: QAMap PR QA
+  short_description: Find what the current PR needs to prove before merge.
+  brand_color: "#0E7490"
+  default_prompt: Analyze the current PR with QAMap, verify its evidence, and carry out the safest next QA action.
+policy:
+  allow_implicit_invocation: true
