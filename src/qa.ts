@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   formatDraftReadinessStage,
@@ -210,7 +211,8 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     changedTestContracts,
   );
   const changedFiles = draft.plan.changedFiles.map((file) => file.path);
-  const preferredVerificationCommand = buildChangedTestVerificationCommand(
+  const preferredVerificationCommand = await buildChangedTestVerificationCommand(
+    root,
     flows,
     changedFiles,
     draft.plan.suggestedCommands,
@@ -453,11 +455,12 @@ function shouldRunChangedTestEvidence(flows: QaDraftFlow[], changedFiles: string
     scenarioReceipts.every((receipt) => receipt.decision === "review-only");
 }
 
-function buildChangedTestVerificationCommand(
+async function buildChangedTestVerificationCommand(
+  root: string,
   flows: QaDraftFlow[],
   changedFiles: string[],
   suggestedCommands: string[],
-): string | undefined {
+): Promise<string | undefined> {
   const changed = new Set(changedFiles);
   const changedEvidence = uniqueStrings(
     flows.flatMap((flow) => flow.existingEvidencePaths).filter((file) => changed.has(file)),
@@ -474,7 +477,126 @@ function buildChangedTestVerificationCommand(
   if (packageTest && pythonTests.length > 0) {
     return `${packageTest} -- ${pythonTests.slice(0, 4).join(" ")}`;
   }
+  const directPackageTest = suggestedCommands.find((command) =>
+    /^(?:npm|pnpm|yarn)(?:\s+run)?\s+test$/i.test(command)
+  );
+  const javascriptTests = changedEvidence
+    .filter(isJavaScriptTestEvidence)
+    .slice(0, 4);
+  if (!directPackageTest || javascriptTests.length === 0) {
+    return undefined;
+  }
+  const testScript = await readPackageTestScript(root);
+  if (!testScript) {
+    return undefined;
+  }
+  return buildFocusedJavaScriptTestCommand(
+    directPackageTest,
+    testScript,
+    javascriptTests,
+  );
+}
+
+function isJavaScriptTestEvidence(file: string): boolean {
+  return /\.[cm]?[jt]sx?$/i.test(file) && (
+    /(?:^|\/)(?:__tests__|tests?|e2e)(?:\/|$)/i.test(file) ||
+    /(?:^|\/)[^/]+\.(?:test|spec|e2e|cy)\.[cm]?[jt]sx?$/i.test(file)
+  );
+}
+
+async function readPackageTestScript(root: string): Promise<string | undefined> {
+  try {
+    const parsed = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as {
+      scripts?: Record<string, unknown>;
+    };
+    const testScript = parsed.scripts?.test;
+    return typeof testScript === "string" && testScript.trim().length > 0
+      ? testScript.trim()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildFocusedJavaScriptTestCommand(
+  packageTestCommand: string,
+  testScript: string,
+  testFiles: string[],
+): string | undefined {
+  const chain = splitSafeTestScriptChain(testScript);
+  if (!chain) {
+    return undefined;
+  }
+  const runner = chain.at(-1);
+  if (!runner) {
+    return undefined;
+  }
+  const fileArguments = testFiles.map(shellCommandArgument).join(" ");
+  if (runner === "node --test") {
+    return appendPackageTestArguments(packageTestCommand, fileArguments);
+  }
+
+  const nodeWithTargets = /^node\s+--test\s+(.+)$/.exec(runner);
+  if (nodeWithTargets && isSimpleTestTargetList(nodeWithTargets[1])) {
+    return [
+      ...chain.slice(0, -1),
+      `node --test ${fileArguments}`,
+    ].join(" && ");
+  }
+  if (/^vitest(?:\s+(?:run|--run))?$/i.test(runner)) {
+    return appendPackageTestArguments(packageTestCommand, fileArguments);
+  }
+  if (/^jest(?:\s+--(?:ci|runInBand|detectOpenHandles|forceExit))*$/i.test(runner)) {
+    return appendPackageTestArguments(
+      packageTestCommand,
+      `--runTestsByPath ${fileArguments}`,
+    );
+  }
+  if (/^playwright\s+test(?:\s+--pass-with-no-tests)?$/i.test(runner)) {
+    return appendPackageTestArguments(packageTestCommand, fileArguments);
+  }
   return undefined;
+}
+
+function splitSafeTestScriptChain(script: string): string[] | undefined {
+  if (/[\n\r;|><`$]/.test(script) || /(^|[^&])&([^&]|$)|&&&/.test(script)) {
+    return undefined;
+  }
+  const chain = script.split(/\s*&&\s*/).map((segment) => segment.trim());
+  if (chain.length === 0 || chain.some((segment) => segment.length === 0)) {
+    return undefined;
+  }
+  const prefixes = chain.slice(0, -1);
+  if (!prefixes.every((segment) =>
+    /^(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+[A-Za-z0-9:_-]+$/i.test(segment)
+  )) {
+    return undefined;
+  }
+  return chain;
+}
+
+function isSimpleTestTargetList(value: string): boolean {
+  const tokens = value.match(/(?:'[^']*'|"[^"]*"|[^\s]+)/g);
+  if (!tokens || tokens.join(" ").length !== value.trim().length) {
+    return false;
+  }
+  return tokens.every((token) => {
+    const unquoted = (
+      (token.startsWith("'") && token.endsWith("'")) ||
+      (token.startsWith("\"") && token.endsWith("\""))
+    )
+      ? token.slice(1, -1)
+      : token;
+    return unquoted.length > 0 &&
+      !unquoted.startsWith("-") &&
+      /^[A-Za-z0-9_./:@*?[\]{}=-]+$/.test(unquoted);
+  });
+}
+
+function appendPackageTestArguments(command: string, args: string): string {
+  return /^yarn(?:\s|$)/i.test(command)
+    ? `${command} ${args}`
+    : `${command} -- ${args}`;
 }
 
 const agentListLimit = 6;

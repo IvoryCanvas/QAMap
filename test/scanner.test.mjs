@@ -1426,7 +1426,8 @@ test("generateQaDraft prefers changed repository test contracts over broad histo
         reporting: "./dist/cli.js",
       },
       scripts: {
-        test: "node --test",
+        build: "node --version",
+        test: "npm run build && node --test test/*.test.mjs",
       },
     }),
   );
@@ -1483,6 +1484,154 @@ test("generateQaDraft prefers changed repository test contracts over broad histo
   assert.equal(qa.prChecklist.some((item) => /historical-rules/.test(item)), false);
   assert.match(markdown, /Existing test evidence: `test\/report-command\.test\.mjs`/);
   assert.doesNotMatch(markdown, /Run existing test evidence: `test\/historical-rules\.test\.mjs`/);
+  assert.deepEqual(qa.route, {
+    basis: "repository-validation",
+    status: "verification-ready-to-run",
+    nextAction: "run-repository-command",
+    command: "npm run build && node --test test/report-command.test.mjs",
+  });
+  assert.equal(
+    qa.suggestedCommands[0],
+    "npm run build && node --test test/report-command.test.mjs",
+  );
+  assert.equal(qa.suggestedCommands[1], "npm test");
+});
+
+test("generateQaDraft scopes supported JavaScript runners to changed test evidence", async (context) => {
+  const cases = [
+    {
+      name: "Vitest through npm",
+      testScript: "vitest run",
+      expectedFocused: "npm test -- test/session-expiry.test.ts",
+      expectedFull: "npm test",
+    },
+    {
+      name: "Jest through npm",
+      testScript: "jest --ci",
+      expectedFocused: "npm test -- --runTestsByPath test/session-expiry.test.ts",
+      expectedFull: "npm test",
+    },
+    {
+      name: "Playwright through npm",
+      testScript: "playwright test",
+      expectedFocused: "npm test -- test/session-expiry.test.ts",
+      expectedFull: "npm test",
+    },
+    {
+      name: "Vitest through Yarn",
+      packageManager: "yarn@4.9.1",
+      testScript: "vitest run",
+      expectedFocused: "yarn test test/session-expiry.test.ts",
+      expectedFull: "yarn test",
+    },
+  ];
+
+  for (const fixture of cases) {
+    await context.test(fixture.name, async () => {
+      const root = await makeTempRepo();
+      await initGitRepo(root);
+      await mkdir(path.join(root, "test"), { recursive: true });
+      await writeFile(
+        path.join(root, "package.json"),
+        JSON.stringify({
+          name: "session-library",
+          packageManager: fixture.packageManager,
+          scripts: {
+            test: fixture.testScript,
+          },
+        }),
+      );
+      await writeFile(path.join(root, "src.js"), "export const sessionState = 'active';\n");
+      await git(root, ["add", "."]);
+      await git(root, ["commit", "-m", "base"]);
+      await git(root, ["branch", "-M", "main"]);
+
+      await git(root, ["switch", "-c", "test/session-expiry"]);
+      await writeFile(
+        path.join(root, "test/session-expiry.test.ts"),
+        [
+          "test('expired sessions are rejected', () => {",
+          "  expect('expired').not.toBe('active');",
+          "});",
+          "",
+        ].join("\n"),
+      );
+      await git(root, ["add", "."]);
+      await git(root, ["commit", "-m", "test: cover expired sessions"]);
+
+      const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+      assert.deepEqual(qa.route, {
+        basis: "repository-validation",
+        status: "verification-ready-to-run",
+        nextAction: "run-repository-command",
+        command: fixture.expectedFocused,
+      });
+      assert.equal(qa.suggestedCommands[0], fixture.expectedFocused);
+      assert.equal(qa.suggestedCommands[1], fixture.expectedFull);
+    });
+  }
+});
+
+test("generateQaDraft preserves the full suite when JavaScript narrowing is ambiguous", async (context) => {
+  const cases = [
+    {
+      name: "custom shell pipeline",
+      testScript: "node scripts/prepare-tests.mjs | vitest run",
+      expectedCommand: "npm test",
+    },
+    {
+      name: "Bun native test command",
+      packageManager: "bun@1.2.22",
+      testScript: "vitest run",
+      expectedCommand: "bun test",
+    },
+  ];
+
+  for (const fixture of cases) {
+    await context.test(fixture.name, async () => {
+      const root = await makeTempRepo();
+      await initGitRepo(root);
+      await mkdir(path.join(root, "test"), { recursive: true });
+      await writeFile(
+        path.join(root, "package.json"),
+        JSON.stringify({
+          name: "notification-library",
+          packageManager: fixture.packageManager,
+          scripts: {
+            test: fixture.testScript,
+          },
+        }),
+      );
+      await writeFile(path.join(root, "src.js"), "export const notificationState = 'queued';\n");
+      await git(root, ["add", "."]);
+      await git(root, ["commit", "-m", "base"]);
+      await git(root, ["branch", "-M", "main"]);
+
+      await git(root, ["switch", "-c", "test/notification-retry"]);
+      await writeFile(
+        path.join(root, "test/notification-retry.test.ts"),
+        [
+          "test('failed notifications stay retryable', () => {",
+          "  expect('retryable').not.toBe('discarded');",
+          "});",
+          "",
+        ].join("\n"),
+      );
+      await git(root, ["add", "."]);
+      await git(root, ["commit", "-m", "test: cover notification retry"]);
+
+      const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+      assert.deepEqual(qa.route, {
+        basis: "repository-validation",
+        status: "verification-ready-to-run",
+        nextAction: "run-repository-command",
+        command: fixture.expectedCommand,
+      });
+      assert.deepEqual(qa.suggestedCommands, [fixture.expectedCommand]);
+    });
+  }
 });
 
 test("generateE2ePlan detects design token packages and suggests artifact validation", async () => {
