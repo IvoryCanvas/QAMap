@@ -15,6 +15,7 @@
 - The agent skill now converts `route.nextAction` into exactly one immediate action and reports later command execution separately from QAMap's static `not-run` receipt.
 - `qamap init --agent` now installs the complete skill bundle, including optional host metadata, while continuing to preserve locally modified skill files unless `--force` is explicit.
 - QA handoffs now prefer test contracts changed by the current PR over broader historical filename or keyword matches, while keeping unrelated changed tests out of individual flow evidence.
+- Safely recognized npm, pnpm, and Yarn workspaces now place one behavior-linked changed-test command per affected package before the unchanged package suites. Ambiguous custom pipelines remain suite-wide.
 - Changed-test contract extraction now ignores test-like source strings embedded inside fixture builders instead of reporting them as executable repository tests.
 - Compact agent handoffs now retain one repository test-evidence path for secondary affected flows instead of dropping that trace during the 4KB payload reduction.
 

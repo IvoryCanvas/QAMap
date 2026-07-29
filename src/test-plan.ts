@@ -373,7 +373,7 @@ async function discoverJavaScriptCommands(
         affectedPackage.changedFiles,
       );
       return preferredJavaScriptScripts(affectedPackage.scripts, platformBuildScripts)
-        .map((script) => workspaceScriptCommand(
+        .map((script) => buildWorkspaceScriptCommand(
           packageManager,
           affectedPackage.name ?? `./${affectedPackage.path}`,
           script,
@@ -467,7 +467,7 @@ function preferredJavaScriptScripts(
   ]).filter((script) => isUsableScript(scripts[script]));
 }
 
-function workspaceScriptCommand(packageManager: string, target: string, script: string): string {
+export function buildWorkspaceScriptCommand(packageManager: string, target: string, script: string): string {
   const scopedTarget = shellArgument(target);
   if (packageManager === "pnpm") {
     return script === "test"

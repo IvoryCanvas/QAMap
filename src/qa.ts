@@ -23,7 +23,11 @@ import type { QaReasoningTrace, QaTraceEvidenceSummary } from "./qa-trace.js";
 import { routeQaScenario } from "./scenario-routing.js";
 import { collectChangedTestContracts } from "./test-evidence.js";
 import type { ChangedTestContract } from "./test-evidence.js";
-import { collectAddedDiffEvidence, generateTestPlan } from "./test-plan.js";
+import {
+  buildWorkspaceScriptCommand,
+  collectAddedDiffEvidence,
+  generateTestPlan,
+} from "./test-plan.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
 export interface QaDraftOptions extends Omit<E2eDraftOptions, "dryRun" | "output"> {
@@ -211,15 +215,16 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     changedTestContracts,
   );
   const changedFiles = draft.plan.changedFiles.map((file) => file.path);
-  const preferredVerificationCommand = await buildChangedTestVerificationCommand(
+  const preferredVerificationCommands = await buildChangedTestVerificationCommands(
     root,
     flows,
     changedFiles,
     draft.plan.suggestedCommands,
   );
-  const suggestedCommands = preferredVerificationCommand
-    ? uniqueStrings([preferredVerificationCommand, ...draft.plan.suggestedCommands])
-    : draft.plan.suggestedCommands;
+  const suggestedCommands = uniqueStrings([
+    ...preferredVerificationCommands,
+    ...draft.plan.suggestedCommands,
+  ]);
   const missingEvidence = buildMissingEvidence(qaFiles);
   const traces = buildQaReasoningTraces(
     draft.plan.changeAnalysis.intents,
@@ -455,46 +460,166 @@ function shouldRunChangedTestEvidence(flows: QaDraftFlow[], changedFiles: string
     scenarioReceipts.every((receipt) => receipt.decision === "review-only");
 }
 
-async function buildChangedTestVerificationCommand(
+async function buildChangedTestVerificationCommands(
   root: string,
   flows: QaDraftFlow[],
   changedFiles: string[],
   suggestedCommands: string[],
-): Promise<string | undefined> {
+): Promise<string[]> {
   const changed = new Set(changedFiles);
   const changedEvidence = uniqueStrings(
     flows.flatMap((flow) => flow.existingEvidencePaths).filter((file) => changed.has(file)),
   );
   if (changedEvidence.length === 0) {
-    return undefined;
+    return [];
   }
   const pytest = suggestedCommands.find((command) => /^pytest(?:\s|$)/i.test(command));
   const pythonTests = changedEvidence.filter((file) => /(?:^|\/)test_[^/]+\.py$|(?:^|\/)[^/]+_test\.py$/i.test(file));
   if (pytest && pythonTests.length > 0) {
-    return `pytest ${pythonTests.slice(0, 4).join(" ")}`;
+    return [`pytest ${pythonTests.slice(0, 4).join(" ")}`];
   }
   const packageTest = suggestedCommands.find((command) => /^(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+test(?:\s|$)/i.test(command));
   if (packageTest && pythonTests.length > 0) {
-    return `${packageTest} -- ${pythonTests.slice(0, 4).join(" ")}`;
+    return [`${packageTest} -- ${pythonTests.slice(0, 4).join(" ")}`];
   }
   const directPackageTest = suggestedCommands.find((command) =>
     /^(?:npm|pnpm|yarn)(?:\s+run)?\s+test$/i.test(command)
   );
-  const javascriptTests = changedEvidence
-    .filter(isJavaScriptTestEvidence)
-    .slice(0, 4);
-  if (!directPackageTest || javascriptTests.length === 0) {
-    return undefined;
+  const javascriptTests = changedEvidence.filter(isJavaScriptTestEvidence);
+  if (javascriptTests.length === 0) {
+    return [];
   }
-  const testScript = await readPackageTestScript(root);
-  if (!testScript) {
-    return undefined;
+  if (directPackageTest) {
+    const testScript = await readPackageTestScript(root);
+    if (!testScript) {
+      return [];
+    }
+    const focused = buildFocusedJavaScriptTestCommand(
+      directPackageTest,
+      testScript,
+      javascriptTests.slice(0, 4),
+    );
+    return focused ? [focused] : [];
   }
-  return buildFocusedJavaScriptTestCommand(
-    directPackageTest,
-    testScript,
+
+  return buildFocusedWorkspaceJavaScriptTestCommands(
+    root,
+    suggestedCommands,
     javascriptTests,
   );
+}
+
+interface ChangedWorkspaceTestGroup {
+  packagePath: string;
+  packageName?: string;
+  testScript: string;
+  testFiles: string[];
+}
+
+async function buildFocusedWorkspaceJavaScriptTestCommands(
+  root: string,
+  suggestedCommands: string[],
+  testFiles: string[],
+): Promise<string[]> {
+  const groups = await groupChangedTestsByPackage(root, testFiles);
+  const focused: string[] = [];
+  for (const group of groups) {
+    const target = group.packageName ?? `./${group.packagePath}`;
+    const packageTestCommand = findWorkspacePackageTestCommand(suggestedCommands, target);
+    if (!packageTestCommand) {
+      continue;
+    }
+    const command = buildFocusedJavaScriptTestCommand(
+      packageTestCommand,
+      group.testScript,
+      group.testFiles,
+    );
+    if (command?.startsWith(`${packageTestCommand} `)) {
+      focused.push(command);
+    }
+  }
+  return focused;
+}
+
+async function groupChangedTestsByPackage(
+  root: string,
+  testFiles: string[],
+): Promise<ChangedWorkspaceTestGroup[]> {
+  const groups = new Map<string, ChangedWorkspaceTestGroup>();
+  const packageCache = new Map<string, { name?: string; testScript?: string } | undefined>();
+  for (const testFile of testFiles) {
+    const normalized = toPosixPath(testFile);
+    if (path.posix.isAbsolute(normalized) || normalized === ".." || normalized.startsWith("../")) {
+      continue;
+    }
+    let directory = path.posix.dirname(normalized);
+    while (directory !== "." && directory !== "/") {
+      let packageInfo = packageCache.get(directory);
+      if (!packageCache.has(directory)) {
+        packageInfo = await readPackageTestConfiguration(path.join(root, directory));
+        packageCache.set(directory, packageInfo);
+      }
+      if (packageInfo) {
+        if (packageInfo.testScript) {
+          const existing = groups.get(directory);
+          const relativeTestFile = path.posix.relative(directory, normalized);
+          if (existing) {
+            existing.testFiles.push(relativeTestFile);
+          } else {
+            groups.set(directory, {
+              packagePath: directory,
+              packageName: packageInfo.name,
+              testScript: packageInfo.testScript,
+              testFiles: [relativeTestFile],
+            });
+          }
+        }
+        break;
+      }
+      const parent = path.posix.dirname(directory);
+      if (parent === directory) {
+        break;
+      }
+      directory = parent;
+    }
+  }
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      testFiles: uniqueStrings(group.testFiles).slice(0, 4),
+    }))
+    .sort((left, right) => left.packagePath.localeCompare(right.packagePath));
+}
+
+async function readPackageTestConfiguration(
+  root: string,
+): Promise<{ name?: string; testScript?: string } | undefined> {
+  try {
+    const parsed = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as {
+      name?: unknown;
+      scripts?: Record<string, unknown>;
+    };
+    return {
+      name: typeof parsed.name === "string" && parsed.name.trim().length > 0
+        ? parsed.name.trim()
+        : undefined,
+      testScript: typeof parsed.scripts?.test === "string" && parsed.scripts.test.trim().length > 0
+        ? parsed.scripts.test.trim()
+        : undefined,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function findWorkspacePackageTestCommand(
+  suggestedCommands: string[],
+  target: string,
+): string | undefined {
+  return ["pnpm", "yarn", "npm"]
+    .map((packageManager) => buildWorkspaceScriptCommand(packageManager, target, "test"))
+    .map((command) => suggestedCommands.find((candidate) => candidate === command))
+    .find((command): command is string => Boolean(command));
 }
 
 function isJavaScriptTestEvidence(file: string): boolean {
@@ -505,17 +630,7 @@ function isJavaScriptTestEvidence(file: string): boolean {
 }
 
 async function readPackageTestScript(root: string): Promise<string | undefined> {
-  try {
-    const parsed = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as {
-      scripts?: Record<string, unknown>;
-    };
-    const testScript = parsed.scripts?.test;
-    return typeof testScript === "string" && testScript.trim().length > 0
-      ? testScript.trim()
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  return (await readPackageTestConfiguration(root))?.testScript;
 }
 
 function buildFocusedJavaScriptTestCommand(
