@@ -107,7 +107,7 @@ For monorepos, run `qamap qa` at the repository root first. When every changed f
 
 Pass `--workspace-root` when explicitly running another command against a package, or when overriding an ambiguous `qa` result. Package-local checks still use the package directory, while repo-level guardrails such as `AGENTS.md`, `.github/workflows`, `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` are read from the workspace root.
 
-Suggested validation commands follow the changed ownership boundary where possible. JavaScript workspaces receive package-scoped commands, and Python repositories can receive related pytest paths through a detected Compose service and container runner. These are commands to run, never pre-recorded pass results.
+Suggested validation commands follow the changed ownership boundary where possible. JavaScript workspaces receive package-scoped commands. When changed tests are connected to affected behavior across multiple npm, pnpm, or Yarn packages, QAMap puts one safely narrowed file command per package first and retains each full package suite afterward. Custom shell pipelines stay broad. Python repositories can receive related pytest paths through a detected Compose service and container runner. These are commands to run, never pre-recorded pass results.
 
 ### Short Package Scripts
 

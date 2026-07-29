@@ -1573,6 +1573,231 @@ test("generateQaDraft scopes supported JavaScript runners to changed test eviden
   }
 });
 
+test("generateQaDraft scopes changed test evidence across workspace packages", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "apps/admin/src"), { recursive: true });
+  await mkdir(path.join(root, "apps/admin/test"), { recursive: true });
+  await mkdir(path.join(root, "apps/audit/src"), { recursive: true });
+  await mkdir(path.join(root, "apps/audit/test"), { recursive: true });
+  await mkdir(path.join(root, "apps/store/src"), { recursive: true });
+  await mkdir(path.join(root, "apps/store/test"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      private: true,
+      packageManager: "pnpm@10.32.1",
+    }),
+  );
+  await writeFile(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+  await writeFile(
+    path.join(root, "apps/admin/package.json"),
+    JSON.stringify({
+      name: "@fixture/admin",
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "apps/audit/package.json"),
+    JSON.stringify({
+      name: "@fixture/audit",
+      scripts: {
+        test: "node scripts/prepare-tests.mjs | vitest run",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "apps/store/package.json"),
+    JSON.stringify({
+      name: "@fixture/store",
+      scripts: {
+        test: "vitest run",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "apps/admin/src/access.ts"),
+    "export const canApproveAccess = (expired) => !expired;\n",
+  );
+  await writeFile(
+    path.join(root, "apps/admin/test/access.test.mjs"),
+    "test('administrators can review access requests', () => {});\n",
+  );
+  await writeFile(
+    path.join(root, "apps/audit/src/history.ts"),
+    "export const historyStatus = 'recorded';\n",
+  );
+  await writeFile(
+    path.join(root, "apps/audit/test/history.test.ts"),
+    "test('audit history records accepted changes', () => {});\n",
+  );
+  await writeFile(
+    path.join(root, "apps/store/src/cart.ts"),
+    "export const canSelectDelivery = (available) => available;\n",
+  );
+  await writeFile(
+    path.join(root, "apps/store/test/cart.test.ts"),
+    "test('cart totals include the selected delivery option', () => {});\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "test/workspace-contracts"]);
+  await writeFile(
+    path.join(root, "apps/admin/src/access.ts"),
+    "export const canApproveAccess = (expired) => !expired;\nexport const approvalReason = 'active request';\n",
+  );
+  await writeFile(
+    path.join(root, "apps/admin/test/access.test.mjs"),
+    [
+      "test('administrators can review access requests', () => {});",
+      "test('expired access requests cannot be approved', () => {});",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: reject expired access approvals"]);
+
+  await writeFile(
+    path.join(root, "apps/audit/src/history.ts"),
+    "export const historyStatus = 'recorded';\nexport const rejectedStatus = 'rejected';\n",
+  );
+  await writeFile(
+    path.join(root, "apps/audit/test/history.test.ts"),
+    [
+      "test('audit history records accepted changes', () => {});",
+      "test('audit history records rejected changes', () => {});",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: record rejected audit changes"]);
+
+  await writeFile(
+    path.join(root, "apps/store/src/cart.ts"),
+    "export const canSelectDelivery = (available) => available;\nexport const deliveryError = 'Unavailable option';\n",
+  );
+  await writeFile(
+    path.join(root, "apps/store/test/cart.test.ts"),
+    [
+      "test('cart totals include the selected delivery option', () => {});",
+      "test('unavailable delivery options are rejected', () => {});",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: reject unavailable delivery options"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+  assert.equal(qa.analysisScope.mode, "repository-root");
+  assert.deepEqual(qa.suggestedCommands, [
+    "pnpm --filter @fixture/admin test -- test/access.test.mjs",
+    "pnpm --filter @fixture/store test -- test/cart.test.ts",
+    "pnpm --filter @fixture/admin test",
+    "pnpm --filter @fixture/audit test",
+    "pnpm --filter @fixture/store test",
+  ]);
+  assert.equal(
+    qa.suggestedCommands.some((command) => /@fixture\/audit test --/.test(command)),
+    false,
+  );
+  assert.deepEqual(qa.route, {
+    basis: "repository-validation",
+    status: "verification-ready-to-run",
+    nextAction: "run-repository-command",
+    command: "pnpm --filter @fixture/admin test -- test/access.test.mjs",
+  });
+});
+
+test("generateQaDraft preserves npm and Yarn workspace command syntax when focusing tests", async (context) => {
+  const cases = [
+    {
+      name: "npm workspaces",
+      packageManager: "npm@11.4.2",
+      command(packageName, file) {
+        return `npm test --workspace ${packageName}${file ? ` -- ${file}` : ""}`;
+      },
+    },
+    {
+      name: "Yarn workspaces",
+      packageManager: "yarn@4.9.1",
+      command(packageName, file) {
+        return `yarn workspace ${packageName} test${file ? ` ${file}` : ""}`;
+      },
+    },
+  ];
+
+  for (const fixture of cases) {
+    await context.test(fixture.name, async () => {
+      const root = await makeTempRepo();
+      await initGitRepo(root);
+      for (const packageName of ["alpha", "beta"]) {
+        await mkdir(path.join(root, `packages/${packageName}/src`), { recursive: true });
+        await mkdir(path.join(root, `packages/${packageName}/test`), { recursive: true });
+        await writeFile(
+          path.join(root, `packages/${packageName}/package.json`),
+          JSON.stringify({
+            name: `@fixture/${packageName}`,
+            scripts: {
+              test: "vitest run",
+            },
+          }),
+        );
+        await writeFile(
+          path.join(root, `packages/${packageName}/src/${packageName}.ts`),
+          `export const ${packageName}State = 'base';\n`,
+        );
+        await writeFile(
+          path.join(root, `packages/${packageName}/test/${packageName}.test.ts`),
+          `test('${packageName} preserves its base state', () => {});\n`,
+        );
+      }
+      await writeFile(
+        path.join(root, "package.json"),
+        JSON.stringify({
+          private: true,
+          packageManager: fixture.packageManager,
+          workspaces: ["packages/*"],
+        }),
+      );
+      await git(root, ["add", "."]);
+      await git(root, ["commit", "-m", "base"]);
+      await git(root, ["branch", "-M", "main"]);
+
+      await git(root, ["switch", "-c", "test/workspace-runner"]);
+      for (const packageName of ["alpha", "beta"]) {
+        await writeFile(
+          path.join(root, `packages/${packageName}/src/${packageName}.ts`),
+          `export const ${packageName}State = 'changed';\n`,
+        );
+        await writeFile(
+          path.join(root, `packages/${packageName}/test/${packageName}.test.ts`),
+          [
+            `test('${packageName} preserves its base state', () => {});`,
+            `test('${packageName} exposes its changed state', () => {});`,
+            "",
+          ].join("\n"),
+        );
+        await git(root, ["add", "."]);
+        await git(root, ["commit", "-m", `feat: expose ${packageName} changed state`]);
+      }
+
+      const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+      assert.deepEqual(qa.suggestedCommands, [
+        fixture.command("@fixture/alpha", "test/alpha.test.ts"),
+        fixture.command("@fixture/beta", "test/beta.test.ts"),
+        fixture.command("@fixture/alpha"),
+        fixture.command("@fixture/beta"),
+      ]);
+    });
+  }
+});
+
 test("generateQaDraft preserves the full suite when JavaScript narrowing is ambiguous", async (context) => {
   const cases = [
     {
