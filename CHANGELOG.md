@@ -6,10 +6,17 @@
 
 - Added an evidence-gated validation-recovery compiler. When a diff-backed form timing change connects to a route, validated input, visible error, submit action, and visible success result, QAMap now compiles both a valid submission path and an invalid-input, correction, and stale-error recovery scenario.
 - Added a third seeded-regression execution contract that requires the byte-identical generated browser artifact to fail when corrected input leaves stale validation feedback and pass when first-touch revalidation is restored.
+- Added native Codex and Claude Code plugin manifests that expose the existing vendor-neutral `qamap-pr-qa` skill without duplicating the local analysis engine.
+- Added Codex skill presentation metadata and a plugin contract test that keeps both host manifests, the npm package, and the shared skill version aligned.
 
 ### Changed
 
 - Form validation timing detection now reads the changed hunk and uses word-bounded form context, preserving framework-neutral React and Vue cases without treating unrelated format-mode vocabulary as product validation QA.
+- The agent skill now converts `route.nextAction` into exactly one immediate action and reports later command execution separately from QAMap's static `not-run` receipt.
+- `qamap init --agent` now installs the complete skill bundle, including optional host metadata, while continuing to preserve locally modified skill files unless `--force` is explicit.
+- QA handoffs now prefer test contracts changed by the current PR over broader historical filename or keyword matches, while keeping unrelated changed tests out of individual flow evidence.
+- Changed-test contract extraction now ignores test-like source strings embedded inside fixture builders instead of reporting them as executable repository tests.
+- Compact agent handoffs now retain one repository test-evidence path for secondary affected flows instead of dropping that trace during the 4KB payload reduction.
 
 ## 0.4.8 - 2026-07-27
 

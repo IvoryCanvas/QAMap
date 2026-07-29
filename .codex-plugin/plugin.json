@@ -1,0 +1,32 @@
+{
+  "name": "qamap",
+  "version": "0.4.8",
+  "description": "Turn PR changes into traceable local QA decisions and optional automation handoffs without an LLM call.",
+  "author": {
+    "name": "IvoryCanvas",
+    "url": "https://github.com/IvoryCanvas"
+  },
+  "homepage": "https://github.com/IvoryCanvas/QAMap#readme",
+  "repository": "https://github.com/IvoryCanvas/QAMap",
+  "license": "MIT",
+  "keywords": [
+    "qa",
+    "pull-request",
+    "local-first",
+    "agent-skill",
+    "e2e"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "QAMap",
+    "shortDescription": "Find what a PR needs to prove before merge.",
+    "longDescription": "Map commit and diff evidence to affected behavior, routed QA scenarios, and optional local automation without uploading source code.",
+    "developerName": "IvoryCanvas",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/IvoryCanvas/QAMap",
+    "defaultPrompt": "Analyze the current PR with QAMap and carry out the safest evidence-backed QA action."
+  }
+}

@@ -205,7 +205,10 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   });
   const changedTestContracts = collectChangedTestContracts(addedDiffEvidence);
   const qaFiles = draft.plan.changedFiles.length > 0 ? draft.files : [];
-  const flows = qaFiles.map((file) => qaFlowFromDraftFile(file));
+  const flows = preferChangedTestEvidence(
+    qaFiles.map((file) => qaFlowFromDraftFile(file)),
+    changedTestContracts,
+  );
   const changedFiles = draft.plan.changedFiles.map((file) => file.path);
   const preferredVerificationCommand = buildChangedTestVerificationCommand(
     flows,
@@ -1337,6 +1340,9 @@ function secondaryAgentFlow(
     focus: compactAgentFlowFocus(flow.focus, Math.min(limits.question ?? 90, limits.success ?? 90)),
     steps: [],
     selectors: [],
+    existingEvidence: flow.existingEvidence
+      ?.slice(0, 1)
+      .map((file) => truncateForAgent(file, limits.file ?? 70)),
     evidence: [],
   };
 }
@@ -2178,6 +2184,108 @@ function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
   };
 }
 
+function preferChangedTestEvidence(
+  flows: QaDraftFlow[],
+  changedTestContracts: ChangedTestContract[],
+): QaDraftFlow[] {
+  if (changedTestContracts.length === 0) {
+    return flows;
+  }
+
+  return flows.map((flow) => {
+    const scored = changedTestContracts
+      .map((contract) => ({
+        contract,
+        score: changedTestContractScore(flow, contract),
+      }))
+      .filter((candidate) => candidate.score > 0)
+      .sort((left, right) =>
+        right.score - left.score ||
+        left.contract.file.localeCompare(right.contract.file) ||
+        left.contract.line - right.contract.line
+      );
+    const strongestScore = scored[0]?.score ?? 0;
+    const evidencePaths = uniqueStrings(
+      scored
+        .filter((candidate) => candidate.score >= Math.max(3, strongestScore - 2))
+        .map((candidate) => candidate.contract.file),
+    );
+    if (evidencePaths.length === 0) {
+      return flow;
+    }
+    return {
+      ...flow,
+      // A changed repository-authored contract is stronger evidence than a broad filename or keyword match.
+      existingEvidencePaths: evidencePaths,
+    };
+  });
+}
+
+function changedTestContractScore(flow: QaDraftFlow, contract: ChangedTestContract): number {
+  const flowTitleTokens = qaEvidenceTokens(flow.title);
+  const flowFileTokens = qaEvidenceTokens(flow.changedFiles.join("\n"));
+  const flowTokens = new Set([...flowTitleTokens, ...flowFileTokens]);
+  const contractTitleTokens = qaEvidenceTokens(contract.title);
+  const contractFileTokens = qaEvidenceTokens(contract.file);
+  const contractTokens = new Set([...contractTitleTokens, ...contractFileTokens]);
+  const shared = [...flowTokens].filter((token) => contractTokens.has(token));
+  if (shared.length === 0) {
+    return 0;
+  }
+
+  const titleOverlap = flowTitleTokens.filter((token) => contractTitleTokens.includes(token)).length;
+  const fileOverlap = flowFileTokens.filter((token) => contractTokens.has(token)).length;
+  return shared.length * 3 + titleOverlap * 2 + fileOverlap * 2;
+}
+
+function qaEvidenceTokens(value: string): string[] {
+  const ignored = new Set([
+    "assert",
+    "assertion",
+    "behavior",
+    "changed",
+    "check",
+    "checklist",
+    "cli",
+    "command",
+    "contract",
+    "draft",
+    "evidence",
+    "existing",
+    "expected",
+    "file",
+    "flow",
+    "input",
+    "invalid",
+    "json",
+    "keeps",
+    "manifest",
+    "native",
+    "output",
+    "path",
+    "primary",
+    "qamap",
+    "related",
+    "repository",
+    "result",
+    "run",
+    "shared",
+    "success",
+    "test",
+    "valid",
+    "verification",
+    "yaml",
+  ]);
+  return uniqueStrings(
+    value
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .split(/[^a-zA-Z0-9]+/)
+      .map((part) => part.toLowerCase())
+      .map((part) => part.length > 4 && part.endsWith("s") ? part.slice(0, -1) : part)
+      .filter((part) => (part.length > 2 || part === "qa" || part === "e2e") && !ignored.has(part)),
+  );
+}
+
 function buildFlowReasons(file: E2eDraftFile): string[] {
   const verificationMode = verificationModeForDraftFile(file);
   if (verificationMode === "command-contract") {
@@ -2250,11 +2358,15 @@ function buildPrChecklist(
   changedTestContracts: ChangedTestContract[],
   suggestedCommands: string[],
 ): string[] {
-  const testEvidenceLabel = flows[0]?.verificationMode === "existing-test-evidence"
+  const changedEvidencePaths = uniqueStrings(changedTestContracts.map((contract) => contract.file));
+  const testEvidencePaths = changedEvidencePaths.length > 0
+    ? changedEvidencePaths
+    : flows[0]?.existingEvidencePaths ?? [];
+  const testEvidenceLabel = changedEvidencePaths.length > 0 || flows[0]?.verificationMode === "existing-test-evidence"
     ? "changed test evidence"
     : "related test evidence";
-  const evidenceChecklist = flows[0]?.existingEvidencePaths.length
-      ? `Run the ${testEvidenceLabel}: ${flows[0].existingEvidencePaths.slice(0, 4).join(", ")}.`
+  const evidenceChecklist = testEvidencePaths.length
+      ? `Run the ${testEvidenceLabel}: ${testEvidencePaths.slice(0, 4).join(", ")}.`
       : flows[0]?.verificationMode
         ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${suggestedCommands[0] ?? "the nearest repository validation command"}.`
       : draft.plan.changeAnalysis.intents[0]
@@ -2291,14 +2403,18 @@ function buildAgentHandoff(
   missingEvidence: QaDraftMissingEvidence[],
   suggestedCommands: string[],
 ): string[] {
-  const testEvidenceLabel = flows[0]?.verificationMode === "existing-test-evidence"
+  const changedEvidencePaths = uniqueStrings(changedTestContracts.map((contract) => contract.file));
+  const testEvidencePaths = changedEvidencePaths.length > 0
+    ? changedEvidencePaths
+    : flows[0]?.existingEvidencePaths ?? [];
+  const testEvidenceLabel = changedEvidencePaths.length > 0 || flows[0]?.verificationMode === "existing-test-evidence"
     ? "changed test evidence"
     : "related test evidence";
   const handoff = [
     "Use this as a local PR QA skill result, not as proof that browser or device QA already passed.",
     draft.dryRun ? "No files were written because this command previews QA work only." : undefined,
-    flows[0]?.existingEvidencePaths.length
-      ? `Run the ${testEvidenceLabel} (${flows[0].existingEvidencePaths.slice(0, 3).join(", ")}) and record the result before handoff.`
+    testEvidencePaths.length
+      ? `Run the ${testEvidenceLabel} (${testEvidencePaths.slice(0, 3).join(", ")}) and record the result before handoff.`
       : flows[0]?.verificationMode
         ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${suggestedCommands[0] ?? "the nearest repository command"} and record the result before handoff; do not invent a product-journey E2E for this diff alone.`
       : draft.plan.changeAnalysis.intents[0]

@@ -1490,6 +1490,7 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
     changedFiles: Array.from({ length: 12 }, (__, fileIndex) => `src/${"nested/".repeat(20)}file-${fileIndex}.tsx`),
     draftSteps: Array.from({ length: 12 }, (__, stepIndex) => `Step ${stepIndex} ${"detail ".repeat(50)}`),
     selectorHints: Array.from({ length: 12 }, (__, selectorIndex) => `[data-testid="${"selector".repeat(20)}-${selectorIndex}"]`),
+    existingEvidencePaths: [`test/flow-${index}.test.ts`],
   }));
   const compactAgentOutput = formatAgentQaDraft(oversizedQa);
   const compactAgentSummary = JSON.parse(compactAgentOutput);
@@ -1502,6 +1503,10 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.ok(compactAgentSummary.flows.length > 0);
   assert.equal(typeof compactAgentSummary.flows[0].source, "string");
   assert.ok(Array.isArray(compactAgentSummary.flows[0].steps));
+  assert.deepEqual(compactAgentSummary.flows[0].existingEvidence, ["test/flow-0.test.ts"]);
+  if (compactAgentSummary.flows.length > 1) {
+    assert.deepEqual(compactAgentSummary.flows[1].existingEvidence, ["test/flow-1.test.ts"]);
+  }
   assert.ok(compactAgentSummary.compaction);
 
   const pathologicalQa = structuredClone(oversizedQa);

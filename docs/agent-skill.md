@@ -25,6 +25,8 @@ It performs four idempotent steps:
 
 Both skill copies preserve local changes unless you explicitly pass `--force`. After setup, agents that read `AGENTS.md` or either project-skill location can discover the same QA workflow without receiving a different prompt contract. The rest of this document explains what that pass does and how to wire it manually on other agent surfaces.
 
+The installed skill bundle also carries optional Codex presentation metadata. QAMap keeps that metadata beside the same `SKILL.md`; it does not create a second workflow for another host.
+
 ## Recommended Agent Step
 
 Run this before writing a PR body or asking for review. Agents should prefer the compact agent format — one minified JSON object (about 2 KB for a typical small PR) instead of a long report:
@@ -75,11 +77,19 @@ cat skills/qamap-pr-qa/SKILL.md
 
 If your agent supports symlinked skills, point its skill directory at `skills/qamap-pr-qa`. If it only supports instruction text, copy the contents of `SKILL.md` into that system's reusable instruction format.
 
-## Plugin Boundary
+## Native Plugin Boundary
 
-The local skill is the integration contract. It invokes the installed or one-off QAMap CLI, consumes the versioned agent JSON, and asks the host LLM to inspect only the evidence it still needs. QAMap itself does not call an LLM or upload repository source.
+The repository now includes native `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` manifests. Both discover the same `skills/qamap-pr-qa/SKILL.md`, which invokes the installed or one-off QAMap CLI and consumes the versioned agent JSON. QAMap itself does not call an LLM or upload repository source.
 
-A future installable plugin should package this same skill without creating a second QA prompt or analysis engine. It does not need an MCP server merely to execute QAMap: the CLI already runs inside the checked-out repository. An MCP layer is justified only if a separate host cannot launch local commands, and it must preserve the same `qamap.qa` schema and local-first boundary.
+These manifests are thin distribution wrappers, not another QA implementation. They intentionally add no MCP server, background monitor, or automatic hook: the CLI already runs inside the checked-out repository, and an agent must not silently install a runner or claim product QA passed.
+
+From a source checkout, validate the Claude Code manifest without invoking a model:
+
+```sh
+claude plugin validate .
+```
+
+For a local Claude Code session, the same checkout can be loaded with `claude --plugin-dir .`. Codex plugin validation and marketplace packaging use `.codex-plugin/plugin.json`. Public marketplace availability is not implied by the presence of either manifest; until a listing is published, `qamap init --agent` and the portable skill install remain the stable onboarding paths.
 
 ## What The Agent Should Do With The Output
 
@@ -95,6 +105,8 @@ Use `Change Intent Evidence` and the `PR Comment Draft` as review context:
 - missing fixture, selector, or assertion evidence
 - optional automation adapter selected only after QA design
 - PR checklist items
+
+The host agent must choose one `route.nextAction`, verify the strongest source first, and report any command it actually ran as a separate execution receipt. Static QAMap output always begins as `not-run`.
 
 If the command says a generated recommendation is wrong, do not keep re-prompting the agent with the same context. Update the repo-local manifest after human review:
 

@@ -1,6 +1,6 @@
 ---
 name: qamap-pr-qa
-description: Local zero-LLM PR QA workflow. Use when an agent is preparing, updating, or reviewing a pull request and needs to derive commit-backed change intent, behavior lifecycle, runner-independent QA scenarios, affected flows, automation drafts, missing evidence, and optional manifest repair guidance without calling a cloud service or LLM.
+description: Local zero-LLM PR QA workflow. Use when an agent is preparing, updating, finalizing, or reviewing a pull request, asks what the PR should test, or needs commit-backed change intent, affected behavior, QA scenarios, evidence, validation commands, optional automation drafts, and manifest repair guidance.
 ---
 
 # QAMap PR QA
@@ -47,14 +47,27 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
    - `automation` — an optional adapter handoff. It is not required to use the QA judgment.
    - `prChecklist[]` and `commands[]` — checklist lines and validation commands for the handoff.
 
-5. Only after a human or team accepts the scenario and automation adapter, create or preview executable coverage:
+5. Follow the `route.nextAction` contract:
+   - `run-repository-command` — run the exact existing `route.command` from the selected analysis scope when permissions allow.
+   - `define-repository-command` — do not invent a passing command. Report the missing repository validation contract.
+   - `review-and-run-draft` — preview the printed `automation.draftCommand` first. Write or execute the draft only after the scenario and adapter are accepted.
+   - `complete-draft-evidence` — report the first required evidence gap. Do not install a runner or fabricate a selector, fixture, action, or assertion.
+6. Only after a human or team accepts the scenario and automation adapter, create or preview executable coverage:
 
    ```sh
-   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap e2e draft . --base <base> --head HEAD
+   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap e2e draft . --base <base> --head HEAD --dry-run
    ```
 
    If the selected adapter is absent, inspect and explicitly accept the `automation.setupCommand` proposal. Never install a runner merely because QAMap detected a web or mobile surface.
-6. Include the useful parts in the PR body, review note, or handoff summary.
+7. Include the useful parts in the PR body, review note, or handoff summary.
+
+## Agent Action Contract
+
+- Choose exactly one immediate next action from `route.nextAction`. Do not dump every possible command on the user.
+- Verify the strongest scenario source before acting. If it has no exact diff location or is marked `reviewRequired`, ask one precise question instead of generating code.
+- Treat QAMap's `execution.status: "not-run"` as authoritative. Only a command that this agent actually ran can produce a pass, fail, blocked, or not-verifiable receipt.
+- Report QAMap analysis and later command execution as separate facts. A generated or structurally runnable draft is not a passing test.
+- Never modify a shared manifest automatically. Present the proposed correction target and require human approval.
 
 ## Output Rules
 
@@ -91,6 +104,8 @@ QAMap QA
 - Affected flow:
 - Suggested E2E/checklist:
 - Missing evidence:
-- Validation command:
+- Selected next action:
+- Action taken:
+- Execution receipt: not run | passed | failed | blocked | not verifiable
 - Manifest repair needed:
 ```

@@ -19,6 +19,8 @@
     "qamap": "dist/cli.js"
   },
   "files": [
+    ".codex-plugin",
+    ".claude-plugin",
     "dist",
     "docs",
     "skills",

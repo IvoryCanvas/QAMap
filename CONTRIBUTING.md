@@ -79,6 +79,7 @@ git tag -a v0.4.1 -m v0.4.1
 ```
 
 Do not add a product name, subtitle, or alternate version tag. Package versions, the CLI version constant, the changelog, Git tag, and GitHub Release must agree.
+The native `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` versions must match the npm package version as well.
 
 ## Good First Contributions
 

@@ -21,10 +21,14 @@ export interface AgentInitResult {
 
 const SECTION_START = "<!-- qamap:agent:start -->";
 const SECTION_END = "<!-- qamap:agent:end -->";
-const SKILL_RELATIVE_PATH = path.join("skills", "qamap-pr-qa", "SKILL.md");
+const SKILL_RELATIVE_ROOT = path.join("skills", "qamap-pr-qa");
+const SKILL_BUNDLE_FILES = [
+  "SKILL.md",
+  path.join("agents", "openai.yaml"),
+];
 const SKILL_TARGET_RELATIVE_PATHS = [
-  path.join(".agents", "skills", "qamap-pr-qa", "SKILL.md"),
-  path.join(".claude", "skills", "qamap-pr-qa", "SKILL.md"),
+  path.join(".agents", "skills", "qamap-pr-qa"),
+  path.join(".claude", "skills", "qamap-pr-qa"),
 ];
 
 export async function initAgentSetup(rootInput: string, options: { force?: boolean } = {}): Promise<AgentInitResult> {
@@ -96,27 +100,52 @@ async function copyPackagedSkill(
   targetRelativePath: string,
   force: boolean,
 ): Promise<AgentInitFile> {
-  const sourcePath = path.join(packageRoot(), SKILL_RELATIVE_PATH);
-  const targetPath = path.join(root, targetRelativePath);
-  const relativePath = targetRelativePath;
+  const sourceRoot = path.join(packageRoot(), SKILL_RELATIVE_ROOT);
+  const targetRoot = path.join(root, targetRelativePath);
+  const packagedFiles = await Promise.all(SKILL_BUNDLE_FILES.map(async (relativePath) => ({
+    relativePath,
+    content: await fs.readFile(path.join(sourceRoot, relativePath), "utf8"),
+  })));
+  const existingFiles = await Promise.all(packagedFiles.map(async (file) => {
+    const targetPath = path.join(targetRoot, file.relativePath);
+    const exists = await pathExists(targetPath);
+    return {
+      ...file,
+      targetPath,
+      exists,
+      existing: exists ? await fs.readFile(targetPath, "utf8") : undefined,
+    };
+  }));
+  const targetExisted = existingFiles.some((file) => file.exists);
+  const hasLocalChanges = existingFiles.some((file) => file.exists && file.existing !== file.content);
 
-  const skillContent = await fs.readFile(sourcePath, "utf8");
-
-  if (await pathExists(targetPath)) {
-    const existing = await fs.readFile(targetPath, "utf8");
-    if (existing === skillContent) {
-      return { path: relativePath, status: "unchanged", detail: "packaged skill already installed" };
-    }
-    if (!force) {
-      return { path: relativePath, status: "skipped", detail: "differs from the packaged skill; pass --force to replace it" };
-    }
-    await fs.writeFile(targetPath, skillContent, "utf8");
-    return { path: relativePath, status: "updated", detail: "replaced with the packaged skill (--force)" };
+  if (hasLocalChanges && !force) {
+    return {
+      path: targetRelativePath,
+      status: "skipped",
+      detail: "skill bundle contains local changes; pass --force to replace packaged files",
+    };
   }
-
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  await fs.writeFile(targetPath, skillContent, "utf8");
-  return { path: relativePath, status: "created", detail: "installed the packaged QAMap PR QA skill" };
+  let changed = false;
+  for (const file of existingFiles) {
+    if (file.existing === file.content) {
+      continue;
+    }
+    await fs.mkdir(path.dirname(file.targetPath), { recursive: true });
+    await fs.writeFile(file.targetPath, file.content, "utf8");
+    changed = true;
+  }
+  if (!changed) {
+    return { path: targetRelativePath, status: "unchanged", detail: "packaged skill bundle already installed" };
+  }
+  if (!targetExisted) {
+    return { path: targetRelativePath, status: "created", detail: "installed the packaged QAMap PR QA skill bundle" };
+  }
+  return {
+    path: targetRelativePath,
+    status: "updated",
+    detail: force ? "replaced packaged skill files (--force)" : "installed missing packaged skill metadata",
+  };
 }
 
 async function ensureDefaultConfig(root: string): Promise<AgentInitFile> {
