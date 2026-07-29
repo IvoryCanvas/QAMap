@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Added an evidence-gated validation-recovery compiler. When a diff-backed form timing change connects to a route, validated input, visible error, submit action, and visible success result, QAMap now compiles both a valid submission path and an invalid-input, correction, and stale-error recovery scenario.
+- Added a third seeded-regression execution contract that requires the byte-identical generated browser artifact to fail when corrected input leaves stale validation feedback and pass when first-touch revalidation is restored.
+
+### Changed
+
+- Form validation timing detection now reads the changed hunk and uses word-bounded form context, preserving framework-neutral React and Vue cases without treating unrelated format-mode vocabulary as product validation QA.
+
 ## 0.4.8 - 2026-07-27
 
 ### Added

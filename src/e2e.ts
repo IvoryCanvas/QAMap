@@ -4917,6 +4917,7 @@ type DraftE2eFlow = E2eFlow & {
   manifestCheckMatches?: VerificationManifestMatch[];
   persistenceProbe?: PlaywrightPersistenceProbe;
   conditionalStateProbe?: PlaywrightConditionalStateProbe;
+  validationRecoveryProbe?: PlaywrightValidationRecoveryProbe;
   metadataProbe?: PlaywrightMetadataProbe;
 };
 type AnalyzedChangeIntent = ChangeIntentAnalysis["intents"][number];
@@ -4933,6 +4934,18 @@ interface PlaywrightPersistenceProbe {
 interface PlaywrightConditionalStateProbe {
   actionSelector: E2eSelector;
   outcomeSelector: E2eSelector;
+}
+
+interface PlaywrightValidationRecoveryProbe {
+  mode: "onBlur" | "onTouched";
+  inputSelector: E2eSelector;
+  errorSelector: E2eSelector;
+  actionSelector: E2eSelector;
+  successSelector: E2eSelector;
+  invalidValue: string;
+  validValue: string;
+  primarySteps: string[];
+  primaryAssertions: string[];
 }
 
 interface PlaywrightMetadataProbe {
@@ -7900,15 +7913,17 @@ async function buildDraftFlows(
   }
   return Promise.all(draftFlows.map(async (flow) => {
     const revision = analysisRevisionForPlan(plan);
-    const [persistenceProbe, conditionalStateProbe] = await Promise.all([
+    const [persistenceProbe, conditionalStateProbe, validationRecoveryProbe] = await Promise.all([
       inferPlaywrightPersistenceProbe(plan.root, flow, addedDiffText, revision),
       inferPlaywrightConditionalStateProbe(plan.root, flow, addedDiffText, revision),
+      inferPlaywrightValidationRecoveryProbe(plan.root, flow, revision),
     ]);
     const metadataProbe = inferPlaywrightMetadataProbe(flow, addedDiffText);
     return {
       ...flow,
       persistenceProbe,
       conditionalStateProbe,
+      validationRecoveryProbe,
       metadataProbe,
       missingTestability: metadataProbe
         ? flow.missingTestability.filter((gap) => !/selectors?.+controls? this flow taps or types into/i.test(gap))
@@ -9017,6 +9032,216 @@ function uniqueConditionalRenderedOutcomes(outcomes: ConditionalRenderedOutcome[
   });
 }
 
+async function inferPlaywrightValidationRecoveryProbe(
+  root: string,
+  flow: DraftE2eFlow,
+  analysisRevision: AnalysisRevision = { head: "HEAD", includeWorkingTree: false },
+): Promise<PlaywrightValidationRecoveryProbe | undefined> {
+  if (!primaryRouteEntrypoint(flow)) {
+    return undefined;
+  }
+  const scenario = flow.qaScenarios?.find((candidate) =>
+    candidate.kind === "state-transition" &&
+    /validation timing across edit, blur, correction, and submit/i.test(candidate.title)
+  );
+  const primaryScenario = flow.qaScenarios?.find((candidate) => candidate.kind === "primary");
+  if (!scenario || !primaryScenario) {
+    return undefined;
+  }
+  const timingEvidence = scenario.evidence.find((item) =>
+    item.kind === "diff" &&
+    item.side === "head" &&
+    item.relation === "direct" &&
+    item.symbol === "form-validation-mode" &&
+    item.file
+  );
+  const modeMatch = timingEvidence?.value.match(/\bto\s+(onBlur|onTouched)\b/i);
+  const mode = modeMatch?.[1];
+  if (!timingEvidence?.file || (mode !== "onBlur" && mode !== "onTouched")) {
+    return undefined;
+  }
+
+  const text = await readAnalyzedText(root, timingEvidence.file, analysisRevision);
+  if (!text || !new RegExp(`\\bmode\\s*:\\s*["'\`]${mode}["'\`]`, "i").test(text)) {
+    return undefined;
+  }
+  const selectors = flow.selectors.filter((selector) => selector.file === timingEvidence.file);
+  const input = validationInputCandidate(selectors, text, [
+    flow.title,
+    scenario.title,
+    ...scenario.steps,
+    ...scenario.assertions,
+  ].join(" "));
+  if (!input) {
+    return undefined;
+  }
+  const formText = sourceFormForSelector(text, input.selector.value);
+  if (!formText) {
+    return undefined;
+  }
+  const errorSelector = validationErrorSelector(selectors, input.selector, formText);
+  const actionSelector = validationSubmitSelector(selectors, formText);
+  if (!errorSelector || !actionSelector) {
+    return undefined;
+  }
+  const successSelector = validationSuccessSelector(selectors, actionSelector, formText);
+  if (!successSelector) {
+    return undefined;
+  }
+
+  return {
+    mode,
+    inputSelector: input.selector,
+    errorSelector,
+    actionSelector,
+    successSelector,
+    invalidValue: input.invalidValue,
+    validValue: input.validValue,
+    primarySteps: primaryScenario.steps,
+    primaryAssertions: primaryScenario.assertions,
+  };
+}
+
+function validationInputCandidate(
+  selectors: E2eSelector[],
+  text: string,
+  scenarioText: string,
+): { selector: E2eSelector; invalidValue: string; validValue: string } | undefined {
+  const contextTokens = new Set(selectorSemanticTokens(scenarioText));
+  const candidates = selectors
+    .filter((selector) => isInputSelector(selector))
+    .flatMap((selector) => {
+      const element = sourceInputElementForSelector(text, selector.value);
+      const samples = element ? validationSamplesForInput(element, selector.value) : undefined;
+      if (!samples) {
+        return [];
+      }
+      const affinity = selectorSemanticTokens(selector.value)
+        .filter((token) => contextTokens.has(token)).length;
+      return [{ selector, affinity, ...samples }];
+    })
+    .sort((left, right) =>
+      right.affinity - left.affinity ||
+      selectorEvidenceScore(right.selector) - selectorEvidenceScore(left.selector)
+    );
+  if (candidates.length === 0 || (candidates.length > 1 && candidates[0].affinity === 0)) {
+    return undefined;
+  }
+  return candidates[0];
+}
+
+function sourceInputElementForSelector(text: string, value: string): string | undefined {
+  return [...text.matchAll(/<(?:input|textarea)\b[^>]*>/gi)]
+    .map((match) => match[0])
+    .find((element) => element.includes(value));
+}
+
+function sourceFormForSelector(text: string, value: string): string | undefined {
+  return [...text.matchAll(/<form\b[^>]*>[\s\S]{0,12000}?<\/form>/gi)]
+    .map((match) => match[0])
+    .find((form) => form.includes(value));
+}
+
+function validationSamplesForInput(
+  element: string,
+  selectorValue: string,
+): { invalidValue: string; validValue: string } | undefined {
+  const typeMatch = element.match(
+    /\btype\s*=\s*(?:"([^"]+)"|'([^']+)'|\{\s*["']([^"']+)["']\s*\})/i,
+  );
+  const type = (typeMatch?.[1] ?? typeMatch?.[2] ?? typeMatch?.[3])?.toLowerCase();
+  if (type === "email" || /\bemail\b/i.test(selectorValue)) {
+    return { invalidValue: "not-an-email", validValue: "person@example.com" };
+  }
+  if (type === "url" || /\burl\b/i.test(selectorValue)) {
+    return { invalidValue: "not-a-url", validValue: "https://example.com/item" };
+  }
+  if (/\b(?:required|minLength|maxLength|pattern|validate)\b/.test(element)) {
+    return { invalidValue: "", validValue: "QAMap valid value" };
+  }
+  return undefined;
+}
+
+function validationErrorSelector(
+  selectors: E2eSelector[],
+  inputSelector: E2eSelector,
+  formText: string,
+): E2eSelector | undefined {
+  const inputTokens = new Set(selectorSemanticTokens(inputSelector.value));
+  if (inputTokens.size === 0) {
+    return undefined;
+  }
+  const candidates = selectors
+    .filter((selector) =>
+      selector !== inputSelector &&
+      selectorCanSupportAssertion(selector) &&
+      isValidationErrorValue(selector.value) &&
+      formText.includes(selector.value)
+    )
+    .map((selector) => ({
+      selector,
+      affinity: selectorSemanticTokens(selector.value).filter((token) => inputTokens.has(token)).length,
+    }))
+    .sort((left, right) =>
+      right.affinity - left.affinity ||
+      selectorEvidenceScore(right.selector) - selectorEvidenceScore(left.selector)
+    );
+  return candidates[0]?.affinity ? candidates[0].selector : undefined;
+}
+
+function validationSubmitSelector(selectors: E2eSelector[], formText: string): E2eSelector | undefined {
+  const submitElements = [
+    ...formText.matchAll(
+      /<(button|[A-Za-z][\w.-]*Button)\b(?=[^>]*\btype\s*=\s*(?:"submit"|'submit'|\{\s*["']submit["']\s*\}))[^>]*>[\s\S]{0,500}?<\/\1>/gi,
+    ),
+  ].map((match) => match[0]);
+  return selectors
+    .filter((selector) =>
+      !isInputSelector(selector) &&
+      selectorCanDriveInteraction(selector) &&
+      submitElements.some((element) => element.includes(selector.value))
+    )
+    .sort((left, right) => selectorEvidenceScore(right) - selectorEvidenceScore(left))[0];
+}
+
+function validationSuccessSelector(
+  selectors: E2eSelector[],
+  actionSelector: E2eSelector,
+  formText: string,
+): E2eSelector | undefined {
+  return selectors
+    .filter((selector) =>
+      selector !== actionSelector &&
+      selectorCanSupportAssertion(selector) &&
+      isVisibleSuccessOutcome(selector.value) &&
+      formText.includes(selector.value)
+    )
+    .sort((left, right) => selectorEvidenceScore(right) - selectorEvidenceScore(left))[0];
+}
+
+function isValidationErrorValue(value: string): boolean {
+  return /\b(?:error|invalid|required|validation|warning|feedback)\b/i.test(value) ||
+    /(?:오류|잘못|필수|유효하지|입력해)/.test(value);
+}
+
+function selectorSemanticTokens(value: string): string[] {
+  const ignored = new Set([
+    "button",
+    "error",
+    "feedback",
+    "field",
+    "form",
+    "input",
+    "invalid",
+    "required",
+    "submit",
+    "test",
+    "valid",
+    "validation",
+  ]);
+  return keywordsForStep(value).filter((token) => !ignored.has(token));
+}
+
 function namedHandlerBodyAtOffset(text: string, handler: string, offset: number): string | undefined {
   const prefix = text.slice(0, offset);
   const matcher = new RegExp(
@@ -9796,6 +10021,7 @@ function maestroCommandForStep(
 function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow, addedDiffText: Record<string, string> = {}): string {
   const testName = flow.title.replaceAll('"', "'");
   const persistenceProbe = playwrightPersistenceProbeForFlow(flow);
+  const validationRecoveryProbe = playwrightValidationRecoveryProbeForFlow(flow);
   const metadataProbe = playwrightMetadataProbeForFlow(flow);
   const selectorQueue = persistenceProbe
     ? [
@@ -9848,8 +10074,11 @@ function buildPlaywrightDraft(plan: E2ePlanResult, flow: E2eFlow, addedDiffText:
     `await page.goto(${routeDraft.expression});`,
   ]);
   appendPlaywrightPersistencePreparation(lines, persistenceProbe);
+  appendPlaywrightValidationPrimaryPath(lines, validationRecoveryProbe);
   for (const step of draftExecutableSteps(flow, "playwright").filter(
-    (candidate) => !metadataProbeCoversStep(metadataProbe, candidate),
+    (candidate) =>
+      !metadataProbeCoversStep(metadataProbe, candidate) &&
+      !validationRecoveryProbeCoversStep(validationRecoveryProbe, candidate),
   )) {
     const manifestCheck = manifestCheckForDraftStep(flow, step);
     const manifestBody = manifestCheck ? playwrightActionForManifestCheck(manifestCheck, step) : undefined;
@@ -9907,6 +10136,10 @@ function playwrightConditionalStateProbeForFlow(flow: E2eFlow): PlaywrightCondit
   return (flow as DraftE2eFlow).conditionalStateProbe;
 }
 
+function playwrightValidationRecoveryProbeForFlow(flow: E2eFlow): PlaywrightValidationRecoveryProbe | undefined {
+  return (flow as DraftE2eFlow).validationRecoveryProbe;
+}
+
 function playwrightMetadataProbeForFlow(flow: E2eFlow): PlaywrightMetadataProbe | undefined {
   return (flow as DraftE2eFlow).metadataProbe;
 }
@@ -9916,6 +10149,32 @@ function metadataProbeCoversStep(
   step: string,
 ): boolean {
   return Boolean(probe && (step === probe.action || step === probe.assertion));
+}
+
+function validationRecoveryProbeCoversStep(
+  probe: PlaywrightValidationRecoveryProbe | undefined,
+  step: string,
+): boolean {
+  return Boolean(probe && [...probe.primarySteps, ...probe.primaryAssertions].includes(step));
+}
+
+function appendPlaywrightValidationPrimaryPath(
+  lines: string[],
+  probe: PlaywrightValidationRecoveryProbe | undefined,
+): void {
+  if (!probe) {
+    return;
+  }
+  appendPlaywrightTestStep(lines, probe.primarySteps[0] ?? "Submit a valid value", [
+    ...probe.primarySteps.map((step) => `// Step intent: ${step}`),
+    `const validatedField = ${playwrightLocator(probe.inputSelector)};`,
+    `await validatedField.fill("${quoteJs(probe.validValue)}");`,
+    `await ${playwrightLocator(probe.actionSelector)}.click();`,
+  ]);
+  appendPlaywrightTestStep(lines, probe.primaryAssertions[0] ?? "Verify successful submission", [
+    ...probe.primaryAssertions.map((assertion) => `// Step intent: ${assertion}`),
+    `await expect(${playwrightLocator(probe.successSelector)}).toBeVisible();`,
+  ]);
 }
 
 function appendPlaywrightMetadataAssertion(
@@ -10006,6 +10265,11 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
     if (selection.decision === "review-only") {
       continue;
     }
+    const validationRecoveryDraft = playwrightValidationRecoveryScenarioDraft(flow, scenario, routeDraft);
+    if (validationRecoveryDraft) {
+      drafts.push(validationRecoveryDraft);
+      continue;
+    }
     const conditionalStateDraft = playwrightConditionalStateScenarioDraft(flow, scenario, routeDraft);
     if (conditionalStateDraft) {
       drafts.push(conditionalStateDraft);
@@ -10075,6 +10339,50 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
     });
   }
   return drafts;
+}
+
+function playwrightValidationRecoveryScenarioDraft(
+  flow: E2eFlow,
+  scenario: IntentQaScenario,
+  routeDraft: PlaywrightRouteDraft,
+): PlaywrightRoutedScenarioDraft | undefined {
+  if (
+    scenario.kind !== "state-transition" ||
+    !/validation timing across edit, blur, correction, and submit/i.test(scenario.title)
+  ) {
+    return undefined;
+  }
+  const probe = playwrightValidationRecoveryProbeForFlow(flow);
+  if (!probe) {
+    return undefined;
+  }
+  const testName = `${flow.title}: ${scenario.title}`.replaceAll('"', "'");
+  const lines = [
+    `test("${testName}", async ({ page }) => {`,
+    `  await page.goto(${routeDraft.expression});`,
+    `  const validationField = ${playwrightLocator(probe.inputSelector)};`,
+    `  const validationError = ${playwrightLocator(probe.errorSelector)};`,
+    `  await validationField.fill("${quoteJs(probe.invalidValue)}");`,
+    "  await expect(validationError).not.toBeVisible();",
+    "  await validationField.blur();",
+    "  await expect(validationError).toBeVisible();",
+    `  await validationField.fill("${quoteJs(probe.validValue)}");`,
+  ];
+  if (probe.mode === "onBlur") {
+    lines.push("  await validationField.blur();");
+  }
+  lines.push(
+    "  await expect(validationError).not.toBeVisible();",
+    `  await ${playwrightLocator(probe.actionSelector)}.click();`,
+    `  await expect(${playwrightLocator(probe.successSelector)}).toBeVisible();`,
+    "});",
+  );
+  return {
+    scenarioId: scenario.id,
+    mappedSteps: scenario.steps.length,
+    mappedAssertions: scenario.assertions.length,
+    lines,
+  };
 }
 
 function playwrightRepeatedActionScenarioDraft(

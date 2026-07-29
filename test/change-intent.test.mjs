@@ -3011,6 +3011,127 @@ test("form validation mode changes produce edit-trigger-correction QA across unr
   );
 });
 
+test("React form evidence compiles validation recovery and a valid submission path", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: {
+        react: "19.0.0",
+        "react-hook-form": "7.62.0",
+        vite: "7.0.0",
+        "@playwright/test": "1.56.0",
+      },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  const file = "src/pages/feedback.tsx";
+  const source = (mode) => [
+    "import { useState } from 'react';",
+    "import { useForm } from 'react-hook-form';",
+    "",
+    "export function FeedbackPage() {",
+    "  const [submitted, setSubmitted] = useState(false);",
+    `  const { register, handleSubmit, formState: { errors } } = useForm({ mode: '${mode}' });`,
+    "  return <form onSubmit={handleSubmit(() => setSubmitted(true))}>",
+    "    <input type=\"email\" data-testid=\"email-input\" {...register('email', { required: 'Email required' })} />",
+    "    {errors.email ? <p data-testid=\"email-error\">Invalid email</p> : null}",
+    "    <button type=\"submit\" data-testid=\"feedback-submit\">Send feedback</button>",
+    "    {submitted ? <p data-testid=\"feedback-sent\">Feedback sent</p> : null}",
+    "  </form>;",
+    "}",
+  ].join("\n");
+  await write(root, file, source("onChange"));
+  commit(root, "benchmark baseline");
+  branch(root, "fix/feedback-validation");
+  await write(root, file, source("onTouched"));
+  commit(root, "fix: defer email validation until field exit and clear feedback after correction");
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: ".generated-e2e",
+  });
+  const fileDraft = draft.files.find((candidate) =>
+    candidate.scenarioAutomation.some((receipt) => /validation timing across edit/i.test(receipt.title))
+  );
+  assert.ok(fileDraft);
+  const spec = await readFile(path.join(root, fileDraft.path), "utf8");
+  const primaryReceipt = fileDraft.scenarioAutomation.find((receipt) => receipt.kind === "primary");
+  const recoveryReceipt = fileDraft.scenarioAutomation.find((receipt) =>
+    /validation timing across edit/i.test(receipt.title)
+  );
+
+  assert.equal(primaryReceipt?.status, "compiled");
+  assert.equal(recoveryReceipt?.status, "compiled");
+  assert.match(spec, /page\.goto\("\/feedback"\)/);
+  assert.match(spec, /validatedField\.fill\("person@example\.com"\)/);
+  assert.match(spec, /getByTestId\("feedback-submit"\)\.click\(\)/);
+  assert.match(spec, /getByTestId\("feedback-sent"\)\)\.toBeVisible\(\)/);
+  assert.match(spec, /validationField\.fill\("not-an-email"\)/);
+  assert.match(spec, /expect\(validationError\)\.not\.toBeVisible\(\)/);
+  assert.match(spec, /validationField\.blur\(\)/);
+  assert.match(spec, /expect\(validationError\)\.toBeVisible\(\)/);
+  assert.doesNotMatch(spec, /QAMap could not infer a stable locator|test\.fixme/);
+});
+
+test("Vue form evidence compiles the same validation recovery contract", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      scripts: { dev: "vite", "test:e2e": "playwright test" },
+      dependencies: { vue: "3.5.0", vite: "7.0.0", "@playwright/test": "1.56.0" },
+    }),
+  );
+  await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  const file = "src/pages/invitation.vue";
+  const source = (mode) => [
+    "<script setup>",
+    "import { ref } from 'vue';",
+    `const formOptions = { mode: '${mode}' };`,
+    "const errors = ref({ email: '' });",
+    "const submitted = ref(false);",
+    "function submitInvitation() { submitted.value = true; }",
+    "</script>",
+    "<template>",
+    "  <form @submit.prevent=\"submitInvitation\">",
+    "    <input type=\"email\" data-testid=\"invite-email\" required />",
+    "    <p v-if=\"errors.email\" data-testid=\"invite-email-error\">Invalid email</p>",
+    "    <button type=\"submit\" data-testid=\"invite-submit\">Send invitation</button>",
+    "    <p v-if=\"submitted\" data-testid=\"invitation-sent\">Invitation sent</p>",
+    "  </form>",
+    "</template>",
+  ].join("\n");
+  await write(root, file, source("onChange"));
+  commit(root, "benchmark baseline");
+  branch(root, "fix/invitation-validation");
+  await write(root, file, source("onTouched"));
+  commit(root, "fix: defer invitation email validation until field exit");
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: ".generated-e2e",
+  });
+  const fileDraft = draft.files.find((candidate) =>
+    candidate.scenarioAutomation.some((receipt) => /validation timing across edit/i.test(receipt.title))
+  );
+  const recoveryReceipt = fileDraft?.scenarioAutomation.find((receipt) =>
+    /validation timing across edit/i.test(receipt.title)
+  );
+  assert.ok(fileDraft);
+  assert.equal(recoveryReceipt?.status, "compiled");
+  const spec = await readFile(path.join(root, fileDraft.path), "utf8");
+  assert.match(spec, /getByTestId\("invite-email"\)/);
+  assert.match(spec, /getByTestId\("invite-email-error"\)/);
+  assert.match(spec, /getByTestId\("invite-submit"\)/);
+  assert.match(spec, /getByTestId\("invitation-sent"\)/);
+});
+
 test("non-form interaction mode changes do not fabricate validation timing QA", async (t) => {
   const root = await makeRepo(t);
   const file = "src/components/Canvas.tsx";
@@ -3027,6 +3148,22 @@ test("non-form interaction mode changes do not fabricate validation timing QA", 
     "export const canvasInteraction = { mode: 'onTouched' };\n",
   );
   commit(root, "fix: update canvas interaction mode");
+
+  const analysis = await analyze(root, [file]);
+  assert.equal(
+    analysis.intents[0].scenarios.some((scenario) => /validation timing/i.test(scenario.title)),
+    false,
+  );
+});
+
+test("format mode vocabulary does not fabricate form validation QA", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/pages/formats.tsx";
+  await write(root, file, "export const exportOptions = { mode: 'onChange' };\n");
+  commit(root, "benchmark baseline");
+  branch(root, "fix/export-format-mode");
+  await write(root, file, "export const exportOptions = { mode: 'onTouched' };\n");
+  commit(root, "fix: update export format interaction mode");
 
   const analysis = await analyze(root, [file]);
   assert.equal(

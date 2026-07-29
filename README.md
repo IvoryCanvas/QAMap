@@ -29,7 +29,7 @@ This is the current CLI running against a committed React subscription-renewal f
 
 _Recorded from the current source against `test/benchmarks/web-symbol-annotated-renewal`; the final `2 passed` is a real Playwright run, not a simulated result. It proves this committed fixture only. The broader failure/timeout scenario remains explicitly unmapped because the fixture has no visible recovery behavior._
 
-The green run is also regression-checked. QAMap generates each spec once and replays the **same artifact** against fixed and seeded-regression source. CI currently requires two independent contracts to hold: a repeated action must not escape as a second request, and a saved field must survive reload. See the [execution benchmark contract](docs/benchmarking.md#run-the-execution-contract).
+The green run is also regression-checked. QAMap generates each spec once and replays the **same artifact** against fixed and seeded-regression source. CI currently requires three independent contracts to hold: a repeated action must not escape as a second request, a saved field must survive reload, and validation feedback must appear at the changed boundary and clear after correction before a valid submit succeeds. See the [execution benchmark contract](docs/benchmarking.md#run-the-execution-contract).
 
 ## Quick Start
 

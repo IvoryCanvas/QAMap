@@ -1996,8 +1996,13 @@ function detectFormValidationTimingChange(
   file: string,
   hunk: AddedDiffHunk,
 ): { before: string; after: string; line: number } | undefined {
-  const context = `${file} ${hunk.hunkHeader ?? ""}`;
-  if (!/form|field|signup|register|validation|schema/i.test(context)) {
+  const context = [
+    file,
+    hunk.hunkHeader ?? "",
+    ...(hunk.removedLines ?? []).map((line) => line.text),
+    ...hunk.lines.map((line) => line.text),
+  ].join(" ").replace(/([a-z])([A-Z])/g, "$1 $2");
+  if (!/\b(?:form|field|signup|register|validation|schema)\b/i.test(context)) {
     return undefined;
   }
   const modePattern = /\bmode\s*:\s*["'`](onChange|onBlur|onTouched|onSubmit|all)["'`]/i;
