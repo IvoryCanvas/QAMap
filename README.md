@@ -49,7 +49,7 @@ A manifest and test runner are **not required** for the first run.
 
 `qa` performs static analysis and draft mapping only. It does not launch the target application or claim that product QA passed.
 
-When `--base` is omitted, QAMap checks CI pull-request metadata, repo-local Git configuration, and nearby long-lived branches in that order. The report always shows which base was selected and why. Use `--include-working-tree` to analyze the final net state from that branch to the current worktree; a file added in an earlier commit and removed locally is not reported as a current change.
+When `--base` is omitted, QAMap checks CI pull-request metadata, repo-local Git configuration, and nearby long-lived branches in that order. The report always shows which base was selected and why. Use `--include-working-tree` to analyze the final net state from that branch to the current worktree; a file added in an earlier commit and removed locally is not reported as a current change. QAMap also isolates a **Current Local Delta**, so today's uncommitted task and its changed test contracts stay visible instead of being buried by older commits on a long-lived branch.
 
 For repeat use in a JavaScript repository, install QAMap once and add short package scripts:
 
@@ -76,6 +76,8 @@ QAMap keeps QA selection and test generation as two separate decisions:
 | --- | --- |
 | **Behavior inference** | Connect commit intent and changed symbols into a trigger, condition, state change, side effect, and observable outcome. |
 | **Scenario routing** | Mark each scenario `required`, `recommended`, or `review-only`, with the exact diff hunk or commit that supports it. |
+| **Knowledge authority** | Separate reviewed team policy (`team-policy`), behavior declared by repository tests or annotations (`repository-contract`), and QAMap's own deterministic inference (`qamap-inference`). Inferred judgments remain approval-required. |
+| **Test class** | Label protected core flows as `golden`, changed behavior as `regression`, and risk-driven failure or boundary coverage as `edge`. |
 | **QA reasoning trace** | Give every scenario a stable ID that connects diff line -> affected lifecycle -> risk -> routing decision -> optional draft, while keeping execution explicitly `not-run`. |
 | **Repository test contracts** | Preserve test cases added by the PR, including non-English pytest names, as repository-authored behavior requirements with `file:line` evidence. They remain `not-run` until the selected command is executed. |
 | **Evidence disposition** | Distinguish a confirmed causal chain from a missing diff source (`source-gap`) or an unjoined behavior path (`mapping-gap`), and count repeated citations only once. |
@@ -90,7 +92,7 @@ When a PR changes both a route and a shared type or utility, the directly change
 
 Changes limited to analyzer rules, configuration, documentation, generated artifacts, or existing tests are routed to repository validation. QAMap does not mislabel them as blocked product E2E work, and it never claims that a suggested command has already passed.
 
-Suggested repository commands are scoped to affected workspace packages and related tests when the repo exposes enough evidence. For JavaScript and TypeScript projects, a changed test that is connected to the affected behavior can become the first file-scoped command when the existing `test` script uses Node test, Vitest, Jest, or Playwright. Cross-package PRs receive one focused command per safely understood npm, pnpm, or Yarn package, followed by each unchanged package suite. QAMap refuses to rewrite pipelines or custom shell scripts it cannot interpret safely. Python projects can reuse root Compose variants and their primary application service; background workers are not selected as the default test entrypoint merely because they share an image.
+Suggested repository commands are scoped to affected workspace packages and related tests when the repo exposes enough evidence. For JavaScript and TypeScript projects, a changed test that is connected to the affected behavior can become the first file-scoped command when the existing `test` script uses Node test, Vitest, Jest, or Playwright. Automatically selected package commands include their package directory, so they can be copied from the workspace root without an implicit `cd`. Cross-package PRs receive one focused command per safely understood npm, pnpm, or Yarn package, followed by each unchanged package suite. QAMap refuses to rewrite pipelines or custom shell scripts it cannot interpret safely. Python projects can reuse root Compose variants and their primary application service; background workers are not selected as the default test entrypoint merely because they share an image.
 
 In a declared JavaScript monorepo, `qamap qa` automatically uses the changed package when every changed file belongs to one recognized package. The report names the selected package and uses its routes, scripts, fixtures, and runner settings while retaining repository-level guardrails. Changes spanning packages or including root files stay repository-wide instead of being silently narrowed.
 

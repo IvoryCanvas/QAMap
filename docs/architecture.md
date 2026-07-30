@@ -21,6 +21,22 @@ commit range + base/head diff
 
 The repository, not a model session, is the source of truth. Commit subjects and bodies provide author intent, source code supplies observable structure, optional symbol QA annotations bind important exports to local semantics, and `.qamap/manifest.yaml` supplies reviewed team-wide product intent that commits and code alone cannot prove.
 
+## Knowledge Authority And Test Classes
+
+QAMap does not present every judgment as equally trusted. Each affected flow and routed scenario can carry one authority:
+
+- `team-policy`: a reviewed manifest or committed core flow explicitly protects this behavior;
+- `repository-contract`: a changed test or an active symbol annotation declares behavior in the repository, but a change to that declaration still needs normal PR review;
+- `qamap-inference`: QAMap derived the judgment from commits and diff evidence. It is useful routing input, not durable team policy, and always requires approval.
+
+The same result identifies why the scenario exists in the QA harness:
+
+- `golden`: a reviewed core flow that should remain stable across changes;
+- `regression`: behavior changed by the current branch or declared by a changed test;
+- `edge`: failure, boundary, or state-transition coverage selected from risk evidence.
+
+Authority and test class answer different questions. `team-policy` says who owns the judgment; `golden` says what role it plays in verification. Neither field claims execution or a passing test.
+
 ## Change Intent
 
 `src/change-intent.ts` reads behavior-bearing commits in the selected base/head range and joins related `feat`, `fix`, `hotfix`, `perf`, and supporting `refactor` commits through normalized domain terms. Added diff symbols provide independent evidence for triggers, conditions, state changes, side effects, and observable outcomes.
@@ -43,6 +59,10 @@ The analysis is deterministic and local. It does not execute repository code, co
 The analysis range is evidence too. QAMap resolves a base from an explicit option, pull-request CI environment, repo-local Git configuration, or the nearest long-lived branch in Git history. The chosen source and explanation are carried through test-plan, review, E2E, QA, and compact agent output. Local history cannot always prove the hosting platform's PR target, so equivalent refs at the same commit are disclosed instead of being treated as distinct answers.
 
 Committed analysis uses the base/head merge-base range. Working-tree analysis compares that merge base directly with the final tracked worktree and then adds untracked files. This avoids preserving a stale intermediate change that was committed earlier in the branch but removed before review.
+
+When working-tree analysis is enabled, QAMap also compares `HEAD` with the worktree and emits a separate `currentDelta`. Its files, repository test contracts, and safely focused validation commands are ranked ahead of older branch evidence. The complete branch remains available for impact analysis, but a long-running branch cannot silently hide the task being edited now.
+
+Committed analysis reserves diff evidence from the newest commit before filling the bounded branch-wide evidence set. This keeps the latest independent intent and its exact test contracts visible even when an accumulated branch changes more files than the broad analysis cap. When that evidence belongs to one declared workspace package, copied validation commands include the selected package directory and execute from the workspace root.
 
 ## Change Source Roles
 
@@ -91,7 +111,7 @@ diff file + line -> linked lifecycle stage -> risk -> routing decision -> option
 
 Trace IDs are derived from stable scenario IDs. The same ID appears in human QA output, the additive agent v1 payload, and generated Playwright, Maestro, or manual artifacts. A reviewer can therefore move from a draft back to the exact reason it exists without reconstructing that relationship from separate report sections.
 
-A trace is `traceable` only when a located diff source and an evidence-linked lifecycle stage support a routed scenario. `partial` means the source and lifecycle could not be joined exactly. `review-only` means contextual or commit evidence was not strong enough to make the scenario policy. These states describe reasoning provenance, never product execution or pass/fail status. Automation remains optional: the reasoning path can be traceable even when no deterministic runner adapter can compile it yet.
+A trace is `traceable` only when a located diff source and an evidence-linked lifecycle stage support a routed scenario. `partial` means the source and lifecycle could not be joined exactly. `review-only` means contextual or commit evidence was not strong enough to make the scenario policy. Its scenario also carries knowledge authority, approval status, and test class so an agent can distinguish reviewed policy from deterministic inference without reconstructing provenance. These states describe reasoning provenance, never product execution or pass/fail status. Automation remains optional: the reasoning path can be traceable even when no deterministic runner adapter can compile it yet.
 
 ## Behavior Graph
 

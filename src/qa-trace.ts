@@ -14,6 +14,8 @@ export type QaReasoningTraceStatus = "traceable" | "partial" | "review-only";
 export type QaTraceBehaviorRelation = "evidence-linked" | "intent-context";
 export type QaTraceEvidenceDisposition = "confirmed" | "source-gap" | "mapping-gap";
 export type QaTraceManifestCorrectionKind = "review-existing" | "add-or-correct-flow";
+export type QaKnowledgeAuthority = "team-policy" | "repository-contract" | "qamap-inference";
+export type QaTestClass = "golden" | "regression" | "edge";
 
 export interface QaTraceArtifactInput {
   scenarioId: string;
@@ -51,6 +53,9 @@ export interface QaTraceScenario {
   decision: QaScenarioDecision;
   routingReason: string;
   assertions: string[];
+  authority: QaKnowledgeAuthority;
+  approvalRequired: boolean;
+  testClass: QaTestClass;
 }
 
 export interface QaTraceArtifact {
@@ -170,6 +175,9 @@ export function buildQaReasoningTraces(
         decision: routing.decision,
         routingReason: routing.reason,
         assertions: scenario.assertions.slice(0, 3),
+        authority: scenarioKnowledgeAuthority(scenario),
+        approvalRequired: true,
+        testClass: scenario.kind === "primary" ? "regression" : "edge",
       },
       artifact,
       manifestCorrection: traceManifestCorrection(
@@ -183,6 +191,12 @@ export function buildQaReasoningTraces(
       gaps,
     };
   }));
+}
+
+function scenarioKnowledgeAuthority(scenario: IntentQaScenario): QaKnowledgeAuthority {
+  return scenario.evidence.some((evidence) => /@qamap(?:Flow|Stage|Outcome|Risk)\b/.test(evidence.value))
+    ? "repository-contract"
+    : "qamap-inference";
 }
 
 export function summarizeQaTraceEvidence(traces: QaReasoningTrace[]): QaTraceEvidenceSummary {

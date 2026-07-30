@@ -1064,6 +1064,12 @@ export async function collectAddedDiffEvidence(
     const diffTarget = options.includeWorkingTree
       ? await resolveMergeBase(gitRoot, options.base, options.head)
       : `${options.base}...${options.head}`;
+    if (!options.includeWorkingTree) {
+      await mergePriorityDiffEvidence(byFile, gitRoot, relativeRoot, options);
+    }
+    if (options.includeWorkingTree) {
+      await mergeUntrackedDiffEvidence(byFile, gitRoot, relativeRoot);
+    }
     const { stdout } = await git(gitRoot, [
       "diff",
       "--no-color",
@@ -1072,13 +1078,31 @@ export async function collectAddedDiffEvidence(
       diffTarget,
     ]);
     mergeAddedDiffEvidence(byFile, stdout, relativeRoot);
-    if (options.includeWorkingTree) {
-      await mergeUntrackedDiffEvidence(byFile, gitRoot, relativeRoot);
-    }
   } catch {
     return byFile;
   }
   return byFile;
+}
+
+async function mergePriorityDiffEvidence(
+  byFile: AddedDiffEvidence,
+  gitRoot: string,
+  relativeRoot: string,
+  options: AddedDiffTextOptions,
+): Promise<void> {
+  try {
+    const { stdout } = await git(gitRoot, [
+      "diff",
+      "--no-color",
+      "--find-renames",
+      "--unified=0",
+      `${options.head}^`,
+      options.head,
+    ]);
+    mergeAddedDiffEvidence(byFile, stdout, relativeRoot);
+  } catch {
+    // A root commit has no parent; the complete base/head diff below remains valid.
+  }
 }
 
 async function mergeUntrackedDiffEvidence(

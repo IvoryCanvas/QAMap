@@ -69,6 +69,9 @@ test("QA reasoning traces expose weak links without claiming product execution",
   assert.equal(reviewTrace.manifestCorrection.kind, "add-or-correct-flow");
   assert.equal(reviewTrace.manifestCorrection.target, ".qamap/manifest.yaml > flows");
   assert.equal(reviewTrace.manifestCorrection.requiresHumanApproval, true);
+  assert.equal(reviewTrace.scenario.authority, "qamap-inference");
+  assert.equal(reviewTrace.scenario.approvalRequired, true);
+  assert.equal(reviewTrace.scenario.testClass, "edge");
   assert.equal(reviewTrace.execution, "not-run");
   assert.ok(reviewTrace.gaps.some((gap) => /No located diff source/.test(gap)));
   assert.ok(reviewTrace.gaps.some((gap) => /No optional automation artifact/.test(gap)));
@@ -3636,6 +3639,110 @@ test("symbol annotations inside analyzer rules do not become product QA", async 
   assert.ok(analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
     /analysis rule positive and negative controls/i.test(scenario.title)
   ));
+});
+
+test("change intents prioritize the newest independent feature for review", async (t) => {
+  const root = await makeRepo(t);
+  const profileFile = "src/profile/saveProfile.ts";
+  const archiveFile = "src/archive/openArchive.ts";
+  const analyzerFile = "src/rules/requestRule.ts";
+
+  await write(root, profileFile, "export const saveProfile = () => 'idle';\n");
+  await write(root, archiveFile, "export const openArchive = () => 'idle';\n");
+  await write(root, analyzerFile, "export const matchesRequest = (source) => /request/.test(source);\n");
+  commit(root, "chore: baseline");
+  branch(root, "feature/review-order");
+
+  await write(
+    root,
+    profileFile,
+    [
+      "export function saveProfile(name) {",
+      "  if (!name) throw new Error('Profile name is required');",
+      "  localStorage.setItem('profile-name', name);",
+      "  return 'Profile saved';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: save profile preferences");
+
+  await write(
+    root,
+    archiveFile,
+    [
+      "export function openArchive(blockId) {",
+      "  if (!blockId) return 'Archive block is required';",
+      "  window.location.assign(`/archive/${blockId}`);",
+      "  return 'Archive opened';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: open archived records");
+
+  await write(
+    root,
+    analyzerFile,
+    [
+      "const ignoredVocabulary = /calendar|scheduledAt/i;",
+      "export const matchesRequest = (source) => /request/.test(source) && !ignoredVocabulary.test(source);",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "chore: refine analyzer controls");
+
+  const analysis = await analyze(root, [profileFile, archiveFile, analyzerFile]);
+
+  assert.ok(analysis.intents.length >= 2);
+  assert.match(analysis.intents[0].title, /open archived records/i);
+  assert.match(analysis.intents[1].title, /save profile preferences/i);
+  const residualIntentIndex = analysis.intents.findIndex((intent) =>
+    /static analysis rule|changed behavior/i.test(intent.title)
+  );
+  assert.ok(residualIntentIndex > 1);
+});
+
+test("diff evidence reserves the latest commit before large branch history", async (t) => {
+  const root = await makeRepo(t);
+  const latestTestFile = "src/z-latest/RevenueScreen.test.tsx";
+  const historicalFiles = Array.from(
+    { length: 200 },
+    (_, index) => `src/history/Feature${String(index).padStart(3, "0")}.ts`,
+  );
+
+  for (const file of historicalFiles) {
+    await write(root, file, "export const state = 'before';\n");
+  }
+  await write(root, latestTestFile, "it('keeps the original layout', () => expect(true).toBe(true));\n");
+  commit(root, "chore: baseline");
+  branch(root, "feature/large-history");
+
+  for (const file of historicalFiles) {
+    await write(root, file, "export const state = 'after';\n");
+  }
+  commit(root, "feat: migrate historical surfaces");
+
+  await write(
+    root,
+    latestTestFile,
+    [
+      "it('keeps the original layout', () => expect(true).toBe(true));",
+      "it('matches the current reward layout', () => expect(true).toBe(true));",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "fix: align the current reward layout");
+
+  const evidence = await collectAddedDiffEvidence(root, { base: "main", head: "HEAD" });
+
+  assert.equal(Object.keys(evidence).length, 200);
+  assert.equal(Object.keys(evidence)[0], latestTestFile);
+  assert.ok(
+    evidence[latestTestFile].some((hunk) =>
+      hunk.lines.some((line) => /matches the current reward layout/i.test(line.text))
+    ),
+  );
 });
 
 async function analyze(root, files) {

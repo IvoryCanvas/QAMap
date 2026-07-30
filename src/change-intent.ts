@@ -297,18 +297,43 @@ export async function analyzeChangeIntents(
         : "Commit evidence was available, but it did not contain a behavior-bearing feat, fix, hotfix, or performance intent.",
     );
   }
+  const rankedIntents = rankChangeIntentsForReview(intents, commits);
 
   return {
     base: options.base,
     head: options.head,
-    source: changeIntentSource(intents, commits, codeSignals),
+    source: changeIntentSource(rankedIntents, commits, codeSignals),
     commits,
-    intents,
+    intents: rankedIntents,
     symbolAnnotations: productAnnotations.length > 0 || annotationAnalysis.diagnostics.length > 0
       ? summarizeQaSymbolAnnotations(productAnnotations, annotationAnalysis.diagnostics.length)
       : undefined,
     diagnostics: uniqueStrings(diagnostics),
   };
+}
+
+function rankChangeIntentsForReview(
+  intents: ChangeIntent[],
+  commits: ChangeIntentCommit[],
+): ChangeIntent[] {
+  const commitOrder = new Map(commits.map((commit, index) => [commit.sha, index]));
+  return intents
+    .map((intent, index) => ({
+      intent,
+      index,
+      latestCommit: intent.commits.length === 0
+        ? -1
+        : Math.max(...intent.commits.map((commit) => commitOrder.get(commit.sha) ?? -1)),
+      locatedEvidence: intent.evidence.filter((evidence) =>
+        hasActionableLocatedDiffEvidence([evidence])
+      ).length,
+    }))
+    .sort((left, right) =>
+      right.latestCommit - left.latestCommit ||
+      right.locatedEvidence - left.locatedEvidence ||
+      left.index - right.index
+    )
+    .map(({ intent }) => intent);
 }
 
 async function collectCommitEvidence(

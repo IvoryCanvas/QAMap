@@ -921,6 +921,18 @@ test("generateQaDraft automatically uses the only changed workspace package", as
       "",
     ].join("\n"),
   );
+  await writeFile(
+    path.join(listingRoot, "app/offers/page.test.tsx"),
+    [
+      "test('offers can be submitted', () => {",
+      "  expect('saved').toBe('saved');",
+      "});",
+      "test('offer submission failures remain visible', () => {",
+      "  expect('failed').not.toBe('saved');",
+      "});",
+      "",
+    ].join("\n"),
+  );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "add offer submission"]);
 
@@ -936,7 +948,24 @@ test("generateQaDraft automatically uses the only changed workspace package", as
   assert.equal(qa.root, listingRoot);
   assert.equal(qa.project, "web");
   assert.equal(qa.runner, "playwright");
-  assert.equal(qa.analysisScope.candidates[0].changedFiles, 22);
+  assert.equal(qa.analysisScope.candidates[0].changedFiles, 23);
+  assert.equal(
+    qa.suggestedCommands[0],
+    "pnpm --dir services/listing test -- app/offers/page.test.tsx",
+    JSON.stringify({
+      commands: qa.suggestedCommands,
+      flows: qa.flows.map((flow) => ({
+        title: flow.title,
+        changedFiles: flow.changedFiles,
+        evidence: flow.existingEvidencePaths,
+      })),
+      contracts: qa.changedTestContracts,
+    }),
+  );
+  assert.equal(
+    qa.prChecklist.some((item) => item.includes("pnpm test -- app/offers/page.test.tsx")),
+    false,
+  );
   assert.ok(qa.changeAnalysis.intents.flatMap((intent) => intent.files).every((file) => !file.startsWith("services/listing/")));
   assert.deepEqual(
     qa.analysisScope.candidates.map((candidate) => candidate.path),
@@ -1465,6 +1494,14 @@ test("generateQaDraft prefers changed repository test contracts over broad histo
       "test('cache cleanup expires stale entries', () => {});",
     ].join("\n"),
   );
+  await mkdir(
+    path.join(root, "src/features/revenue/components/__tests__"),
+    { recursive: true },
+  );
+  await writeFile(
+    path.join(root, "src/features/revenue/components/__tests__/RevenueScreen.test.tsx"),
+    "it('matches the current reward layout', () => expect(true).toBe(true));\n",
+  );
   await git(root, ["add", "."]);
   await git(root, ["commit", "-m", "add generated report summary"]);
 
@@ -1476,10 +1513,19 @@ test("generateQaDraft prefers changed repository test contracts over broad histo
   assert.deepEqual(reportFlow.existingEvidencePaths, ["test/report-command.test.mjs"]);
   assert.equal(reportFlow.existingEvidencePaths.includes("test/historical-rules.test.mjs"), false);
   assert.equal(reportFlow.existingEvidencePaths.includes("test/cache-policy.test.mjs"), false);
-  assert.ok(
-    qa.prChecklist.some((item) =>
-      /changed test evidence: test\/cache-policy\.test\.mjs, test\/report-command\.test\.mjs/.test(item)
+  assert.equal(
+    reportFlow.existingEvidencePaths.includes(
+      "src/features/revenue/components/__tests__/RevenueScreen.test.tsx",
     ),
+    false,
+  );
+  const changedTestChecklist = qa.prChecklist.find((item) => /changed test evidence:/i.test(item));
+  assert.ok(changedTestChecklist);
+  assert.match(changedTestChecklist, /test\/cache-policy\.test\.mjs/);
+  assert.match(changedTestChecklist, /test\/report-command\.test\.mjs/);
+  assert.match(
+    changedTestChecklist,
+    /src\/features\/revenue\/components\/__tests__\/RevenueScreen\.test\.tsx/,
   );
   assert.equal(qa.prChecklist.some((item) => /historical-rules/.test(item)), false);
   assert.match(markdown, /Existing test evidence: `test\/report-command\.test\.mjs`/);
@@ -1495,6 +1541,121 @@ test("generateQaDraft prefers changed repository test contracts over broad histo
     "npm run build && node --test test/report-command.test.mjs",
   );
   assert.equal(qa.suggestedCommands[1], "npm test");
+});
+
+test("generateQaDraft keeps changed test contracts inside their feature owner", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/features/home/components"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "feature-ownership-example",
+      scripts: {
+        test: "jest --ci",
+      },
+      dependencies: {
+        react: "latest",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/features/home/components/HomeScreen.tsx"),
+    "export const HomeScreen = () => <button>Open home</button>;\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/home-layout"]);
+  await writeFile(
+    path.join(root, "src/features/home/components/HomeScreen.tsx"),
+    "export const HomeScreen = () => <button onClick={() => alert('Home opened')}>Open home</button>;\n",
+  );
+  await mkdir(
+    path.join(root, "src/features/revenue/components/__tests__"),
+    { recursive: true },
+  );
+  await writeFile(
+    path.join(root, "src/features/revenue/components/__tests__/RevenueScreen.test.tsx"),
+    "it('matches the current reward layout', () => expect(true).toBe(true));\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: update the home interaction"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const homeFlow = qa.flows.find((flow) =>
+    flow.changedFiles.includes("src/features/home/components/HomeScreen.tsx")
+  );
+
+  assert.ok(homeFlow);
+  assert.equal(
+    homeFlow.existingEvidencePaths.includes(
+      "src/features/revenue/components/__tests__/RevenueScreen.test.tsx",
+    ),
+    false,
+  );
+});
+
+test("generateQaDraft routes undeclared nested package contracts to their own test command", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  const packageRoot = path.join(root, "tools/triage-runner");
+  await mkdir(path.join(packageRoot, "lib"), { recursive: true });
+  await mkdir(path.join(packageRoot, "test"), { recursive: true });
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ private: true }));
+  await writeFile(
+    path.join(packageRoot, "package.json"),
+    JSON.stringify({
+      name: "triage-runner",
+      private: true,
+      type: "module",
+      scripts: {
+        test: "node --test test/*.test.mjs",
+      },
+    }),
+  );
+  await writeFile(path.join(packageRoot, "package-lock.json"), "{}\n");
+  await writeFile(
+    path.join(packageRoot, "lib/evidence.mjs"),
+    "export const shouldAsk = () => true;\n",
+  );
+  await writeFile(
+    path.join(packageRoot, "test/evidence.test.mjs"),
+    "test('asks for evidence', () => assert.equal(true, true));\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "fix/triage-evidence"]);
+  await writeFile(
+    path.join(packageRoot, "lib/evidence.mjs"),
+    "export const shouldAsk = (hasHypothesis) => Boolean(hasHypothesis);\n",
+  );
+  await writeFile(
+    path.join(packageRoot, "test/evidence.test.mjs"),
+    [
+      "test('asks only when a hypothesis exists', () => assert.equal(true, true));",
+      "test('stays quiet without a hypothesis', () => assert.equal(true, true));",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "fix: require an actionable triage hypothesis"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+  assert.ok(qa.changedTestContracts.some((contract) =>
+    contract.title === "stays quiet without a hypothesis"
+  ));
+  assert.equal(qa.suggestedCommands[0], "npm --prefix tools/triage-runner test");
+  assert.deepEqual(qa.route, {
+    basis: "repository-validation",
+    status: "verification-ready-to-run",
+    nextAction: "run-repository-command",
+    command: "npm --prefix tools/triage-runner test",
+  });
 });
 
 test("generateQaDraft scopes supported JavaScript runners to changed test evidence", async (context) => {
@@ -1695,8 +1856,8 @@ test("generateQaDraft scopes changed test evidence across workspace packages", a
 
   assert.equal(qa.analysisScope.mode, "repository-root");
   assert.deepEqual(qa.suggestedCommands, [
-    "pnpm --filter @fixture/admin test -- test/access.test.mjs",
     "pnpm --filter @fixture/store test -- test/cart.test.ts",
+    "pnpm --filter @fixture/admin test -- test/access.test.mjs",
     "pnpm --filter @fixture/admin test",
     "pnpm --filter @fixture/audit test",
     "pnpm --filter @fixture/store test",
@@ -1709,7 +1870,7 @@ test("generateQaDraft scopes changed test evidence across workspace packages", a
     basis: "repository-validation",
     status: "verification-ready-to-run",
     nextAction: "run-repository-command",
-    command: "pnpm --filter @fixture/admin test -- test/access.test.mjs",
+    command: "pnpm --filter @fixture/store test -- test/cart.test.ts",
   });
 });
 
@@ -1789,8 +1950,8 @@ test("generateQaDraft preserves npm and Yarn workspace command syntax when focus
       const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
 
       assert.deepEqual(qa.suggestedCommands, [
-        fixture.command("@fixture/alpha", "test/alpha.test.ts"),
         fixture.command("@fixture/beta", "test/beta.test.ts"),
+        fixture.command("@fixture/alpha", "test/alpha.test.ts"),
         fixture.command("@fixture/alpha"),
         fixture.command("@fixture/beta"),
       ]);
@@ -2496,6 +2657,9 @@ test("generateE2ePlan treats test-only changes as evidence verification, not pro
       file: "tests/e2e/admin-primary-journey.spec.ts",
       line: 2,
       framework: "javascript",
+      authority: "repository-contract",
+      approvalRequired: true,
+      testClass: "regression",
     }],
   });
 });
@@ -6239,6 +6403,96 @@ test("qa output makes the short-command change scope visible", async () => {
   assert.equal(local.includeWorkingTree, true);
   assert.match(formatMarkdownQaDraft(committed), /Change scope: committed branch changes only/);
   assert.match(formatMarkdownQaDraft(local), /Change scope: committed and uncommitted working-tree changes/);
+});
+
+test("qa isolates current working-tree contracts from committed branch history", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/archive"), { recursive: true });
+  await mkdir(path.join(root, "src/statistics"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: { test: "vitest run", lint: "eslint ." },
+      devDependencies: { vitest: "^3.0.0" },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/archive/ArchiveScreen.tsx"),
+    "export const ArchiveScreen = () => <button>Open archive</button>;\n",
+  );
+  await writeFile(
+    path.join(root, "src/archive/ArchiveScreen.test.tsx"),
+    "it('opens archived records', () => expect(true).toBe(true));\n",
+  );
+  await writeFile(
+    path.join(root, "src/statistics/StatisticsScreen.tsx"),
+    "export const StatisticsScreen = () => <p>Statistics</p>;\n",
+  );
+  await writeFile(
+    path.join(root, "src/statistics/StatisticsScreen.test.tsx"),
+    "it('shows statistics', () => expect(true).toBe(true));\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "baseline"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/long-lived-branch"]);
+  await writeFile(
+    path.join(root, "src/statistics/StatisticsScreen.tsx"),
+    "export const StatisticsScreen = () => <p>Visitor statistics</p>;\n",
+  );
+  await writeFile(
+    path.join(root, "src/statistics/StatisticsScreen.test.tsx"),
+    [
+      "it('shows statistics', () => expect(true).toBe(true));",
+      "it('shows visitor statistics', () => expect(true).toBe(true));",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: show visitor statistics"]);
+
+  await writeFile(
+    path.join(root, "src/archive/ArchiveScreen.tsx"),
+    "export const ArchiveScreen = () => <button>Archive editing is unavailable</button>;\n",
+  );
+  await writeFile(
+    path.join(root, "src/archive/ArchiveScreen.test.tsx"),
+    [
+      "it('opens archived records', () => expect(true).toBe(true));",
+      "it('shows an unavailable notice instead of opening archived products', () => expect(true).toBe(true));",
+      "",
+    ].join("\n"),
+  );
+
+  const qa = await generateQaDraft(root, {
+    base: "main",
+    head: "HEAD",
+    includeWorkingTree: true,
+  });
+  const agent = JSON.parse(formatAgentQaDraft(qa));
+  const markdown = formatMarkdownQaDraft(qa);
+
+  assert.deepEqual(qa.currentDelta?.files, [
+    "src/archive/ArchiveScreen.test.tsx",
+    "src/archive/ArchiveScreen.tsx",
+  ]);
+  assert.deepEqual(qa.currentDelta?.repositoryContracts, [{
+    file: "src/archive/ArchiveScreen.test.tsx",
+    title: "shows an unavailable notice instead of opening archived products",
+    line: 2,
+    framework: "javascript",
+  }]);
+  assert.match(qa.suggestedCommands[0], /ArchiveScreen\.test\.tsx/);
+  assert.doesNotMatch(qa.suggestedCommands[0], /StatisticsScreen/);
+  assert.equal(agent.currentDelta.scope, "working-tree-only");
+  assert.deepEqual(agent.currentDelta.files, qa.currentDelta.files);
+  assert.equal(agent.currentDelta.repositoryContracts[0].authority, "repository-contract");
+  assert.equal(agent.currentDelta.repositoryContracts[0].approvalRequired, true);
+  assert.match(markdown, /## Current Local Delta/);
+  assert.match(markdown, /shows an unavailable notice instead of opening archived products/);
+  assert.match(markdown, /separate from committed branch history/i);
 });
 
 test("initializeLocalHistory protects local runs with gitignore entries", async () => {

@@ -27,6 +27,8 @@ Before treating the next public release as ready, the golden demo must satisfy t
 - The public benchmark distinguishes a tryable file from complete PR evidence: golden automation fixtures contract on self-checks, TODOs, execution blockers, and runnable status instead of passing on flow naming alone.
 - Recommendation evidence is explainable: output shows the changed file, manifest flow/check, and manifest path to repair when wrong.
 - Every required scenario has one inspectable path from diff line to affected behavior, risk, routing decision, optional artifact, and explicit execution status.
+- Every retained judgment discloses whether it came from team policy, a repository contract, or QAMap inference, and inferred judgments cannot silently become shared policy.
+- Working-tree runs isolate the current local delta from older branch history and put its exact changed test command first when the repository supports safe narrowing.
 - README demo shows the full loop: manifest-free PR QA draft, optional repo context baseline, PR mapping, E2E draft, and remaining validation gaps.
 - One manifest correction should improve future PR recommendations without another LLM prompt.
 
@@ -51,9 +53,11 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Measure the complete agent handoff: skill discovery, invocation, schema parsing, strongest-source verification, one canonical next action, and an execution receipt that remains separate from static analysis.
 - Improve changed-file impact mapping from shared symbols and components to consuming routes, screens, API contracts, and manifest flows.
 - Keep directly changed routes and screens ahead of reverse-import consumers, so a shared type edit cannot replace the touched product surface with unrelated pages.
-- Automatically use one changed declared workspace package for `qa`, while retaining repository-wide analysis for cross-package, root-spanning, undeclared, or unknown-package changes. Expose that decision to humans and agents instead of requiring a second manual discovery pass.
+- Automatically use one changed declared workspace package for `qa`, while retaining repository-wide analysis for cross-package, root-spanning, undeclared, or unknown-package changes. Expose that decision to humans and agents instead of requiring a second manual discovery pass, and keep every selected package-manager command executable from the workspace root.
 - Preserve behavioral contracts declared by changed tests, including non-English test names, and route their exact files into repository validation without claiming execution. Node test, Vitest, Jest, and Playwright package scripts are narrowed only when their existing command shape is safe to interpret. Cross-package npm, pnpm, and Yarn changes keep one focused command per understood package plus every full package suite; custom shell pipelines stay unchanged.
 - Keep long-PR intent clustering conservative: package scopes and one-word keyword bridges must not collapse unrelated commits into one high-confidence QA lifecycle.
+- Rank the newest independent intent first and preserve a separate working-tree delta, so accumulated branch history cannot crowd the current task out of human or agent handoffs.
+- Classify retained scenarios as golden, regression, or edge coverage while keeping knowledge authority and execution state separate.
 - Keep the [release validation checklist](release-validation.md), [manifest guide](manifest.md), public [E2E output examples](e2e-output-examples.md), and README examples aligned with captured output from the public fixtures.
 - Stabilize the manifest feedback loop with `.qamap/manifest.yaml`, `manifest init`, `manifest validate`, `manifest explain`, JSON Schema, and manifest-driven E2E draft shaping.
 - Regression-test the complete manifest correction lifecycle: manifest-free first judgment, human correction, same-PR improvement, committed repo memory, and reuse on a later PR.

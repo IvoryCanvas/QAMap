@@ -6,6 +6,32 @@
   "type": "object",
   "additionalProperties": true,
   "definitions": {
+    "knowledgeAuthority": {
+      "type": "string",
+      "enum": ["team-policy", "repository-contract", "qamap-inference"],
+      "description": "Who owns the QA judgment: an explicit team policy, a repository-declared contract, or a deterministic QAMap inference."
+    },
+    "qaTestClass": {
+      "type": "string",
+      "enum": ["golden", "regression", "edge"],
+      "description": "The role of the scenario in the QA harness: protected core flow, changed behavior regression, or risk-driven edge coverage."
+    },
+    "repositoryContract": {
+      "type": "object",
+      "required": ["title", "file", "line", "framework"],
+      "properties": {
+        "title": { "type": "string" },
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "framework": { "type": "string", "enum": ["javascript", "pytest", "go"] },
+        "authority": { "const": "repository-contract" },
+        "approvalRequired": {
+          "type": "boolean",
+          "description": "True when the changed contract still needs normal PR review before it becomes trusted repository knowledge."
+        },
+        "testClass": { "$ref": "#/definitions/qaTestClass" }
+      }
+    },
     "evidenceSource": {
       "type": "object",
       "required": ["kind", "reason"],
@@ -61,7 +87,13 @@
           "properties": {
             "id": { "type": "string" },
             "decision": { "type": "string", "enum": ["required", "recommended", "review-only"] },
-            "title": { "type": "string" }
+            "title": { "type": "string" },
+            "authority": { "$ref": "#/definitions/knowledgeAuthority" },
+            "approvalRequired": {
+              "type": "boolean",
+              "description": "Whether a human must accept this judgment before it becomes durable QA policy."
+            },
+            "testClass": { "$ref": "#/definitions/qaTestClass" }
           }
         },
         "artifact": {
@@ -234,6 +266,22 @@
         "files": { "type": "number", "minimum": 0 }
       }
     },
+    "currentDelta": {
+      "type": "object",
+      "description": "Working-tree-only evidence isolated from committed branch history so the newest local task is not buried by a long-lived branch.",
+      "required": ["scope", "files", "repositoryContracts"],
+      "properties": {
+        "scope": { "const": "working-tree-only" },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "repositoryContracts": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/repositoryContract" }
+        }
+      }
+    },
     "testContracts": {
       "type": "object",
       "description": "Behavioral expectations declared by tests added in this diff. They are repository-authored contracts and have not been executed by QAMap.",
@@ -243,16 +291,7 @@
         "execution": { "const": "not-run" },
         "items": {
           "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["title", "file", "line", "framework"],
-            "properties": {
-              "title": { "type": "string" },
-              "file": { "type": "string" },
-              "line": { "type": "integer", "minimum": 1 },
-              "framework": { "type": "string", "enum": ["javascript", "pytest", "go"] }
-            }
-          }
+          "items": { "$ref": "#/definitions/repositoryContract" }
         }
       }
     },
@@ -304,6 +343,12 @@
                 "title": { "type": "string" },
                 "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
                 "reviewRequired": { "type": "boolean" },
+                "authority": { "$ref": "#/definitions/knowledgeAuthority" },
+                "approvalRequired": {
+                  "type": "boolean",
+                  "description": "Whether this routed scenario still needs a human decision before becoming team policy."
+                },
+                "testClass": { "$ref": "#/definitions/qaTestClass" },
                 "sources": {
                   "type": "array",
                   "items": { "$ref": "#/definitions/evidenceSource" },
@@ -464,6 +509,12 @@
             "type": "string",
             "description": "The observable result that would prove the flow still works."
           },
+          "authority": { "$ref": "#/definitions/knowledgeAuthority" },
+          "approvalRequired": {
+            "type": "boolean",
+            "description": "Whether this flow was inferred and still needs approval before it becomes durable QA policy."
+          },
+          "testClass": { "$ref": "#/definitions/qaTestClass" },
           "focus": {
             "type": "object",
             "description": "Changed action and observable assertion preserved only when a same-title scenario is fully compiled, even if the ordered step list is compacted.",
