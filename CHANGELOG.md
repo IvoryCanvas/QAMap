@@ -4,6 +4,8 @@
 
 ### Added
 
+- Added explicit QA knowledge authority (`team-policy`, `repository-contract`, or `qamap-inference`) and harness test classes (`golden`, `regression`, or `edge`) to human reports, agent handoffs, and the additive v1 schema.
+- Added a working-tree-only current delta that isolates uncommitted files and changed test contracts from older branch history.
 - Added an evidence-gated validation-recovery compiler. When a diff-backed form timing change connects to a route, validated input, visible error, submit action, and visible success result, QAMap now compiles both a valid submission path and an invalid-input, correction, and stale-error recovery scenario.
 - Added a third seeded-regression execution contract that requires the byte-identical generated browser artifact to fail when corrected input leaves stale validation feedback and pass when first-touch revalidation is restored.
 - Added native Codex and Claude Code plugin manifests that expose the existing vendor-neutral `qamap-pr-qa` skill without duplicating the local analysis engine.
@@ -11,11 +13,16 @@
 
 ### Changed
 
+- Newer independent change intents and current local test commands now rank ahead of stale branch history, while the complete branch remains available for wider impact analysis.
+- Latest-commit diff evidence is reserved before the bounded branch-wide scan, preventing a large accumulated PR from hiding the current behavior and its test contracts.
+- Agent payload compaction preserves current-delta evidence and authority metadata on retained flows while remaining below the 4KB contract.
 - Form validation timing detection now reads the changed hunk and uses word-bounded form context, preserving framework-neutral React and Vue cases without treating unrelated format-mode vocabulary as product validation QA.
 - The agent skill now converts `route.nextAction` into exactly one immediate action and reports later command execution separately from QAMap's static `not-run` receipt.
 - `qamap init --agent` now installs the complete skill bundle, including optional host metadata, while continuing to preserve locally modified skill files unless `--force` is explicit.
 - QA handoffs now prefer test contracts changed by the current PR over broader historical filename or keyword matches, while keeping unrelated changed tests out of individual flow evidence.
 - Safely recognized npm, pnpm, and Yarn workspaces now place one behavior-linked changed-test command per affected package before the unchanged package suites. Ambiguous custom pipelines remain suite-wide.
+- Automatically selected package commands now include the package directory, so copied commands execute from the workspace root instead of depending on an unstated working directory.
+- Unrelated feature tests no longer attach to a flow merely because both paths contain generic structural words, and standalone nested packages with their own lockfile can route changed contracts to their package suite.
 - Changed-test contract extraction now ignores test-like source strings embedded inside fixture builders instead of reporting them as executable repository tests.
 - Compact agent handoffs now retain one repository test-evidence path for secondary affected flows instead of dropping that trace during the 4KB payload reduction.
 

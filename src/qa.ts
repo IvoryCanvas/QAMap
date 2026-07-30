@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   formatDraftReadinessStage,
@@ -18,8 +18,14 @@ import type {
   E2eWorkspaceTarget,
 } from "./e2e.js";
 import type { ChangeIntentEvidence, IntentQaScenario } from "./change-intent.js";
+import { collectChangedFiles } from "./git-context.js";
 import { buildQaReasoningTraces, summarizeQaTraceEvidence } from "./qa-trace.js";
-import type { QaReasoningTrace, QaTraceEvidenceSummary } from "./qa-trace.js";
+import type {
+  QaKnowledgeAuthority,
+  QaReasoningTrace,
+  QaTestClass,
+  QaTraceEvidenceSummary,
+} from "./qa-trace.js";
 import { routeQaScenario } from "./scenario-routing.js";
 import { collectChangedTestContracts } from "./test-evidence.js";
 import type { ChangedTestContract } from "./test-evidence.js";
@@ -54,6 +60,7 @@ export interface QaDraftResult {
   execution: QaExecutionReceipt;
   testSuite: E2eDraftResult["plan"]["testSuite"];
   changedTestContracts: ChangedTestContract[];
+  currentDelta?: QaCurrentDelta;
   bootstrap: E2eDraftResult["plan"]["bootstrap"];
   runnerSetup: E2eDraftResult["plan"]["runnerSetup"];
   changeAnalysis: E2eDraftResult["plan"]["changeAnalysis"];
@@ -139,6 +146,15 @@ export interface QaDraftFlow {
   manifestUpdatePath?: string;
   scenarioAutomation: E2eScenarioAutomationReceipt[];
   why: string[];
+  authority: QaKnowledgeAuthority;
+  approvalRequired: boolean;
+  testClass: QaTestClass;
+}
+
+export interface QaCurrentDelta {
+  scope: "working-tree-only";
+  files: string[];
+  repositoryContracts: ChangedTestContract[];
 }
 
 type QaVerificationMode =
@@ -178,8 +194,9 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
         workspaceRoot: root,
         automaticWorkspaceScope: false,
       });
+      const qualified = qualifyAutomaticPackageCommands(scoped, selected.path);
       return {
-        ...scoped,
+        ...qualified,
         analysisScope: {
           mode: "automatic-package",
           workspaceRoot: root,
@@ -208,12 +225,27 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     workspaceRoot: e2eOptions.workspaceRoot,
     includeWorkingTree: draft.plan.includeWorkingTree,
   });
-  const changedTestContracts = collectChangedTestContracts(addedDiffEvidence);
+  const currentDelta = await collectCurrentDelta(root, draft, e2eOptions.workspaceRoot);
+  const latestCommitContracts = await collectLatestCommitContracts(
+    root,
+    draft.plan.head,
+    e2eOptions.workspaceRoot,
+  );
+  const changedTestContracts = uniqueChangedTestContracts([
+    ...(currentDelta?.repositoryContracts ?? []),
+    ...latestCommitContracts,
+    ...collectChangedTestContracts(addedDiffEvidence),
+  ]);
   const qaFiles = draft.plan.changedFiles.length > 0 ? draft.files : [];
-  const flows = preferChangedTestEvidence(
+  const inferredFlows = preferChangedTestEvidence(
     qaFiles.map((file) => qaFlowFromDraftFile(file)),
     changedTestContracts,
   );
+  const flows = inferredFlows.length > 0
+    ? inferredFlows
+    : changedTestContracts.length > 0
+      ? [qaFlowFromChangedTestContracts(changedTestContracts)]
+      : [];
   const changedFiles = draft.plan.changedFiles.map((file) => file.path);
   const preferredVerificationCommands = await buildChangedTestVerificationCommands(
     root,
@@ -221,10 +253,33 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     changedFiles,
     draft.plan.suggestedCommands,
   );
-  const suggestedCommands = uniqueStrings([
-    ...preferredVerificationCommands,
-    ...draft.plan.suggestedCommands,
-  ]);
+  const currentDeltaCommands = currentDelta
+    ? await buildTestVerificationCommands(
+        root,
+        currentDelta.repositoryContracts.map((contract) => contract.file),
+        draft.plan.suggestedCommands,
+      )
+    : [];
+  const latestCommitCommands = await buildTestVerificationCommands(
+    root,
+    latestCommitContracts
+      .filter((contract) => flows[0] && changedTestContractScore(flows[0], contract) > 0)
+      .map((contract) => contract.file),
+    draft.plan.suggestedCommands,
+  );
+  const suggestedCommands = currentDelta
+    ? uniqueStrings([
+        ...currentDeltaCommands,
+        ...latestCommitCommands,
+        ...draft.plan.suggestedCommands.filter((command) => !isFocusedValidationCommand(command)),
+        ...preferredVerificationCommands,
+        ...draft.plan.suggestedCommands,
+      ])
+    : uniqueStrings([
+        ...latestCommitCommands,
+        ...preferredVerificationCommands,
+        ...draft.plan.suggestedCommands,
+      ]);
   const missingEvidence = buildMissingEvidence(qaFiles);
   const traces = buildQaReasoningTraces(
     draft.plan.changeAnalysis.intents,
@@ -275,6 +330,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     },
     testSuite: draft.plan.testSuite,
     changedTestContracts,
+    currentDelta,
     bootstrap: draft.plan.bootstrap,
     runnerSetup: draft.plan.runnerSetup,
     changeAnalysis: draft.plan.changeAnalysis,
@@ -288,6 +344,134 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     agentHandoff: buildAgentHandoff(draft, flows, changedTestContracts, missingEvidence, suggestedCommands),
     suggestedCommands,
   };
+}
+
+async function collectCurrentDelta(
+  root: string,
+  draft: E2eDraftResult,
+  workspaceRoot: string | undefined,
+): Promise<QaCurrentDelta | undefined> {
+  if (!draft.plan.includeWorkingTree) {
+    return undefined;
+  }
+  const evidence = await collectAddedDiffEvidence(root, {
+    base: draft.plan.head,
+    head: draft.plan.head,
+    workspaceRoot,
+    includeWorkingTree: true,
+  });
+  const gitRoot = workspaceRoot ? path.resolve(workspaceRoot) : root;
+  const relativeRoot = workspaceRoot
+    ? toPosixPath(path.relative(gitRoot, root)).replace(/^\.\/+|\/+$/g, "")
+    : "";
+  const changedFiles = await collectChangedFiles(gitRoot, {
+    base: draft.plan.head,
+    head: draft.plan.head,
+    includeWorkingTree: true,
+  });
+  const files = uniqueStrings(
+    changedFiles
+      .map((file) => {
+        const normalized = toPosixPath(file.path);
+        if (!relativeRoot) {
+          return normalized;
+        }
+        const prefix = `${relativeRoot}/`;
+        return normalized.startsWith(prefix) ? normalized.slice(prefix.length) : undefined;
+      })
+      .filter((file): file is string => Boolean(file)),
+  ).sort((left, right) => left.localeCompare(right));
+  if (files.length === 0) {
+    return undefined;
+  }
+  return {
+    scope: "working-tree-only",
+    files,
+    repositoryContracts: collectChangedTestContracts(evidence),
+  };
+}
+
+async function collectLatestCommitContracts(
+  root: string,
+  head: string,
+  workspaceRoot: string | undefined,
+): Promise<ChangedTestContract[]> {
+  const evidence = await collectAddedDiffEvidence(root, {
+    base: `${head}^`,
+    head,
+    workspaceRoot,
+  });
+  return collectChangedTestContracts(evidence);
+}
+
+function uniqueChangedTestContracts(contracts: ChangedTestContract[]): ChangedTestContract[] {
+  const seen = new Set<string>();
+  return contracts.filter((contract) => {
+    const key = `${contract.file}:${contract.line}:${contract.title}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function qualifyAutomaticPackageCommands(
+  result: QaDraftResult,
+  packagePath: string,
+): QaDraftResult {
+  const replacements = new Map(
+    result.suggestedCommands.map((command) => [
+      command,
+      qualifyPackageCommand(command, packagePath),
+    ]),
+  );
+  const replaceCommandsInText = (value: string): string => {
+    let updated = value;
+    for (const [command, qualified] of replacements) {
+      if (command !== qualified) {
+        updated = updated.replaceAll(command, qualified);
+      }
+    }
+    return updated;
+  };
+  return {
+    ...result,
+    route: {
+      ...result.route,
+      command: result.route.command
+        ? replacements.get(result.route.command) ?? qualifyPackageCommand(result.route.command, packagePath)
+        : undefined,
+    },
+    prChecklist: result.prChecklist.map(replaceCommandsInText),
+    agentHandoff: result.agentHandoff.map(replaceCommandsInText),
+    suggestedCommands: result.suggestedCommands.map((command) =>
+      replacements.get(command) ?? command
+    ),
+  };
+}
+
+function qualifyPackageCommand(command: string, packagePath: string): string {
+  if (
+    /(?:^|\s)(?:--dir|--cwd|--prefix|--filter|--workspace)(?:\s|=)/.test(command) ||
+    /\byarn\s+workspace\s/.test(command)
+  ) {
+    return command;
+  }
+  const target = shellCommandArgument(packagePath);
+  if (/^pnpm\s/.test(command)) {
+    return command.replace(/^pnpm\s/, `pnpm --dir ${target} `);
+  }
+  if (/^yarn\s/.test(command)) {
+    return command.replace(/^yarn\s/, `yarn --cwd ${target} `);
+  }
+  if (/^bun\s/.test(command)) {
+    return command.replace(/^bun\s/, `bun --cwd ${target} `);
+  }
+  if (/^npm\s/.test(command)) {
+    return command.replace(/^npm\s/, `npm --prefix ${target} `);
+  }
+  return command;
 }
 
 function qaScopeCandidate(target: E2eWorkspaceTarget): QaAnalysisScopeCandidate {
@@ -473,6 +657,18 @@ async function buildChangedTestVerificationCommands(
   if (changedEvidence.length === 0) {
     return [];
   }
+  return buildTestVerificationCommands(root, changedEvidence, suggestedCommands);
+}
+
+async function buildTestVerificationCommands(
+  root: string,
+  testFiles: string[],
+  suggestedCommands: string[],
+): Promise<string[]> {
+  const changedEvidence = uniqueStrings(testFiles);
+  if (changedEvidence.length === 0) {
+    return [];
+  }
   const pytest = suggestedCommands.find((command) => /^pytest(?:\s|$)/i.test(command));
   const pythonTests = changedEvidence.filter((file) => /(?:^|\/)test_[^/]+\.py$|(?:^|\/)[^/]+_test\.py$/i.test(file));
   if (pytest && pythonTests.length > 0) {
@@ -509,6 +705,10 @@ async function buildChangedTestVerificationCommands(
   );
 }
 
+function isFocusedValidationCommand(command: string): boolean {
+  return /--runTestsByPath\b|(?:^|\s)[^\s]+(?:test|spec)\.(?:[cm]?[jt]sx?|py)(?:\s|$)/i.test(command);
+}
+
 interface ChangedWorkspaceTestGroup {
   packagePath: string;
   packageName?: string;
@@ -527,6 +727,10 @@ async function buildFocusedWorkspaceJavaScriptTestCommands(
     const target = group.packageName ?? `./${group.packagePath}`;
     const packageTestCommand = findWorkspacePackageTestCommand(suggestedCommands, target);
     if (!packageTestCommand) {
+      const standaloneCommand = await standalonePackageTestCommand(root, group.packagePath);
+      if (standaloneCommand) {
+        focused.push(standaloneCommand);
+      }
       continue;
     }
     const command = buildFocusedJavaScriptTestCommand(
@@ -539,6 +743,39 @@ async function buildFocusedWorkspaceJavaScriptTestCommands(
     }
   }
   return focused;
+}
+
+async function standalonePackageTestCommand(
+  root: string,
+  packagePath: string,
+): Promise<string | undefined> {
+  const packageDirectory = path.join(root, packagePath);
+  const target = shellCommandArgument(packagePath);
+  if (await pathExists(path.join(packageDirectory, "pnpm-lock.yaml"))) {
+    return `pnpm --dir ${target} test`;
+  }
+  if (await pathExists(path.join(packageDirectory, "yarn.lock"))) {
+    return `yarn --cwd ${target} test`;
+  }
+  if (
+    await pathExists(path.join(packageDirectory, "bun.lock")) ||
+    await pathExists(path.join(packageDirectory, "bun.lockb"))
+  ) {
+    return `bun --cwd ${target} test`;
+  }
+  if (await pathExists(path.join(packageDirectory, "package-lock.json"))) {
+    return `npm --prefix ${target} test`;
+  }
+  return undefined;
+}
+
+async function pathExists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function groupChangedTestsByPackage(
@@ -838,6 +1075,7 @@ function compactAgentFlowFocus(focus: AgentFlowFocus | undefined, maxLength: num
 
 export function formatAgentQaDraft(result: QaDraftResult): string {
   const scenarioAutomationById = aggregateScenarioAutomationById(result.flows);
+  const traceByScenarioId = new Map(result.traces.map((trace) => [trace.scenario.id, trace]));
   const scenariosById = new Map(
     result.changeAnalysis.intents.flatMap((intent) => intent.scenarios).map((scenario) => [scenario.id, scenario]),
   );
@@ -860,6 +1098,13 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
     project: result.project,
     runner: result.runner,
     manifest: result.manifestPath ?? null,
+    currentDelta: result.currentDelta
+      ? {
+          scope: result.currentDelta.scope,
+          files: result.currentDelta.files.slice(0, 6).map((file) => truncateForAgent(file, 120)),
+          repositoryContracts: result.currentDelta.repositoryContracts.slice(0, 3).map(formatAgentRepositoryContract),
+        }
+      : undefined,
     analysisScope: {
       mode: result.analysisScope.mode,
       selectedPath: result.analysisScope.selectedPath,
@@ -915,6 +1160,9 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
         id: trace.scenario.id,
         decision: trace.scenario.decision,
         title: truncateForAgent(trace.scenario.title, 100),
+        authority: trace.scenario.authority,
+        approvalRequired: trace.scenario.approvalRequired,
+        testClass: trace.scenario.testClass,
       },
       artifact: trace.artifact
         ? {
@@ -932,10 +1180,7 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
       declared: result.changedTestContracts.length,
       execution: "not-run",
       items: result.changedTestContracts.slice(0, 3).map((contract) => ({
-        title: truncateForAgent(contract.title, 100),
-        file: truncateForAgent(contract.file, 120),
-        line: contract.line,
-        framework: contract.framework,
+        ...formatAgentRepositoryContract(contract),
       })),
     },
     intentCount: result.changeAnalysis.intents.length,
@@ -955,6 +1200,7 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
       scenarios: intent.scenarios.slice(0, 2).map((scenario) => {
         const routing = routeQaScenario(scenario);
         const automation = scenarioAutomationById.get(scenario.id);
+        const trace = traceByScenarioId.get(scenario.id);
         return {
           id: scenario.id,
           priority: scenario.priority,
@@ -962,6 +1208,9 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
           title: truncateForAgent(scenario.title, 100),
           confidence: scenario.confidence ?? "low",
           reviewRequired: scenario.reviewRequired ?? true,
+          authority: trace?.scenario.authority ?? "qamap-inference",
+          approvalRequired: trace?.scenario.approvalRequired ?? true,
+          testClass: trace?.scenario.testClass ?? (scenario.kind === "primary" ? "regression" : "edge"),
           sources: strongestEvidence(scenario.evidence, 1).map(formatAgentEvidenceSource),
           assertions: scenario.assertions.slice(0, 2).map((assertion) => truncateForAgent(assertion, 120)),
           routing: {
@@ -1004,6 +1253,9 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
       return {
         title: truncateForAgent(flow.title, 80),
         source: truncateForAgent(flow.source, 60),
+        authority: flow.authority,
+        approvalRequired: flow.approvalRequired,
+        testClass: flow.testClass,
         draft: truncateForAgent(flow.draftPath, 140),
         runnable: flow.runnableStatus,
         verificationMode: flow.verificationMode,
@@ -1040,13 +1292,25 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
 
 interface AgentSummaryShape {
   [key: string]: unknown;
+  currentDelta?: {
+    scope?: unknown;
+    files: string[];
+    repositoryContracts: Array<Record<string, unknown>>;
+  };
   traces: Array<{
     id?: unknown;
     status?: unknown;
     source?: Record<string, string | number>;
     behavior?: { id?: unknown; phase?: unknown; label?: string; relation?: unknown };
     risk?: { kind?: unknown; statement?: string };
-    scenario?: { id?: unknown; decision?: unknown; title?: string };
+    scenario?: {
+      id?: unknown;
+      decision?: unknown;
+      title?: string;
+      authority?: unknown;
+      approvalRequired?: unknown;
+      testClass?: unknown;
+    };
     artifact?: { draft?: string; status?: unknown; flowCoverage?: string };
     execution?: unknown;
   }>;
@@ -1065,6 +1329,9 @@ interface AgentSummaryShape {
       kind?: unknown;
       title?: unknown;
       confidence?: unknown;
+      authority?: unknown;
+      approvalRequired?: unknown;
+      testClass?: unknown;
       sources?: unknown[];
       assertions: string[];
       routing?: {
@@ -1087,6 +1354,9 @@ interface AgentSummaryShape {
   flows: Array<{
     title?: unknown;
     source?: unknown;
+    authority?: unknown;
+    approvalRequired?: unknown;
+    testClass?: unknown;
     draft?: unknown;
     runnable?: unknown;
     verificationMode?: unknown;
@@ -1266,6 +1536,9 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     ? {
         title: flow.title,
         source: truncateForAgent(String(flow.source ?? ""), 40),
+        authority: flow.authority,
+        approvalRequired: flow.approvalRequired,
+        testClass: flow.testClass,
         draft: flow.draft,
         verificationMode: flow.verificationMode,
         entry: flow.entry,
@@ -1291,6 +1564,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     project: summary.project,
     runner: summary.runner,
     manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 120) : null,
+    currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
     analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
     execution: summary.execution,
     route: summary.route,
@@ -1358,6 +1632,9 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     ? {
         title: truncateForAgent(String(flow.title ?? ""), 60),
         source: truncateForAgent(String(flow.source ?? ""), 30),
+        authority: flow.authority,
+        approvalRequired: flow.approvalRequired,
+        testClass: flow.testClass,
         draft: truncateForAgent(String(flow.draft ?? ""), 80),
         verificationMode: flow.verificationMode,
         entry: flow.entry ? truncateForAgent(String(flow.entry), 80) : undefined,
@@ -1384,6 +1661,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     project: summary.project,
     runner: summary.runner,
     manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 180) : null,
+    currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
     analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
     execution: summary.execution,
     route: summary.route,
@@ -1453,6 +1731,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     project: summary.project,
     runner: summary.runner,
     manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 80) : null,
+    currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
     analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
     execution: summary.execution,
     route: summary.route,
@@ -1492,11 +1771,150 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
     scenarios: intent.scenarios.slice(0, 1),
   }));
-  return JSON.stringify({
+  const boundedSummary = {
     ...floorSummary,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - boundedIntents.length),
     intents: boundedIntents,
+  };
+  const boundedPayload = JSON.stringify(boundedSummary);
+  if (Buffer.byteLength(boundedPayload) <= agentPayloadByteLimit) {
+    return boundedPayload;
+  }
+
+  const hardLimitTraces = emergencyTraces.slice(0, 1).map((trace) => ({
+    id: trace.id,
+    status: trace.status,
+    source: trace.source
+      ? {
+          kind: trace.source.kind,
+          reason: "Located evidence.",
+          file: trace.source.file
+            ? truncateForAgent(String(trace.source.file), 60)
+            : undefined,
+        }
+      : undefined,
+    risk: trace.risk
+      ? {
+          kind: trace.risk.kind,
+          statement: truncateForAgent(String(trace.risk.statement ?? ""), 120),
+        }
+      : undefined,
+    scenario: trace.scenario
+      ? {
+          id: trace.scenario.id,
+          decision: trace.scenario.decision,
+          title: truncateForAgent(String(trace.scenario.title ?? ""), 45),
+        }
+      : undefined,
+    execution: trace.execution,
+  }));
+  const hardLimitIntents = boundedIntents.slice(0, 1).map((intent) => ({
+    title: truncateForAgent(String(intent.title ?? ""), 45),
+    confidence: intent.confidence,
+    reviewRequired: intent.reviewRequired,
+    evidence: [],
+    lifecycle: selectAgentLifecycleStages(intent.lifecycle, 2),
+    scenarioCount: intent.scenarioCount,
+    omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
+    scenarios: intent.scenarios.slice(0, 1).map((scenario) => ({
+      id: scenario.id,
+      priority: scenario.priority,
+      kind: scenario.kind,
+      title: truncateForAgent(String(scenario.title ?? ""), 45),
+      confidence: scenario.confidence,
+      sources: scenario.sources?.slice(0, 1).map((source) => {
+        if (!source || typeof source !== "object") return source;
+        const value = source as Record<string, unknown>;
+        return {
+          kind: value.kind,
+          reason: "Located evidence.",
+          file: value.file ? truncateForAgent(String(value.file), 60) : undefined,
+        };
+      }),
+      assertions: [],
+    })),
+  }));
+  const hardLimitFlows = floorFlows.slice(0, 2).map((flow, index) => ({
+    title: truncateForAgent(String(flow.title ?? ""), 45),
+    source: truncateForAgent(String(flow.source ?? ""), 24),
+    authority: flow.authority,
+    approvalRequired: flow.approvalRequired,
+    testClass: flow.testClass,
+    draft: truncateForAgent(String(flow.draft ?? ""), 45),
+    verificationMode: flow.verificationMode,
+    changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 60)),
+    reviewQuestion: flow.reviewQuestion
+      ? truncateForAgent(String(flow.reviewQuestion), 70)
+      : undefined,
+    successSignal: flow.successSignal
+      ? truncateForAgent(String(flow.successSignal), 70)
+      : undefined,
+    steps: index === 0
+      ? flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 45))
+      : [],
+    selectors: [],
+    existingEvidence: flow.existingEvidence
+      ?.slice(0, 1)
+      .map((file) => truncateForAgent(file, 60)),
+  }));
+  return JSON.stringify({
+    schema: summary.schema,
+    base: truncateForAgent(String(summary.base ?? ""), 48),
+    head: truncateForAgent(String(summary.head ?? ""), 48),
+    project: summary.project,
+    runner: summary.runner,
+    manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 48) : null,
+    currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
+    execution: summary.execution,
+    route: summary.route,
+    readiness: summary.readiness,
+    scenarioCoverage: summary.scenarioCoverage,
+    evidenceSummary: summary.evidenceSummary,
+    manifestCorrection: summary.manifestCorrection,
+    traceCount: summary.traceCount,
+    omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - hardLimitTraces.length),
+    traces: hardLimitTraces,
+    testSuite: summary.testSuite,
+    intentCount: summary.intentCount,
+    omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - hardLimitIntents.length),
+    intents: hardLimitIntents,
+    flowCount: summary.flowCount,
+    omittedFlowCount: Math.max(0, numericCount(summary.flowCount) - hardLimitFlows.length),
+    flows: hardLimitFlows,
+    requiredEvidence: [],
+    recommendedEvidenceCount: summary.recommendedEvidenceCount,
+    requiredBootstrap: [],
+    prChecklist: [],
+    commands: summary.commands.slice(0, 1).map((command) => truncateForAgent(command, 60)),
+    compaction: {
+      maxBytes: agentPayloadByteLimit,
+      originalBytes: Buffer.byteLength(payload),
+      emergency: true,
+      hardLimit: true,
+    },
   });
+}
+
+function compactAgentCurrentDelta(
+  value: AgentSummaryShape["currentDelta"],
+  limit: number,
+): AgentSummaryShape["currentDelta"] | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return {
+    scope: value.scope,
+    files: value.files.slice(0, Math.max(1, limit)).map((file) => truncateForAgent(file, 80)),
+    repositoryContracts: value.repositoryContracts.slice(0, Math.max(1, limit)).map((contract) => ({
+      title: truncateForAgent(String(contract.title ?? ""), 80),
+      file: truncateForAgent(String(contract.file ?? ""), 80),
+      line: contract.line,
+      framework: contract.framework,
+      authority: contract.authority,
+      approvalRequired: contract.approvalRequired,
+      testClass: contract.testClass,
+    })),
+  };
 }
 
 function numericCount(value: unknown): number {
@@ -1563,6 +1981,9 @@ function secondaryAgentFlow(
   return {
     title: truncateForAgent(String(flow.title ?? ""), limits.title ?? 60),
     source: truncateForAgent(String(flow.source ?? ""), limits.source ?? 30),
+    authority: flow.authority,
+    approvalRequired: flow.approvalRequired,
+    testClass: flow.testClass,
     draft: truncateForAgent(String(flow.draft ?? ""), limits.draft ?? 70),
     verificationMode: flow.verificationMode,
     changedFiles: flow.changedFiles
@@ -1688,6 +2109,20 @@ function formatAgentEvidenceSource(evidence: ChangeIntentEvidence): Record<strin
   return source;
 }
 
+function formatAgentRepositoryContract(
+  contract: ChangedTestContract,
+): Record<string, string | number | boolean> {
+  return {
+    title: truncateForAgent(contract.title, 100),
+    file: truncateForAgent(contract.file, 120),
+    line: contract.line,
+    framework: contract.framework,
+    authority: "repository-contract",
+    approvalRequired: true,
+    testClass: "regression",
+  };
+}
+
 function strongestEvidence(evidence: ChangeIntentEvidence[], limit: number): ChangeIntentEvidence[] {
   return evidence
     .map((item, index) => ({ item, index }))
@@ -1760,6 +2195,11 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
       : "";
     lines.push(
       `- Repository-authored behavior: ${contractTitles.map(escapeMarkdownInline).join("; ")}${moreContracts}. Execution not run by QAMap.`,
+    );
+  }
+  if (result.currentDelta) {
+    lines.push(
+      `- Current local delta: ${result.currentDelta.files.length} file${result.currentDelta.files.length === 1 ? "" : "s"} isolated from committed branch history.`,
     );
   }
   const nextCommand = nextStepCommand(result);
@@ -1870,11 +2310,33 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push(`- Draft flows: ${result.flows.length}`);
   lines.push("");
 
+  if (result.currentDelta) {
+    lines.push("## Current Local Delta");
+    lines.push("");
+    lines.push(
+      "This working-tree-only capsule is separate from committed branch history so the newest local change is not buried by older feature work.",
+    );
+    lines.push("");
+    for (const file of result.currentDelta.files.slice(0, 12)) {
+      lines.push(`- Changed now: \`${escapeMarkdownInline(file)}\``);
+    }
+    for (const contract of result.currentDelta.repositoryContracts.slice(0, 6)) {
+      lines.push(
+        `- Repository contract awaiting review: ${escapeMarkdownInline(contract.title)} — ` +
+          `\`${escapeMarkdownInline(contract.file)}:${contract.line}\``,
+      );
+    }
+    if (result.currentDelta.repositoryContracts.length === 0) {
+      lines.push("- No changed test contract was declared in the current local delta.");
+    }
+    lines.push("");
+  }
+
   if (result.changedTestContracts.length > 0) {
     lines.push("## Repository-backed QA Contracts");
     lines.push("");
     lines.push(
-      `QAMap found ${result.changedTestContracts.length} test contract${result.changedTestContracts.length === 1 ? "" : "s"} declared in changed test code. These are repository-authored expectations, not proof that the tests passed.`,
+      `QAMap found ${result.changedTestContracts.length} test contract${result.changedTestContracts.length === 1 ? "" : "s"} declared in changed test code. Authority: repository contract. These expectations still require PR approval and are not proof that the tests passed.`,
     );
     lines.push("");
     for (const contract of result.changedTestContracts.slice(0, 12)) {
@@ -2023,6 +2485,9 @@ function appendQaDecisionLayers(
       ? `- ${scenarios.length} diff-backed scenario${scenarios.length === 1 ? "" : "s"} remain in the review scope regardless of current automation readiness.`
       : "- No diff-backed scenario was inferred; heuristic suggestions remain review-only.",
   );
+  lines.push(
+    "- Scenario authority is explicit: team policy is reviewed knowledge, repository contracts are declared but unexecuted, and QAMap inference requires human approval.",
+  );
   lines.push("- Runner, selector, fixture, or environment gaps do not remove an important risk from this layer.");
   lines.push("");
 
@@ -2048,7 +2513,13 @@ function appendQaDecisionLayers(
   } else {
     for (const scenario of contractScenarios.slice(0, 6)) {
       const automation = automationByScenario.get(scenario.id)?.receipt;
-      lines.push(`- [${scenario.priority}] ${escapeMarkdownInline(scenario.title)}`);
+      const trace = result.traces.find((item) => item.scenario.id === scenario.id);
+      const testClass = trace?.scenario.testClass ?? (scenario.kind === "primary" ? "regression" : "edge");
+      const authority = trace?.scenario.authority ?? "qamap-inference";
+      lines.push(
+        `- [${scenario.priority}] [${testClass}] ${escapeMarkdownInline(scenario.title)} ` +
+          `(authority: ${authority}; approval required)`,
+      );
       if (scenario.setup[0]) {
         lines.push(`  - Setup: ${escapeMarkdownInline(scenario.setup[0])}`);
       }
@@ -2133,7 +2604,9 @@ function appendQaReasoningTraceMarkdown(lines: string[], result: QaDraftResult):
     }
     lines.push(`3. Risk: ${escapeMarkdownInline(trace.risk.statement)}`);
     lines.push(
-      `4. QA scenario: [${trace.scenario.decision}] ${escapeMarkdownInline(trace.scenario.title)}`,
+      `4. QA scenario: [${trace.scenario.decision}] [${trace.scenario.testClass}] ` +
+        `${escapeMarkdownInline(trace.scenario.title)} ` +
+        `(authority: ${trace.scenario.authority}; approval ${trace.scenario.approvalRequired ? "required" : "recorded"})`,
     );
     if (trace.scenario.assertions[0]) {
       lines.push(`5. Expected proof: ${escapeMarkdownInline(trace.scenario.assertions[0])}`);
@@ -2398,6 +2871,7 @@ function atAGlanceEvidence(flow: QaDraftFlow): string[] {
 
 function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
   const verificationMode = verificationModeForDraftFile(file);
+  const knowledge = qaFlowKnowledge(file, verificationMode);
   return {
     title: file.flowTitle,
     source: formatDraftSource(file.source),
@@ -2418,6 +2892,67 @@ function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
     manifestUpdatePath: file.manifestUpdatePath,
     scenarioAutomation: file.scenarioAutomation ?? [],
     why: buildFlowReasons(file),
+    ...knowledge,
+  };
+}
+
+function qaFlowFromChangedTestContracts(
+  contracts: ChangedTestContract[],
+): QaDraftFlow {
+  const files = uniqueStrings(contracts.map((contract) => contract.file));
+  const primaryContract = contracts[0];
+  return {
+    title: "Changed repository test contracts",
+    source: "repository test contracts",
+    draftPath: primaryContract?.file ?? "repository test suite",
+    changedFiles: files,
+    userJourney: {
+      actor: "Maintainer or test author",
+      trigger: "Run the tests changed by this branch.",
+      goal: "Verify the repository-authored behavior contracts before merge.",
+      successSignal: "Every changed test contract completes through the repository's own test command.",
+      reviewQuestion: "Do the changed repository tests describe and protect the intended behavior?",
+      edgeCases: [],
+    },
+    draftSteps: files.map((file) => `Run ${file}.`),
+    coverageTargets: contracts.slice(0, 8).map((contract) => contract.title),
+    entrypointHints: [],
+    selectorHints: [],
+    existingEvidencePaths: files,
+    verificationMode: "existing-test-evidence",
+    setupHints: [],
+    scenarioAutomation: [],
+    why: [
+      "Changed tests declare repository behavior, but QAMap found no trustworthy product journey to invent.",
+    ],
+    authority: "repository-contract",
+    approvalRequired: true,
+    testClass: "regression",
+  };
+}
+
+function qaFlowKnowledge(
+  file: E2eDraftFile,
+  verificationMode: QaVerificationMode | undefined,
+): Pick<QaDraftFlow, "authority" | "approvalRequired" | "testClass"> {
+  if (file.source === "verification-manifest" || file.source === "core-flow") {
+    return {
+      authority: "team-policy",
+      approvalRequired: false,
+      testClass: "golden",
+    };
+  }
+  if (verificationMode === "existing-test-evidence") {
+    return {
+      authority: "repository-contract",
+      approvalRequired: true,
+      testClass: "regression",
+    };
+  }
+  return {
+    authority: "qamap-inference",
+    approvalRequired: true,
+    testClass: "regression",
   };
 }
 
@@ -2428,8 +2963,12 @@ function preferChangedTestEvidence(
   if (changedTestContracts.length === 0) {
     return flows;
   }
+  const changedContractFiles = new Set(changedTestContracts.map((contract) => contract.file));
 
   return flows.map((flow) => {
+    if (flow.verificationMode === "existing-test-evidence") {
+      return flow;
+    }
     const scored = changedTestContracts
       .map((contract) => ({
         contract,
@@ -2447,20 +2986,31 @@ function preferChangedTestEvidence(
         .filter((candidate) => candidate.score >= Math.max(3, strongestScore - 2))
         .map((candidate) => candidate.contract.file),
     );
-    if (evidencePaths.length === 0) {
-      return flow;
-    }
+    const unchangedEvidencePaths = flow.existingEvidencePaths.filter(
+      (file) => !changedContractFiles.has(file),
+    );
     return {
       ...flow,
       // A changed repository-authored contract is stronger evidence than a broad filename or keyword match.
-      existingEvidencePaths: evidencePaths,
+      existingEvidencePaths: evidencePaths.length > 0
+        ? evidencePaths
+        : unchangedEvidencePaths,
     };
   });
 }
 
 function changedTestContractScore(flow: QaDraftFlow, contract: ChangedTestContract): number {
+  const flowOwners = qaFeatureOwners(flow.changedFiles.slice(0, 3));
+  const contractOwners = qaFeatureOwners([contract.file]);
+  if (
+    flowOwners.length > 0 &&
+    contractOwners.length > 0 &&
+    !flowOwners.some((owner) => contractOwners.includes(owner))
+  ) {
+    return 0;
+  }
   const flowTitleTokens = qaEvidenceTokens(flow.title);
-  const flowFileTokens = qaEvidenceTokens(flow.changedFiles.join("\n"));
+  const flowFileTokens = qaEvidenceTokens(flow.changedFiles.slice(0, 3).join("\n"));
   const flowTokens = new Set([...flowTitleTokens, ...flowFileTokens]);
   const contractTitleTokens = qaEvidenceTokens(contract.title);
   const contractFileTokens = qaEvidenceTokens(contract.file);
@@ -2475,40 +3025,80 @@ function changedTestContractScore(flow: QaDraftFlow, contract: ChangedTestContra
   return shared.length * 3 + titleOverlap * 2 + fileOverlap * 2;
 }
 
+function qaFeatureOwners(files: string[]): string[] {
+  return uniqueStrings(
+    files.flatMap((file) =>
+      [...file.matchAll(/(?:^|\/)(?:features?|domains?|modules?)\/([^/]+)/gi)]
+        .map((match) => normalizeQaFeatureOwner(match[1]))
+        .filter((owner): owner is string => Boolean(owner))
+    ),
+  );
+}
+
+function normalizeQaFeatureOwner(owner: string | undefined): string | undefined {
+  if (!owner) {
+    return undefined;
+  }
+  return owner
+    .toLowerCase()
+    .replace(/\.(?:test|spec|e2e|cy)\.[cm]?[jt]sx?$/i, "")
+    .replace(/\.[cm]?[jt]sx?$/i, "")
+    .replace(/\.(?:vue|svelte|py)$/i, "");
+}
+
 function qaEvidenceTokens(value: string): string[] {
   const ignored = new Set([
     "assert",
     "assertion",
+    "app",
     "behavior",
     "changed",
     "check",
     "checklist",
     "cli",
     "command",
+    "component",
+    "components",
     "contract",
     "draft",
     "evidence",
     "existing",
     "expected",
+    "feature",
+    "features",
     "file",
     "flow",
     "input",
     "invalid",
+    "javascript",
+    "jsx",
     "json",
     "keeps",
     "manifest",
     "native",
     "output",
+    "page",
+    "pages",
     "path",
     "primary",
     "qamap",
     "related",
     "repository",
     "result",
+    "route",
+    "routes",
     "run",
+    "screen",
+    "screens",
     "shared",
+    "spec",
+    "specs",
+    "src",
     "success",
     "test",
+    "tests",
+    "tsx",
+    "typescript",
     "valid",
     "verification",
     "yaml",
