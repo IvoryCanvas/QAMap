@@ -197,6 +197,28 @@
       }
     },
     {
+      "name": "web-preferences-cleanup-tip",
+      "fixture": "test/benchmarks/web-preferences-cleanup-tip",
+      "commits": [
+        { "dir": "head-1", "message": "feat: add a preferences reset action" },
+        { "dir": "head-2", "message": "fix: minor refactor" }
+      ],
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "mustReachFiles": ["src/pages/preferences.tsx"],
+        "mustNamePrimaryIntent": ["preferences reset action"],
+        "mustNameFlows": ["preferences reset"],
+        "mustFindSelectors": ["reset-preferences"],
+        "mustFindSuccessSignals": ["Preferences restored to defaults"],
+        "mustDraftFiles": ["preferences-reset"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 8192
+      }
+    },
+    {
       "name": "web-symbol-annotated-renewal",
       "fixture": "test/benchmarks/web-symbol-annotated-renewal",
       "commitMessage": "fix: prevent duplicate subscription renewal requests",

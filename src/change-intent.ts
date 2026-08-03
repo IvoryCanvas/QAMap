@@ -321,6 +321,7 @@ function rankChangeIntentsForReview(
     .map((intent, index) => ({
       intent,
       index,
+      cleanupOnly: isCleanupOnlyIntent(intent) ? 1 : 0,
       latestCommit: intent.commits.length === 0
         ? -1
         : Math.max(...intent.commits.map((commit) => commitOrder.get(commit.sha) ?? -1)),
@@ -329,11 +330,37 @@ function rankChangeIntentsForReview(
       ).length,
     }))
     .sort((left, right) =>
+      left.cleanupOnly - right.cleanupOnly ||
       right.latestCommit - left.latestCommit ||
       right.locatedEvidence - left.locatedEvidence ||
       left.index - right.index
     )
     .map(({ intent }) => intent);
+}
+
+// Public PR branches routinely end with review-feedback commits ("fix: minor
+// refactor", "fix: tidy up and add tests"). Their behavioral conventional type
+// lets them seed an intent, but the subject describes housekeeping, not the
+// branch's substantive behavior change, so recency alone would headline them.
+// Demote intents whose every commit is cleanup-shaped below substantive
+// intents; demotion only reorders and never drops an intent. Kept separate
+// from isLowSignalCommitStatement so seed/supporting classification and the
+// working-tree current-delta focus are unchanged.
+const cleanupCommitStatementPattern =
+  /^(?:minor\s+)?(?:refactor(?:ing|s)?|clean\s?-?ups?|tidy(?:ing)?(?:\s+up)?|polish(?:ing)?|nits?|typos?|reformat(?:ting)?|lint(?:ing)?|whitespace|merge)\b/i;
+const reviewFeedbackStatementPattern =
+  /^(?:address(?:es|ed|ing)?\s+(?:review|pr\s+)?(?:comments?|feedback)|apply(?:ing)?\s+review\b)/i;
+
+function isCleanupCommitStatement(statement: string): boolean {
+  const trimmed = statement.trim();
+  return cleanupCommitStatementPattern.test(trimmed) || reviewFeedbackStatementPattern.test(trimmed);
+}
+
+function isCleanupOnlyIntent(intent: ChangeIntent): boolean {
+  if (intent.commits.length === 0) {
+    return false;
+  }
+  return intent.commits.every((commit) => isCleanupCommitStatement(commit.statement));
 }
 
 async function collectCommitEvidence(

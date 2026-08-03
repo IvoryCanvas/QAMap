@@ -340,6 +340,14 @@ function evaluateContract(expect, result, plan, qa) {
   }
   appendMissingTerms(failures, "intent title", result.intentTitles, expect.mustNameIntents);
   appendUnexpectedTerms(failures, "intent title", result.intentTitles, expect.mustNotNameIntents);
+  // The first intent is the headline that humans and agents read first, so a
+  // fixture can pin what must rank as primary, not merely appear somewhere.
+  appendMissingTerms(
+    failures,
+    "primary intent title",
+    result.intentTitles.slice(0, 1),
+    expect.mustNamePrimaryIntent,
+  );
   appendMissingTerms(failures, "intent lifecycle", result.intentLifecycle, expect.mustIncludeLifecycle);
   appendUnexpectedTerms(failures, "intent lifecycle", result.intentLifecycle, expect.mustNotIncludeLifecycle);
   appendMissingTerms(failures, "intent QA scenario", result.intentScenarios, expect.mustIncludeQaScenarios);
@@ -702,11 +710,23 @@ async function materializeFixture(target, configDir) {
     });
   }
   await git(repositoryRoot, ["switch", "-c", "benchmark/change"]);
-  if (await exists(headRoot)) {
-    await fs.cp(headRoot, repositoryRoot, { recursive: true, force: true });
+  // A target may declare `commits: [{dir, message}]` to materialize a
+  // multi-commit branch (for example a feature commit followed by a cleanup
+  // tip commit, the shape real pull-request branches routinely have).
+  // Single-head targets keep the original one-commit behavior.
+  const commitPlan = Array.isArray(target.commits) && target.commits.length > 0
+    ? target.commits.map((step) => ({
+      root: path.join(fixtureRoot, step.dir),
+      message: step.message ?? "benchmark change",
+    }))
+    : [{ root: headRoot, message: target.commitMessage ?? "benchmark change" }];
+  for (const step of commitPlan) {
+    if (await exists(step.root)) {
+      await fs.cp(step.root, repositoryRoot, { recursive: true, force: true });
+    }
+    await git(repositoryRoot, ["add", "-A"]);
+    await git(repositoryRoot, ["commit", "--allow-empty", "-m", step.message]);
   }
-  await git(repositoryRoot, ["add", "-A"]);
-  await git(repositoryRoot, ["commit", "--allow-empty", "-m", target.commitMessage ?? "benchmark change"]);
   const prepared = targetPaths(target, repositoryRoot, "main", "HEAD");
   return {
     ...prepared,

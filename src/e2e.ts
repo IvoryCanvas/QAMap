@@ -2836,7 +2836,7 @@ function repositorySuccessOutcome(
 }
 
 function isVisibleSuccessOutcome(value: string): boolean {
-  return /\b(?:active|confirmed|saved|scheduled|refreshed|succeeded|success|completed|created|updated|deleted|sent|approved|accepted|pinned|unpinned|enabled|disabled|activated|deactivated|connected|disconnected|published|archived|ready|queued)\b/i.test(value) ||
+  return /\b(?:active|confirmed|saved|scheduled|refreshed|succeeded|success|completed|created|updated|deleted|sent|approved|accepted|pinned|unpinned|enabled|disabled|activated|deactivated|connected|disconnected|published|archived|restored|ready|queued)\b/i.test(value) ||
     /(?:완료|성공|예약(?:됨|됐|되)|저장(?:됨|됐|되)|등록(?:됨|됐|되)|제출(?:됨|됐|되)|승인(?:됨|됐|되))/.test(value);
 }
 
