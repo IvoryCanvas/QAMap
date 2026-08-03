@@ -7770,7 +7770,12 @@ function normalizePathSegment(segment: string | undefined): string | undefined {
     .replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|json|ya?ml|md|py|go|rs|kt|java|swift|cs)$/i, "")
     .replace(/^_+|_+$/g, "")
     .trim();
-  return isMeaningfulLabel(normalized) ? normalized : undefined;
+  // Two-letter all-lowercase directory segments (ee, ui, db) are near-always
+  // acronyms; keep their uppercase form so titleCase's all-caps branch
+  // preserves them instead of producing labels like "Ee". Longer segments stay
+  // untouched because three-letter directories are often plain words (web, app).
+  const acronymized = /^[a-z]{2}$/.test(normalized) ? normalized.toUpperCase() : normalized;
+  return isMeaningfulLabel(acronymized) ? acronymized : undefined;
 }
 
 function isVersionSegment(value: string): boolean {

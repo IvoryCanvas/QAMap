@@ -123,6 +123,7 @@ interface ParsedCommit extends ChangeIntentCommit {
   seed: boolean;
   supporting: boolean;
   keywords: string[];
+  tickets: string[];
 }
 
 interface CodeBehaviorSignal {
@@ -421,11 +422,36 @@ function scopeCommitFile(file: string, relativeRoot: string): string | undefined
   return file.startsWith(prefix) ? file.slice(prefix.length) : undefined;
 }
 
+// Issue-tracker tags such as "[ABC-123]" or "(ABC-123)" carry provenance, not
+// behavior. Strip them before parsing so every derived sentence (lifecycle
+// labels, assertions, success signals) reads clean; the intent title
+// re-attaches one tag so the reference survives exactly once. Stripping the
+// leading form first also lets "[ABC-123] fix: ..." subjects parse as
+// conventional commits instead of falling back to raw-subject heuristics.
+function extractTicketTags(value: string): { statement: string; tickets: string[] } {
+  const tickets: string[] = [];
+  let statement = value.trim();
+  for (;;) {
+    const leading = statement.match(/^(?:\[([A-Z][A-Z0-9]*-\d+)\]|\(([A-Z][A-Z0-9]*-\d+)\))[\s:–—-]*/);
+    if (!leading) break;
+    tickets.push((leading[1] ?? leading[2]) as string);
+    statement = statement.slice(leading[0].length).trim();
+  }
+  for (;;) {
+    const trailing = statement.match(/\s*(?:\[([A-Z][A-Z0-9]*-\d+)\]|\(([A-Z][A-Z0-9]*-\d+)\))$/);
+    if (!trailing) break;
+    tickets.push((trailing[1] ?? trailing[2]) as string);
+    statement = statement.slice(0, statement.length - trailing[0].length).trim();
+  }
+  return { statement, tickets };
+}
+
 function parseCommit(commit: ChangeIntentCommit): ParsedCommit {
-  const match = commit.subject.match(/^([a-z][a-z0-9-]*)(?:\(([^)]+)\))?!?:\s*(.+)$/i);
+  const { statement: cleanSubject, tickets } = extractTicketTags(commit.subject);
+  const match = cleanSubject.match(/^([a-z][a-z0-9-]*)(?:\(([^)]+)\))?!?:\s*(.+)$/i);
   const conventionalType = match?.[1]?.toLowerCase();
   const scope = match?.[2]?.trim();
-  const statement = (match?.[3] ?? commit.subject).trim();
+  const statement = (match?.[3] ?? cleanSubject).trim();
   const actionSignals = lifecycleKeywordCount(`${statement} ${commit.body ?? ""}`);
   const seed = conventionalType
     ? behavioralCommitTypes.has(conventionalType)
@@ -441,6 +467,7 @@ function parseCommit(commit: ChangeIntentCommit): ParsedCommit {
     seed,
     supporting: supporting && !seed,
     keywords: extractKeywords(`${scope ?? ""} ${statement} ${commit.body ?? ""}`),
+    tickets,
   };
 }
 
@@ -551,7 +578,10 @@ function buildCommitIntent(
   const titleCommit = commits.find((commit) => commit.conventionalType === "feat" || commit.conventionalType === "feature") ??
     commits.find((commit) => commit.seed) ??
     commits[0];
-  const title = sentenceTitle(titleCommit.statement);
+  const titleTicket = titleCommit.tickets[0] ?? commits.flatMap((commit) => commit.tickets)[0];
+  const title = titleTicket
+    ? `${sentenceTitle(titleCommit.statement)} [${titleTicket}]`
+    : sentenceTitle(titleCommit.statement);
   const evidence = uniqueEvidence([
     ...commits.map((commit) => ({
       kind: "commit" as const,
@@ -2587,7 +2617,7 @@ function isStructuredDataFile(file: string): boolean {
 }
 
 function stripParsedCommitFields(commit: ParsedCommit): ChangeIntentCommit {
-  const { seed: _seed, supporting: _supporting, keywords: _keywords, ...result } = commit;
+  const { seed: _seed, supporting: _supporting, keywords: _keywords, tickets: _tickets, ...result } = commit;
   return result;
 }
 
