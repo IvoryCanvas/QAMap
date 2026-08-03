@@ -1,6 +1,6 @@
 {
   "name": "qamap",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "Turn PR changes into traceable local QA decisions and optional automation handoffs without an LLM call.",
   "author": {
     "name": "IvoryCanvas",

@@ -1,20 +1,21 @@
 # Release Validation
 
-## Unreleased
+## 0.4.9 - 2026-08-03
 
-The current patch candidate adds a third evidence-compiled browser contract for form validation recovery. QAMap requires a diff-backed timing change, route, validated field, visible error, submit action, and visible success outcome before it emits the invalid-input and correction path. The generated artifact then has to distinguish first-touch recovery from a seeded blur-only regression:
+QAMap 0.4.9 ships the validation-recovery compiler, the native Codex and Claude Code plugin manifests, and a quality series validated against merged pull requests of unrelated public repositories: substantive intents outrank cleanup tip commits, agent payload identifiers stay whole with a recoverable full report, missing observable outcomes are stated honestly instead of echoing the flow title, ticket tags survive once in the title, and symbol-derived lifecycle labels read behaviorally.
 
 | Gate | Current result |
 | --- | --- |
 | `pnpm release:check` | Passed end to end |
-| `pnpm test` | 253/253 passing |
+| `pnpm test` | 282/282 passing |
 | `pnpm scan` | 0 findings |
-| `pnpm bench:ci` | 23/23 static recommendation contracts passing |
+| `pnpm bench:ci` | 24/24 static recommendation contracts passing, including the new multi-commit cleanup-tip fixture |
 | `pnpm bench:execution` | 3/3 execution contracts passing; duplicate-request, missing-persistence, and stale-validation regressions caught |
-| Coverage | Lines 89.27%, branches 85.82%, functions 95.79% |
-| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.8` |
+| Coverage | Lines 89.41%, branches 85.98%, functions 95.76% |
+| Compact agent handoff | A 43-file public PR branch compacts to 3,387 bytes with zero partially emitted identifier values and a disclosed `fullReport` recovery path |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.9` |
 
-The validation fixture proves two generated paths against a committed local application: a valid submission reaches its visible success result, and invalid input stays quiet before first blur, shows feedback after blur, clears that feedback after correction, and then submits successfully. The same byte-identical artifact fails at the stale-error assertion when the fixed first-touch mode is replaced with blur-only behavior.
+The cleanup-tip fixture materializes a feature commit followed by `fix: minor refactor` and pins the primary intent title, flow title, and draft filename; with the ranking fix reverted the fixture fails on all three, proving the guard. The validation-recovery fixture proves two generated paths against a committed local application: a valid submission reaches its visible success result, and invalid input stays quiet before first blur, shows feedback after blur, clears that feedback after correction, and then submits successfully. The same byte-identical artifact fails at the stale-error assertion when the fixed first-touch mode is replaced with blur-only behavior.
 
 ## 0.4.8 - 2026-07-27
 
