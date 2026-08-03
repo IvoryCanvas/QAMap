@@ -3827,6 +3827,84 @@ test("a cleanup tip commit does not displace the substantive change intent", asy
   assert.ok(cleanupIntentIndex > 0, "cleanup intent must be demoted, not dropped");
 });
 
+test("a flow without a diff-anchored outcome gets an honest success signal instead of a tautology", async (t) => {
+  const root = await makeRepo(t);
+  const pageFile = "src/pages/exportBatching.tsx";
+  await write(root, "package.json", JSON.stringify({ name: "journal-app", private: true }));
+  await write(root, pageFile, "export const ExportBatching = () => 'idle';\n");
+  commit(root, "chore: baseline");
+  branch(root, "feature/export-batching");
+  await write(
+    root,
+    pageFile,
+    [
+      "import { useState } from \"react\";",
+      "export function ExportBatching() {",
+      "  const [applied, setApplied] = useState(false);",
+      "  return (",
+      "    <main>",
+      "      <button data-testid=\"apply-batching\" onClick={() => setApplied(true)}>Apply batching</button>",
+      "      {applied ? <p>Batching preference applied</p> : null}",
+      "    </main>",
+      "  );",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: tune journal export batching");
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const journey = qa.flows[0].userJourney;
+
+  assert.ok(journey);
+  // The signal must not restate the flow title or fall back to a circular
+  // "verify the result matches the intent" sentence.
+  assert.doesNotMatch(journey.successSignal, /matches the commit intent/i);
+  assert.doesNotMatch(journey.successSignal, /^verify\b/i);
+  assert.match(journey.successSignal, /define the expected user-visible result/i);
+  assert.equal(journey.successSignalUnresolved, true);
+  assert.doesNotMatch(journey.reviewQuestion, /produce this outcome: Verify/i);
+  assert.match(journey.reviewQuestion, /What user-visible outcome should .* produce\?/i);
+
+  // Fallback draft steps must not turn the honest sentence into an assertion.
+  const qaMarkdown = formatMarkdownQaDraft(qa);
+  assert.doesNotMatch(qaMarkdown, /Assert no diff-anchored observable outcome/i);
+});
+
+test("a diff-anchored visible outcome keeps its concrete success signal", async (t) => {
+  const root = await makeRepo(t);
+  const pageFile = "src/pages/journalExport.tsx";
+  await write(root, "package.json", JSON.stringify({ name: "journal-web", private: true }));
+  await write(root, pageFile, "export const JournalExport = () => 'idle';\n");
+  commit(root, "chore: baseline");
+  branch(root, "feature/export-confirmation");
+  await write(
+    root,
+    pageFile,
+    [
+      "import { useState } from \"react\";",
+      "export function JournalExport() {",
+      "  const [done, setDone] = useState(false);",
+      "  return (",
+      "    <main>",
+      "      <button data-testid=\"export-journal\" onClick={() => setDone(true)}>Export journal</button>",
+      "      {done ? <p>Journal export completed</p> : null}",
+      "    </main>",
+      "  );",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: confirm journal export completion");
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const journey = qa.flows[0].userJourney;
+
+  assert.ok(journey);
+  assert.match(journey.successSignal, /Journal export completed/);
+  assert.notEqual(journey.successSignalUnresolved, true);
+});
+
 test("a branch of only cleanup commits keeps its newest cleanup intent first", async (t) => {
   const root = await makeRepo(t);
   const labelFile = "src/listings/listingLabels.ts";

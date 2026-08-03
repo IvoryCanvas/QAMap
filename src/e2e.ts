@@ -165,6 +165,9 @@ export interface E2eFlowLanguageBrief {
   trigger: string;
   goal: string;
   successSignal: string;
+  // True when no diff-anchored observable outcome could be extracted and the
+  // successSignal is the explicit unresolved statement instead of evidence.
+  successSignalUnresolved?: boolean;
   reviewQuestion: string;
   edgeCases: string[];
 }
@@ -2203,7 +2206,9 @@ function buildDraftActionItems(
       "assertion",
       "required",
       "Replace starter smoke assertions with domain assertions",
-      `Preserve the success signal "${flow.languageBrief.successSignal}" while replacing weak fallback interactions and generic expects.`,
+      flow.languageBrief.successSignalUnresolved
+        ? "Define a domain success signal for this flow — the diff did not surface an observable outcome — then replace weak fallback interactions and generic expects."
+        : `Preserve the success signal "${flow.languageBrief.successSignal}" while replacing weak fallback interactions and generic expects.`,
     ));
   }
 
@@ -2555,6 +2560,59 @@ function withTerminalPeriod(value: string): string {
   return /[.!?)]$/.test(value.trim()) ? value.trim() : `${value.trim()}.`;
 }
 
+// A success signal that merely restates the flow title ("Verify <title>.") or
+// falls back to a circular "the result matches the intent" sentence answers
+// the review question with the question itself. When that happens, say so
+// explicitly instead: an honest gap is actionable, a tautology is not.
+const unresolvedSuccessSignalText =
+  "no diff-anchored observable outcome was extracted from this change — define the expected user-visible result manually";
+
+const genericSuccessSignalPhrases = new Set([
+  "the changed journey reaches a visible, stable success state",
+  "the observable result matches the commit intent",
+  "the externally observable result matches the commit intent",
+]);
+
+function successSignalTokens(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/^(?:verify|confirm|check)\s+/, "")
+    .replace(/[^a-z0-9가-힣\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function isEchoSuccessSignal(candidate: string, flowTitle: string): boolean {
+  const stripped = stripTerminalPunctuation(candidate.trim())
+    .toLowerCase()
+    .replace(/^(?:verify|confirm|check)\s+/, "")
+    .trim();
+  if (genericSuccessSignalPhrases.has(stripped)) {
+    return true;
+  }
+  const candidateTokens = successSignalTokens(candidate);
+  if (candidateTokens.length === 0) {
+    return true;
+  }
+  const titleTokens = new Set(successSignalTokens(flowTitle));
+  const overlap = candidateTokens.filter((token) => titleTokens.has(token)).length;
+  return overlap / candidateTokens.length >= 0.9;
+}
+
+function resolveFlowSuccessSignal(
+  candidate: string,
+  flowTitle: string,
+): { successSignal: string; unresolved: boolean } {
+  if (isEchoSuccessSignal(candidate, flowTitle)) {
+    return { successSignal: unresolvedSuccessSignalText, unresolved: true };
+  }
+  return { successSignal: candidate, unresolved: false };
+}
+
+function unresolvedReviewQuestion(flowTitle: string): string {
+  return `What user-visible outcome should ${flowTitle} produce? The diff did not surface one; define it before merge.`;
+}
+
 function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLanguageBrief {
   const actor = inferFlowActor(flow);
   const analysisRuleFocused = isAnalysisRuleFocusedFlow(flow);
@@ -2581,9 +2639,11 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
         ? `the intended side effect completes: ${effects.slice(0, 2).join("; ")}`
         : "the observable result matches the commit intent";
     const repositorySuccessSignal = inferFlowSuccessSignal(flow);
-    const successSignal = repositorySuccessSignal === "the changed journey reaches a visible, stable success state"
+    const chosenSignal = repositorySuccessSignal === "the changed journey reaches a visible, stable success state"
       ? lifecycleSuccessSignal
       : repositorySuccessSignal;
+    const resolved = resolveFlowSuccessSignal(chosenSignal, flow.title);
+    const successSignal = resolved.successSignal;
     const scenarioEdges = (flow.qaScenarios ?? [])
       .filter((scenario) => scenario.kind !== "primary")
       .flatMap((scenario) => [scenario.title, ...scenario.edgeCases]);
@@ -2594,21 +2654,27 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
         ? `Validate ${flow.title} against positive, negative, and neighboring-rule controls.`
         : `Complete the intended behavior: ${flow.title}.`,
       successSignal,
+      successSignalUnresolved: resolved.unresolved || undefined,
       reviewQuestion: analysisRuleFocused
         ? `Does ${flow.title} emit only the intended findings while preserving neighboring rules: ${successSignal}?`
-        : `Does ${flow.title} follow the inferred lifecycle and produce this outcome: ${successSignal}?`,
+        : resolved.unresolved
+          ? unresolvedReviewQuestion(flow.title)
+          : `Does ${flow.title} follow the inferred lifecycle and produce this outcome: ${successSignal}?`,
       edgeCases: uniqueStrings(scenarioEdges).slice(0, 6),
     };
   }
   const trigger = inferFlowTrigger(flow);
   const goal = inferFlowGoal(flow);
-  const successSignal = inferFlowSuccessSignal(flow);
+  const resolved = resolveFlowSuccessSignal(inferFlowSuccessSignal(flow), flow.title);
   return {
     actor,
     trigger,
     goal,
-    successSignal,
-    reviewQuestion: inferFlowReviewQuestion(flow, successSignal),
+    successSignal: resolved.successSignal,
+    successSignalUnresolved: resolved.unresolved || undefined,
+    reviewQuestion: resolved.unresolved
+      ? unresolvedReviewQuestion(flow.title)
+      : inferFlowReviewQuestion(flow, resolved.successSignal),
     edgeCases: inferFlowEdgeCases(flow),
   };
 }
