@@ -4,6 +4,7 @@ Each directory represents one reduced pull request:
 
 - `base/` is committed on a temporary `main` branch.
 - `head/` is copied over the baseline and committed on `benchmark/change`; intent fixtures provide a neutral synthetic `commitMessage`.
+- A target may instead declare `commits: [{dir, message}]` overlays that are committed sequentially, materializing a multi-commit branch such as a feature commit followed by a cleanup tip commit.
 - `bench.config.json` declares the human expectation for the resulting QA draft.
 
 Fixtures must stay small, synthetic, and safe to publish. The benchmark runner only reads the materialized repositories. It does not install dependencies, start services, run package scripts, or execute generated tests.

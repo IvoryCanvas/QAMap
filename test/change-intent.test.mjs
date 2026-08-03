@@ -3703,6 +3703,73 @@ test("change intents prioritize the newest independent feature for review", asyn
   assert.ok(residualIntentIndex > 1);
 });
 
+test("a cleanup tip commit does not displace the substantive change intent", async (t) => {
+  const root = await makeRepo(t);
+  const dialogFile = "src/reports/resetReportPreferences.ts";
+
+  await write(root, dialogFile, "export const resetReportPreferences = () => 'idle';\n");
+  commit(root, "chore: baseline");
+  branch(root, "feature/report-preferences-reset");
+
+  await write(
+    root,
+    dialogFile,
+    [
+      "export function resetReportPreferences(confirmed) {",
+      "  if (!confirmed) return 'Reset requires confirmation';",
+      "  localStorage.removeItem('report-preferences');",
+      "  return 'Report preferences reset';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: add report preferences reset dialog");
+
+  await write(
+    root,
+    dialogFile,
+    [
+      "export function resetReportPreferences(isConfirmed) {",
+      "  if (!isConfirmed) return 'Reset requires confirmation';",
+      "  localStorage.removeItem('report-preferences');",
+      "  return 'Report preferences reset';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "fix: minor refactor");
+
+  const analysis = await analyze(root, [dialogFile]);
+
+  assert.match(analysis.intents[0].title, /report preferences reset dialog/i);
+  const cleanupIntentIndex = analysis.intents.findIndex((intent) =>
+    /minor refactor/i.test(intent.title)
+  );
+  assert.ok(cleanupIntentIndex > 0, "cleanup intent must be demoted, not dropped");
+});
+
+test("a branch of only cleanup commits keeps its newest cleanup intent first", async (t) => {
+  const root = await makeRepo(t);
+  const labelFile = "src/listings/listingLabels.ts";
+  const entryFile = "src/journals/journalEntry.ts";
+
+  await write(root, labelFile, "export const listingLabel = () => 'Listing';\n");
+  await write(root, entryFile, "export const journalEntry = () => 'Entry';\n");
+  commit(root, "chore: baseline");
+  branch(root, "chore/cleanup-pass");
+
+  await write(root, labelFile, "export const listingLabel = () => 'Listing label';\n");
+  commit(root, "fix: reformat listing labels");
+
+  await write(root, entryFile, "export const journalEntry = () => 'Journal entry';\n");
+  commit(root, "fix: minor refactor");
+
+  const analysis = await analyze(root, [labelFile, entryFile]);
+
+  assert.ok(analysis.intents.length >= 2);
+  assert.match(analysis.intents[0].title, /minor refactor/i);
+});
+
 test("diff evidence reserves the latest commit before large branch history", async (t) => {
   const root = await makeRepo(t);
   const latestTestFile = "src/z-latest/RevenueScreen.test.tsx";

@@ -10,6 +10,8 @@
 - Added a third seeded-regression execution contract that requires the byte-identical generated browser artifact to fail when corrected input leaves stale validation feedback and pass when first-touch revalidation is restored.
 - Added native Codex and Claude Code plugin manifests that expose the existing vendor-neutral `qamap-pr-qa` skill without duplicating the local analysis engine.
 - Added Codex skill presentation metadata and a plugin contract test that keeps both host manifests, the npm package, and the shared skill version aligned.
+- Added multi-commit benchmark fixtures: a target can declare ordered `commits` overlays instead of a single `head/` snapshot, and a `mustNamePrimaryIntent` expectation pins which intent must rank first. A new cleanup-tip fixture materializes a feature commit followed by `fix: minor refactor` and requires the feature to stay in the headline, flow title, and draft filename.
+- Added `restored` to the visible success-outcome vocabulary so standard "restored to defaults" confirmations qualify as diff-anchored success signals, matching the existing completed-state words such as `updated` and `archived`.
 
 ### Changed
 
@@ -25,6 +27,10 @@
 - Unrelated feature tests no longer attach to a flow merely because both paths contain generic structural words, and standalone nested packages with their own lockfile can route changed contracts to their package suite.
 - Changed-test contract extraction now ignores test-like source strings embedded inside fixture builders instead of reporting them as executable repository tests.
 - Compact agent handoffs now retain one repository test-evidence path for secondary affected flows instead of dropping that trace during the 4KB payload reduction.
+
+### Fixed
+
+- Fixed change-intent review ranking so a cleanup-shaped tip commit (for example `fix: minor refactor` or `fix: tidy up and add tests`) no longer displaces the branch's substantive intent from the headline, scenario names, and generated draft filenames. Cleanup-only intents are demoted below substantive intents but never dropped, and pure-cleanup branches keep their newest intent first. Observed on real public PR branches, where review-feedback commits routinely close a branch.
 
 ## 0.4.8 - 2026-07-27
 
