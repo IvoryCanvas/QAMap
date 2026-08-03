@@ -1031,7 +1031,8 @@ function findFullyCompiledFocusScenario(
 
 function isGenericAgentFocusAssertion(assertion: string): boolean {
   const normalized = normalizeAgentFocusPhrase(assertion);
-  return normalized === "the externally observable result matches the commit intent";
+  return normalized === "the externally observable result matches the commit intent" ||
+    /^no diff-anchored observable outcome was extracted/i.test(assertion.trim());
 }
 
 function findEvidenceMatchedAgentStep(
@@ -3397,7 +3398,11 @@ function fallbackDraftSteps(flow: QaDraftFlow): string[] {
   return [
     flow.userJourney.trigger,
     flow.userJourney.goal,
-    `Assert ${flow.userJourney.successSignal}.`,
+    // An unresolved success signal is a statement about missing evidence, not
+    // an assertable outcome — asking to assert it would recreate the tautology.
+    flow.userJourney.successSignalUnresolved
+      ? "Define the observable success signal for this flow, then assert it."
+      : `Assert ${flow.userJourney.successSignal}.`,
   ];
 }
 
