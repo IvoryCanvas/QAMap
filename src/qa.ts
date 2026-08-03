@@ -958,6 +958,19 @@ function truncateForAgent(value: string, maxLength = 140): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
+// Identifier values — repository paths, commands, selectors, and route hints —
+// must stay whole: a partially emitted path cannot be opened or executed by the
+// consuming agent. Oversized payloads recover bytes by dropping whole optional
+// values, disclosed through omitted counts, never by emitting partial
+// identifiers. Caller-supplied refs (base, head, manifest) keep this generous
+// whole-value bound and fall back to prose truncation only for pathological
+// inputs the caller already knows in full.
+const agentRefWholeValueLimit = 256;
+
+function agentRefValue(value: string, fallbackCap: number): string {
+  return value.length <= agentRefWholeValueLimit ? value : truncateForAgent(value, fallbackCap);
+}
+
 interface AgentFlowFocus {
   action: string;
   assertion: string;
@@ -1073,7 +1086,25 @@ function compactAgentFlowFocus(focus: AgentFlowFocus | undefined, maxLength: num
   };
 }
 
-export function formatAgentQaDraft(result: QaDraftResult): string {
+export interface AgentFormatOptions {
+  // Absolute path of a locally written full report. When provided and the
+  // payload had to compact, the emitted compaction object discloses it as
+  // `fullReport` so a consuming agent can recover omitted traces, scenarios,
+  // and flows without re-running the analysis.
+  fullReportPath?: string;
+}
+
+export function formatAgentQaDraft(result: QaDraftResult, options?: AgentFormatOptions): string {
+  return `${serializeAgentSummary(buildAgentQaSummary(result), options)}\n`;
+}
+
+// The agent summary before byte-budget compaction, as a single JSON line.
+// This is what `compaction.fullReport` points at.
+export function formatAgentQaFullReport(result: QaDraftResult): string {
+  return `${JSON.stringify(buildAgentQaSummary(result))}\n`;
+}
+
+function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
   const scenarioAutomationById = aggregateScenarioAutomationById(result.flows);
   const traceByScenarioId = new Map(result.traces.map((trace) => [trace.scenario.id, trace]));
   const scenariosById = new Map(
@@ -1101,7 +1132,7 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
     currentDelta: result.currentDelta
       ? {
           scope: result.currentDelta.scope,
-          files: result.currentDelta.files.slice(0, 6).map((file) => truncateForAgent(file, 120)),
+          files: result.currentDelta.files.slice(0, 6),
           repositoryContracts: result.currentDelta.repositoryContracts.slice(0, 3).map(formatAgentRepositoryContract),
         }
       : undefined,
@@ -1166,7 +1197,7 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
       },
       artifact: trace.artifact
         ? {
-            draft: truncateForAgent(trace.artifact.draftPath, 120),
+            draft: trace.artifact.draftPath,
             status: trace.artifact.status,
             flowCoverage: trace.artifact.flowCount > 1
               ? `${trace.artifact.compiledFlowCount}/${trace.artifact.flowCount}`
@@ -1256,11 +1287,11 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
         authority: flow.authority,
         approvalRequired: flow.approvalRequired,
         testClass: flow.testClass,
-        draft: truncateForAgent(flow.draftPath, 140),
+        draft: flow.draftPath,
         runnable: flow.runnableStatus,
         verificationMode: flow.verificationMode,
-        entry: flow.entrypointHints[0] ? truncateForAgent(flow.entrypointHints[0], 140) : undefined,
-        changedFiles: flow.changedFiles.slice(0, 4).map((file) => truncateForAgent(file, 140)),
+        entry: flow.entrypointHints[0] || undefined,
+        changedFiles: flow.changedFiles.slice(0, 4),
         reviewQuestion: flow.userJourney?.reviewQuestion
           ? truncateForAgent(flow.userJourney.reviewQuestion, 180)
           : undefined,
@@ -1269,9 +1300,9 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
           : undefined,
         focus,
         steps: flow.draftSteps.slice(0, agentListLimit).map((step) => truncateForAgent(step)),
-        selectors: flow.selectorHints.slice(0, 5).map((selector) => truncateForAgent(selector, 100)),
+        selectors: flow.selectorHints.slice(0, 5),
         existingEvidence: flow.existingEvidencePaths.length > 0
-          ? flow.existingEvidencePaths.slice(0, 4).map((file) => truncateForAgent(file, 140))
+          ? flow.existingEvidencePaths.slice(0, 4)
           : undefined,
         scenarioAutomation: flow.scenarioAutomation.slice(0, 4).map((receipt) => ({
           id: receipt.scenarioId,
@@ -1285,9 +1316,9 @@ export function formatAgentQaDraft(result: QaDraftResult): string {
     recommendedEvidenceCount: result.missingEvidence.filter((item) => item.priority === "recommended").length,
     requiredBootstrap,
     prChecklist: result.prChecklist.slice(0, agentListLimit).map((item) => truncateForAgent(item)),
-    commands: result.suggestedCommands.slice(0, 4).map((command) => truncateForAgent(command, 180)),
+    commands: result.suggestedCommands.slice(0, 4),
   };
-  return `${serializeAgentSummary(summary)}\n`;
+  return summary;
 }
 
 interface AgentSummaryShape {
@@ -1381,11 +1412,17 @@ type CompactAgentFlowShape = Omit<AgentSummaryShape["flows"][number], "evidence"
   evidence?: string[];
 };
 
-function serializeAgentSummary(summary: AgentSummaryShape): string {
+function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormatOptions): string {
   const payload = JSON.stringify(summary);
   if (Buffer.byteLength(payload) <= agentPayloadByteLimit) {
     return payload;
   }
+  const compactionDisclosure = (extra: Record<string, unknown>): Record<string, unknown> => ({
+    maxBytes: agentPayloadByteLimit,
+    originalBytes: Buffer.byteLength(payload),
+    ...(options?.fullReportPath ? { fullReport: options.fullReportPath } : {}),
+    ...extra,
+  });
 
   const compact = {
     ...summary,
@@ -1413,7 +1450,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     requiredBootstrap: summary.requiredBootstrap.slice(0, 2),
     prChecklist: summary.prChecklist.slice(0, 4),
     commands: summary.commands.slice(0, 3),
-    compaction: { maxBytes: agentPayloadByteLimit, originalBytes: Buffer.byteLength(payload) },
+    compaction: compactionDisclosure({}),
   };
   const compactPayload = JSON.stringify(compact);
   if (Buffer.byteLength(compactPayload) <= agentPayloadByteLimit) {
@@ -1525,7 +1562,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
       : undefined,
     artifact: trace.artifact
       ? {
-          draft: truncateForAgent(String(trace.artifact.draft ?? ""), 60),
+          draft: String(trace.artifact.draft ?? ""),
           status: trace.artifact.status,
           flowCoverage: trace.artifact.flowCoverage,
         }
@@ -1542,7 +1579,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
         draft: flow.draft,
         verificationMode: flow.verificationMode,
         entry: flow.entry,
-        changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 80)),
+        changedFiles: flow.changedFiles.slice(0, 1),
         reviewQuestion: flow.reviewQuestion
           ? truncateForAgent(String(flow.reviewQuestion), 100)
           : undefined,
@@ -1552,18 +1589,16 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
         focus: compactAgentFlowFocus(flow.focus, 80),
         steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 80)),
         selectors: flow.selectors.slice(0, 1),
-        existingEvidence: flow.existingEvidence
-          ?.slice(0, 1)
-          .map((file) => truncateForAgent(file, 100)),
+        existingEvidence: flow.existingEvidence?.slice(0, 1),
       }
     : secondaryAgentFlow(flow));
   const leanPayload = JSON.stringify({
     schema: summary.schema,
-    base: truncateForAgent(String(summary.base ?? ""), 120),
-    head: truncateForAgent(String(summary.head ?? ""), 120),
+    base: agentRefValue(String(summary.base ?? ""), 120),
+    head: agentRefValue(String(summary.head ?? ""), 120),
     project: summary.project,
     runner: summary.runner,
-    manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 120) : null,
+    manifest: summary.manifest ? agentRefValue(String(summary.manifest), 120) : null,
     currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
     analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
     execution: summary.execution,
@@ -1587,7 +1622,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     requiredBootstrap: [],
     prChecklist: compact.prChecklist.slice(0, 1),
     commands: compact.commands.slice(0, 1),
-    compaction: { maxBytes: agentPayloadByteLimit, originalBytes: Buffer.byteLength(payload), lean: true },
+    compaction: compactionDisclosure({ lean: true }),
   });
   if (Buffer.byteLength(leanPayload) <= agentPayloadByteLimit) {
     return leanPayload;
@@ -1635,10 +1670,10 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
         authority: flow.authority,
         approvalRequired: flow.approvalRequired,
         testClass: flow.testClass,
-        draft: truncateForAgent(String(flow.draft ?? ""), 80),
+        draft: String(flow.draft ?? ""),
         verificationMode: flow.verificationMode,
-        entry: flow.entry ? truncateForAgent(String(flow.entry), 80) : undefined,
-        changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 80)),
+        entry: flow.entry ? String(flow.entry) : undefined,
+        changedFiles: flow.changedFiles.slice(0, 1),
         reviewQuestion: flow.reviewQuestion
           ? truncateForAgent(String(flow.reviewQuestion), 100)
           : undefined,
@@ -1647,20 +1682,18 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
           : undefined,
         focus: compactAgentFlowFocus(flow.focus, 70),
         steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 60)),
-        selectors: flow.selectors.slice(0, 1).map((selector) => truncateForAgent(selector, 60)),
-        existingEvidence: flow.existingEvidence
-          ?.slice(0, 1)
-          .map((file) => truncateForAgent(file, 80)),
+        selectors: flow.selectors.slice(0, 1),
+        existingEvidence: flow.existingEvidence?.slice(0, 1),
       }
     : secondaryAgentFlow(flow, { title: 55, source: 24, draft: 60, file: 60, question: 80, success: 80 }));
   const emergencyTraces = leanTraces.slice(0, 1);
   const emergencySummary = {
     schema: summary.schema,
-    base: truncateForAgent(String(summary.base ?? ""), 180),
-    head: truncateForAgent(String(summary.head ?? ""), 180),
+    base: agentRefValue(String(summary.base ?? ""), 180),
+    head: agentRefValue(String(summary.head ?? ""), 180),
     project: summary.project,
     runner: summary.runner,
-    manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 180) : null,
+    manifest: summary.manifest ? agentRefValue(String(summary.manifest), 180) : null,
     currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
     analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
     execution: summary.execution,
@@ -1683,8 +1716,8 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     recommendedEvidenceCount: summary.recommendedEvidenceCount,
     requiredBootstrap: [],
     prChecklist: summary.prChecklist.slice(0, 1).map((item) => truncateForAgent(item, 100)),
-    commands: summary.commands.slice(0, 1).map((command) => truncateForAgent(command, 100)),
-    compaction: { maxBytes: agentPayloadByteLimit, originalBytes: Buffer.byteLength(payload), emergency: true },
+    commands: summary.commands.slice(0, 1),
+    compaction: compactionDisclosure({ emergency: true }),
   };
   const emergencyPayload = JSON.stringify(emergencySummary);
   if (Buffer.byteLength(emergencyPayload) <= agentPayloadByteLimit) {
@@ -1707,9 +1740,9 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     ? {
         ...flow,
         title: truncateForAgent(String(flow.title ?? ""), 45),
-        draft: truncateForAgent(String(flow.draft ?? ""), 60),
-        entry: flow.entry ? truncateForAgent(String(flow.entry), 60) : undefined,
-        changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 60)),
+        draft: String(flow.draft ?? ""),
+        entry: flow.entry ? String(flow.entry) : undefined,
+        changedFiles: flow.changedFiles.slice(0, 1),
         reviewQuestion: flow.reviewQuestion
           ? truncateForAgent(String(flow.reviewQuestion), 75)
           : undefined,
@@ -1718,19 +1751,17 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
           : undefined,
         focus: compactAgentFlowFocus(flow.focus, 45),
         steps: flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 45)),
-        selectors: flow.selectors.slice(0, 1).map((selector) => truncateForAgent(selector, 45)),
-        existingEvidence: flow.existingEvidence
-          ?.slice(0, 1)
-          .map((file) => truncateForAgent(file, 60)),
+        selectors: flow.selectors.slice(0, 1),
+        existingEvidence: flow.existingEvidence?.slice(0, 1),
       }
     : secondaryAgentFlow(flow, { title: 45, source: 18, draft: 45, file: 45, question: 60, success: 60 }));
   const floorSummary = {
     schema: summary.schema,
-    base: truncateForAgent(String(summary.base ?? ""), 80),
-    head: truncateForAgent(String(summary.head ?? ""), 80),
+    base: agentRefValue(String(summary.base ?? ""), 80),
+    head: agentRefValue(String(summary.head ?? ""), 80),
     project: summary.project,
     runner: summary.runner,
-    manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 80) : null,
+    manifest: summary.manifest ? agentRefValue(String(summary.manifest), 80) : null,
     currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
     analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
     execution: summary.execution,
@@ -1753,13 +1784,8 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     recommendedEvidenceCount: summary.recommendedEvidenceCount,
     requiredBootstrap: [],
     prChecklist: [],
-    commands: summary.commands.slice(0, 1).map((command) => truncateForAgent(command, 70)),
-    compaction: {
-      maxBytes: agentPayloadByteLimit,
-      originalBytes: Buffer.byteLength(payload),
-      emergency: true,
-      floor: true,
-    },
+    commands: summary.commands.slice(0, 1),
+    compaction: compactionDisclosure({ emergency: true, floor: true }),
   };
   const floorPayload = JSON.stringify(floorSummary);
   if (Buffer.byteLength(floorPayload) <= agentPayloadByteLimit) {
@@ -1788,9 +1814,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
       ? {
           kind: trace.source.kind,
           reason: "Located evidence.",
-          file: trace.source.file
-            ? truncateForAgent(String(trace.source.file), 60)
-            : undefined,
+          file: trace.source.file ? String(trace.source.file) : undefined,
         }
       : undefined,
     risk: trace.risk
@@ -1828,7 +1852,7 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
         return {
           kind: value.kind,
           reason: "Located evidence.",
-          file: value.file ? truncateForAgent(String(value.file), 60) : undefined,
+          file: value.file ? String(value.file) : undefined,
         };
       }),
       assertions: [],
@@ -1840,9 +1864,9 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     authority: flow.authority,
     approvalRequired: flow.approvalRequired,
     testClass: flow.testClass,
-    draft: truncateForAgent(String(flow.draft ?? ""), 45),
+    draft: String(flow.draft ?? ""),
     verificationMode: flow.verificationMode,
-    changedFiles: flow.changedFiles.slice(0, 1).map((file) => truncateForAgent(file, 60)),
+    changedFiles: flow.changedFiles.slice(0, 1),
     reviewQuestion: flow.reviewQuestion
       ? truncateForAgent(String(flow.reviewQuestion), 70)
       : undefined,
@@ -1853,17 +1877,15 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
       ? flow.steps.slice(0, 1).map((step) => truncateForAgent(step, 45))
       : [],
     selectors: [],
-    existingEvidence: flow.existingEvidence
-      ?.slice(0, 1)
-      .map((file) => truncateForAgent(file, 60)),
+    existingEvidence: flow.existingEvidence?.slice(0, 1),
   }));
-  return JSON.stringify({
+  const hardLimitSummary = {
     schema: summary.schema,
-    base: truncateForAgent(String(summary.base ?? ""), 48),
-    head: truncateForAgent(String(summary.head ?? ""), 48),
+    base: agentRefValue(String(summary.base ?? ""), 48),
+    head: agentRefValue(String(summary.head ?? ""), 48),
     project: summary.project,
     runner: summary.runner,
-    manifest: summary.manifest ? truncateForAgent(String(summary.manifest), 48) : null,
+    manifest: summary.manifest ? agentRefValue(String(summary.manifest), 48) : null,
     currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
     execution: summary.execution,
     route: summary.route,
@@ -1873,26 +1895,73 @@ function serializeAgentSummary(summary: AgentSummaryShape): string {
     manifestCorrection: summary.manifestCorrection,
     traceCount: summary.traceCount,
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - hardLimitTraces.length),
-    traces: hardLimitTraces,
+    traces: hardLimitTraces as unknown[],
     testSuite: summary.testSuite,
     intentCount: summary.intentCount,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - hardLimitIntents.length),
-    intents: hardLimitIntents,
+    intents: hardLimitIntents as Array<Record<string, unknown>>,
     flowCount: summary.flowCount,
     omittedFlowCount: Math.max(0, numericCount(summary.flowCount) - hardLimitFlows.length),
-    flows: hardLimitFlows,
+    flows: hardLimitFlows as Array<Record<string, unknown>>,
     requiredEvidence: [],
     recommendedEvidenceCount: summary.recommendedEvidenceCount,
     requiredBootstrap: [],
     prChecklist: [],
-    commands: summary.commands.slice(0, 1).map((command) => truncateForAgent(command, 60)),
-    compaction: {
-      maxBytes: agentPayloadByteLimit,
-      originalBytes: Buffer.byteLength(payload),
-      emergency: true,
-      hardLimit: true,
+    commands: summary.commands.slice(0, 1),
+    compaction: compactionDisclosure({ emergency: true, hardLimit: true }),
+  };
+  let hardLimitPayload = JSON.stringify(hardLimitSummary);
+  if (Buffer.byteLength(hardLimitPayload) <= agentPayloadByteLimit) {
+    return hardLimitPayload;
+  }
+
+  // Identifier-preserving overflow relief: identifier values are never emitted
+  // as partial strings, so a payload that still exceeds the budget sheds whole
+  // optional values instead — each drop stays disclosed through the omitted
+  // counts that already accompany the lists.
+  const reliefSteps: Array<() => void> = [
+    () => {
+      for (const flow of hardLimitSummary.flows) delete flow.existingEvidence;
     },
-  });
+    () => {
+      for (const flow of hardLimitSummary.flows) delete flow.changedFiles;
+    },
+    () => {
+      hardLimitSummary.omittedFlowCount += Math.max(0, hardLimitSummary.flows.length - 1);
+      hardLimitSummary.flows = hardLimitSummary.flows.slice(0, 1);
+    },
+    () => {
+      hardLimitSummary.omittedTraceCount += hardLimitSummary.traces.length;
+      hardLimitSummary.traces = [];
+    },
+    () => {
+      for (const intent of hardLimitSummary.intents) {
+        for (const scenario of (intent.scenarios as Array<Record<string, unknown>> | undefined) ?? []) {
+          delete scenario.sources;
+        }
+      }
+    },
+    () => {
+      hardLimitSummary.commands = [];
+    },
+    () => {
+      for (const flow of hardLimitSummary.flows) {
+        flow.steps = [];
+        delete flow.reviewQuestion;
+        delete flow.successSignal;
+        delete flow.focus;
+        delete flow.entry;
+      }
+    },
+  ];
+  for (const relieve of reliefSteps) {
+    relieve();
+    hardLimitPayload = JSON.stringify(hardLimitSummary);
+    if (Buffer.byteLength(hardLimitPayload) <= agentPayloadByteLimit) {
+      return hardLimitPayload;
+    }
+  }
+  return hardLimitPayload;
 }
 
 function compactAgentCurrentDelta(
@@ -1904,10 +1973,10 @@ function compactAgentCurrentDelta(
   }
   return {
     scope: value.scope,
-    files: value.files.slice(0, Math.max(1, limit)).map((file) => truncateForAgent(file, 80)),
+    files: value.files.slice(0, Math.max(1, limit)),
     repositoryContracts: value.repositoryContracts.slice(0, Math.max(1, limit)).map((contract) => ({
       title: truncateForAgent(String(contract.title ?? ""), 80),
-      file: truncateForAgent(String(contract.file ?? ""), 80),
+      file: String(contract.file ?? ""),
       line: contract.line,
       framework: contract.framework,
       authority: contract.authority,
@@ -1984,11 +2053,9 @@ function secondaryAgentFlow(
     authority: flow.authority,
     approvalRequired: flow.approvalRequired,
     testClass: flow.testClass,
-    draft: truncateForAgent(String(flow.draft ?? ""), limits.draft ?? 70),
+    draft: String(flow.draft ?? ""),
     verificationMode: flow.verificationMode,
-    changedFiles: flow.changedFiles
-      .slice(0, 1)
-      .map((file) => truncateForAgent(file, limits.file ?? 70)),
+    changedFiles: flow.changedFiles.slice(0, 1),
     reviewQuestion: flow.reviewQuestion
       ? truncateForAgent(String(flow.reviewQuestion), limits.question ?? 90)
       : undefined,
@@ -1998,9 +2065,7 @@ function secondaryAgentFlow(
     focus: compactAgentFlowFocus(flow.focus, Math.min(limits.question ?? 90, limits.success ?? 90)),
     steps: [],
     selectors: [],
-    existingEvidence: flow.existingEvidence
-      ?.slice(0, 1)
-      .map((file) => truncateForAgent(file, limits.file ?? 70)),
+    existingEvidence: flow.existingEvidence?.slice(0, 1),
     evidence: [],
   };
 }
@@ -2114,7 +2179,7 @@ function formatAgentRepositoryContract(
 ): Record<string, string | number | boolean> {
   return {
     title: truncateForAgent(contract.title, 100),
-    file: truncateForAgent(contract.file, 120),
+    file: contract.file,
     line: contract.line,
     framework: contract.framework,
     authority: "repository-contract",
