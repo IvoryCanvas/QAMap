@@ -3905,6 +3905,93 @@ test("a diff-anchored visible outcome keeps its concrete success signal", async 
   assert.notEqual(journey.successSignalUnresolved, true);
 });
 
+test("ticket tags stay in the intent title once and out of derived sentences", async (t) => {
+  const root = await makeRepo(t);
+  const invoiceFile = "src/invoices/bindInvite.ts";
+  const noticeFile = "src/notices/expireNotice.ts";
+  await write(root, invoiceFile, "export const bindInvite = () => 'idle';\n");
+  await write(root, noticeFile, "export const expireNotice = () => 'idle';\n");
+  commit(root, "chore: baseline");
+  branch(root, "feature/ticket-tags");
+
+  await write(
+    root,
+    invoiceFile,
+    [
+      "export function bindInvite(address) {",
+      "  if (!address) throw new Error('Invite address is required');",
+      "  localStorage.setItem('invite-address', address);",
+      "  return 'Invite bound';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "fix: bind the invite to the invited address [APP-42]");
+
+  await write(
+    root,
+    noticeFile,
+    [
+      "export function expireNotice(daysLeft) {",
+      "  if (daysLeft <= 0) return 'Notice expired';",
+      "  return 'Notice active';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "[QA-104] fix: expire stale notices after the retention window");
+
+  const analysis = await analyze(root, [invoiceFile, noticeFile]);
+
+  const inviteIntent = analysis.intents.find((intent) => /bind the invite/i.test(intent.title));
+  const noticeIntent = analysis.intents.find((intent) => /expire stale notices/i.test(intent.title));
+  assert.ok(inviteIntent, "trailing-tag commit must still produce its intent");
+  assert.ok(noticeIntent, "leading-tag commit must still produce its intent");
+
+  // The tag survives exactly once, in the title, as provenance.
+  assert.match(inviteIntent.title, /\[APP-42\]$/);
+  assert.match(noticeIntent.title, /\[QA-104\]$/);
+
+  // Derived sentences must be clean.
+  for (const intent of [inviteIntent, noticeIntent]) {
+    for (const stage of intent.lifecycle) {
+      assert.doesNotMatch(stage.label, /APP-42|QA-104/);
+    }
+    for (const scenario of intent.scenarios) {
+      for (const assertion of scenario.assertions) {
+        assert.doesNotMatch(assertion, /APP-42|QA-104/);
+      }
+    }
+    assert.doesNotMatch(intent.summary, /APP-42|QA-104/);
+  }
+});
+
+test("short acronym directory segments keep their uppercase form in flow titles", async (t) => {
+  const root = await makeRepo(t);
+  const noticeFile = "modules/ee/inspector/notice.tsx";
+  await write(root, "package.json", JSON.stringify({ name: "acronym-app", private: true }));
+  await write(root, noticeFile, "export const Notice = () => 'visible';\n");
+  commit(root, "chore: baseline");
+  branch(root, "feature/notice");
+  await write(
+    root,
+    noticeFile,
+    [
+      "export function Notice(dismissed) {",
+      "  if (dismissed) return 'hidden';",
+      "  return 'visible';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "fix: hide the dismissed inspector notice");
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const titles = qa.flows.map((flow) => flow.title).join(" | ");
+  assert.doesNotMatch(titles, /\bEe\b/);
+  assert.match(titles, /\bEE\b/);
+});
+
 test("a branch of only cleanup commits keeps its newest cleanup intent first", async (t) => {
   const root = await makeRepo(t);
   const labelFile = "src/listings/listingLabels.ts";

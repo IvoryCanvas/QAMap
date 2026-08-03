@@ -642,7 +642,12 @@ function normalizeSegment(value: string | undefined): string | undefined {
   if (/^use[A-Z]/.test(normalized)) {
     return undefined;
   }
-  return isUsefulTerm(normalized) ? normalized : undefined;
+  // Two-letter all-lowercase directory segments (ee, ui, db) are near-always
+  // acronyms; keep their uppercase form so titleCase preserves them instead of
+  // producing terms like "Ee". Longer segments stay untouched because
+  // three-letter directories are often plain words (web, app).
+  const acronymized = /^[a-z]{2}$/.test(normalized) ? normalized.toUpperCase() : normalized;
+  return isUsefulTerm(acronymized) ? acronymized : undefined;
 }
 
 function isRouteSyntaxSegment(value: string): boolean {

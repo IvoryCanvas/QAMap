@@ -967,7 +967,10 @@ function domainFromPath(file: string): string | undefined {
   for (const key of ["features", "domains", "modules", "services"]) {
     const index = segments.indexOf(key);
     if (index >= 0 && segments[index + 1]) {
-      return segments[index + 1];
+      const segment = segments[index + 1];
+      // Mirror the e2e flow naming rule: two-letter all-lowercase segments are
+      // near-always acronyms and keep their uppercase form.
+      return /^[a-z]{2}$/.test(segment) ? segment.toUpperCase() : segment;
     }
   }
   return undefined;
