@@ -3992,6 +3992,52 @@ test("short acronym directory segments keep their uppercase form in flow titles"
   assert.match(titles, /\bEE\b/);
 });
 
+test("symbol-derived lifecycle labels read behaviorally instead of exposing raw identifiers", async (t) => {
+  const root = await makeRepo(t);
+  const draftFile = "src/journals/saveJournalDraft.ts";
+  await write(root, draftFile, "export const saveJournalDraft = () => 'idle';\n");
+  commit(root, "chore: baseline");
+  branch(root, "feature/journal-draft");
+  await write(
+    root,
+    draftFile,
+    [
+      "export function saveJournalDraft(draft) {",
+      "  setDraftMode(draft);",
+      "  sendJournalReceipt(draft);",
+      "  showSavedBanner();",
+      "  return 'Draft stored';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: keep a journal draft while editing");
+
+  const analysis = await analyze(root, [draftFile]);
+  const labels = analysis.intents.flatMap((intent) => intent.lifecycle.map((stage) => stage.label));
+  const joined = labels.join(" | ");
+
+  // Setter-derived state changes read as behavior, not as the setter name.
+  assert.match(joined, /Update the draft mode state\./);
+  assert.doesNotMatch(joined, /Update state through setDraftMode/);
+  // Side effects and outcomes that cannot be phrased naturally mark the
+  // identifier as code instead of presenting it as prose.
+  assert.match(joined, /Invoke `sendJournalReceipt`\./);
+  assert.match(joined, /Observe the result of `showSavedBanner`\./);
+
+  // Derived assertions keep the code marking.
+  const assertions = analysis.intents.flatMap((intent) =>
+    intent.scenarios.flatMap((scenario) => scenario.assertions)
+  );
+  assert.ok(assertions.some((assertion) => assertion.includes("`showSavedBanner`")));
+
+  // Exact symbols stay available as evidence.
+  const evidenceSymbols = analysis.intents.flatMap((intent) =>
+    intent.evidence.map((item) => item.symbol).filter(Boolean)
+  );
+  assert.ok(evidenceSymbols.includes("setDraftMode"));
+});
+
 test("a branch of only cleanup commits keeps its newest cleanup intent first", async (t) => {
   const root = await makeRepo(t);
   const labelFile = "src/listings/listingLabels.ts";
