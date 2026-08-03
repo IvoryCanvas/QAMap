@@ -30,6 +30,8 @@
 
 ### Fixed
 
+- Compacted agent payloads no longer emit partial identifier values. Draft paths, changed files, existing evidence, selectors, entry hints, and commands stay whole at every compaction stage; an oversized payload drops whole optional values — disclosed through the existing omitted counts — instead of truncating a path the consuming agent could not open. `base`, `head`, and `manifest` stay whole up to 256 characters. The previously undocumented `floor` and `hardLimit` compaction flags are now part of the documented schema.
+- `qamap qa --format agent` now writes the pre-compaction summary to a temp file and discloses it as `compaction.fullReport` (additive v1 field), so an agent can recover omitted traces, scenarios, and flows without re-running the analysis. The analyzed repository stays untouched; the library export `formatAgentQaFullReport` produces the same document.
 - Fixed change-intent review ranking so a cleanup-shaped tip commit (for example `fix: minor refactor` or `fix: tidy up and add tests`) no longer displaces the branch's substantive intent from the headline, scenario names, and generated draft filenames. Cleanup-only intents are demoted below substantive intents but never dropped, and pure-cleanup branches keep their newest intent first. Observed on real public PR branches, where review-feedback commits routinely close a branch.
 
 ## 0.4.8 - 2026-07-27

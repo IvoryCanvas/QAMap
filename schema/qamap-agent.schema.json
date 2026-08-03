@@ -571,12 +571,24 @@
     },
     "compaction": {
       "type": "object",
-      "description": "Present when QAMap reduced lower-priority detail to keep the complete line below 4KB while retaining the highest-priority flow and a compact second flow for multi-surface changes.",
+      "description": "Present when QAMap reduced lower-priority detail to keep the complete line below 4KB while retaining the highest-priority flow and a compact second flow for multi-surface changes. Identifier values (draft paths, changed files, existing evidence, selectors, entry hints, commands) are never emitted as partial strings; oversized payloads drop whole optional values, disclosed through the omitted counts.",
       "properties": {
         "maxBytes": { "type": "integer", "minimum": 1 },
         "originalBytes": { "type": "integer", "minimum": 1 },
         "lean": { "type": "boolean" },
-        "emergency": { "type": "boolean" }
+        "emergency": { "type": "boolean" },
+        "floor": {
+          "type": "boolean",
+          "description": "The harsher floor shape was required after the emergency shape still exceeded the budget."
+        },
+        "hardLimit": {
+          "type": "boolean",
+          "description": "The final identifier-preserving shape was required; whole optional values may have been dropped and are reflected in the omitted counts."
+        },
+        "fullReport": {
+          "type": "string",
+          "description": "Absolute path of a locally written temp file containing the same agent summary before byte-budget compaction. Written by the CLI on a best-effort basis; recover omitted traces, scenarios, and flows from it instead of re-running the analysis."
+        }
       }
     },
     "requiredEvidence": {

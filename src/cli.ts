@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-import { promises as fs } from "node:fs";
+import { createHash } from "node:crypto";
+import { promises as fs, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { formatAgentInitReport, initAgentSetup } from "./agent-init.js";
@@ -39,7 +41,7 @@ import {
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
-import { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+import { formatAgentQaDraft, formatAgentQaFullReport, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
 import { formatQaScriptInitReport, initializeQaScripts } from "./script-init.js";
@@ -828,7 +830,21 @@ function formatQaDraftOutput(result: Awaited<ReturnType<typeof generateQaDraft>>
     return `${JSON.stringify(result, null, 2)}\n`;
   }
   if (format === "agent") {
-    return formatAgentQaDraft(result);
+    // Write the pre-compaction summary next to the system temp directory so a
+    // consuming agent can recover omitted traces, scenarios, and flows without
+    // re-running the analysis. The analyzed repository itself stays untouched.
+    // Best effort: when the write fails the payload simply omits the pointer.
+    const digest = createHash("sha256")
+      .update(`${result.root} ${result.base} ${result.head}`)
+      .digest("hex")
+      .slice(0, 12);
+    const fullReportPath = path.join(os.tmpdir(), `qamap-qa-agent-full-${digest}.json`);
+    try {
+      writeFileSync(fullReportPath, formatAgentQaFullReport(result));
+      return formatAgentQaDraft(result, { fullReportPath });
+    } catch {
+      return formatAgentQaDraft(result);
+    }
   }
   if (format !== "markdown" && format !== "text") {
     throw new Error(`QA draft supports text, json, markdown, or agent output, not ${format}`);

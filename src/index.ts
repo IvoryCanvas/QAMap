@@ -78,7 +78,7 @@ export {
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
-export { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+export { formatAgentQaDraft, formatAgentQaFullReport, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
 export { buildQaReasoningTraces, qaTraceIdForScenario, summarizeQaTraceEvidence } from "./qa-trace.js";
 export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 export { isRequiredScenarioEvidence, routeQaScenario } from "./scenario-routing.js";

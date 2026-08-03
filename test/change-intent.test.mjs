@@ -868,6 +868,85 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
   assert.ok(compactSummary.flows[0].steps.length > 0);
 });
 
+test("compacted agent payloads keep identifier values whole and disclose a full report", async (t) => {
+  const root = await makeRepo(t);
+  const pageFile = "src/deeply/nested/preferences/panels/workspace/settingsPanel.tsx";
+  await write(root, "package.json", JSON.stringify({ name: "identifier-app", private: true }));
+  await write(root, pageFile, "export const SettingsPanel = () => 'idle';\n");
+  commit(root, "chore: baseline");
+  branch(root, "feature/long-journey");
+  await write(
+    root,
+    pageFile,
+    [
+      "export function SettingsPanel(confirmed) {",
+      "  if (!confirmed) return 'Confirmation required';",
+      "  return 'Workspace density preferences restored';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: add workspace preferences density reset confirmation banner journey");
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const oversizedQa = structuredClone(qa);
+  oversizedQa.changeAnalysis.intents = Array.from({ length: 12 }, (_, index) => ({
+    ...structuredClone(qa.changeAnalysis.intents[0]),
+    title: `${qa.changeAnalysis.intents[0].title} ${index} ${"intent".repeat(40)}`,
+  }));
+  oversizedQa.flows = Array.from({ length: 20 }, (_, index) => ({
+    ...structuredClone(qa.flows[0]),
+    title: `${qa.flows[0].title} ${index} ${"flow".repeat(40)}`,
+    changedFiles: Array.from({ length: 12 }, () => pageFile),
+    draftSteps: Array.from({ length: 12 }, (__, stepIndex) => `Step ${stepIndex} ${"detail ".repeat(50)}`),
+  }));
+
+  const fullReportPath = path.join(os.tmpdir(), "qamap-test-agent-full-report.json");
+  const compactOutput = formatAgentQaDraft(oversizedQa, { fullReportPath });
+  const compactSummary = JSON.parse(compactOutput);
+
+  assert.ok(Buffer.byteLength(compactOutput) <= 4 * 1024 - 1);
+  assert.ok(compactSummary.compaction, "the oversized payload must have compacted");
+
+  const identifierKeys = new Set([
+    "draft",
+    "changedFiles",
+    "existingEvidence",
+    "file",
+    "files",
+    "commands",
+    "selectors",
+    "entry",
+  ]);
+  const partialIdentifiers = [];
+  const walk = (node, keyName) => {
+    if (typeof node === "string") {
+      if (identifierKeys.has(keyName) && node.endsWith("…")) {
+        partialIdentifiers.push(`${keyName}: ${node}`);
+      }
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item, keyName);
+      return;
+    }
+    if (node && typeof node === "object") {
+      for (const [key, value] of Object.entries(node)) walk(value, key);
+    }
+  };
+  walk(compactSummary, "");
+  assert.deepEqual(partialIdentifiers, [], "identifier values must never be emitted as partial strings");
+
+  assert.equal(compactSummary.compaction.fullReport, fullReportPath);
+
+  const qaModule = await import("../dist/qa.js");
+  assert.equal(typeof qaModule.formatAgentQaFullReport, "function");
+  const fullReport = JSON.parse(qaModule.formatAgentQaFullReport(oversizedQa));
+  assert.equal(fullReport.schema.name, "qamap.qa");
+  assert.equal(fullReport.flows.length >= compactSummary.flows.length, true);
+  assert.ok(Buffer.byteLength(JSON.stringify(fullReport)) > 4 * 1024 - 1);
+});
+
 test("repository analysis plumbing does not become product boundary QA", async (t) => {
   const root = await makeRepo(t);
   await write(
