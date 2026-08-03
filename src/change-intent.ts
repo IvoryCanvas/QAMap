@@ -60,6 +60,9 @@ export interface BehaviorLifecycleStage {
   confidence: ChangeIntentConfidence;
   evidence: ChangeIntentEvidence[];
   files: string[];
+  // Raw code identifier when the stage was derived from a code signal, so
+  // classification never depends on the reader-facing label phrasing.
+  symbol?: string;
 }
 
 export interface IntentQaScenario {
@@ -761,7 +764,7 @@ function buildLifecycle(
       };
       continue;
     }
-    stages.push(createLifecycleStage(signal.kind, signal.label, "medium", [signal.evidence], [signal.file]));
+    stages.push(createLifecycleStage(signal.kind, signal.label, "medium", [signal.evidence], [signal.file], signal.symbol));
   }
 
   stages.push(...lifecycleFromDetectedRiskEvidence(roleEvidence));
@@ -922,6 +925,7 @@ function createLifecycleStage(
   confidence: ChangeIntentConfidence,
   evidence: ChangeIntentEvidence[],
   files: string[],
+  symbol?: string,
 ): BehaviorLifecycleStage {
   const normalizedLabel = sentenceLabel(label);
   return {
@@ -931,6 +935,7 @@ function createLifecycleStage(
     confidence,
     evidence: uniqueEvidence(evidence),
     files: uniqueStrings(files),
+    ...(symbol ? { symbol } : {}),
   };
 }
 
@@ -1263,7 +1268,11 @@ function buildIntentQaScenarios(
     ], ["Permission denied", "Feature disabled", "State restored"], scenarioEvidenceFor(productLifecycle, productEvidence, /toggle|enable|disable|permission|authoriz|auth|guard/i)));
   }
 
-  const entryRoutingSearchable = searchable.replaceAll("navigation.setoptions", "");
+  // navigation.setOptions configures the current screen's header, it does not
+  // route anywhere — exclude both its raw form and its behavioral label.
+  const entryRoutingSearchable = searchable
+    .replaceAll("navigation.setoptions", "")
+    .replaceAll("update the navigation options state", "");
   const explicitOpenDestination = /\bopen\b[^.;]{0,80}\b(?:linked|destination|route|screen|page|detail|summary)\b/.test(
     entryRoutingSearchable,
   );
@@ -1549,7 +1558,17 @@ function normalizeLifecycleAlignmentToken(value: string): string {
 }
 
 function isImplementationShapedStateChangeStage(stage: BehaviorLifecycleStage): boolean {
-  return /^Update state through (?:set|update|dispatch|emit|mutate|use)[A-Z0-9_]/.test(stage.label);
+  if (stage.kind !== "state-change") {
+    return false;
+  }
+  // Prefer the structural symbol over label text so behavioral phrasing of
+  // the label cannot silently change this classification. The whole symbol
+  // must start with a setter verb — "navigation.setOptions" is a member call
+  // on a product object, not a bare state setter, and keeps its old standing.
+  if (stage.symbol) {
+    return /^(?:set|update|dispatch|emit|mutate|use)[A-Z0-9_]/.test(stage.symbol);
+  }
+  return /^Update state through `?(?:set|update|dispatch|emit|mutate|use)[A-Z0-9_]/.test(stage.label);
 }
 
 function isDurableStateChangeRequirement(stage: BehaviorLifecycleStage): boolean {
@@ -2454,6 +2473,22 @@ function isImplementationPredicateCall(identifier: string, expression = identifi
   return names.some((name) => implementationPredicateCalls.has(name.toLowerCase()));
 }
 
+// QA staff read lifecycle labels, so symbol-derived stages phrase behavior in
+// prose where that is safe (setter targets) and mark the identifier as code
+// with backticks where naive humanization would produce nonsense (predicates,
+// method chains). Exact symbols always remain on the stage and its evidence.
+const stateSetterVerbs = new Set(["set", "update", "dispatch", "emit", "mutate", "use", "toggle"]);
+
+function humanizedStateTarget(symbol: string): string | undefined {
+  const words = humanizeIdentifier(symbol).split(/\s+/).filter(Boolean);
+  const verbIndex = words.findIndex((word) => stateSetterVerbs.has(word));
+  if (verbIndex < 0) {
+    return undefined;
+  }
+  const target = [...words.slice(0, verbIndex), ...words.slice(verbIndex + 1)].join(" ").trim();
+  return target || undefined;
+}
+
 function codeSignalLabel(kind: BehaviorLifecycleStageKind, symbol: string): string {
   if (kind === "trigger") {
     return `Trigger ${humanizeIdentifier(symbol)}.`;
@@ -2462,15 +2497,16 @@ function codeSignalLabel(kind: BehaviorLifecycleStageKind, symbol: string): stri
     return `Check ${humanizeIdentifier(symbol)}.`;
   }
   if (kind === "state-change") {
-    return `Update state through ${symbol}.`;
+    const target = humanizedStateTarget(symbol);
+    return target ? `Update the ${target} state.` : `Update state through \`${symbol}\`.`;
   }
   if (kind === "side-effect") {
-    return `Invoke ${symbol}.`;
+    return `Invoke \`${symbol}\`.`;
   }
   if (kind === "observable-outcome") {
-    return `Observe the result of ${symbol}.`;
+    return `Observe the result of \`${symbol}\`.`;
   }
-  return `Run ${symbol}.`;
+  return `Run \`${symbol}\`.`;
 }
 
 function extractTriggerPhrases(statement: string): string[] {
