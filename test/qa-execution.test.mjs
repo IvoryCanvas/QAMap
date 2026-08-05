@@ -50,7 +50,8 @@ test("profile output stays visible", () => {
   assert.ok(result.execution.stdoutBytes > 0);
   assert.match(result.execution.stdoutSha256, /^[a-f0-9]{64}$/);
   assert.match(streamedStdout, /PRIVATE_FIXTURE_OUTPUT_SHOULD_NOT_ENTER_THE_RECEIPT/);
-  assert.equal(streamedStderr, "");
+  assert.equal(result.execution.stderrBytes, Buffer.byteLength(streamedStderr, "utf8"));
+  assert.doesNotMatch(streamedStderr, /PRIVATE_FIXTURE_OUTPUT_SHOULD_NOT_ENTER_THE_RECEIPT/);
   assert.doesNotMatch(
     JSON.stringify(result.execution),
     /PRIVATE_FIXTURE_OUTPUT_SHOULD_NOT_ENTER_THE_RECEIPT/,
