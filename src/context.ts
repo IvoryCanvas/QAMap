@@ -57,6 +57,7 @@ export async function generateAgentContext(rootInput: string): Promise<string> {
   lines.push("");
   lines.push(`- Before opening a pull request, run \`${dlxCommandFor(snapshot.packageManager)} qa . --base origin/main --head HEAD --format agent\` and address the required evidence and bootstrap items it reports.`);
   lines.push("- Treat the output as QA planning evidence, not as proof that browser, device, or manual QA passed.");
+  lines.push(`- If \`route.nextAction\` is \`run-repository-command\` and execution policy permits it, use \`${dlxCommandFor(snapshot.packageManager)} qa run . --base origin/main --head HEAD --format agent\`; do not repeat the command when \`execution.performed\` is true.`);
   lines.push("- For UI-affecting changes, review the suggested E2E draft before handing the pull request to a human.");
   lines.push("");
   lines.push("## Repository Boundaries");

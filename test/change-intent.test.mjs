@@ -656,6 +656,13 @@ test("source roles distinguish product behavior from commands and analysis rules
     "analysis-rule",
   );
   assert.equal(
+    classifyChangeSourceRole(
+      "src/context.ts",
+      "Tell the agent to inspect route.nextAction before qa run and never repeat it when execution.performed is true.",
+    ).role,
+    "analysis-rule",
+  );
+  assert.equal(
     classifyChangeSourceRole("src/index.ts", "export { classifyChangeSourceRole } from './source-role.js';").role,
     "analysis-rule",
   );
@@ -1012,6 +1019,46 @@ test("repository analysis plumbing does not become product boundary QA", async (
   assert.equal(titles.some((title) => /Destination path|destination routing/i.test(title)), false);
   assert.equal(titles.some((title) => /Changed conditional state and fallback/i.test(title)), false);
   assert.equal(titles.some((title) => /Failure, timeout, and retry handling/i.test(title)), false);
+});
+
+test("agent execution contract generators do not become product state-transition QA", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({ name: "agent-context-generator", type: "module", bin: { inspect: "dist/cli.js" } }),
+  );
+  await write(
+    root,
+    "src/context.ts",
+    "export function generateInstructions() { return 'Run repository validation before handoff.'; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/agent-validation-receipt");
+  await write(
+    root,
+    "src/context.ts",
+    [
+      "export function generateInstructions() {",
+      "  return [",
+      "    'Inspect route.nextAction before qa run.',",
+      "    'Apply the agent execution policy before repository code execution.',",
+      "    'Do not repeat validation when execution.performed is true.',",
+      "  ].join('\\n');",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "feat: add bounded agent validation receipt");
+
+  const analysis = await analyze(root, ["src/context.ts"]);
+  const evidence = analysis.intents.flatMap((intent) => intent.evidence);
+  const titles = analysis.intents.flatMap((intent) => intent.scenarios.map((scenario) => scenario.title));
+
+  assert.ok(evidence.some((item) =>
+    item.file === "src/context.ts" && item.sourceRole === "analysis-rule"
+  ));
+  assert.equal(titles.some((title) => /state transition|persisted state|re-entry/i.test(title)), false);
+  assert.ok(titles.some((title) => /analysis rule positive and negative controls/i.test(title)));
 });
 
 test("package API exports do not imply network failure QA", async (t) => {

@@ -61,6 +61,7 @@ export function buildAgentQaSection(dlxCommand: string): string {
     "- Address every `requiredEvidence` item before handing the pull request to a human.",
     "- Treat `automation` as opt-in. Generate or set up an E2E adapter only after the scenario and source evidence are accepted.",
     "- Treat the result as QA planning evidence, not as proof that browser, device, or manual QA passed.",
+    `- If \`route.nextAction\` is \`run-repository-command\` and policy permits repository code execution, run \`${dlxCommand} qa run . --base origin/main --head HEAD --format agent\`; do not repeat it when \`execution.performed\` is true.`,
     "- The full workflow lives in `.agents/skills/qamap-pr-qa/SKILL.md`; Claude Code also receives `.claude/skills/qamap-pr-qa/SKILL.md`.",
     SECTION_END,
   ].join("\n");

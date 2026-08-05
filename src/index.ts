@@ -79,6 +79,7 @@ export {
 } from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 export { formatAgentQaDraft, formatAgentQaFullReport, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+export { formatMarkdownQaValidation, runQaValidation } from "./qa-execution.js";
 export {
   evaluateQaCapabilities,
   isInstructionLikeRepositoryText,
@@ -331,6 +332,8 @@ export type {
   QaAnalysisScope,
   QaAnalysisScopeCandidate,
   QaAnalysisScopeMode,
+  QaBlockedExecutionReceipt,
+  QaCompletedExecutionReceipt,
   QaDraftFlow,
   QaDraftMissingEvidence,
   QaDraftOptions,
@@ -341,8 +344,10 @@ export type {
   QaRouteDecision,
   QaRouteNextAction,
   QaRouteStatus,
+  QaStaticExecutionReceipt,
   QaVerificationStatus,
 } from "./qa.js";
+export type { RunQaValidationOptions } from "./qa-execution.js";
 export type {
   QaActionApproval,
   QaActionContract,

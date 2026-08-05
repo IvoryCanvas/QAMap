@@ -218,12 +218,29 @@
     },
     "execution": {
       "type": "object",
-      "description": "Explicit receipt for product QA execution. The qa command performs static analysis and draft mapping only; it never claims the target application was exercised.",
+      "description": "Explicit execution receipt. Plain qa remains not-run. qa run may execute only the exact selected repository validation command and reports bounded pass, fail, or blocked evidence.",
       "required": ["status", "performed", "scope"],
       "properties": {
-        "status": { "const": "not-run" },
-        "performed": { "const": false },
-        "scope": { "const": "static-analysis-and-draft-mapping" }
+        "status": {
+          "type": "string",
+          "enum": ["not-run", "blocked", "passed", "failed"]
+        },
+        "performed": { "type": "boolean" },
+        "scope": {
+          "type": "string",
+          "enum": ["static-analysis-and-draft-mapping", "repository-validation"]
+        },
+        "reason": { "type": "string" },
+        "command": { "type": "string" },
+        "cwd": { "const": "." },
+        "exitCode": { "type": "integer" },
+        "signal": { "type": "string" },
+        "durationMs": { "type": "integer", "minimum": 0 },
+        "timedOut": { "type": "boolean" },
+        "stdoutBytes": { "type": "integer", "minimum": 0 },
+        "stderrBytes": { "type": "integer", "minimum": 0 },
+        "stdoutSha256": { "type": "string" },
+        "stderrSha256": { "type": "string" }
       }
     },
     "route": {
@@ -257,7 +274,7 @@
         },
         "command": {
           "type": "string",
-          "description": "Exact existing repository command when nextAction is run-repository-command. QAMap has not executed it."
+          "description": "Exact existing repository command when nextAction is run-repository-command. Check execution before deciding whether it still needs to run."
         }
       }
     },

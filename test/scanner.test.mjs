@@ -6244,13 +6244,14 @@ test("initializeQaScripts adds short repeat-use commands and stays idempotent", 
   );
 
   const first = await initializeQaScripts(root);
-  assert.deepEqual(first.scripts.map((script) => script.status), ["created", "created", "created"]);
+  assert.deepEqual(first.scripts.map((script) => script.status), ["created", "created", "created", "created"]);
   assert.equal(first.packageManager, "pnpm");
   assert.equal(first.dependencyPresent, true);
   assert.equal(first.installCommand, undefined);
   assert.deepEqual(first.runCommands, {
     qa: "pnpm qa",
     "qa:local": "pnpm qa:local",
+    "qa:run": "pnpm qa:run",
     "qa:e2e": "pnpm qa:e2e",
   });
 
@@ -6258,13 +6259,18 @@ test("initializeQaScripts adds short repeat-use commands and stays idempotent", 
   assert.equal(packageJson.scripts.test, "node --test");
   assert.equal(packageJson.scripts.qa, "qamap qa .");
   assert.equal(packageJson.scripts["qa:local"], "qamap qa . --include-working-tree");
+  assert.equal(packageJson.scripts["qa:run"], "qamap qa run .");
   assert.equal(packageJson.scripts["qa:e2e"], "qamap e2e draft . --dry-run");
 
   const second = await initializeQaScripts(root);
-  assert.deepEqual(second.scripts.map((script) => script.status), ["unchanged", "unchanged", "unchanged"]);
+  assert.deepEqual(
+    second.scripts.map((script) => script.status),
+    ["unchanged", "unchanged", "unchanged", "unchanged"],
+  );
   const report = formatQaScriptInitReport(second);
   assert.match(report, /pnpm qa\s+committed changes/);
   assert.match(report, /pnpm qa:local\s+include uncommitted/);
+  assert.match(report, /pnpm qa:run\s+run the exact selected/);
 });
 
 test("initializeQaScripts preserves collisions unless force is explicit", async () => {
@@ -6316,8 +6322,10 @@ test("init --scripts exposes the short-command setup through the CLI", async () 
 
   assert.match(stdout, /# QAMap Short Commands/);
   assert.match(stdout, /pnpm qa:local/);
+  assert.match(stdout, /pnpm qa:run/);
   assert.equal(packageJson.scripts.qa, "qamap qa .");
   assert.equal(packageJson.scripts["qa:local"], "qamap qa . --include-working-tree");
+  assert.equal(packageJson.scripts["qa:run"], "qamap qa run .");
 });
 
 test("initializeQaScripts detects lockfile package managers and preserves indentation", async (t) => {
@@ -8732,6 +8740,8 @@ test("package root exports the public QA API and declarations", async () => {
   assert.equal(packageJson.exports["."].types, "./dist/index.d.ts");
   assert.equal(typeof publicApi.generateQaDraft, "function");
   assert.equal(typeof publicApi.formatAgentQaDraft, "function");
+  assert.equal(typeof publicApi.runQaValidation, "function");
+  assert.equal(typeof publicApi.formatMarkdownQaValidation, "function");
   assert.equal(typeof publicApi.parseQaSymbolAnnotations, "function");
   assert.equal(typeof publicApi.collectChangedQaSymbolAnnotations, "function");
   assert.ok(publicApi.qaSymbolAnnotationTags.includes("@qamapRisk"));
@@ -9612,6 +9622,8 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   const agents = await readFile(path.join(root, "AGENTS.md"), "utf8");
   assert.match(agents, /<!-- qamap:agent:start -->/);
   assert.match(agents, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
+  assert.match(agents, /npx @ivorycanvas\/qamap qa run \. --base origin\/main --head HEAD --format agent/);
+  assert.match(agents, /execution\.performed/);
   assert.match(agents, /requiredEvidence/);
   assert.match(agents, /intents\[\]\.scenarios\[\]\.sources/);
   assert.match(agents, /Treat `automation` as opt-in/);
@@ -9737,6 +9749,7 @@ test("generateAgentContext reflects npm scripts and repository boundaries", asyn
   assert.match(context, /## Pre-PR QA/);
   assert.match(context, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
   assert.match(context, /QA planning evidence, not as proof/);
+  assert.match(context, /npx @ivorycanvas\/qamap qa run \. --base origin\/main --head HEAD --format agent/);
 });
 
 // Minimal JSON Schema (draft-07 subset) checker used to keep

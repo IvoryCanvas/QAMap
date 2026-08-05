@@ -49,6 +49,14 @@ A manifest and test runner are **not required** for the first run.
 
 `qa` performs static analysis and draft mapping only. It does not launch the target application or claim that product QA passed.
 
+When QAMap routes the change to an existing repository validation command, execute that exact selection and receive bounded pass/fail evidence explicitly:
+
+```sh
+npx --yes @ivorycanvas/qamap@latest qa run
+```
+
+`qa run` re-analyzes the same change, executes only a selected existing repository command, and returns its exit code, duration, timeout state, output byte counts, and output hashes. It does not install a runner, execute a proposed product E2E draft, or embed raw command output in JSON/agent receipts.
+
 When `--base` is omitted, QAMap checks CI pull-request metadata, repo-local Git configuration, and nearby long-lived branches in that order. The report always shows which base was selected and why. Use `--include-working-tree` to analyze the final net state from that branch to the current worktree; a file added in an earlier commit and removed locally is not reported as a current change. QAMap also isolates a **Current Local Delta**, so today's uncommitted task and its changed test contracts stay visible instead of being buried by older commits on a long-lived branch.
 
 For repeat use in a JavaScript repository, install QAMap once and add short package scripts:
@@ -63,6 +71,7 @@ After that, the everyday workflow is deliberately small:
 ```sh
 pnpm qa          # committed changes on the current branch
 pnpm qa:local    # also include uncommitted local changes
+pnpm qa:run      # run the exact existing validation command selected by QAMap
 pnpm qa:e2e      # preview an E2E draft without writing files
 ```
 
@@ -78,13 +87,13 @@ QAMap keeps QA selection and test generation as two separate decisions:
 | **Scenario routing** | Mark each scenario `required`, `recommended`, or `review-only`, with the exact diff hunk or commit that supports it. |
 | **Knowledge authority** | Separate reviewed team policy (`team-policy`), behavior declared by repository tests or annotations (`repository-contract`), and QAMap's own deterministic inference (`qamap-inference`). Inferred judgments remain approval-required. |
 | **Test class** | Label protected core flows as `golden`, changed behavior as `regression`, and risk-driven failure or boundary coverage as `edge`. |
-| **QA reasoning trace** | Give every scenario a stable ID that connects diff line -> affected lifecycle -> risk -> routing decision -> optional draft, while keeping execution explicitly `not-run`. |
-| **Repository test contracts** | Preserve test cases added by the PR, including non-English pytest names, as repository-authored behavior requirements with `file:line` evidence. They remain `not-run` until the selected command is executed. |
+| **QA reasoning trace** | Give every scenario a stable ID that connects diff line -> affected lifecycle -> risk -> routing decision -> optional draft. Static draft mapping remains explicitly `not-run`. |
+| **Repository test contracts** | Preserve test cases added by the PR, including non-English pytest names, as repository-authored behavior requirements with `file:line` evidence. `qa run` can execute the exact selected repository command without turning a discovered test name into fake pass evidence. |
 | **Evidence disposition** | Distinguish a confirmed causal chain from a missing diff source (`source-gap`) or an unjoined behavior path (`mapping-gap`), and count repeated citations only once. |
 | **Manifest feedback** | Point an incorrect trace to the exact repo-local manifest target or a concrete flow candidate. QAMap proposes the correction; a human must approve it. |
-| **Automation receipt** | Report whether the selected scenario is fully, partially, or not mapped into a draft, including the missing selector, fixture, entrypoint, or assertion evidence. Machine output keeps the compatible values `compiled`, `partial`, and `not-compiled`; none of them means a test ran or passed. |
+| **Automation receipt** | Report whether the selected scenario is fully, partially, or not mapped into a draft, including the missing selector, fixture, entrypoint, or assertion evidence. Machine output keeps the compatible values `compiled`, `partial`, and `not-compiled`; only a separate execution receipt can report pass or fail. |
 
-The human report preserves all important scenarios even when the repository has no test runner. It then separates **Important QA And Risk Map**, **Executable Evidence Available Now**, and **Manual Or Agent QA Contracts**. A `static-runnable` draft passed QAMap's structural self-checks, but the target application was not launched; only explicit execution can produce pass or fail evidence.
+The human report preserves all important scenarios even when the repository has no test runner. It then separates **Important QA And Risk Map**, **Executable Evidence Available Now**, and **Manual Or Agent QA Contracts**. A `static-runnable` draft passed QAMap's structural self-checks, but the target application was not launched. `qa run` can produce pass or fail evidence for a selected existing repository command; product E2E execution remains a separate explicit step.
 
 When one change intent reaches multiple user surfaces, QAMap keeps a separate draft and automation receipt for each flow. Human and agent output report `flow coverage` across those artifacts, so one fully mapped screen cannot hide another screen whose action or assertion is still missing.
 
@@ -197,14 +206,14 @@ const draft = await generateQaDraft(process.cwd(), { base: "origin/main", head: 
 const context = JSON.parse(formatAgentQaDraft(draft));
 ```
 
-`context.execution` remains `not-run`; an orchestrator must report any later test execution separately.
+Plain `qa` keeps `context.execution` as `not-run`. An orchestrator whose policy allows repository code execution can call `runQaValidation(...)` or `qamap qa run --format agent`; the returned receipt reports `passed`, `failed`, or `blocked` without embedding raw command output.
 
 ## Why QAMap
 
 - **Evidence over guesses.** Every routed scenario carries commit or line-level diff provenance.
 - **Regressions, not plausible prose.** Public PR reductions preserve human QA expectations, and execution contracts require generated tests to fail on seeded defects and pass on their fixes.
 - **Traceable consequences.** The optional test draft points back to the same stable trace that explains the changed behavior and risk.
-- **Bounded agent actions.** Each run states what QAMap could establish, whether the next action executes or writes anything, and which approval is required. Instruction-like diff text cannot escalate that action.
+- **Bounded agent actions.** Each run states what QAMap could establish, whether the next action executes or writes anything, and which approval is required. `qa run` consumes that contract for one exact existing validation command; instruction-like diff text cannot escalate it.
 - **Judgment before generation.** QAMap decides what deserves verification before choosing a runner.
 - **Honest automation.** Missing evidence lowers readiness instead of becoming a fake smoke test or guaranteed-failing assertion.
 - **Local and deterministic.** The same repository state produces the same result without uploading code or spending tokens.
@@ -221,6 +230,8 @@ QAMap은 PR 변경사항을 로컬에서 읽고, 이번 변경이 무엇을 증�
 커밋과 diff에서 변경 의도와 기능 흐름을 추적하고, 정상·실패·경계·상태 전환 시나리오를 `required`, `recommended`, `review-only`로 구분합니다. 각 판단에는 실제 diff 근거가 붙으며, E2E로 안전하게 옮길 수 있는지 여부도 별도로 알려줍니다.
 
 Playwright나 Maestro를 먼저 권하는 것이 목적이 아닙니다. **무엇을 테스트해야 하는지 먼저 판단하고**, 충분한 selector, fixture, assertion, entrypoint가 있을 때만 자동화 초안으로 연결하는 것이 목표입니다.
+
+`qa`는 정적 판단만 수행하며, `qa run`은 QAMap이 선택한 기존 저장소 검증 명령 하나를 명시적으로 실행해 성공·실패 근거를 남깁니다. 제품 E2E 실행이나 테스트 도구 설치를 임의로 시작하지는 않습니다.
 
 클라우드나 LLM 토큰을 사용하지 않으며 manifest 없이 시작할 수 있습니다. 반복해서 틀리는 추천은 `.qamap/manifest.yaml`에 팀의 QA 언어로 보정해 이후 PR에서 재사용합니다.
 

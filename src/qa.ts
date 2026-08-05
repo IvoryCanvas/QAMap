@@ -115,11 +115,40 @@ export interface QaReadinessSummary extends E2eDraftReadinessSummary {
   verificationStatus?: QaVerificationStatus;
 }
 
-export interface QaExecutionReceipt {
+export interface QaStaticExecutionReceipt {
   status: "not-run";
   performed: false;
   scope: "static-analysis-and-draft-mapping";
 }
+
+export interface QaBlockedExecutionReceipt {
+  status: "blocked";
+  performed: false;
+  scope: "repository-validation";
+  reason: string;
+  command?: string;
+}
+
+export interface QaCompletedExecutionReceipt {
+  status: "passed" | "failed";
+  performed: true;
+  scope: "repository-validation";
+  command: string;
+  cwd: ".";
+  exitCode?: number;
+  signal?: string;
+  durationMs: number;
+  timedOut: boolean;
+  stdoutBytes: number;
+  stderrBytes: number;
+  stdoutSha256: string;
+  stderrSha256: string;
+}
+
+export type QaExecutionReceipt =
+  | QaStaticExecutionReceipt
+  | QaBlockedExecutionReceipt
+  | QaCompletedExecutionReceipt;
 
 export type QaAnalysisScopeMode = "repository-root" | "automatic-package" | "explicit-package";
 
@@ -2327,6 +2356,27 @@ function formatQaActionName(id: QaActionId): string {
   return id.replaceAll("-", " ");
 }
 
+function qaExecutionAtAGlance(execution: QaExecutionReceipt): string {
+  if (execution.status === "not-run") {
+    return "Product QA execution: not run; this command performed static analysis and draft mapping only.";
+  }
+  if (execution.status === "blocked") {
+    return `Repository validation execution: blocked; ${execution.reason}`;
+  }
+  const exitCode = execution.exitCode === undefined ? "not available" : String(execution.exitCode);
+  return `Repository validation execution: ${execution.status}; exit code ${exitCode}, ${execution.durationMs} ms.`;
+}
+
+function repositoryContractExecutionLine(execution: QaExecutionReceipt): string {
+  if (execution.status === "not-run") {
+    return "Execution status: not run by QAMap; use the selected repository validation command and record its result.";
+  }
+  if (execution.status === "blocked") {
+    return `Execution status: blocked; ${execution.reason}`;
+  }
+  return `Execution status: ${execution.status}; QAMap ran the selected repository command with exit code ${execution.exitCode ?? "not available"}.`;
+}
+
 export function formatMarkdownQaDraft(result: QaDraftResult): string {
   const lines: string[] = [];
   lines.push("# QAMap QA Draft");
@@ -2335,7 +2385,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("");
   lines.push("## At a Glance");
   lines.push("");
-  lines.push("- Product QA execution: not run; this command performed static analysis and draft mapping only.");
+  lines.push(`- ${qaExecutionAtAGlance(result.execution)}`);
   lines.push(`- Analysis scope: ${escapeMarkdownInline(formatAnalysisScope(result.analysisScope))}`);
   const primaryIntent = result.changeAnalysis.intents[0];
   if (primaryIntent) {
@@ -2556,7 +2606,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
     if (result.changedTestContracts.length > 12) {
       lines.push(`- ... ${result.changedTestContracts.length - 12} more contracts are available in \`--format json\`.`);
     }
-    lines.push("- Execution status: not run by QAMap; use the selected repository validation command and record its result.");
+    lines.push(`- ${repositoryContractExecutionLine(result.execution)}`);
     lines.push("");
   }
 

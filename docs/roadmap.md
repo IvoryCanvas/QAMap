@@ -40,7 +40,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Preserve a conservative diff-only intent when commit messages are not descriptive, while keeping low-confidence scenarios recommended and review-required until stronger evidence exists.
 - Classify changed sources before interpreting vocabulary: product, command, analysis-rule, configuration, test, documentation, and generated evidence must produce role-appropriate QA instead of borrowing one another's domain signals.
 - Keep `qamap.change-intent` as a direct Behavior Graph adapter while moving more source observations out of the compatibility adapter.
-- Preserve `qa` as the static, read-only product surface while designing explicit execution behind `verify`; never turn a scan into implicit project-code execution.
+- Preserve `qa` as the static, read-only product surface and keep `qa run` as the explicit policy-controlled path for one exact existing repository validation command; never turn a scan into implicit project-code execution.
 - Treat the committed [benchmark contract](benchmarking.md) as the quality gate for recommendations, not only implementation correctness. Reduce real failures into public fixtures and require `pnpm bench:ci` on every PR.
 - Keep a separate execution contract for deterministic automation compilers. It must generate an artifact once, fail that artifact against a seeded regression for the intended assertion, and pass it against the fixed source; setup errors and unrelated crashes do not count as caught regressions.
 - Keep provenance-pinned public PR reductions beside synthetic controls. A real case must record repository, PR URL, base/head commits, license, and the human QA expectation it is meant to protect.
@@ -77,7 +77,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 
 - Move route, screen, endpoint, selector, fixture, test, and contract discovery into analyzer adapters, starting with TypeScript web stacks and reusing one web behavior model across Next.js, React Router, Vue/Nuxt, and SvelteKit.
 - Compare base and head Behavior Graphs, then select impacted graph paths before refining deterministic success, validation, failure, empty, loading, auth, and contract scenarios.
-- Add policy-controlled temporary execution so selected scenarios can produce normalized pass, fail, blocked, and not-verifiable evidence without modifying the target repository.
+- Expand the bounded execution contract from existing repository validation into accepted product scenarios, while preserving normalized pass, fail, blocked, and not-verifiable evidence without modifying the target repository by default.
 - Expand the execution benchmark beyond repeated-action, persisted-state, and validation-recovery protection to a non-browser adapter, with one shared framework-neutral evidence contract.
 - Compile critical success and failure scenarios into concrete runner actions before execution, so a green smoke assertion cannot satisfy a lifecycle or coverage contract by itself.
 - Expand the initial JS/TS JSDoc symbol-anchor adapter beyond changed top-level exports, then add equivalent language adapters without making annotations mandatory.
