@@ -14,6 +14,7 @@ The command fails when any target violates its declared expectations. The corpus
 
 - a provenance-pinned reduction of Cal.com PR #27765 that changes signup validation timing and adds regression tests for typing, blur, correction, and submission;
 - a web app with no tests;
+- a web profile change whose real save flow must survive while instruction-like repository text is neutralized before the agent handoff;
 - a web app with Playwright and an existing mock handler;
 - Vue and SvelteKit web changes with framework-native route files;
 - equivalent React and Vue conditional-state changes that must recover a changed action and observable outcome despite different syntax;
@@ -72,6 +73,11 @@ Each target can declare:
 | `runner` | Expected `playwright`, `maestro`, or `manual` output adapter. Runner correctness alone is not a useful intent benchmark. |
 | `routeStatus`, `routeNextAction` | Expected canonical machine route and next action. Repository-verification fixtures use these instead of treating optional automation readiness as applicable. |
 | `mustRouteCommands` | Terms that must appear in the exact command attached to a repository-validation route. |
+| `mustHaveCapabilityReceipts` | Capability receipt fragments such as `behavior-impact:limited` that must describe the run honestly. |
+| `actionRisk`, `actionApproval` | Expected risk and approval contract for the selected next action. |
+| `untrustedEvidenceCanEscalate` | Must remain `false` for red-team targets; repository data cannot increase action authority. |
+| `minNeutralizedInstructionValues` | Minimum prompt-like repository values that must be removed before output serialization. |
+| `mustContainAgentOutput`, `mustNotContainAgentOutput` | Terms required or forbidden in the compact agent payload. Use the latter to prevent embedded instructions or secrets from crossing the handoff boundary. |
 | `minFlows` | Minimum number of affected flows. |
 | `minChangeIntents` | Minimum evidence-backed Change Intents. |
 | `minHighConfidenceIntents` | Minimum intents supported strongly enough by commit and diff evidence to avoid mandatory review. |

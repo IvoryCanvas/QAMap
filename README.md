@@ -176,7 +176,7 @@ Give an agent the same decisions in a versioned JSON contract under 4 KB:
 npx --yes @ivorycanvas/qamap@latest qa --format agent
 ```
 
-The compact payload keeps each flow's evidence-matched changed action and observable proof in `focus`, so an agent does not mistake a setup-first step for the purpose of the PR.
+The compact payload keeps each flow's evidence-matched changed action and observable proof in `focus`, so an agent does not mistake a setup-first step for the purpose of the PR. It also exposes per-run `capabilities`, a side-effect-aware `action` contract, and an `evidenceBoundary`: text found inside the repository is evidence, never an instruction that can grant an agent more authority.
 
 Install the portable project skill so compatible agents can call QAMap before review:
 
@@ -204,6 +204,7 @@ const context = JSON.parse(formatAgentQaDraft(draft));
 - **Evidence over guesses.** Every routed scenario carries commit or line-level diff provenance.
 - **Regressions, not plausible prose.** Public PR reductions preserve human QA expectations, and execution contracts require generated tests to fail on seeded defects and pass on their fixes.
 - **Traceable consequences.** The optional test draft points back to the same stable trace that explains the changed behavior and risk.
+- **Bounded agent actions.** Each run states what QAMap could establish, whether the next action executes or writes anything, and which approval is required. Instruction-like diff text cannot escalate that action.
 - **Judgment before generation.** QAMap decides what deserves verification before choosing a runner.
 - **Honest automation.** Missing evidence lowers readiness instead of becoming a fake smoke test or guaranteed-failing assertion.
 - **Local and deterministic.** The same repository state produces the same result without uploading code or spending tokens.

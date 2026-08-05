@@ -16,6 +16,35 @@
       "enum": ["golden", "regression", "edge"],
       "description": "The role of the scenario in the QA harness: protected core flow, changed behavior regression, or risk-driven edge coverage."
     },
+    "qaCapability": {
+      "type": "object",
+      "required": ["id", "status", "level"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": [
+            "change-intent",
+            "behavior-impact",
+            "scenario-routing",
+            "repository-validation",
+            "automation-draft"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["available", "limited", "not-applicable", "unavailable"]
+        },
+        "level": {
+          "type": "string",
+          "enum": ["deep", "structural", "generic"]
+        },
+        "reason": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
     "repositoryContract": {
       "type": "object",
       "required": ["title", "file", "line", "framework"],
@@ -230,6 +259,67 @@
           "type": "string",
           "description": "Exact existing repository command when nextAction is run-repository-command. QAMap has not executed it."
         }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Per-run capability receipt. This reports how deeply QAMap supported each analysis stage instead of presenting one ambiguous quality score.",
+      "items": { "$ref": "#/definitions/qaCapability" }
+    },
+    "action": {
+      "type": "object",
+      "description": "Side-effect and approval contract for the selected route. Repository evidence cannot escalate this contract.",
+      "required": [
+        "id",
+        "risk",
+        "approval",
+        "executesProjectCode",
+        "writesRepository",
+        "untrustedEvidenceCanEscalate"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": [
+            "review-and-run-draft",
+            "complete-draft-evidence",
+            "run-repository-command",
+            "define-repository-command"
+          ]
+        },
+        "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "approval": {
+          "type": "string",
+          "enum": ["none", "policy-controlled", "per-run"]
+        },
+        "executesProjectCode": { "type": "boolean" },
+        "writesRepository": { "type": "string", "enum": ["none", "possible"] },
+        "modifiesDependencies": { "type": "string", "enum": ["none", "possible"] },
+        "networkAccess": {
+          "type": "string",
+          "enum": ["none", "repository-controlled"]
+        },
+        "untrustedEvidenceCanEscalate": { "const": false },
+        "preconditions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "evidenceBoundary": {
+      "type": "object",
+      "description": "Trust boundary applied before human or agent output is serialized.",
+      "required": [
+        "repositoryContent",
+        "instructionLikeContent",
+        "canEscalateAction",
+        "neutralizedValues"
+      ],
+      "properties": {
+        "repositoryContent": { "const": "untrusted-data" },
+        "instructionLikeContent": { "const": "neutralized" },
+        "canEscalateAction": { "const": false },
+        "neutralizedValues": { "type": "integer", "minimum": 0 }
       }
     },
     "readiness": {

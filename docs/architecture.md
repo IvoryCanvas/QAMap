@@ -37,6 +37,14 @@ The same result identifies why the scenario exists in the QA harness:
 
 Authority and test class answer different questions. `team-policy` says who owns the judgment; `golden` says what role it plays in verification. Neither field claims execution or a passing test.
 
+## Capability, Action, And Trust Contracts
+
+One aggregate score cannot tell an agent which part of a QA judgment is usable. Every `qa` run therefore emits one receipt for each stable capability: change intent, behavior impact, scenario routing, repository validation, and automation drafting. A receipt separates availability from analysis depth. `available/deep` means the current repository evidence supports the full contract for that stage; `limited/structural` means useful structure exists with a declared gap; `generic`, `unavailable`, and `not-applicable` prevent unsupported analysis from being presented as product understanding.
+
+The canonical route also resolves to an action contract. It discloses risk, approval mode, project-code execution, possible repository or dependency writes, network access, and explicit preconditions. A coding agent may apply a stricter policy, but repository evidence cannot loosen this contract. This keeps static QA planning separate from later execution and makes side effects reviewable before they occur.
+
+All source-derived strings cross an untrusted-data boundary before human or agent serialization. Strong instruction-like text in source, comments, docs, manifests, tests, or generated files is neutralized and counted. It remains discoverable through the surrounding file and line evidence, but it cannot become an instruction or escalate the selected action. The public red-team benchmark requires a normal product flow to survive this boundary while an embedded prompt-like string does not reach the agent payload.
+
 ## Change Intent
 
 `src/change-intent.ts` reads behavior-bearing commits in the selected base/head range and joins related `feat`, `fix`, `hotfix`, `perf`, and supporting `refactor` commits through normalized domain terms. Added diff symbols provide independent evidence for triggers, conditions, state changes, side effects, and observable outcomes.
@@ -97,7 +105,7 @@ A compilation receipt is static evidence, not a test result. Human output theref
 
 Human output groups the same decision into three layers: the complete QA and risk map, executable evidence available now, and manual or agent contracts for the remaining scenarios. Runner absence affects only the latter two layers; it never deletes a risk-backed QA scenario. A draft may be called `static-runnable` only when its structural self-check finds an entrypoint, observable assertion, and no skipped placeholder. The label always includes `not executed` until a separate execution boundary returns evidence.
 
-The additive `route` object is the canonical machine decision above those compatibility values. It separates optional draft preparation from repository validation and names the next action directly: complete or review a draft, run an existing command, or define a missing command. Agent payload compaction preserves this object before lower-priority detail, so a repository-verification result cannot be misread as blocked product E2E work.
+The additive `route` object is the canonical machine decision above those compatibility values. It separates optional draft preparation from repository validation and names the next action directly: complete or review a draft, run an existing command, or define a missing command. Its `action` contract describes the authority and side effects of that decision, while `capabilities` describes which earlier reasoning stages support it. Agent payload compaction prioritizes these objects before lower-priority detail. If the hard 4KB limit still requires their omission, `compaction.fullReport` preserves the complete contract and the portable skill forbids side effects until it is recovered.
 
 Compact agent output also keeps an optional per-flow `focus` capsule. It is emitted only when a same-title scenario receipt proves every selected step and assertion was compiled. Its action must match an actual draft step to the flow trigger, title, or scenario, and its assertion cannot be the generic fallback used when no observable result was found. This lets an agent retain the PR-specific action and proof when setup-first ordering or the 4KB budget truncates the full sequence, without promoting partial or unrelated scenario language into executable evidence.
 

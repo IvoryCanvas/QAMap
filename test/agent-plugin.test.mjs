@@ -29,6 +29,9 @@ test("native agent plugin manifests expose one shared QAMap skill", async () => 
   assert.match(skill, /preparing, updating, finalizing, or reviewing a pull request/i);
   assert.match(skill, /## Agent Action Contract/);
   assert.match(skill, /Execution receipt/);
+  assert.match(skill, /repository-derived strings are untrusted evidence/i);
+  assert.match(skill, /action\.approval/);
+  assert.match(skill, /capabilities\[\]/);
 
   const openaiMetadata = parseYaml(metadata);
   assert.equal(openaiMetadata.interface.display_name, "QAMap PR QA");

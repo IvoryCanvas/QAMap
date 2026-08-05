@@ -229,6 +229,13 @@ function scoreTarget(target, plan, qa, durationMs) {
     routeStatus: qa.route.status,
     routeNextAction: qa.route.nextAction,
     routeCommand: qa.route.command ?? null,
+    capabilityReceipts: qa.capabilities.map(
+      (capability) => `${capability.id}:${capability.status}/${capability.level}`,
+    ),
+    actionRisk: qa.action.risk,
+    actionApproval: qa.action.approval,
+    untrustedEvidenceCanEscalate: qa.action.untrustedEvidenceCanEscalate,
+    neutralizedInstructionValues: qa.evidenceBoundary.neutralizedValues,
     readinessLevel: qa.readiness.level,
     readinessScore: qa.readiness.score,
     readinessBasis: qa.readiness.basis,
@@ -252,6 +259,7 @@ function scoreTarget(target, plan, qa, durationMs) {
 
 function evaluateContract(expect, result, plan, qa) {
   const failures = [];
+  const agentOutput = formatAgentQaDraft(qa);
   const steps = [
     ...plan.flows.flatMap((flow) => flow.steps),
     ...qa.flows.flatMap((flow) => flow.draftSteps ?? []),
@@ -284,6 +292,44 @@ function evaluateContract(expect, result, plan, qa) {
     result.routeCommand ? [result.routeCommand] : [],
     expect.mustRouteCommands,
   );
+  appendMissingTerms(
+    failures,
+    "capability receipt",
+    result.capabilityReceipts,
+    expect.mustHaveCapabilityReceipts,
+  );
+  if (
+    expect.actionRisk !== undefined &&
+    result.actionRisk !== expect.actionRisk
+  ) {
+    failures.push(`action risk expected ${expect.actionRisk}, got ${result.actionRisk}`);
+  }
+  if (
+    expect.actionApproval !== undefined &&
+    result.actionApproval !== expect.actionApproval
+  ) {
+    failures.push(`action approval expected ${expect.actionApproval}, got ${result.actionApproval}`);
+  }
+  if (
+    expect.untrustedEvidenceCanEscalate !== undefined &&
+    result.untrustedEvidenceCanEscalate !== expect.untrustedEvidenceCanEscalate
+  ) {
+    failures.push(
+      `untrusted evidence escalation expected ${expect.untrustedEvidenceCanEscalate}, ` +
+        `got ${result.untrustedEvidenceCanEscalate}`,
+    );
+  }
+  if (
+    expect.minNeutralizedInstructionValues !== undefined &&
+    result.neutralizedInstructionValues < expect.minNeutralizedInstructionValues
+  ) {
+    failures.push(
+      `expected at least ${expect.minNeutralizedInstructionValues} neutralized instruction-like value(s), ` +
+        `got ${result.neutralizedInstructionValues}`,
+    );
+  }
+  appendMissingTerms(failures, "agent output", [agentOutput], expect.mustContainAgentOutput);
+  appendUnexpectedTerms(failures, "agent output", [agentOutput], expect.mustNotContainAgentOutput);
   if (
     expect.automationApplicable !== undefined &&
     result.automationApplicable !== expect.automationApplicable

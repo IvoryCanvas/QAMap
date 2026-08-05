@@ -79,6 +79,17 @@ export {
 } from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 export { formatAgentQaDraft, formatAgentQaFullReport, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+export {
+  evaluateQaCapabilities,
+  isInstructionLikeRepositoryText,
+  neutralizeInstructionLikeValues,
+  qaActionContract,
+  qaActionIds,
+  qaCapabilityIds,
+  qaEvidenceBoundary,
+  validateQaActionRegistry,
+  validateQaCapabilityRegistry,
+} from "./qa-contract.js";
 export { buildQaReasoningTraces, qaTraceIdForScenario, summarizeQaTraceEvidence } from "./qa-trace.js";
 export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 export { isRequiredScenarioEvidence, routeQaScenario } from "./scenario-routing.js";
@@ -332,6 +343,20 @@ export type {
   QaRouteStatus,
   QaVerificationStatus,
 } from "./qa.js";
+export type {
+  QaActionApproval,
+  QaActionContract,
+  QaActionEffect,
+  QaActionId,
+  QaActionNetwork,
+  QaActionRisk,
+  QaCapabilityContext,
+  QaCapabilityId,
+  QaCapabilityLevel,
+  QaCapabilityResult,
+  QaCapabilityStatus,
+  QaEvidenceBoundary,
+} from "./qa-contract.js";
 export type {
   QaReasoningTrace,
   QaReasoningTraceStatus,

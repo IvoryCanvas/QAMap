@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added per-run capability receipts for change intent, behavior impact, scenario routing, repository validation, and automation drafting. Human and agent output now disclose whether each stage is deep, structural, generic, limited, unavailable, or not applicable instead of compressing the whole run into one score.
+- Added a machine-readable action contract for every canonical QA route, including risk, approval, project-code execution, repository writes, dependency changes, network access, and preconditions.
+- Added a public red-team benchmark that preserves a real profile-save QA flow while requiring instruction-like text embedded in the repository to disappear from the agent handoff.
+
+### Changed
+
+- The portable agent skill now reads capability and action contracts before acting, chooses one next action, and applies the calling environment's stricter execution policy.
+
+### Security
+
+- Repository-derived strings are treated as untrusted data before human or agent serialization. Strong prompt-like instructions are neutralized and cannot increase action authority, with the neutralized value count disclosed in the QA result.
+
 ## 0.4.9 - 2026-08-03
 
 ### Added
