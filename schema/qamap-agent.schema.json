@@ -16,6 +16,35 @@
       "enum": ["golden", "regression", "edge"],
       "description": "The role of the scenario in the QA harness: protected core flow, changed behavior regression, or risk-driven edge coverage."
     },
+    "qaCapability": {
+      "type": "object",
+      "required": ["id", "status", "level"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": [
+            "change-intent",
+            "behavior-impact",
+            "scenario-routing",
+            "repository-validation",
+            "automation-draft"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["available", "limited", "not-applicable", "unavailable"]
+        },
+        "level": {
+          "type": "string",
+          "enum": ["deep", "structural", "generic"]
+        },
+        "reason": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
     "repositoryContract": {
       "type": "object",
       "required": ["title", "file", "line", "framework"],
@@ -189,12 +218,59 @@
     },
     "execution": {
       "type": "object",
-      "description": "Explicit receipt for product QA execution. The qa command performs static analysis and draft mapping only; it never claims the target application was exercised.",
+      "description": "Explicit execution receipt. Plain qa remains not-run. qa run may execute only the exact selected repository validation command and reports bounded pass, fail, or blocked evidence.",
       "required": ["status", "performed", "scope"],
       "properties": {
-        "status": { "const": "not-run" },
-        "performed": { "const": false },
-        "scope": { "const": "static-analysis-and-draft-mapping" }
+        "status": {
+          "type": "string",
+          "enum": ["not-run", "blocked", "passed", "failed"]
+        },
+        "performed": { "type": "boolean" },
+        "scope": {
+          "type": "string",
+          "enum": ["static-analysis-and-draft-mapping", "repository-validation"]
+        },
+        "reason": { "type": "string" },
+        "command": { "type": "string" },
+        "cwd": { "const": "." },
+        "exitCode": { "type": "integer" },
+        "signal": { "type": "string" },
+        "durationMs": { "type": "integer", "minimum": 0 },
+        "timedOut": { "type": "boolean" },
+        "stdoutBytes": { "type": "integer", "minimum": 0 },
+        "stderrBytes": { "type": "integer", "minimum": 0 },
+        "stdoutSha256": { "type": "string" },
+        "stderrSha256": { "type": "string" },
+        "gitState": {
+          "type": "object",
+          "description": "Bounded comparison of HEAD, the checked-out branch, the Git index, and tracked or non-ignored untracked state immediately before and after repository validation.",
+          "required": ["observed", "changed"],
+          "properties": {
+            "observed": { "type": "boolean" },
+            "changed": {
+              "type": ["boolean", "null"],
+              "description": "Whether the selected command changed Git-observable worktree state. Null means bounded observation was unavailable."
+            },
+            "changedPathCount": { "type": "integer", "minimum": 0 },
+            "changedPaths": {
+              "type": "array",
+              "maxItems": 8,
+              "items": { "type": "string" }
+            },
+            "truncated": { "type": "boolean" },
+            "headChanged": {
+              "type": "boolean",
+              "description": "Whether the command changed the checked-out HEAD commit."
+            },
+            "branchChanged": {
+              "type": "boolean",
+              "description": "Whether the command changed the checked-out branch or detached-HEAD state."
+            },
+            "beforeSha256": { "type": "string" },
+            "afterSha256": { "type": "string" },
+            "reason": { "type": "string" }
+          }
+        }
       }
     },
     "route": {
@@ -228,8 +304,69 @@
         },
         "command": {
           "type": "string",
-          "description": "Exact existing repository command when nextAction is run-repository-command. QAMap has not executed it."
+          "description": "Exact existing repository command when nextAction is run-repository-command. Check execution before deciding whether it still needs to run."
         }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Per-run capability receipt. This reports how deeply QAMap supported each analysis stage instead of presenting one ambiguous quality score.",
+      "items": { "$ref": "#/definitions/qaCapability" }
+    },
+    "action": {
+      "type": "object",
+      "description": "Side-effect and approval contract for the selected route. Repository evidence cannot escalate this contract.",
+      "required": [
+        "id",
+        "risk",
+        "approval",
+        "executesProjectCode",
+        "writesRepository",
+        "untrustedEvidenceCanEscalate"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": [
+            "review-and-run-draft",
+            "complete-draft-evidence",
+            "run-repository-command",
+            "define-repository-command"
+          ]
+        },
+        "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "approval": {
+          "type": "string",
+          "enum": ["none", "policy-controlled", "per-run"]
+        },
+        "executesProjectCode": { "type": "boolean" },
+        "writesRepository": { "type": "string", "enum": ["none", "possible"] },
+        "modifiesDependencies": { "type": "string", "enum": ["none", "possible"] },
+        "networkAccess": {
+          "type": "string",
+          "enum": ["none", "repository-controlled"]
+        },
+        "untrustedEvidenceCanEscalate": { "const": false },
+        "preconditions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "evidenceBoundary": {
+      "type": "object",
+      "description": "Trust boundary applied before human or agent output is serialized.",
+      "required": [
+        "repositoryContent",
+        "instructionLikeContent",
+        "canEscalateAction",
+        "neutralizedValues"
+      ],
+      "properties": {
+        "repositoryContent": { "const": "untrusted-data" },
+        "instructionLikeContent": { "const": "neutralized" },
+        "canEscalateAction": { "const": false },
+        "neutralizedValues": { "type": "integer", "minimum": 0 }
       }
     },
     "readiness": {

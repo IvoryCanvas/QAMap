@@ -42,6 +42,7 @@ import {
 } from "./manifest.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
 import { formatAgentQaDraft, formatAgentQaFullReport, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+import { formatMarkdownQaValidation, runQaValidation } from "./qa-execution.js";
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
 import { formatQaScriptInitReport, initializeQaScripts } from "./script-init.js";
@@ -87,6 +88,7 @@ interface ParsedOptions {
   dryRun?: boolean;
   agent?: boolean;
   scripts?: boolean;
+  timeoutMs?: number;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -276,9 +278,10 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "qa") {
-    const options = parseOptions(rest);
+    const runValidation = rest[0] === "run";
+    const options = parseOptions(runValidation ? rest.slice(1) : rest);
     const loadedConfig = await loadOptionsConfig(options);
-    const result = await generateQaDraft(options.path, {
+    const qaOptions = {
       base: options.base,
       head: options.head,
       workspaceRoot: options.workspaceRoot,
@@ -286,10 +289,31 @@ async function main(argv: string[]): Promise<number> {
       validationCommands: loadedConfig.config.validationCommands,
       runner: options.e2eRunner,
       manifestPath: options.manifestPath,
-    });
-    const output = formatQaDraftOutput(result, options.format ?? (options.json ? "json" : "markdown"));
+    };
+    const format = options.format ?? (options.json ? "json" : "markdown");
+    const streamCommandOutput = runValidation &&
+      !options.output &&
+      (format === "markdown" || format === "text");
+    const result = runValidation
+      ? await runQaValidation(options.path, {
+          ...qaOptions,
+          timeoutMs: options.timeoutMs,
+          ...(streamCommandOutput
+            ? {
+                onStdout: (chunk: Uint8Array) => process.stdout.write(chunk),
+                onStderr: (chunk: Uint8Array) => process.stderr.write(chunk),
+              }
+            : {}),
+        })
+      : await generateQaDraft(options.path, qaOptions);
+    if (streamCommandOutput && result.execution.performed) {
+      console.log("");
+    }
+    const output = runValidation && (format === "markdown" || format === "text")
+      ? formatMarkdownQaValidation(result)
+      : formatQaDraftOutput(result, format);
     await printOrWrite(output, options.output);
-    return 0;
+    return runValidation ? qaValidationExitCode(result.execution) : 0;
   }
 
   if (command === "history") {
@@ -700,6 +724,15 @@ function parseOptions(args: string[]): ParsedOptions {
       continue;
     }
 
+    if (arg === "--timeout-ms") {
+      const value = Number.parseInt(readValue(args, ++index, arg), 10);
+      if (!Number.isFinite(value) || value < 1_000) {
+        throw new Error("--timeout-ms must be an integer of at least 1000");
+      }
+      options.timeoutMs = value;
+      continue;
+    }
+
     if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
@@ -835,7 +868,7 @@ function formatQaDraftOutput(result: Awaited<ReturnType<typeof generateQaDraft>>
     // re-running the analysis. The analyzed repository itself stays untouched.
     // Best effort: when the write fails the payload simply omits the pointer.
     const digest = createHash("sha256")
-      .update(`${result.root} ${result.base} ${result.head}`)
+      .update(`${result.root}\0${result.base}\0${result.head}`)
       .digest("hex")
       .slice(0, 12);
     const fullReportPath = path.join(os.tmpdir(), `qamap-qa-agent-full-${digest}.json`);
@@ -850,6 +883,18 @@ function formatQaDraftOutput(result: Awaited<ReturnType<typeof generateQaDraft>>
     throw new Error(`QA draft supports text, json, markdown, or agent output, not ${format}`);
   }
   return formatMarkdownQaDraft(result);
+}
+
+function qaValidationExitCode(
+  execution: Awaited<ReturnType<typeof runQaValidation>>["execution"],
+): number {
+  if (execution.status === "passed") {
+    return 0;
+  }
+  if (execution.status === "failed" && execution.exitCode && execution.exitCode > 0 && execution.exitCode < 126) {
+    return execution.exitCode;
+  }
+  return execution.status === "blocked" ? 2 : 1;
 }
 
 function manifestSuggestionFormat(format: OutputFormat, command: "domains" | "flows"): "text" | "json" | "markdown" {
@@ -942,6 +987,11 @@ Start here, from inside your repository, on the branch you want to check:
       Print the same QA judgment as compact JSON, including scenario-level
       file and line sources, for an agent or PR workflow.
 
+  qamap qa run
+      Re-analyze the change and execute only the exact existing repository
+      validation command selected by QAMap. Returns a bounded execution receipt;
+      it never installs a runner or executes a proposed product E2E draft.
+
   qamap e2e draft . --base origin/main --head HEAD
       Optional: after accepting a QA scenario, preview or create an automation
       draft. Runner setup remains an explicit team choice.
@@ -956,7 +1006,7 @@ Want your agent to run QAMap by itself? Run once: qamap init --agent
       QAMap skill, so agents run the QA pass before every handoff.
 
 Want shorter commands for repeat use? Run once: qamap init --scripts
-      Adds qa, qa:local, and qa:e2e package scripts without replacing
+      Adds qa, qa:local, qa:run, and qa:e2e package scripts without replacing
       existing scripts unless --force is passed.
 
 Full command reference: qamap help`);
@@ -977,6 +1027,7 @@ Usage:
   qamap github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
   qamap test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
   qamap qa [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--format <format>] [--output <file>]
+  qamap qa run [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--timeout-ms <n>] [--format <format>] [--output <file>]
   qamap e2e plan [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   qamap e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force]
   qamap e2e draft [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
@@ -1013,6 +1064,7 @@ Examples:
   qamap github-action . --mode review --base origin/main --head HEAD --fail-on high
   qamap test-plan . --base origin/main --head HEAD
   qamap qa . --base origin/main --head HEAD
+  qamap qa run . --base origin/main --head HEAD
   qamap qa . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD --output QAMAP_QA.md
   qamap e2e plan . --base origin/main --head HEAD
   qamap e2e plan . --base origin/main --head HEAD --record-history

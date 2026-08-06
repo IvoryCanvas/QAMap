@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added per-run capability receipts for change intent, behavior impact, scenario routing, repository validation, and automation drafting. Human and agent output now disclose whether each stage is deep, structural, generic, limited, unavailable, or not applicable instead of compressing the whole run into one score.
+- Added a machine-readable action contract for every canonical QA route, including risk, approval, project-code execution, repository writes, dependency changes, network access, and preconditions.
+- Added a public red-team benchmark that preserves a real profile-save QA flow while requiring instruction-like text embedded in the repository to disappear from the agent handoff.
+- Added `qamap qa run`, an explicit bounded execution loop that re-analyzes the change, executes only the exact selected existing repository validation command, preserves its exit code, and emits timeout, duration, output-size, and output-hash evidence without embedding raw output.
+- Completed `qa run` receipts now compare HEAD, the checked-out branch, the Git index, and tracked or non-ignored untracked state before and after execution, distinguish command mutations from pre-existing local changes, and disclose a bounded relative-path list without embedding file contents.
+- Added the `qa:run` repeat-use shortcut through `qamap init --scripts`.
+
+### Changed
+
+- The portable agent skill now reads capability and action contracts before acting, chooses one next action, and applies the calling environment's stricter execution policy.
+- Agent and JSON consumers can use the same execution receipt without repeating a repository command that QAMap already ran.
+
+### Fixed
+
+- Repository test commands launched from QAMap's own Node test harness no longer inherit the parent test-runner marker and silently skip every child test as a recursive invocation.
+- Timed-out repository commands now receive a forced process-tree termination when graceful shutdown does not complete.
+- Agent execution-contract generators are classified as analysis rules instead of fabricating product state-transition QA from fields such as `route.nextAction` and `execution.performed`.
+
+### Security
+
+- Repository-derived strings are treated as untrusted data before human or agent serialization. Strong prompt-like instructions are neutralized and cannot increase action authority, with the neutralized value count disclosed in the QA result.
+- Repository-derived Python test paths are quoted before a focused validation command reaches the shell, preventing special characters in a changed filename from becoming command syntax.
+
 ## 0.4.9 - 2026-08-03
 
 ### Added

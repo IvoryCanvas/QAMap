@@ -19,6 +19,18 @@ import type {
 } from "./e2e.js";
 import type { ChangeIntentEvidence, IntentQaScenario } from "./change-intent.js";
 import { collectChangedFiles } from "./git-context.js";
+import {
+  evaluateQaCapabilities,
+  neutralizeInstructionLikeValues,
+  qaActionContract,
+  qaEvidenceBoundary,
+} from "./qa-contract.js";
+import type {
+  QaActionContract,
+  QaActionId,
+  QaCapabilityResult,
+  QaEvidenceBoundary,
+} from "./qa-contract.js";
 import { buildQaReasoningTraces, summarizeQaTraceEvidence } from "./qa-trace.js";
 import type {
   QaKnowledgeAuthority,
@@ -66,7 +78,10 @@ export interface QaDraftResult {
   changeAnalysis: E2eDraftResult["plan"]["changeAnalysis"];
   traces: QaReasoningTrace[];
   evidenceSummary: QaTraceEvidenceSummary;
+  capabilities: QaCapabilityResult[];
   route: QaRouteDecision;
+  action: QaActionContract;
+  evidenceBoundary: QaEvidenceBoundary;
   readiness: QaReadinessSummary;
   flows: QaDraftFlow[];
   missingEvidence: QaDraftMissingEvidence[];
@@ -85,10 +100,7 @@ export type QaRouteStatus =
   | "verification-ready-to-run"
   | "verification-command-needed";
 export type QaRouteNextAction =
-  | "review-and-run-draft"
-  | "complete-draft-evidence"
-  | "run-repository-command"
-  | "define-repository-command";
+  QaActionId;
 
 export interface QaRouteDecision {
   basis: QaReadinessBasis;
@@ -103,11 +115,63 @@ export interface QaReadinessSummary extends E2eDraftReadinessSummary {
   verificationStatus?: QaVerificationStatus;
 }
 
-export interface QaExecutionReceipt {
+export interface QaStaticExecutionReceipt {
   status: "not-run";
   performed: false;
   scope: "static-analysis-and-draft-mapping";
 }
+
+export interface QaBlockedExecutionReceipt {
+  status: "blocked";
+  performed: false;
+  scope: "repository-validation";
+  reason: string;
+  command?: string;
+}
+
+export interface QaCompletedExecutionReceipt {
+  status: "passed" | "failed";
+  performed: true;
+  scope: "repository-validation";
+  command: string;
+  cwd: ".";
+  exitCode?: number;
+  signal?: string;
+  durationMs: number;
+  timedOut: boolean;
+  stdoutBytes: number;
+  stderrBytes: number;
+  stdoutSha256: string;
+  stderrSha256: string;
+  gitState: QaGitStateReceipt;
+}
+
+export interface QaObservedGitStateReceipt {
+  observed: true;
+  changed: boolean;
+  changedPathCount: number;
+  changedPaths: string[];
+  truncated: boolean;
+  headChanged: boolean;
+  branchChanged: boolean;
+  beforeSha256: string;
+  afterSha256: string;
+}
+
+export interface QaUnavailableGitStateReceipt {
+  observed: false;
+  changed: null;
+  reason: string;
+}
+
+export type QaGitStateReceipt =
+  | QaObservedGitStateReceipt
+  | QaUnavailableGitStateReceipt;
+
+export type QaExecutionReceipt =
+  | QaStaticExecutionReceipt
+  | QaBlockedExecutionReceipt
+  | QaCompletedExecutionReceipt;
 
 export type QaAnalysisScopeMode = "repository-root" | "automatic-package" | "explicit-package";
 
@@ -305,8 +369,43 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   const evidenceSummary = summarizeQaTraceEvidence(traces);
   const readiness = buildQaReadiness(draft.readinessSummary, flows, suggestedCommands, changedFiles);
   const route = buildQaRouteDecision(readiness, suggestedCommands);
+  const capabilities = evaluateQaCapabilities({
+    intents: {
+      total: draft.plan.changeAnalysis.intents.length,
+      evidenceBacked: draft.plan.changeAnalysis.intents.filter((intent) =>
+        intent.evidence.some((item) =>
+          item.kind === "diff" &&
+          Boolean(item.file) &&
+          item.startLine !== undefined &&
+          item.relation !== "contextual"
+        )
+      ).length,
+    },
+    traces: {
+      total: traces.length,
+      confirmed: evidenceSummary.confirmed,
+    },
+    scenarios: {
+      total: traces.length,
+      routed: traces.filter((trace) => trace.scenario.decision !== "review-only").length,
+      reviewOnly: traces.filter((trace) => trace.scenario.decision === "review-only").length,
+    },
+    repositoryValidation: {
+      applicable: readiness.basis === "repository-validation",
+      commandAvailable: Boolean(route.command),
+      contractCount: changedTestContracts.length,
+      testSuitePresent: draft.plan.testSuite.hasTestSuite,
+    },
+    automation: {
+      applicable: readiness.automationApplicable,
+      compiled: readiness.compiledScenarios,
+      partial: readiness.partialScenarios,
+      notCompiled: readiness.notCompiledScenarios,
+      requiredGaps: readiness.requiredScenarioGaps,
+    },
+  });
 
-  return {
+  const result: QaDraftResult = {
     tool: {
       name: TOOL_NAME,
       version: VERSION,
@@ -336,13 +435,27 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     changeAnalysis: draft.plan.changeAnalysis,
     traces,
     evidenceSummary,
+    capabilities,
     route,
+    action: qaActionContract(route.nextAction),
+    evidenceBoundary: {
+      ...qaEvidenceBoundary,
+      neutralizedValues: 0,
+    },
     readiness,
     flows,
     missingEvidence,
     prChecklist: buildPrChecklist(draft, flows, changedTestContracts, suggestedCommands),
     agentHandoff: buildAgentHandoff(draft, flows, changedTestContracts, missingEvidence, suggestedCommands),
     suggestedCommands,
+  };
+  const protectedResult = neutralizeInstructionLikeValues(result);
+  return {
+    ...protectedResult.value,
+    evidenceBoundary: {
+      ...qaEvidenceBoundary,
+      neutralizedValues: protectedResult.neutralizedValues,
+    },
   };
 }
 
@@ -672,11 +785,11 @@ async function buildTestVerificationCommands(
   const pytest = suggestedCommands.find((command) => /^pytest(?:\s|$)/i.test(command));
   const pythonTests = changedEvidence.filter((file) => /(?:^|\/)test_[^/]+\.py$|(?:^|\/)[^/]+_test\.py$/i.test(file));
   if (pytest && pythonTests.length > 0) {
-    return [`pytest ${pythonTests.slice(0, 4).join(" ")}`];
+    return [`pytest ${pythonTests.slice(0, 4).map(shellCommandArgument).join(" ")}`];
   }
   const packageTest = suggestedCommands.find((command) => /^(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+test(?:\s|$)/i.test(command));
   if (packageTest && pythonTests.length > 0) {
-    return [`${packageTest} -- ${pythonTests.slice(0, 4).join(" ")}`];
+    return [`${packageTest} -- ${pythonTests.slice(0, 4).map(shellCommandArgument).join(" ")}`];
   }
   const directPackageTest = suggestedCommands.find((command) =>
     /^(?:npm|pnpm|yarn)(?:\s+run)?\s+test$/i.test(command)
@@ -1146,6 +1259,9 @@ function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
     },
     execution: result.execution,
     route: result.route,
+    capabilities: compactAgentCapabilities(result.capabilities),
+    action: compactAgentAction(result.action),
+    evidenceBoundary: result.evidenceBoundary,
     readiness: {
       score: result.readiness.score,
       level: result.readiness.level,
@@ -1322,8 +1438,22 @@ function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
   return summary;
 }
 
+type AgentCapabilityShape = Pick<QaCapabilityResult, "id" | "status" | "level">;
+type AgentActionShape = Pick<
+  QaActionContract,
+  | "id"
+  | "risk"
+  | "approval"
+  | "executesProjectCode"
+  | "writesRepository"
+  | "untrustedEvidenceCanEscalate"
+>;
+
 interface AgentSummaryShape {
   [key: string]: unknown;
+  capabilities: AgentCapabilityShape[];
+  action: AgentActionShape;
+  evidenceBoundary: QaEvidenceBoundary;
   currentDelta?: {
     scope?: unknown;
     files: string[];
@@ -1424,6 +1554,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     ...(options?.fullReportPath ? { fullReport: options.fullReportPath } : {}),
     ...extra,
   });
+  const preserveScopeCandidates = shouldPreserveAgentScopeCandidates(summary.analysisScope);
 
   const compact = {
     ...summary,
@@ -1601,9 +1732,14 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     runner: summary.runner,
     manifest: summary.manifest ? agentRefValue(String(summary.manifest), 120) : null,
     currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
-    analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
+    analysisScope: compactAgentAnalysisScope(summary.analysisScope, preserveScopeCandidates),
     execution: summary.execution,
     route: summary.route,
+    ...(preserveScopeCandidates
+      ? {}
+      : { capabilities: compactAgentCapabilities(summary.capabilities) }),
+    action: compactAgentAction(summary.action),
+    evidenceBoundary: summary.evidenceBoundary,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     evidenceSummary: summary.evidenceSummary,
@@ -1696,9 +1832,10 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     runner: summary.runner,
     manifest: summary.manifest ? agentRefValue(String(summary.manifest), 180) : null,
     currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
-    analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
+    analysisScope: compactAgentAnalysisScope(summary.analysisScope, preserveScopeCandidates),
     execution: summary.execution,
     route: summary.route,
+    evidenceBoundary: summary.evidenceBoundary,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     evidenceSummary: summary.evidenceSummary,
@@ -1764,7 +1901,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     runner: summary.runner,
     manifest: summary.manifest ? agentRefValue(String(summary.manifest), 80) : null,
     currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
-    analysisScope: compactAgentAnalysisScope(summary.analysisScope, false),
+    analysisScope: compactAgentAnalysisScope(summary.analysisScope, preserveScopeCandidates),
     execution: summary.execution,
     route: summary.route,
     readiness: summary.readiness,
@@ -1987,6 +2124,25 @@ function compactAgentCurrentDelta(
   };
 }
 
+function compactAgentCapabilities(
+  capabilities: readonly QaCapabilityResult[] | AgentSummaryShape["capabilities"],
+): AgentSummaryShape["capabilities"] {
+  return capabilities.map(({ id, status, level }) => ({ id, status, level }));
+}
+
+function compactAgentAction(
+  action: QaActionContract | AgentActionShape,
+): AgentActionShape {
+  return {
+    id: action.id,
+    risk: action.risk,
+    approval: action.approval,
+    executesProjectCode: action.executesProjectCode,
+    writesRepository: action.writesRepository,
+    untrustedEvidenceCanEscalate: action.untrustedEvidenceCanEscalate,
+  };
+}
+
 function numericCount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
@@ -2035,6 +2191,16 @@ function compactAgentAnalysisScope(value: unknown, includeCandidates: boolean): 
       ? truncateForAgent(String(scope.reason), 90)
       : defaultReason,
   };
+}
+
+function shouldPreserveAgentScopeCandidates(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const scope = value as Record<string, unknown>;
+  return scope.mode === "repository-root" &&
+    Array.isArray(scope.candidates) &&
+    scope.candidates.length > 0;
 }
 
 function secondaryAgentFlow(
@@ -2205,6 +2371,35 @@ function evidenceStrength(evidence: ChangeIntentEvidence): number {
   return 0;
 }
 
+function formatQaCapabilityName(id: QaCapabilityResult["id"]): string {
+  return id.replaceAll("-", " ");
+}
+
+function formatQaActionName(id: QaActionId): string {
+  return id.replaceAll("-", " ");
+}
+
+function qaExecutionAtAGlance(execution: QaExecutionReceipt): string {
+  if (execution.status === "not-run") {
+    return "Product QA execution: not run; this command performed static analysis and draft mapping only.";
+  }
+  if (execution.status === "blocked") {
+    return `Repository validation execution: blocked; ${execution.reason}`;
+  }
+  const exitCode = execution.exitCode === undefined ? "not available" : String(execution.exitCode);
+  return `Repository validation execution: ${execution.status}; exit code ${exitCode}, ${execution.durationMs} ms.`;
+}
+
+function repositoryContractExecutionLine(execution: QaExecutionReceipt): string {
+  if (execution.status === "not-run") {
+    return "Execution status: not run by QAMap; use the selected repository validation command and record its result.";
+  }
+  if (execution.status === "blocked") {
+    return `Execution status: blocked; ${execution.reason}`;
+  }
+  return `Execution status: ${execution.status}; QAMap ran the selected repository command with exit code ${execution.exitCode ?? "not available"}.`;
+}
+
 export function formatMarkdownQaDraft(result: QaDraftResult): string {
   const lines: string[] = [];
   lines.push("# QAMap QA Draft");
@@ -2213,7 +2408,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("");
   lines.push("## At a Glance");
   lines.push("");
-  lines.push("- Product QA execution: not run; this command performed static analysis and draft mapping only.");
+  lines.push(`- ${qaExecutionAtAGlance(result.execution)}`);
   lines.push(`- Analysis scope: ${escapeMarkdownInline(formatAnalysisScope(result.analysisScope))}`);
   const primaryIntent = result.changeAnalysis.intents[0];
   if (primaryIntent) {
@@ -2266,6 +2461,23 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   if (result.currentDelta) {
     lines.push(
       `- Current local delta: ${result.currentDelta.files.length} file${result.currentDelta.files.length === 1 ? "" : "s"} isolated from committed branch history.`,
+    );
+  }
+  lines.push(
+    `- Analysis capabilities: ${result.capabilities.map((capability) =>
+      `${formatQaCapabilityName(capability.id)} ${capability.status}/${capability.level}`
+    ).join("; ")}.`,
+  );
+  lines.push(
+    `- Selected action: ${formatQaActionName(result.action.id)}; risk ${result.action.risk}, ` +
+      `approval ${result.action.approval}, project code ${result.action.executesProjectCode ? "may run" : "will not run"}, ` +
+      `repository writes ${result.action.writesRepository}.`,
+  );
+  if (result.evidenceBoundary.neutralizedValues > 0) {
+    lines.push(
+      `- Safety boundary: ${result.evidenceBoundary.neutralizedValues} instruction-like repository value` +
+        `${result.evidenceBoundary.neutralizedValues === 1 ? " was" : "s were"} neutralized; ` +
+        "repository text cannot escalate the selected action.",
     );
   }
   const nextCommand = nextStepCommand(result);
@@ -2366,6 +2578,10 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push(`- Change scope: ${result.includeWorkingTree ? "committed and uncommitted working-tree changes" : "committed branch changes only"}`);
   lines.push(`- Project: ${formatProjectType(result.project)}`);
   lines.push(`- Manifest: ${result.manifestPath ? `\`${escapeMarkdownInline(result.manifestPath)}\`` : "not found; using repo signals and PR diff only"}`);
+  lines.push(
+    `- Repository evidence boundary: ${result.evidenceBoundary.repositoryContent}; ` +
+      `instruction-like content is ${result.evidenceBoundary.instructionLikeContent} and cannot change action authority.`,
+  );
   if (verificationOnly) {
     lines.push(`- Repository verification stage: ${formatRepositoryVerificationStage(result, nextCommand)}`);
     lines.push("- Optional automation readiness: not applicable to this verification-only diff.");
@@ -2413,7 +2629,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
     if (result.changedTestContracts.length > 12) {
       lines.push(`- ... ${result.changedTestContracts.length - 12} more contracts are available in \`--format json\`.`);
     }
-    lines.push("- Execution status: not run by QAMap; use the selected repository validation command and record its result.");
+    lines.push(`- ${repositoryContractExecutionLine(result.execution)}`);
     lines.push("");
   }
 

@@ -7,6 +7,7 @@ export const qamapPackageName = "@ivorycanvas/qamap";
 export const recommendedQaScripts = {
   qa: "qamap qa .",
   "qa:local": "qamap qa . --include-working-tree",
+  "qa:run": "qamap qa run .",
   "qa:e2e": "qamap e2e draft . --dry-run",
 } as const;
 
@@ -101,6 +102,7 @@ export async function initializeQaScripts(
     runCommands: {
       qa: runCommandFor(packageManager, "qa"),
       "qa:local": runCommandFor(packageManager, "qa:local"),
+      "qa:run": runCommandFor(packageManager, "qa:run"),
       "qa:e2e": runCommandFor(packageManager, "qa:e2e"),
     },
   };
@@ -124,6 +126,7 @@ export function formatQaScriptInitReport(result: QaScriptInitResult): string {
   lines.push("");
   lines.push(`  ${result.runCommands.qa}          committed changes on the current branch`);
   lines.push(`  ${result.runCommands["qa:local"]}    include uncommitted working-tree changes`);
+  lines.push(`  ${result.runCommands["qa:run"]}      run the exact selected repository validation command`);
   lines.push(`  ${result.runCommands["qa:e2e"]}      preview an E2E draft without writing files`);
   lines.push("");
   lines.push("The base branch is inferred. Pass extra QAMap options through the package script when a repository needs an explicit base.");

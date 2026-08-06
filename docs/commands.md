@@ -6,6 +6,7 @@ Every QAMap command, with what it produces and when to reach for it. For the sho
 
 ```sh
 pnpm exec qamap qa . --base origin/main --head HEAD
+pnpm exec qamap qa run . --base origin/main --head HEAD
 pnpm exec qamap qa . --base origin/main --head HEAD --format agent
 pnpm exec qamap qa . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD --output QAMAP_QA.md
 pnpm exec qamap scan .
@@ -33,7 +34,7 @@ Scenario routing and draft mapping answer different questions. Routing explains 
 Human QA output makes that boundary visible in three layers:
 
 1. **Important QA And Risk Map** keeps every evidence-backed scenario, including cases that require human review.
-2. **Executable Evidence Available Now** lists existing validation commands and structurally self-checked drafts without claiming they ran.
+2. **Executable Evidence Available Now** lists existing validation commands and structurally self-checked drafts without claiming they ran. An explicit `qa run` invocation may attach a separate repository-command execution receipt.
 3. **Manual Or Agent QA Contracts** preserves the exact setup, action, outcome, and missing evidence for scenarios that cannot yet compile deterministically.
 
 `static-runnable` means the generated artifact has an entrypoint, observable assertion, no skipped placeholder, and passing QAMap self-checks. It does not mean the target application or command was executed.
@@ -82,6 +83,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `qamap test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
 | `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. A single changed declared workspace package is selected automatically. |
+| `qamap qa run . --base origin/main --head HEAD` | Re-analyze the change and execute only the exact existing repository validation command selected by the canonical route. Returns pass, fail, timeout, or blocked evidence; it never installs a runner or runs a proposed product E2E draft. |
 | `qamap qa . --base origin/main --head HEAD --format agent` | The same decision content as one compact JSON line for coding agents — a versioned contract documented in [docs/agent-format.md](agent-format.md). |
 | `qamap e2e plan . --base origin/main --head HEAD` | Derive change intent and QA scenarios, then map them to coverage, test evidence, testability gaps, and an automation adapter. |
 | `qamap e2e plan . --base origin/main --head HEAD --record-history` | Save a compact local run snapshot under `.qamap/runs/` while keeping JSON/Markdown output usable. |
@@ -101,7 +103,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `qamap init .` | Create a starter `qamap.config.json`. |
 | `qamap init --agent .` | One-command agent onboarding: add a marked QAMap Pre-PR QA section to `AGENTS.md`, install the same packaged skill to the portable `.agents/skills/qamap-pr-qa/SKILL.md` path and the Claude-compatible `.claude/skills/qamap-pr-qa/SKILL.md` path, and create `qamap.config.json` if missing. Idempotent; existing instructions and locally modified skills are preserved. |
-| `qamap init --scripts .` | Add collision-safe `qa`, `qa:local`, and `qa:e2e` package scripts for repeat use in a JavaScript repository. |
+| `qamap init --scripts .` | Add collision-safe `qa`, `qa:local`, `qa:run`, and `qa:e2e` package scripts for repeat use in a JavaScript repository. |
 
 For monorepos, run `qamap qa` at the repository root first. When every changed file belongs to exactly one recognized package declared by `workspaces` or `pnpm-workspace.yaml`, `qa` automatically analyzes that package and reports `automatic-package` as its analysis scope. Package-local routes, scripts, fixtures, and runner settings are used while repo-level guardrails remain available. If multiple packages changed, a root file is also part of the diff, or the package type is unknown, QAMap keeps repository-wide scope and lists the package candidates rather than silently choosing one.
 
@@ -117,9 +119,10 @@ After installing QAMap as a development dependency, run `qamap init --scripts .`
 | --- | --- | --- |
 | `qa` | `qamap qa .` | Analyze committed changes on the current branch. |
 | `qa:local` | `qamap qa . --include-working-tree` | Include staged, unstaged, and untracked working-tree changes. |
+| `qa:run` | `qamap qa run .` | Execute the exact existing repository validation command selected after re-analysis. |
 | `qa:e2e` | `qamap e2e draft . --dry-run` | Preview the optional E2E draft without writing files. |
 
-For pnpm, these become `pnpm qa`, `pnpm qa:local`, and `pnpm qa:e2e`. npm uses `npm run <script>`; Yarn and Bun use their normal script syntax. The generated commands omit a hard-coded base branch so QAMap can infer the repository default. Repositories that cannot infer a base can still pass `--base <ref>` through the script or use the full CLI command.
+For pnpm, these become `pnpm qa`, `pnpm qa:local`, `pnpm qa:run`, and `pnpm qa:e2e`. npm uses `npm run <script>`; Yarn and Bun use their normal script syntax. The generated commands omit a hard-coded base branch so QAMap can infer the repository default. Repositories that cannot infer a base can still pass `--base <ref>` through the script or use the full CLI command.
 
 `qamap review` compares a branch against a base ref for PR-style workflows. It separates newly introduced findings from risky files that already had findings on the base branch but were modified again, which helps reviewers notice when a PR touches known-dangerous surfaces such as committed `.env` files, MCP configs, or release scripts.
 
