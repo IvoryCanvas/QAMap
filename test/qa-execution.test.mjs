@@ -407,6 +407,30 @@ test("policy contract", () => {});
   await assert.rejects(readFile(marker, "utf8"), /ENOENT/);
 });
 
+test("qa run treats repository-derived Python test paths as shell arguments", async () => {
+  const root = await makeGitRepository();
+  await writeFile(path.join(root, "pytest.ini"), "[pytest]\n");
+  await commitAll(root, "chore: create Python validation fixture");
+  await git(root, "checkout", "-b", "feature/profile-validation");
+  await mkdir(path.join(root, "tests"), { recursive: true });
+  const testFile = "tests/test_profile.py; touch qamap-injected.txt; #_test.py";
+  await writeFile(
+    path.join(root, testFile),
+    "def test_profile_output():\n    assert 'Profile saved' == 'Profile saved'\n",
+  );
+  await commitAll(root, "test: cover profile output");
+
+  const result = await runQaValidation(root, {
+    base: "main",
+    head: "HEAD",
+    timeoutMs: 15_000,
+  });
+
+  assert.equal(result.route.nextAction, "run-repository-command");
+  assert.match(result.execution.command, /^pytest 'tests\/test_profile\.py; touch qamap-injected\.txt; #_test\.py'$/);
+  await assert.rejects(readFile(path.join(root, "qamap-injected.txt"), "utf8"), /ENOENT/);
+});
+
 test("qa run CLI emits the completed receipt as machine-readable JSON", async () => {
   const root = await makeRepositoryTestFixture({
     testBody: `

@@ -785,11 +785,11 @@ async function buildTestVerificationCommands(
   const pytest = suggestedCommands.find((command) => /^pytest(?:\s|$)/i.test(command));
   const pythonTests = changedEvidence.filter((file) => /(?:^|\/)test_[^/]+\.py$|(?:^|\/)[^/]+_test\.py$/i.test(file));
   if (pytest && pythonTests.length > 0) {
-    return [`pytest ${pythonTests.slice(0, 4).join(" ")}`];
+    return [`pytest ${pythonTests.slice(0, 4).map(shellCommandArgument).join(" ")}`];
   }
   const packageTest = suggestedCommands.find((command) => /^(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+test(?:\s|$)/i.test(command));
   if (packageTest && pythonTests.length > 0) {
-    return [`${packageTest} -- ${pythonTests.slice(0, 4).join(" ")}`];
+    return [`${packageTest} -- ${pythonTests.slice(0, 4).map(shellCommandArgument).join(" ")}`];
   }
   const directPackageTest = suggestedCommands.find((command) =>
     /^(?:npm|pnpm|yarn)(?:\s+run)?\s+test$/i.test(command)

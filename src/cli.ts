@@ -868,7 +868,7 @@ function formatQaDraftOutput(result: Awaited<ReturnType<typeof generateQaDraft>>
     // re-running the analysis. The analyzed repository itself stays untouched.
     // Best effort: when the write fails the payload simply omits the pointer.
     const digest = createHash("sha256")
-      .update(`${result.root} ${result.base} ${result.head}`)
+      .update(`${result.root}\0${result.base}\0${result.head}`)
       .digest("hex")
       .slice(0, 12);
     const fullReportPath = path.join(os.tmpdir(), `qamap-qa-agent-full-${digest}.json`);

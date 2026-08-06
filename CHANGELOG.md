@@ -25,6 +25,7 @@
 ### Security
 
 - Repository-derived strings are treated as untrusted data before human or agent serialization. Strong prompt-like instructions are neutralized and cannot increase action authority, with the neutralized value count disclosed in the QA result.
+- Repository-derived Python test paths are quoted before a focused validation command reaches the shell, preventing special characters in a changed filename from becoming command syntax.
 
 ## 0.4.9 - 2026-08-03
 
