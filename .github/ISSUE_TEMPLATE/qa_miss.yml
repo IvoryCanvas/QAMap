@@ -1,0 +1,44 @@
+name: QA miss or false positive
+description: Share a minimized case where QAMap selected, missed, or grounded QA incorrectly.
+title: "[QA]: "
+labels: ["type: fix", "area: qa-planning"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Real failures make QAMap better. Use invented names and remove private source, paths, customer data, credentials, and internal output.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What went wrong?
+      options:
+        - Wrong change intent
+        - Missed affected behavior or user flow
+        - Unsupported QA scenario or false positive
+        - Missing or incorrect diff evidence
+        - Unusable E2E draft
+        - Incorrect execution receipt
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide a safe diff, fixture, or public repository link plus the exact QAMap command and version.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: QAMap result
+      description: Paste the relevant concise output or reasoning trace.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected QA reasoning
+      description: What behavior, risk, scenario, and source evidence should QAMap have selected?
+    validations:
+      required: true

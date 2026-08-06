@@ -7,7 +7,12 @@ import test from "node:test";
 import ts from "typescript";
 import { analyzeChangeIntents } from "../dist/change-intent.js";
 import { generateE2eDraft, generateE2ePlan } from "../dist/e2e.js";
-import { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "../dist/qa.js";
+import {
+  formatAgentQaDraft,
+  formatMarkdownQaDraft,
+  formatTextQaDraft,
+  generateQaDraft,
+} from "../dist/qa.js";
 import {
   buildQaReasoningTraces,
   qaTraceIdForScenario,
@@ -1459,6 +1464,7 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
   const agentSummary = JSON.parse(formatAgentQaDraft(qa));
   const qaMarkdown = formatMarkdownQaDraft(qa);
+  const qaText = formatTextQaDraft(qa);
   const writtenDraft = await generateE2eDraft(root, {
     base: "main",
     head: "HEAD",
@@ -1570,6 +1576,12 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.match(qaMarkdown, /If this trace is wrong: review `\.qamap\/manifest\.yaml > flows`/);
   assert.match(qaMarkdown, /1\. Diff evidence:[\s\S]*2\. Affected behavior:[\s\S]*3\. Risk:[\s\S]*4\. QA scenario:/);
   assert.match(qaMarkdown, /Product QA execution: not run/);
+  assert.match(qaText, /^QAMap QA$/m);
+  assert.match(qaText, /REQUIRED\s+Submit account preferences/i);
+  assert.match(qaText, /Evidence: src\/pages\/preferences\.tsx:\d+/);
+  assert.match(qaText, /Routing: \d+ required, \d+ recommended, \d+ review-only/);
+  assert.match(qaText, /Optional E2E mapping: \d+ mapped, \d+ partial, \d+ unmapped; not executed/);
+  assert.doesNotMatch(qaText, /## QA Reasoning Trace/);
   assert.equal(agentSummary.execution.status, "not-run");
   assert.match(qaMarkdown, /## Optional Automation/);
   assert.doesNotMatch(qaMarkdown, /Install command|First E2E Draft Bootstrap/);

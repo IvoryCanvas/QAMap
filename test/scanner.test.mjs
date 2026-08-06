@@ -26,6 +26,7 @@ import {
   formatMarkdownE2eSetup,
   formatAgentQaDraft,
   formatMarkdownQaDraft,
+  formatTextQaDraft,
   formatQaScriptInitReport,
   formatMarkdownReviewReport,
   formatMarkdownTestPlan,
@@ -2829,6 +2830,88 @@ test("generateE2ePlan treats API service source utilities as contract-impacting 
   assert.match(flow.languageBrief.successSignal, /expected status, response shape, auth behavior/);
   assert.match(flow.languageBrief.reviewQuestion, /endpoint, handler, or service contract/);
   assert.equal(plan.flows.some((item) => item.title === "Changed-file smoke checklist"), false);
+});
+
+test("generateQaDraft treats transformer changes as input-output contracts instead of API or visual journeys", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/transformers"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: {
+        test: "node --test",
+      },
+      dependencies: {
+        express: "^4.18.0",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/transformers/paint.ts"),
+    [
+      "export function parsePaint(raw) {",
+      "  return { type: raw.type };",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/pattern-paint"]);
+  await writeFile(
+    path.join(root, "src/transformers/paint.ts"),
+    [
+      "export function parsePaint(raw) {",
+      "  if (raw.type === 'PATTERN') return parsePatternPaint(raw);",
+      "  return { type: raw.type };",
+      "}",
+      "",
+      "function parsePatternPaint(raw) {",
+      "  const backgroundRepeat = 'repeat';",
+      "  return {",
+      "    type: raw.type,",
+      "    sourceId: raw.sourceId,",
+      "    backgroundRepeat,",
+      "    backgroundSize: `${Math.round(raw.scale * 100)}%`,",
+      "    backgroundPosition: 'center center',",
+      "  };",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "Add support for patterned fills"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const transformationFlow = plan.flows.find((flow) => flow.kind === "transformation");
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const text = formatTextQaDraft(qa);
+
+  assert.equal(plan.project.type, "api-service");
+  assert.ok(transformationFlow);
+  assert.equal(plan.flows.some((flow) => flow.kind === "api"), false);
+  assert.equal(plan.flows.some((flow) => flow.kind === "content"), false);
+  assert.ok(
+    transformationFlow.coverage.some((target) => target.title === "Input-to-output transformation contract"),
+  );
+  assert.equal(transformationFlow.setupHints.some((hint) => hint.kind === "network"), false);
+  assert.equal(transformationFlow.fixtureReadiness.status, "not-needed");
+  assert.ok(
+    transformationFlow.intentEvidence.some(
+      (evidence) =>
+        evidence.file === "src/transformers/paint.ts" &&
+        evidence.startLine !== undefined &&
+        evidence.symbol === "parsePatternPaint:output",
+    ),
+  );
+  assert.equal(qa.flows[0]?.verificationMode, "transformation-contract");
+  assert.match(text, /Repository verification:/);
+  assert.match(text, /input-to-output transformation contract verification/);
+  assert.doesNotMatch(text, /Optional E2E mapping:/);
+  assert.doesNotMatch(text, /status, response shape, auth behavior/);
 });
 
 test("generateE2ePlan detects Django service apps from a workspace root", async () => {
@@ -7464,6 +7547,7 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
 
   const qa = await generateQaDraft(root, { base: "main", head: "HEAD", runner: "playwright" });
   const markdown = formatMarkdownQaDraft(qa);
+  const text = formatTextQaDraft(qa);
 
   assert.equal(qa.noCloud, true);
   assert.equal(qa.noLlmToken, true);
@@ -7495,6 +7579,18 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.match(markdown, /## Optional Automation/);
   assert.match(markdown, /PR Checklist/);
   assert.match(markdown, /No cloud\. No LLM token/);
+  assert.match(text, /^QAMap QA$/m);
+  assert.match(text, /Local static analysis\. No cloud or LLM token\. Product QA was not run\./);
+  assert.match(text, /^Change$/m);
+  assert.match(text, /^Verify before merge$/m);
+  assert.match(text, /REVIEW\s+.*Checkout Submit.*Order confirmed/);
+  assert.match(text, /Proof: .*Order confirmed/);
+  assert.match(text, /Evidence: src\/pages\/checkout\/index\.tsx/);
+  assert.match(text, /^Evidence$/m);
+  assert.match(text, /No diff-backed reasoning trace; the inferred flow remains review-only/);
+  assert.match(text, /^Next$/m);
+  assert.match(text, /Open the full reasoning trace: qamap qa --format markdown/);
+  assert.doesNotMatch(text, /## QA Reasoning Trace/);
 
   const cliOutput = await execFileAsync(process.execPath, [
     cliPath,
@@ -7507,8 +7603,25 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
     "--runner",
     "playwright",
   ]);
-  assert.match(cliOutput.stdout, /QAMap QA Draft/);
-  assert.match(cliOutput.stdout, /PR Comment Draft/);
+  assert.match(cliOutput.stdout, /^QAMap QA$/m);
+  assert.match(cliOutput.stdout, /Verify before merge/);
+  assert.doesNotMatch(cliOutput.stdout, /PR Comment Draft/);
+
+  const markdownCliOutput = await execFileAsync(process.execPath, [
+    cliPath,
+    "qa",
+    root,
+    "--base",
+    "main",
+    "--head",
+    "HEAD",
+    "--runner",
+    "playwright",
+    "--format",
+    "markdown",
+  ]);
+  assert.match(markdownCliOutput.stdout, /QAMap QA Draft/);
+  assert.match(markdownCliOutput.stdout, /PR Comment Draft/);
 
   const agentOutput = formatAgentQaDraft(qa);
   const agentSummary = JSON.parse(agentOutput);
@@ -8517,6 +8630,21 @@ test("terminal colorizer decorates reports only and passes machine formats throu
   assert.match(colored, /\u001b\[31m\[required\]\u001b\[0m/);
   assert.match(colored, /Stage\u001b\[0m: \u001b\[33msetup needed\u001b\[0m/);
   assert.match(colored, /\u001b\[36mqamap e2e setup\u001b\[0m/);
+
+  const concise = colorizeReport([
+    "QAMap QA",
+    "Change",
+    "Verify before merge",
+    "  REQUIRED  Save profile",
+    "    Proof: Profile saved appears",
+    "  RECOMMENDED  Retry handling",
+    "Evidence",
+    "Next",
+  ].join("\n"));
+  assert.match(concise, /\u001b\[1m\u001b\[36mQAMap QA\u001b\[0m/);
+  assert.match(concise, /\u001b\[1m\u001b\[31mREQUIRED\u001b\[0m/);
+  assert.match(concise, /\u001b\[1m\u001b\[33mRECOMMENDED\u001b\[0m/);
+  assert.match(concise, /\u001b\[1mProof\u001b\[0m:/);
 
   const json = JSON.stringify({ schema: { name: "qamap.qa" } });
   assert.equal(colorizeReport(json), json);

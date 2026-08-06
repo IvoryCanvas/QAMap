@@ -1,5 +1,24 @@
 # Release Validation
 
+## 0.4.10 - 2026-08-06
+
+QAMap 0.4.10 makes the first-run experience shorter without hiding the reasoning path. The default `qamap qa` output now leads with changed behavior, required proof, exact evidence, and the selected verification route; the complete Markdown report remains available through `--format markdown`. The README and demo were rebuilt from this actual output, and the contributor workflow now asks for minimized QA misses, false-positive controls, and execution evidence instead of broad feature descriptions.
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 308/308 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 25/25 static recommendation contracts passing |
+| `pnpm bench:execution` | 3/3 execution contracts passing; duplicate-request, missing-persistence, and stale-validation regressions caught |
+| Coverage | Lines 89.64%, branches 86.32%, functions 95.66% |
+| Public repository smoke | A transformer-only change in `GLips/Figma-Context-MCP` routes to an input-to-output contract with exact symbol and line evidence, not an invented API, authentication, or product E2E scenario |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.10` |
+
+The concise output is intentionally a review receipt, not a claim that product QA ran. It reports selected repository commands as `not run`, keeps unsupported automation out of the required path, and points to the full report when a reviewer needs every scenario and trace. Transformation changes receive representative-input, exact-output, boundary, and compatibility checks even when no browser runner exists. A public-repository smoke exposed the previous false API classification, and a domain-neutral regression fixture now protects that boundary.
+
+The quick-start GIF was recorded from the current CLI against the committed `web-symbol-annotated-renewal` fixture. Every line shown is actual static-analysis output, and the recording deliberately ends with validation and E2E marked `not run`. Executable behavior is proven separately by the seeded-regression benchmark. Removed legacy GIFs are no longer referenced or packaged.
+
 ## 0.4.9 - 2026-08-03
 
 QAMap 0.4.9 ships the validation-recovery compiler, the native Codex and Claude Code plugin manifests, and a quality series validated against merged pull requests of unrelated public repositories: substantive intents outrank cleanup tip commits, agent payload identifiers stay whole with a recoverable full report, missing observable outcomes are stated honestly instead of echoing the flow title, ticket tags survive once in the title, and symbol-derived lifecycle labels read behaviorally.

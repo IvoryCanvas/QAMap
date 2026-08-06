@@ -224,6 +224,7 @@ export interface QaCurrentDelta {
 type QaVerificationMode =
   | "command-contract"
   | "analysis-rule"
+  | "transformation-contract"
   | "existing-test-evidence"
   | "configuration"
   | "documentation"
@@ -2400,6 +2401,120 @@ function repositoryContractExecutionLine(execution: QaExecutionReceipt): string 
   return `Execution status: ${execution.status}; QAMap ran the selected repository command with exit code ${execution.exitCode ?? "not available"}.`;
 }
 
+export function formatTextQaDraft(result: QaDraftResult): string {
+  const lines: string[] = [];
+  const primaryIntent = result.changeAnalysis.intents[0];
+  const primaryFlow = result.flows[0];
+  const routing = summarizeTraceRouting(result.traces);
+  const automation = summarizeTraceAutomation(result.traces);
+
+  lines.push("QAMap QA");
+  lines.push("Local static analysis. No cloud or LLM token. Product QA was not run.");
+  lines.push("");
+  lines.push("Change");
+  if (primaryIntent) {
+    const review = primaryIntent.reviewRequired ? "; review required" : "";
+    lines.push(`  ${plainText(primaryIntent.title)} (${primaryIntent.confidence} confidence${review})`);
+    const lifecycle = summarizeIntentLifecycle(primaryIntent.lifecycle);
+    if (lifecycle) {
+      lines.push("  Flow:");
+      for (const [index, stage] of lifecycle.split(" -> ").entries()) {
+        lines.push(`    ${index === 0 ? "" : "-> "}${plainText(stage)}`);
+      }
+    }
+  } else {
+    lines.push("  No change intent was inferred; suggestions remain review-only.");
+  }
+  if (primaryFlow) {
+    lines.push(`  Affected behavior: ${plainText(primaryFlow.title)}`);
+  } else {
+    lines.push("  Affected behavior: no changed flow candidate was found.");
+  }
+
+  lines.push("");
+  lines.push("Verify before merge");
+  if (result.traces.length === 0) {
+    if (primaryFlow) {
+      const reviewQuestion = primaryFlow.userJourney?.reviewQuestion ?? `Does ${primaryFlow.title} behave as intended?`;
+      lines.push(`  REVIEW  ${plainText(reviewQuestion)}`);
+      if (primaryFlow.userJourney?.successSignal && !primaryFlow.userJourney.successSignalUnresolved) {
+        lines.push(`    Proof: ${plainText(primaryFlow.userJourney.successSignal)}`);
+      }
+      if (primaryFlow.changedFiles[0]) {
+        lines.push(`    Evidence: ${plainText(primaryFlow.changedFiles[0])}`);
+      }
+    } else {
+      lines.push("  No diff-backed QA scenario was produced.");
+    }
+  } else {
+    for (const trace of result.traces.slice(0, 4)) {
+      lines.push(`  ${trace.scenario.decision.toUpperCase()}  ${plainText(trace.scenario.title)}`);
+      if (trace.scenario.assertions[0]) {
+        lines.push(`    Proof: ${plainText(trace.scenario.assertions[0])}`);
+      }
+      const source = trace.sources.find((item) => item.file) ?? trace.sources[0];
+      if (source) {
+        lines.push(`    Evidence: ${formatPlainEvidenceReference(source)}`);
+      }
+    }
+    if (result.traces.length > 4) {
+      lines.push(`  ${result.traces.length - 4} more scenario(s) are available in the full report.`);
+    }
+  }
+
+  lines.push("");
+  lines.push("Evidence");
+  if (result.evidenceSummary.totalTraces === 0) {
+    lines.push("  No diff-backed reasoning trace; the inferred flow remains review-only.");
+  } else {
+    lines.push(
+      `  ${result.evidenceSummary.confirmed}/${result.evidenceSummary.totalTraces} scenarios connect to ` +
+        `${result.evidenceSummary.uniqueSources} unique diff source(s).`,
+    );
+  }
+  if (result.traces.length > 0) {
+    lines.push(
+      `  Routing: ${routing.required} required, ${routing.recommended} recommended, ${routing.reviewOnly} review-only.`,
+    );
+  } else if (primaryFlow) {
+    lines.push("  Routing: fallback flow for review; no scenario policy was inferred.");
+  }
+  if (result.readiness.basis === "repository-validation") {
+    const verificationModes = uniqueStrings(
+      result.flows
+        .map((flow) => flow.verificationMode)
+        .filter((mode): mode is QaVerificationMode => Boolean(mode))
+        .map(formatVerificationMode),
+    );
+    lines.push(
+      `  Repository verification: ${verificationModes.length > 0 ? verificationModes.join(", ") : "existing repository evidence"}; ` +
+        "no product E2E draft proposed.",
+    );
+  } else {
+    lines.push(
+      `  Optional E2E mapping: ${automation.compiled} mapped, ${automation.partial} partial, ` +
+        `${automation.notCompiled} unmapped; not executed.`,
+    );
+  }
+  const validationCommand = nextStepCommand(result);
+  if (validationCommand) {
+    lines.push(`  Existing validation: ${plainText(validationCommand)} (selected, not run)`);
+  }
+
+  lines.push("");
+  lines.push("Next");
+  if (validationCommand) {
+    lines.push("  Run selected repository validation: qamap qa run");
+  } else {
+    lines.push("  Review the selected scenarios before choosing an execution step.");
+  }
+  if (needsGeneratedDraft(result)) {
+    lines.push("  Preview an optional E2E draft: qamap e2e draft . --dry-run");
+  }
+  lines.push("  Open the full reasoning trace: qamap qa --format markdown");
+  return `${lines.join("\n")}\n`;
+}
+
 export function formatMarkdownQaDraft(result: QaDraftResult): string {
   const lines: string[] = [];
   lines.push("# QAMap QA Draft");
@@ -3111,6 +3226,20 @@ function formatEvidenceReference(evidence: ChangeIntentEvidence): string {
   return `${location}${symbol}${qualifiers ? ` [${qualifiers}]` : ""}`;
 }
 
+function formatPlainEvidenceReference(evidence: ChangeIntentEvidence): string {
+  if (evidence.commit) {
+    return `commit ${evidence.commit.slice(0, 12)}`;
+  }
+  const lineRange = evidence.startLine === undefined
+    ? ""
+    : evidence.endLine !== undefined && evidence.endLine !== evidence.startLine
+      ? `:${evidence.startLine}-${evidence.endLine}`
+      : `:${evidence.startLine}`;
+  const location = evidence.file ? `${plainText(evidence.file)}${lineRange}` : evidence.kind;
+  const symbol = evidence.symbol ? ` (${plainText(evidence.symbol)})` : "";
+  return `${location}${symbol}`;
+}
+
 function summarizeIntentLifecycle(lifecycle: QaDraftResult["changeAnalysis"]["intents"][number]["lifecycle"]): string {
   const start = lifecycle.find((stage) => stage.kind === "trigger")
     ?? lifecycle.find((stage) => stage.kind === "action");
@@ -3555,6 +3684,9 @@ function verificationModeForTitle(title: string): QaVerificationMode | undefined
   if (/^Static analysis rule\b/i.test(title.trim())) {
     return "analysis-rule";
   }
+  if (/\btransformation contract\b/i.test(title.trim())) {
+    return "transformation-contract";
+  }
   if (isChangedTestEvidenceTitle(title)) {
     return "existing-test-evidence";
   }
@@ -3571,6 +3703,9 @@ function verificationModeForTitle(title: string): QaVerificationMode | undefined
 }
 
 function verificationModeForDraftFile(file: E2eDraftFile): QaVerificationMode | undefined {
+  if (file.flowKind === "transformation") {
+    return "transformation-contract";
+  }
   const scenarioSourceRoles = (file.qaScenarios ?? [])
     .flatMap((scenario) => scenario.evidence)
     .map((source) => source.sourceRole)
@@ -3594,6 +3729,9 @@ function formatVerificationMode(mode: QaVerificationMode): string {
   }
   if (mode === "analysis-rule") {
     return "analyzer rule boundary verification";
+  }
+  if (mode === "transformation-contract") {
+    return "input-to-output transformation contract verification";
   }
   if (mode === "existing-test-evidence") {
     return "the changed test evidence";
@@ -3689,4 +3827,8 @@ function uniqueStrings(values: string[]): string[] {
 
 function escapeMarkdownInline(value: string): string {
   return value.replaceAll("`", "'");
+}
+
+function plainText(value: string): string {
+  return value.replaceAll("`", "'").replace(/\s+/g, " ").trim();
 }

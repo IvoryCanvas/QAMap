@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.10 - 2026-08-06
+
 ### Added
 
 - Added per-run capability receipts for change intent, behavior impact, scenario routing, repository validation, and automation drafting. Human and agent output now disclose whether each stage is deep, structural, generic, limited, unavailable, or not applicable instead of compressing the whole run into one score.
@@ -10,17 +12,25 @@
 - Added `qamap qa run`, an explicit bounded execution loop that re-analyzes the change, executes only the exact selected existing repository validation command, preserves its exit code, and emits timeout, duration, output-size, and output-hash evidence without embedding raw output.
 - Completed `qa run` receipts now compare HEAD, the checked-out branch, the Git index, and tracked or non-ignored untracked state before and after execution, distinguish command mutations from pre-existing local changes, and disclose a bounded relative-path list without embedding file contents.
 - Added the `qa:run` repeat-use shortcut through `qamap init --scripts`.
+- Added a concise default `qamap qa` view that keeps the change, lifecycle, required proof, exact source evidence, routing status, selected validation, and next action visible without the full Markdown report.
+- Added input-to-output transformation contracts for parser, serializer, mapper, converter, normalizer, codec, and transformer changes. These changes now route to representative input, exact output, boundary input, and backward-compatibility checks instead of generic API or visual QA.
+- Added a dedicated QA-miss issue template so false positives, missed risks, wrong evidence, and unusable drafts can become minimized public regressions.
 
 ### Changed
 
 - The portable agent skill now reads capability and action contracts before acting, chooses one next action, and applies the calling environment's stricter execution policy.
 - Agent and JSON consumers can use the same execution receipt without repeating a repository command that QAMap already ran.
+- Reworked the README around a 60-second first run, one readable recording made from current output, a short result example, and an explicit separation between static analysis, repository command execution, and optional E2E drafting.
+- Reworked contribution guidance around behavioral contracts, safe public fixtures, negative controls, focused validation, maintainer-owned labels, and failure-to-regression workflow.
+- `qamap qa --format markdown` remains the complete reasoning artifact while the default text format is optimized for terminal review.
 
 ### Fixed
 
 - Repository test commands launched from QAMap's own Node test harness no longer inherit the parent test-runner marker and silently skip every child test as a recursive invocation.
 - Timed-out repository commands now receive a forced process-tree termination when graceful shutdown does not complete.
 - Agent execution-contract generators are classified as analysis rules instead of fabricating product state-transition QA from fields such as `route.nextAction` and `execution.performed`.
+- Transformation modules inside API repositories no longer fabricate endpoint status, authentication, network-failure, or mock-response checks. Style-named transformer files are no longer mistaken for presentation-only changes.
+- Non-conventional commit recovery is limited to behavior-bearing phrasing and exact changed-code evidence, preventing broad `add` or `update` subjects from replacing route, manifest, and workspace flow contracts.
 
 ### Security
 

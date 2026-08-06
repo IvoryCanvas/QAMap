@@ -27,7 +27,11 @@ Use `npx --yes @ivorycanvas/qamap@latest ...` for one-off human runs without ins
 
 ## Reading The Output
 
-Human-facing reports (`text` and `markdown` formats) open with an **At a Glance** section: evidence-backed change intent, behavior lifecycle, affected behavior, the reviewer question to answer before merge, concrete repository evidence, trace coverage, the proposed draft path, and optional automation gaps. The **QA Reasoning Trace** section then gives each selected scenario a stable ID and shows the causal path from a diff source to affected behavior, risk, routing decision, and optional artifact. Runner information appears later as an automation adapter. When printed to an interactive terminal the report is colorized (headings, statuses, priority tags, inline commands); files written with `--output`, pipes, CI logs, and the machine formats (`json`, `agent`, `sarif`) are always plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
+`qamap qa` defaults to a concise `text` report for humans. It shows the inferred change, selected QA scenarios, expected proof, strongest file/line evidence, routing and optional E2E coverage, execution status, and the next explicit action.
+
+Use `--format markdown` for the complete review artifact. It opens with **At a Glance**, then retains every stable **QA Reasoning Trace** from a diff source to affected behavior, risk, routing decision, and optional artifact. Use `--format agent` for the compact versioned machine contract and `--format json` for the full structured result.
+
+Interactive terminal reports are colorized. Files written with `--output`, pipes, CI logs, and machine formats remain plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
 
 Scenario routing and draft mapping answer different questions. Routing explains what the changed behavior should prove before merge. **Draft Mapping And Context Gaps** explains why an optional generated artifact may still need a selector, fixture, runner, or repository fact. Those draft gaps do not invalidate the runner-independent QA judgment and are not automatically PR merge requirements.
 

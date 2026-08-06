@@ -1,276 +1,155 @@
-# 30-Second Quick Start Demo
+# First-Run Walkthrough
 
-This demo is the shortest way to show what QAMap does in a public README, blog post, or launch thread. The checked-in GIF uses the current source against the public `web-react-record-pinning` benchmark without a manifest. Record actual CLI output and generated code only; do not substitute idealized report blocks.
+QAMap should answer one question before it asks you to adopt a runner, manifest, or workflow:
 
-## Story
+> What does this branch need to prove before merge?
 
-A reviewer sees a PR that adds a record-pinning interaction and visible result:
+## 1. Run One Read-Only Command
 
-```txt
-src/pages/records.tsx
+From the branch you want to review:
+
+```sh
+npx --yes @ivorycanvas/qamap@latest qa
 ```
 
-The reviewer wants to know:
-
-- Which user flow is affected?
-- Which diff hunk caused each QA scenario to be proposed?
-- Should this become a Playwright test, a manual checklist, or only a review note?
-- What blocks the generated draft from being trusted as regression coverage?
-
-## Command
-
-Run QAMap on the branch:
+QAMap infers the base branch in standard repositories. Use explicit refs only when needed:
 
 ```sh
 npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD
 ```
 
-`qa` is important for first contact. It lets maintainers review change intent, behavior lifecycle, scenario confidence, exact diff sources, and a PR checklist without writing files or selecting a test runner.
+The command performs static analysis. It does not run product code, install a test tool, or write files.
 
-After the team accepts a scenario and wants executable coverage:
+## 2. Read The Five Sections
+
+The default text output is intentionally short:
+
+1. **Change**: inferred intent, behavior lifecycle, and affected flow.
+2. **Verify before merge**: selected QA scenarios and expected proof.
+3. **Evidence**: the changed file, line, symbol, and trace coverage behind those decisions.
+4. **Execution boundary**: whether an existing command or optional E2E draft was selected, and whether it ran.
+5. **Next**: one explicit action plus links to deeper output.
+
+Example from the committed subscription-renewal fixture:
+
+```txt
+QAMap QA
+Local static analysis. No cloud or LLM token. Product QA was not run.
+
+Change
+  Prevent duplicate subscription renewal requests (medium confidence; review required)
+  Affected behavior: Prevent duplicate subscription renewal requests
+
+Verify before merge
+  REQUIRED  Prevent duplicate subscription renewal requests
+    Proof: Verify visible text "Subscription active" appears.
+    Evidence: src/pages/renewal.tsx:11 (RenewalPage)
+  RECOMMENDED  Duplicate renewal request
+    Proof: Verify duplicate renewal request is prevented or handled explicitly.
+
+Evidence
+  3/3 scenarios connect to 6 unique diff sources.
+  Optional E2E mapping: 2 mapped, 1 unmapped; not executed.
+  Existing validation: npm run test:e2e (selected, not run)
+```
+
+The wording matters:
+
+- **selected, not run** means QAMap found an existing repository command but did not execute it.
+- **mapped, not executed** means QAMap can express an optional test draft; the application was not launched.
+- **review required** means deterministic inference found evidence, but a human has not promoted it into team policy.
+
+## 3. Open The Full Reasoning Only When Needed
 
 ```sh
-npx --yes @ivorycanvas/qamap@latest e2e draft . --base origin/main --head HEAD --dry-run
-npx --yes @ivorycanvas/qamap@latest e2e draft . --base origin/main --head HEAD
+npx --yes @ivorycanvas/qamap@latest qa --format markdown
 ```
 
-For a repository adopting QAMap as team QA memory, start with the manifest loop:
+The Markdown report retains:
+
+- every change intent and lifecycle stage
+- required, recommended, and review-only scenarios
+- stable trace IDs
+- exact diff and repository evidence
+- scenario authority and approval requirements
+- missing source or mapping gaps
+- PR checklist and optional automation receipts
+
+Use `--output QAMAP_QA.md` when you want a review artifact:
 
 ```sh
-npx --yes @ivorycanvas/qamap@latest manifest context .
-npx --yes @ivorycanvas/qamap@latest manifest init .
-npx --yes @ivorycanvas/qamap@latest manifest validate .
-npx --yes @ivorycanvas/qamap@latest manifest explain . --base origin/main --head HEAD
+npx --yes @ivorycanvas/qamap@latest qa --format markdown --output QAMAP_QA.md
 ```
 
-For a read-only smoke test against a repository you do not want to modify, keep the manifest outside the repo and pass it back into the PR commands:
+## 4. Execute Only By Explicit Choice
+
+If the result selects an existing repository validation command:
 
 ```sh
-npx --yes @ivorycanvas/qamap@latest manifest init . --write /tmp/qamap-manifest.yaml
-npx --yes @ivorycanvas/qamap@latest qa . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD
+npx --yes @ivorycanvas/qamap@latest qa run
 ```
 
-The manifest is the optional durable layer. First-run QA routing works without it; teams can add one later to correct domains, flows, anchors, and checks once, then reuse that correction across future PRs without re-explaining the same QA context to an LLM.
+QAMap re-analyzes the same change, runs only that selected command, applies a timeout, and returns:
 
-If your coding agent supports reusable local instructions, use the packaged skill template as the PR handoff workflow:
+- pass, fail, timeout, or blocked status
+- exit code and duration
+- bounded output sizes and hashes
+- whether HEAD, branch, index, or Git-observable worktree state changed
 
-```txt
-skills/qamap-pr-qa/SKILL.md
-```
+This command does not install a runner or execute a proposed product E2E draft.
 
-## Manifest-Backed PoC Path
+## 5. Preview Optional E2E
 
-The practical PoC is not "QAMap reads every project perfectly." The useful loop is:
-
-```txt
-default branch repo context
-  -> qamap manifest init
-  -> reviewed .qamap/manifest.yaml
-
-PR branch diff
-  -> qamap manifest explain
-  -> qamap e2e draft
-  -> draft test file plus manifest repair path
-```
-
-For example, a repository can contain:
-
-```txt
-CONTEXT.md
-docs/adr/checkout-purchase.md
-AGENTS.md
-src/pages/checkout/index.tsx
-playwright.config.ts
-```
-
-If `docs/adr/checkout-purchase.md` says the checkout purchase flow must cover success, API failure, and visible confirmation evidence, `manifest init` can bootstrap a flow named `Checkout Purchase` with the route `/checkout`. When a later PR changes `src/pages/checkout/index.tsx`, QAMap can connect the changed route to that manifest flow and preview:
-
-```txt
-Manifest Recommendations
-- Flow: Checkout Purchase
-- Entry route: /checkout
-- Evidence sources: route-file, adr-context
-- Required checks:
-  - Checkout Purchase uses deterministic success fixture data
-  - Checkout Purchase handles failed, empty, or unauthorized responses
-- If this is wrong: update .qamap/manifest.yaml > flows.checkout-checkout-purchase.anchors
-
-Draft file
-- tests/e2e/checkout-purchase.spec.ts
-```
-
-That draft is intentionally concrete enough to edit, run, and promote:
-
-```ts
-import { expect, test } from "@playwright/test";
-
-test("Checkout Purchase", async ({ page }) => {
-  // Verification manifest evidence:
-  // Flow: Checkout Purchase
-  // .qamap/manifest.yaml > flows.checkout-checkout-purchase.anchors
-
-  await test.step("Open route /checkout.", async () => {
-    await page.goto("/checkout");
-  });
-
-  await test.step("Fill Email with realistic data.", async () => {
-    await page.getByPlaceholder("Email").fill("qamap@example.com");
-  });
-
-  await test.step("Submit using Checkout Submit.", async () => {
-    await page.getByTestId("checkout-submit").click();
-  });
-
-  await expect(page.getByText("Order confirmed")).toBeVisible();
-});
-```
-
-The human still owns the final truth: fixture data, auth state, API mocks, and assertions must match the real product. The saving is that the repeated context work moves into repo-local manifest memory, and a wrong recommendation points to the manifest path to repair instead of asking a new AI prompt to re-learn the project.
-
-## What QAMap Reads
-
-```txt
-Input
-- git diff between origin/main and HEAD
-- package.json scripts and dependencies
-- framework and route files
-- existing E2E runner config
-- stable selectors such as data-testid, aria-label, role text, placeholder text, and testID
-- optional team-owned context in .qamap/manifest.yaml, CONTEXT.md, ADRs, goals, QA runbooks, and agent instructions
-```
-
-## What QAMap Returns
-
-```txt
-Output
-- PR comment/checklist draft
-- commit-backed change intent and confidence
-- ordered behavior lifecycle
-- primary, failure, boundary, and state-transition QA scenarios
-- scenario-level confidence, review status, and exact commit or head-side `file:line` sources
-- evidence disposition (`confirmed`, `source-gap`, or `mapping-gap`) with repeated source references deduplicated
-- changed domain language
-- candidate user flow
-- manifest evidence when a repo-local flow/check matches
-- optional automation adapter selected after QA design
-- optional draft file path
-- flow language brief
-- runnable status
-- self-check status
-- required action items
-- blockers that explain why a draft is not ready yet
-- an exact manifest correction target when the reasoning path is wrong, always gated by human approval
-```
-
-The result should not stop at "selector needed" or "fixture needed." A useful QAMap report should say which behavior changed, which scenarios follow, which exact hunk supports each scenario, what remains uncertain, and where to update the manifest if the recommendation is wrong. Automation comes after that review.
-
-## Markdown Preview
-
-```txt
-# QAMap QA Draft
-
-At a Glance
-- Change intent: Submit notification preferences and show the saved state [high]
-- Behavior lifecycle: trigger -> state-change -> side-effect -> observable-outcome
-
-Summary
-- Project: Web
-- Manifest: .qamap/manifest.yaml
-
-QA scenarios
-- [critical] changed preference lifecycle [high]
-  - Source: src/pages/preferences.tsx:17, symbol onClick
-  - Assert: the saved state is visible
-- [recommended] failure, timeout, and retry handling [medium; review required]
-  - Source: src/pages/preferences.tsx:7, symbol fetch
-  - Assert: retries do not duplicate requests or side effects
-
-Evidence gaps in this QA proposal
-- [required] fixture: Add deterministic response data for /api/preferences.
-
-PR checklist
-- [ ] Review each QA scenario and its diff source.
-- [ ] Confirm success and failed-response assertions for /api/preferences.
-- [ ] Run pnpm run test:e2e.
-
-Optional automation
-- Adapter candidate: Playwright
-- qamap e2e draft . --base origin/main --head HEAD
-```
-
-## Draft Shape
-
-```ts
-import { expect, test } from "@playwright/test";
-
-test("Checkout purchase", async ({ page }) => {
-  await test.step("Open route /checkout.", async () => {
-    await page.goto("/checkout");
-  });
-
-  await test.step("Fill checkout email.", async () => {
-    await page.getByPlaceholder("Email").fill("buyer@example.com");
-  });
-
-  await test.step("Fill checkout name.", async () => {
-    await page.getByPlaceholder("Name").fill("Ada Lovelace");
-  });
-
-  await test.step("Submit checkout.", async () => {
-    await page.getByRole("button", { name: "Complete purchase" }).click();
-  });
-
-  await expect(page.getByText("Order confirmed")).toBeVisible();
-});
-```
-
-In the demo branch, the generated test is meant to protect this review question:
-
-```txt
-Can a customer still complete the Checkout purchase flow after the checkout form change?
-```
-
-The draft covers:
-
-- entering the checkout route
-- using the changed checkout form controls
-- checking the success/confirmation state
-- checking the invalid-input recovery path
-
-The dry-run result is intentionally conservative:
-
-```txt
-Generated E2E draft: yes
-Static Playwright self-check: pass
-Browser test execution: not run in --dry-run
-Still required: deterministic fixture/mock data and real pnpm run test:e2e execution
-```
-
-## Recording A Short GIF
-
-Use a tiny branch where a form, button, route, or API client changed. The recording only needs three terminal moments:
+After accepting the selected QA scenarios:
 
 ```sh
-git diff --stat origin/main...HEAD
-npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD
-npx --yes @ivorycanvas/qamap@latest verify . --base origin/main --head HEAD --format markdown
+npx --yes @ivorycanvas/qamap@latest e2e draft . --dry-run
 ```
 
-The best GIF is not a long terminal scroll. Show:
+QAMap chooses a Playwright, Maestro, CLI, or manual adapter only after QA routing. A scenario stays visible even when its selector, fixture, entrypoint, or assertion is not yet strong enough for deterministic compilation.
 
-- the changed files
-- the generated flow name
-- the planned draft path
-- the required action items
-- the no-write `--dry-run` line
+## Include Local Changes
 
-## Launch Message
+To analyze staged, unstaged, and untracked work:
+
+```sh
+npx --yes @ivorycanvas/qamap@latest qa --include-working-tree
+```
+
+For repeat use in a JavaScript repository:
+
+```sh
+pnpm add -D @ivorycanvas/qamap
+pnpm exec qamap init --scripts
+pnpm qa:local
+```
+
+## Agent Handoff
+
+```sh
+npx --yes @ivorycanvas/qamap@latest qa --format agent
+```
+
+The compact payload carries the same decisions, evidence boundary, next action, and execution receipt in a versioned contract. See [agent-format.md](agent-format.md).
+
+## Manifest Is Optional
+
+Start without one. If a durable flow is repeatedly misunderstood:
+
+```sh
+npx --yes @ivorycanvas/qamap@latest manifest init
+```
+
+Review `.qamap/manifest.yaml` before committing it. Human-approved corrections can sharpen later branches without another prompt.
+
+## Demo Provenance
+
+The README GIF is generated from the current default output against:
 
 ```txt
-QAMap turns a PR diff into affected flows, missing QA evidence, and draft E2E/checklist work.
-
-It runs locally, does not upload source code, and does not call an LLM API.
-
-Try it:
-npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD
+test/benchmarks/web-symbol-annotated-renewal
 ```
+
+The fixture is synthetic and committed. The GIF shows static analysis only. Separate execution benchmarks generate browser artifacts once, require the same artifact to fail on a seeded defect, and require it to pass on the fixed source.
+
+For those contracts, see [benchmarking.md](benchmarking.md).

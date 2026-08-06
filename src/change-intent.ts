@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
-import { classifyChangeSourceRole } from "./source-role.js";
+import { classifyChangeSourceRole, isTransformationSourcePath } from "./source-role.js";
 import type { ChangeSourceRole } from "./source-role.js";
 import {
   collectChangedQaSymbolAnnotations,
@@ -140,6 +140,8 @@ interface CodeBehaviorSignal {
 const behavioralCommitTypes = new Set(["feat", "feature", "fix", "hotfix", "perf"]);
 const supportingCommitTypes = new Set(["refactor"]);
 const ignoredCommitTypes = new Set(["build", "chore", "ci", "docs", "release", "style", "test"]);
+const nonConventionalBehaviorVerbPattern =
+  /^(?:add\s+support\s+for|allow|enable|fix|handle|implement|persist|prevent|remove|restore|surface|support)\b/i;
 const maxCommits = 50;
 const maxIntentFiles = 20;
 const maxLifecycleStages = 12;
@@ -298,7 +300,7 @@ export async function analyzeChangeIntents(
     diagnostics.push(
       commits.length === 0
         ? "No behavior-bearing commit or sufficiently connected working-tree signals were found."
-        : "Commit evidence was available, but it did not contain a behavior-bearing feat, fix, hotfix, or performance intent.",
+        : "Commit evidence was available, but it did not contain a behavior-bearing intent.",
     );
   }
   const rankedIntents = rankChangeIntentsForReview(intents, commits);
@@ -456,9 +458,14 @@ function parseCommit(commit: ChangeIntentCommit): ParsedCommit {
   const scope = match?.[2]?.trim();
   const statement = (match?.[3] ?? cleanSubject).trim();
   const actionSignals = lifecycleKeywordCount(`${statement} ${commit.body ?? ""}`);
+  const nonConventionalBehavior =
+    !conventionalType &&
+    nonConventionalBehaviorVerbPattern.test(statement) &&
+    (commit.files ?? []).some(isBehaviorBearingFile) &&
+    !isLowSignalCommitStatement(statement);
   const seed = conventionalType
     ? behavioralCommitTypes.has(conventionalType)
-    : actionSignals >= 2 && !isLowSignalCommitStatement(statement);
+    : (actionSignals >= 2 || nonConventionalBehavior) && !isLowSignalCommitStatement(statement);
   const supporting = conventionalType
     ? supportingCommitTypes.has(conventionalType)
     : actionSignals >= 1 && !isLowSignalCommitStatement(statement);
@@ -1828,6 +1835,7 @@ function collectCodeBehaviorSignals(
     }
     locatedFiles.add(file);
     for (const hunk of hunks) {
+      collectTransformationContractSignals(signals, file, hunk);
       for (const line of hunk.lines) {
         collectCodeBehaviorSignalsFromText(signals, file, line.text, hunk, line.line);
       }
@@ -1842,6 +1850,71 @@ function collectCodeBehaviorSignals(
     collectCodeBehaviorSignalsFromText(signals, file, text);
   }
   return selectCodeSignals(signals);
+}
+
+function collectTransformationContractSignals(
+  signals: CodeBehaviorSignal[],
+  file: string,
+  hunk: AddedDiffHunk,
+): void {
+  if (!isTransformationSourcePath(file)) {
+    return;
+  }
+  const declaration = hunk.lines
+    .map((line) => ({
+      line,
+      match: line.text.match(
+        /\b(?:function\s+|(?:const|let|var)\s+)([A-Za-z_$][\w$]*(?:transform|parse|serializ|deserializ|format|map|convert|normaliz|encode|decode)[A-Za-z0-9_$]*|(?:transform|parse|serializ|deserializ|format|map|convert|normaliz|encode|decode)[A-Za-z0-9_$]*)\b/i,
+      ),
+    }))
+    .find((candidate) => candidate.match);
+  const symbol = declaration?.match?.[1];
+  if (!declaration || !symbol) {
+    return;
+  }
+
+  const actionLabel = `Transform representative input through \`${symbol}\`.`;
+  signals.push({
+    kind: "action",
+    label: actionLabel,
+    file,
+    symbol,
+    evidence: {
+      ...codeSignalEvidence(actionLabel, file, symbol, hunk, declaration.line.line),
+      relation: "direct",
+    },
+  });
+
+  const returnIndex = hunk.lines.findIndex(
+    (line, index) => index >= hunk.lines.indexOf(declaration.line) && /\breturn\s*\{/.test(line.text),
+  );
+  if (returnIndex < 0) {
+    return;
+  }
+  const outputFields = uniqueStrings(
+    hunk.lines
+      .slice(returnIndex, returnIndex + 30)
+      .map((line) => line.text.match(/^\s+([A-Za-z_$][\w$]*)\s*(?::|,)/)?.[1])
+      .filter((field): field is string => Boolean(field) && field !== "type"),
+  ).slice(0, 5);
+  if (outputFields.length === 0) {
+    return;
+  }
+  const outputLine = hunk.lines
+    .slice(returnIndex, returnIndex + 30)
+    .find((line) => outputFields.some((field) => line.text.includes(`${field}:`))) ?? declaration.line;
+  const outcomeLabel =
+    `Observe the transformed output from \`${symbol}\` with fields ${outputFields.map((field) => `\`${field}\``).join(", ")}.`;
+  signals.push({
+    kind: "observable-outcome",
+    label: outcomeLabel,
+    file,
+    symbol: `${symbol}:output`,
+    evidence: {
+      ...codeSignalEvidence(outcomeLabel, file, `${symbol}:output`, hunk, outputLine.line),
+      relation: "direct",
+    },
+  });
 }
 
 function collectRenderedMetadataSignals(

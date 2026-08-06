@@ -1,30 +1,27 @@
-## Intent
+## Why
 
-<!-- What changed, and why should this change exist? -->
+<!-- What real failure, missed risk, false positive, or user problem does this change address? -->
 
-## Agent / Review Risk
+## Behavioral Contract
 
-<!-- Note risky surfaces touched, compatibility concerns, rollout risk, or "None". -->
+<!-- What should QAMap infer, route, cite, generate, or execute after this change? -->
 
-## Validation Evidence
+## Evidence
 
+<!-- Name the minimized fixture, positive/negative controls, or public reproduction. -->
+
+- [ ] Focused regression test added or updated.
 - [ ] `pnpm test`
-- [ ] `pnpm scan` <!-- Required for scanner, security rule, or repository policy changes. -->
-- [ ] `pnpm bench:execution` <!-- Required for deterministic automation compiler or execution-fixture changes. -->
-- [ ] Relevant `qamap verify`, `qamap test-plan`, or `qamap e2e plan/draft` output reviewed.
+- [ ] `pnpm bench:ci` for QA inference, routing, trace, or output changes.
+- [ ] `pnpm bench:execution` for E2E compiler or execution-fixture changes.
+- [ ] `pnpm scan` for scanner, security, or repository-policy changes.
 
-## E2E / Manual Coverage
+## Public OSS Check
 
-<!-- List generated E2E drafts, manual flows exercised, or why E2E coverage is not needed. -->
+- [ ] No private repository name, path, source, customer data, credential, or internal smoke output is included.
+- [ ] Shared inference is proven across unrelated positive cases and a negative control, or this PR explains why that contract is not applicable.
+- [ ] User-facing commands and claims match actual behavior.
 
-## Maintainer Notes
+## Review Notes
 
-<!-- Anything reviewers should know before merging. -->
-
-## Collaboration Checklist
-
-- [ ] The branch uses an allowed prefix and contains no coding-agent product name.
-- [ ] The PR title follows `Type: imperative summary`.
-- [ ] `@ivory-code` is assigned, or assignment is left for a maintainer when permissions do not allow it.
-- [ ] Exactly one `type:` label and only relevant `area:` labels are applied.
-- [ ] The PR is intended to be squash-merged after required checks pass.
+<!-- Compatibility, safety, rollout, remaining limits, or "None". Maintainers handle assignment and labels. -->
