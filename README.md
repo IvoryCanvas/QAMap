@@ -55,7 +55,7 @@ When QAMap routes the change to an existing repository validation command, execu
 npx --yes @ivorycanvas/qamap@latest qa run
 ```
 
-`qa run` re-analyzes the same change, executes only a selected existing repository command, and returns its exit code, duration, timeout state, output byte counts, and output hashes. It does not install a runner, execute a proposed product E2E draft, or embed raw command output in JSON/agent receipts.
+`qa run` re-analyzes the same change, executes only a selected existing repository command, and returns its exit code, duration, timeout state, output byte counts, and output hashes. It also compares HEAD, the checked-out branch, the Git index, and tracked or non-ignored untracked state immediately before and after execution, so a passing test cannot silently hide a generated file, modified source, staged file, commit, or checkout. Pre-existing local changes are fingerprinted rather than attributed to the command. It does not install a runner, execute a proposed product E2E draft, or embed raw command output in JSON/agent receipts.
 
 When `--base` is omitted, QAMap checks CI pull-request metadata, repo-local Git configuration, and nearby long-lived branches in that order. The report always shows which base was selected and why. Use `--include-working-tree` to analyze the final net state from that branch to the current worktree; a file added in an earlier commit and removed locally is not reported as a current change. QAMap also isolates a **Current Local Delta**, so today's uncommitted task and its changed test contracts stay visible instead of being buried by older commits on a long-lived branch.
 
@@ -89,6 +89,7 @@ QAMap keeps QA selection and test generation as two separate decisions:
 | **Test class** | Label protected core flows as `golden`, changed behavior as `regression`, and risk-driven failure or boundary coverage as `edge`. |
 | **QA reasoning trace** | Give every scenario a stable ID that connects diff line -> affected lifecycle -> risk -> routing decision -> optional draft. Static draft mapping remains explicitly `not-run`. |
 | **Repository test contracts** | Preserve test cases added by the PR, including non-English pytest names, as repository-authored behavior requirements with `file:line` evidence. `qa run` can execute the exact selected repository command without turning a discovered test name into fake pass evidence. |
+| **Execution side-effect receipt** | Compare HEAD, branch, index, and Git-observable worktree state before and after `qa run`, report whether they changed, and retain a bounded list of affected relative paths without exposing file contents. |
 | **Evidence disposition** | Distinguish a confirmed causal chain from a missing diff source (`source-gap`) or an unjoined behavior path (`mapping-gap`), and count repeated citations only once. |
 | **Manifest feedback** | Point an incorrect trace to the exact repo-local manifest target or a concrete flow candidate. QAMap proposes the correction; a human must approve it. |
 | **Automation receipt** | Report whether the selected scenario is fully, partially, or not mapped into a draft, including the missing selector, fixture, entrypoint, or assertion evidence. Machine output keeps the compatible values `compiled`, `partial`, and `not-compiled`; only a separate execution receipt can report pass or fail. |
@@ -206,14 +207,14 @@ const draft = await generateQaDraft(process.cwd(), { base: "origin/main", head: 
 const context = JSON.parse(formatAgentQaDraft(draft));
 ```
 
-Plain `qa` keeps `context.execution` as `not-run`. An orchestrator whose policy allows repository code execution can call `runQaValidation(...)` or `qamap qa run --format agent`; the returned receipt reports `passed`, `failed`, or `blocked` without embedding raw command output.
+Plain `qa` keeps `context.execution` as `not-run`. An orchestrator whose policy allows repository code execution can call `runQaValidation(...)` or `qamap qa run --format agent`; the returned receipt reports `passed`, `failed`, or `blocked` without embedding raw command output. A completed receipt also reports whether the command changed Git-observable worktree state, while preserving pre-existing dirty state as the baseline.
 
 ## Why QAMap
 
 - **Evidence over guesses.** Every routed scenario carries commit or line-level diff provenance.
 - **Regressions, not plausible prose.** Public PR reductions preserve human QA expectations, and execution contracts require generated tests to fail on seeded defects and pass on their fixes.
 - **Traceable consequences.** The optional test draft points back to the same stable trace that explains the changed behavior and risk.
-- **Bounded agent actions.** Each run states what QAMap could establish, whether the next action executes or writes anything, and which approval is required. `qa run` consumes that contract for one exact existing validation command; instruction-like diff text cannot escalate it.
+- **Bounded agent actions.** Each run states what QAMap could establish, whether the next action executes or writes anything, and which approval is required. `qa run` consumes that contract for one exact existing validation command, then reports any Git-observable worktree mutation; instruction-like diff text cannot escalate it.
 - **Judgment before generation.** QAMap decides what deserves verification before choosing a runner.
 - **Honest automation.** Missing evidence lowers readiness instead of becoming a fake smoke test or guaranteed-failing assertion.
 - **Local and deterministic.** The same repository state produces the same result without uploading code or spending tokens.

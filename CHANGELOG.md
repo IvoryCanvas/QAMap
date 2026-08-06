@@ -8,6 +8,7 @@
 - Added a machine-readable action contract for every canonical QA route, including risk, approval, project-code execution, repository writes, dependency changes, network access, and preconditions.
 - Added a public red-team benchmark that preserves a real profile-save QA flow while requiring instruction-like text embedded in the repository to disappear from the agent handoff.
 - Added `qamap qa run`, an explicit bounded execution loop that re-analyzes the change, executes only the exact selected existing repository validation command, preserves its exit code, and emits timeout, duration, output-size, and output-hash evidence without embedding raw output.
+- Completed `qa run` receipts now compare HEAD, the checked-out branch, the Git index, and tracked or non-ignored untracked state before and after execution, distinguish command mutations from pre-existing local changes, and disclose a bounded relative-path list without embedding file contents.
 - Added the `qa:run` repeat-use shortcut through `qamap init --scripts`.
 
 ### Changed

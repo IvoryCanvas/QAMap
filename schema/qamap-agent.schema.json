@@ -240,7 +240,37 @@
         "stdoutBytes": { "type": "integer", "minimum": 0 },
         "stderrBytes": { "type": "integer", "minimum": 0 },
         "stdoutSha256": { "type": "string" },
-        "stderrSha256": { "type": "string" }
+        "stderrSha256": { "type": "string" },
+        "gitState": {
+          "type": "object",
+          "description": "Bounded comparison of HEAD, the checked-out branch, the Git index, and tracked or non-ignored untracked state immediately before and after repository validation.",
+          "required": ["observed", "changed"],
+          "properties": {
+            "observed": { "type": "boolean" },
+            "changed": {
+              "type": ["boolean", "null"],
+              "description": "Whether the selected command changed Git-observable worktree state. Null means bounded observation was unavailable."
+            },
+            "changedPathCount": { "type": "integer", "minimum": 0 },
+            "changedPaths": {
+              "type": "array",
+              "maxItems": 8,
+              "items": { "type": "string" }
+            },
+            "truncated": { "type": "boolean" },
+            "headChanged": {
+              "type": "boolean",
+              "description": "Whether the command changed the checked-out HEAD commit."
+            },
+            "branchChanged": {
+              "type": "boolean",
+              "description": "Whether the command changed the checked-out branch or detached-HEAD state."
+            },
+            "beforeSha256": { "type": "string" },
+            "afterSha256": { "type": "string" },
+            "reason": { "type": "string" }
+          }
+        }
       }
     },
     "route": {

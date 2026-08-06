@@ -9623,6 +9623,7 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   assert.match(agents, /<!-- qamap:agent:start -->/);
   assert.match(agents, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
   assert.match(agents, /npx @ivorycanvas\/qamap qa run \. --base origin\/main --head HEAD --format agent/);
+  assert.match(agents, /inspect `execution\.gitState`/);
   assert.match(agents, /execution\.performed/);
   assert.match(agents, /requiredEvidence/);
   assert.match(agents, /intents\[\]\.scenarios\[\]\.sources/);
@@ -9750,6 +9751,7 @@ test("generateAgentContext reflects npm scripts and repository boundaries", asyn
   assert.match(context, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
   assert.match(context, /QA planning evidence, not as proof/);
   assert.match(context, /npx @ivorycanvas\/qamap qa run \. --base origin\/main --head HEAD --format agent/);
+  assert.match(context, /inspect `execution\.gitState`/);
 });
 
 // Minimal JSON Schema (draft-07 subset) checker used to keep

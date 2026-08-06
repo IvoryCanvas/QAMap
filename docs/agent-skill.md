@@ -49,7 +49,7 @@ The command writes no test files. It only previews the QA work that should be at
 pnpm exec qamap qa run . --base origin/main --head HEAD --format agent
 ```
 
-`qa run` re-analyzes the change and runs only that exact selection. Its receipt reports pass, fail, timeout, or blocked metadata without embedding raw command output. It does not install a runner or execute a proposed product E2E draft.
+`qa run` re-analyzes the change and runs only that exact selection. Its receipt reports pass, fail, timeout, or blocked metadata without embedding raw command output. It also compares Git-observable worktree state before and after execution; agents should inspect changed paths before treating a green command as clean evidence. It does not install a runner or execute a proposed product E2E draft.
 
 ## Packaged Skill Template
 

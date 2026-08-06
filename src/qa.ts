@@ -143,7 +143,30 @@ export interface QaCompletedExecutionReceipt {
   stderrBytes: number;
   stdoutSha256: string;
   stderrSha256: string;
+  gitState: QaGitStateReceipt;
 }
+
+export interface QaObservedGitStateReceipt {
+  observed: true;
+  changed: boolean;
+  changedPathCount: number;
+  changedPaths: string[];
+  truncated: boolean;
+  headChanged: boolean;
+  branchChanged: boolean;
+  beforeSha256: string;
+  afterSha256: string;
+}
+
+export interface QaUnavailableGitStateReceipt {
+  observed: false;
+  changed: null;
+  reason: string;
+}
+
+export type QaGitStateReceipt =
+  | QaObservedGitStateReceipt
+  | QaUnavailableGitStateReceipt;
 
 export type QaExecutionReceipt =
   | QaStaticExecutionReceipt

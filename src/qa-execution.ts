@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { lstat, readlink } from "node:fs/promises";
 import path from "node:path";
 import {
   generateQaDraft,
@@ -9,12 +11,20 @@ import type {
   QaCompletedExecutionReceipt,
   QaDraftOptions,
   QaDraftResult,
+  QaGitStateReceipt,
 } from "./qa.js";
-import { neutralizedInstructionText } from "./qa-contract.js";
+import {
+  neutralizeInstructionLikeValues,
+  neutralizedInstructionText,
+} from "./qa-contract.js";
 
 const defaultTimeoutMs = 5 * 60 * 1000;
 const maximumTimeoutMs = 30 * 60 * 1000;
 const maximumCommandLength = 2_048;
+const maximumGitStatePaths = 2_048;
+const maximumGitOutputBytes = 8 * 1024 * 1024;
+const maximumGitStateFileBytes = 32 * 1024 * 1024;
+const gitStateReceiptPathLimit = 8;
 
 export interface RunQaValidationOptions extends QaDraftOptions {
   timeoutMs?: number;
@@ -69,9 +79,15 @@ export async function runQaValidation(
     onStdout: options.onStdout,
     onStderr: options.onStderr,
   });
+  const protectedExecution = neutralizeInstructionLikeValues(execution);
   return {
     ...result,
-    execution,
+    execution: protectedExecution.value,
+    evidenceBoundary: {
+      ...result.evidenceBoundary,
+      neutralizedValues:
+        result.evidenceBoundary.neutralizedValues + protectedExecution.neutralizedValues,
+    },
   };
 }
 
@@ -132,6 +148,33 @@ export function formatMarkdownQaValidation(result: QaDraftResult): string {
         `(\`${result.execution.stdoutSha256.slice(0, 12)}\`), stderr ${result.execution.stderrBytes} bytes ` +
         `(\`${result.execution.stderrSha256.slice(0, 12)}\`)`,
     );
+    if (result.execution.gitState.observed) {
+      lines.push(
+        `- Git-observable worktree changes: ${result.execution.gitState.changed ? "yes" : "no"}`,
+      );
+      if (result.execution.gitState.changed) {
+        if (result.execution.gitState.headChanged || result.execution.gitState.branchChanged) {
+          lines.push(
+            `- Git reference changed: ${
+              [
+                result.execution.gitState.headChanged ? "HEAD" : undefined,
+                result.execution.gitState.branchChanged ? "branch" : undefined,
+              ].filter(Boolean).join(" and ")
+            }`,
+          );
+        }
+        lines.push(`- Changed path count: ${result.execution.gitState.changedPathCount}`);
+        if (result.execution.gitState.changedPaths.length > 0) {
+          lines.push(
+            `- Changed paths: ${result.execution.gitState.changedPaths
+              .map((candidate) => `\`${markdownCode(markdownText(candidate))}\``)
+              .join(", ")}${result.execution.gitState.truncated ? ", ..." : ""}`,
+          );
+        }
+      }
+    } else {
+      lines.push(`- Git-observable worktree changes: unknown; ${result.execution.gitState.reason}`);
+    }
   }
   lines.push("");
   lines.push(
@@ -191,6 +234,7 @@ async function executeSelectedCommand(
   let stdoutBytes = 0;
   let stderrBytes = 0;
   let timedOut = false;
+  const beforeGitState = await captureGitState(cwd);
 
   return new Promise((resolve) => {
     const child = spawn(command, {
@@ -227,12 +271,13 @@ async function executeSelectedCommand(
       forceKillTimeout.unref();
     }, options.timeoutMs);
 
-    child.once("close", (exitCode, signal) => {
+    child.once("close", async (exitCode, signal) => {
       clearTimeout(timeout);
       if (forceKillTimeout) {
         clearTimeout(forceKillTimeout);
       }
       const passed = !spawnError && !timedOut && exitCode === 0;
+      const afterGitState = await captureGitState(cwd);
       resolve({
         status: passed ? "passed" : "failed",
         performed: true,
@@ -247,9 +292,190 @@ async function executeSelectedCommand(
         stderrBytes,
         stdoutSha256: stdoutHash.digest("hex"),
         stderrSha256: stderrHash.digest("hex"),
+        gitState: compareGitState(beforeGitState, afterGitState),
       });
     });
   });
+}
+
+interface GitStateSnapshot {
+  fingerprint: string;
+  entries: Map<string, string>;
+  head: string;
+  branch: string;
+}
+
+async function captureGitState(root: string): Promise<GitStateSnapshot | undefined> {
+  try {
+    const [statusOutput, headOutput, branchOutput] = await Promise.all([
+      runGitForState(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
+      runGitForState(root, ["rev-parse", "--verify", "HEAD"]),
+      runGitForState(root, ["rev-parse", "--abbrev-ref", "HEAD"]),
+    ]);
+    const statuses = parseGitStatus(statusOutput);
+    const paths = [...statuses.keys()].sort();
+    if (paths.length > maximumGitStatePaths) {
+      return undefined;
+    }
+    const entries = new Map<string, string>();
+    const fileBudget = { remainingBytes: maximumGitStateFileBytes };
+    for (const candidate of paths) {
+      entries.set(
+        candidate,
+        `${statuses.get(candidate)}:${await fingerprintGitPath(root, candidate, fileBudget)}`,
+      );
+    }
+    const head = headOutput.toString("utf8").trim();
+    const branch = branchOutput.toString("utf8").trim();
+    return {
+      entries,
+      head,
+      branch,
+      fingerprint: fingerprintGitEntries(entries, head, branch),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function compareGitState(
+  before: GitStateSnapshot | undefined,
+  after: GitStateSnapshot | undefined,
+): QaGitStateReceipt {
+  if (!before || !after) {
+    return {
+      observed: false,
+      changed: null,
+      reason: "Git worktree state could not be read within the bounded observation policy.",
+    };
+  }
+  const paths = [...new Set([...before.entries.keys(), ...after.entries.keys()])]
+    .filter((candidate) => before.entries.get(candidate) !== after.entries.get(candidate))
+    .sort();
+  return {
+    observed: true,
+    changed: before.fingerprint !== after.fingerprint,
+    changedPathCount: paths.length,
+    changedPaths: paths.slice(0, gitStateReceiptPathLimit),
+    truncated: paths.length > gitStateReceiptPathLimit,
+    headChanged: before.head !== after.head,
+    branchChanged: before.branch !== after.branch,
+    beforeSha256: before.fingerprint,
+    afterSha256: after.fingerprint,
+  };
+}
+
+async function runGitForState(root: string, args: string[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", args, {
+      cwd: root,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    let exceededLimit = false;
+    child.stdout.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > maximumGitOutputBytes) {
+        exceededLimit = true;
+        child.kill("SIGTERM");
+        return;
+      }
+      chunks.push(chunk);
+    });
+    child.once("error", reject);
+    child.once("close", (exitCode) => {
+      if (exitCode !== 0 || exceededLimit) {
+        reject(new Error("bounded Git state query failed"));
+        return;
+      }
+      resolve(Buffer.concat(chunks));
+    });
+  });
+}
+
+function parseGitStatus(output: Buffer): Map<string, string> {
+  const records = output.toString("utf8").split("\0");
+  const statuses = new Map<string, string>();
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    if (!record || record.length < 4) {
+      continue;
+    }
+    const status = record.slice(0, 2);
+    const candidate = record.slice(3);
+    statuses.set(candidate, status);
+    if (status[0] === "R" || status[0] === "C") {
+      const source = records[index + 1];
+      if (source) {
+        statuses.set(source, `${status}:source`);
+        index += 1;
+      }
+    }
+  }
+  return statuses;
+}
+
+async function fingerprintGitPath(
+  root: string,
+  relativePath: string,
+  budget: { remainingBytes: number },
+): Promise<string> {
+  const absolutePath = path.resolve(root, relativePath);
+  const relative = path.relative(root, absolutePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return "outside-workspace";
+  }
+  try {
+    const stat = await lstat(absolutePath);
+    if (stat.isSymbolicLink()) {
+      return `symlink:${sha256(await readlink(absolutePath))}`;
+    }
+    if (!stat.isFile()) {
+      return `mode:${stat.mode}`;
+    }
+    if (stat.size > budget.remainingBytes) {
+      throw new Error("Git state file hashing exceeded its bounded byte budget");
+    }
+    budget.remainingBytes -= stat.size;
+    return `file:${stat.mode}:${await hashFile(absolutePath)}`;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return "deleted";
+    }
+    throw error;
+  }
+}
+
+async function hashFile(file: string): Promise<string> {
+  const hash = createHash("sha256");
+  await new Promise<void>((resolve, reject) => {
+    const stream = createReadStream(file);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.once("error", reject);
+    stream.once("end", resolve);
+  });
+  return hash.digest("hex");
+}
+
+function fingerprintGitEntries(
+  entries: Map<string, string>,
+  head: string,
+  branch: string,
+): string {
+  const hash = createHash("sha256");
+  hash.update(`HEAD\0${head}\0BRANCH\0${branch}\0`);
+  for (const [candidate, fingerprint] of entries) {
+    hash.update(candidate);
+    hash.update("\0");
+    hash.update(fingerprint);
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function terminateProcessTree(

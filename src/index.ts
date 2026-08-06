@@ -339,12 +339,15 @@ export type {
   QaDraftOptions,
   QaDraftResult,
   QaExecutionReceipt,
+  QaGitStateReceipt,
+  QaObservedGitStateReceipt,
   QaReadinessBasis,
   QaReadinessSummary,
   QaRouteDecision,
   QaRouteNextAction,
   QaRouteStatus,
   QaStaticExecutionReceipt,
+  QaUnavailableGitStateReceipt,
   QaVerificationStatus,
 } from "./qa.js";
 export type { RunQaValidationOptions } from "./qa-execution.js";
