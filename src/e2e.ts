@@ -44,7 +44,7 @@ import type {
 import { routeQaScenario } from "./scenario-routing.js";
 import type { QaScenarioDecision } from "./scenario-routing.js";
 import { qaTraceIdForScenario } from "./qa-trace.js";
-import { classifyChangeSourceRole } from "./source-role.js";
+import { classifyChangeSourceRole, isTransformationSourcePath } from "./source-role.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
 export type E2eProjectType =
@@ -60,6 +60,7 @@ export type E2eRunnerName = "maestro" | "playwright" | "manual";
 export type E2eFlowKind =
   | "ui"
   | "api"
+  | "transformation"
   | "state"
   | "content"
   | "config"
@@ -323,6 +324,7 @@ export interface E2eRunnerSetupProposal {
 export interface E2eDraftFile {
   path: string;
   flowTitle: string;
+  flowKind?: E2eFlowKind;
   runner: E2eRunnerName;
   status: "created" | "skipped" | "preview";
   source?: "verification-manifest" | "change-intent" | "domain-language" | "core-flow" | "heuristic";
@@ -999,6 +1001,30 @@ function buildCoverageTargets(kind: E2eFlowKind, files: string[], runner: E2eRun
         [
           "Simulate or force timeout, unauthorized, validation, and server-error responses.",
           "Verify retry, toast, inline error, logging, or recovery behavior.",
+        ],
+      ),
+    );
+  }
+
+  if (kind === "transformation" || files.some(isTransformationSourcePath)) {
+    targets.push(
+      coverageTarget(
+        "Input-to-output transformation contract",
+        "critical",
+        "Parser, serializer, mapper, and transformer changes should prove the exact output contract for representative input.",
+        [
+          "Run one representative supported input through the changed transformation.",
+          "Verify the exact returned shape, values, ordering, and defaults affected by the diff.",
+          "Keep one unchanged input variant as a backward-compatibility control.",
+        ],
+      ),
+      coverageTarget(
+        "Unsupported and boundary input",
+        "recommended",
+        "Transformation code often fails at missing, unknown, empty, or boundary values even when the primary sample passes.",
+        [
+          "Exercise missing optional fields, an unsupported variant, and one minimum or maximum boundary when relevant.",
+          "Verify the transformer returns the documented fallback or fails with an intentional error.",
         ],
       ),
     );
@@ -2279,6 +2305,7 @@ function buildDraftActionItems(
 function draftFileDetails(flow: DraftE2eFlow): Pick<
   E2eDraftFile,
   | "changedFiles"
+  | "flowKind"
   | "draftSteps"
   | "entrypointHints"
   | "selectorHints"
@@ -2293,6 +2320,7 @@ function draftFileDetails(flow: DraftE2eFlow): Pick<
 > {
   return {
     changedFiles: flow.files.slice(0, maxFilesPerFlow),
+    flowKind: flow.kind,
     draftSteps: flow.steps.slice(0, 8),
     entrypointHints: flow.entrypoints.map(formatEntrypointHint).slice(0, 6),
     selectorHints: flow.selectors.map(formatSelectorHint).slice(0, 8),
@@ -2687,6 +2715,9 @@ function inferFlowActor(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isApiContractFocusedFlow(flow)) {
     return "API consumer or upstream service";
   }
+  if (isTransformationContractFocusedFlow(flow)) {
+    return "Library consumer or maintainer";
+  }
   if (isDesignTokenFocusedFlow(flow)) {
     return "Design system consumer or maintainer";
   }
@@ -2756,6 +2787,9 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
     if (isApiContractFocusedFlow(flow)) {
       return `Call the endpoint, handler, or service path affected by ${flow.files[0]}.`;
     }
+    if (isTransformationContractFocusedFlow(flow)) {
+      return `Run representative input through the transformation affected by ${flow.files[0]}.`;
+    }
     if (isDesignTokenFocusedFlow(flow)) {
       return `Regenerate or inspect the token artifact affected by ${flow.files[0]}.`;
     }
@@ -2782,6 +2816,9 @@ function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isApiContractFocusedFlow(flow)) {
     return "Call one representative health, auth, or changed-domain endpoint.";
   }
+  if (isTransformationContractFocusedFlow(flow)) {
+    return "Run a representative input through the changed parser, serializer, mapper, or transformer.";
+  }
   if (isCliCommandFocusedFlow(flow)) {
     return "Run the representative changed CLI command path.";
   }
@@ -2800,6 +2837,9 @@ function inferFlowGoal(flow: Omit<E2eFlow, "languageBrief">): string {
   }
   if (isApiContractFocusedFlow(flow)) {
     return `Protect ${flow.title} by verifying the changed request, response, auth, and failure contract.`;
+  }
+  if (isTransformationContractFocusedFlow(flow)) {
+    return `Protect ${flow.title} by verifying exact outputs, boundary inputs, and backward compatibility.`;
   }
   if (isDesignTokenFocusedFlow(flow)) {
     return `Protect ${flow.title} by verifying token schema, generated artifacts, and at least one consumer sample.`;
@@ -2839,6 +2879,9 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
   }
   if (isApiContractFocusedFlow(flow)) {
     return "the changed contract returns the expected status, response shape, auth behavior, and failure handling";
+  }
+  if (isTransformationContractFocusedFlow(flow)) {
+    return "representative inputs produce the exact intended output while unsupported and unchanged variants remain intentional";
   }
   if (isDesignTokenFocusedFlow(flow)) {
     return "the token schema, generated artifacts, semantic aliases, and consumer sample all reflect the intended change";
@@ -2927,6 +2970,9 @@ function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSi
   if (isApiContractFocusedFlow(flow)) {
     return `Can a reviewer confirm that the changed endpoint, handler, or service contract is exercised and this outcome is verified: ${successSignal}?`;
   }
+  if (isTransformationContractFocusedFlow(flow)) {
+    return `Can a reviewer confirm that representative and boundary inputs exercise the changed transformation and this outcome is verified: ${successSignal}?`;
+  }
   if (isDesignTokenFocusedFlow(flow)) {
     return `Can a reviewer confirm that the changed token artifact is regenerated, consumed, and this outcome is verified: ${successSignal}?`;
   }
@@ -2961,6 +3007,12 @@ function isApiContractFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean
     (flow.coverage.some((target) => target.title === "API contract compatibility") &&
       !hasUserFacingEntrypointOrFile(flow))
   );
+}
+
+function isTransformationContractFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return flow.kind === "transformation" ||
+    /\btransformation contract\b/i.test(flow.title) ||
+    flow.files.some(isTransformationSourcePath);
 }
 
 function isDesignTokenFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
@@ -5147,6 +5199,7 @@ function buildFlowCandidates(
           (file) =>
             !apiFiles.includes(file) &&
             !isConfigLikeFile(file) &&
+            !isTransformationSourcePath(file) &&
             (isServiceSourceFile(file) || isPythonServiceModule(file)),
         )
       : [];
@@ -5155,12 +5208,17 @@ function buildFlowCandidates(
       ? candidateFiles.filter((file) => !isConfigLikeFile(file) && !isTestLikeFile(file) && isServiceSourceFile(file))
       : [];
   const contractFiles = uniqueStrings([...apiFiles, ...apiServiceSourceFiles]);
+  const transformationFiles = candidateFiles.filter(isTransformationSourcePath);
   const stateFiles = candidateFiles.filter(isStateLikeFile);
   const designTokenFiles = candidateFiles.filter(isDesignTokenFile);
   const catalogFiles = candidateFiles.filter((file) => isCatalogDataFile(file) && !designTokenFiles.includes(file));
   const artifactFiles = uniqueStrings([...designTokenFiles]);
   const contentFiles = candidateFiles.filter(
-    (file) => isContentOrStyleFile(file) && !artifactFiles.includes(file) && !catalogFiles.includes(file),
+    (file) =>
+      isContentOrStyleFile(file) &&
+      !transformationFiles.includes(file) &&
+      !artifactFiles.includes(file) &&
+      !catalogFiles.includes(file),
   );
   const configFiles = candidateFiles.filter(isConfigLikeFile);
   const domainFiles = candidateFiles.filter(isDomainOwnedFile);
@@ -5214,6 +5272,23 @@ function buildFlowCandidates(
               "Verify the successful response is rendered or persisted correctly.",
               "Verify the reachable error or empty state for a failed response.",
             ],
+    });
+  }
+
+  if (transformationFiles.length > 0) {
+    const subject = summarizeFlowSubject(transformationFiles, "Changed", domainLanguage);
+    candidates.push({
+      kind: "transformation",
+      title: `${subject} transformation contract checklist`,
+      reason:
+        "Parser, serializer, mapper, converter, or transformer source changed, so verification should compare representative inputs with exact outputs instead of inventing an API or visual journey.",
+      files: transformationFiles,
+      steps: [
+        "Run one representative supported input through the changed transformation.",
+        "Verify the exact output shape, values, ordering, and defaults affected by the diff.",
+        "Exercise a missing, unsupported, empty, or boundary input when relevant.",
+        "Keep one unchanged input variant as a backward-compatibility control.",
+      ],
     });
   }
 
@@ -5324,6 +5399,7 @@ function buildFlowCandidates(
     (file) =>
       !isUserFacingFile(file) &&
       !isApiLikeFile(file) &&
+      !isTransformationSourcePath(file) &&
       !isConfigLikeFile(file) &&
       !isContentOrStyleFile(file) &&
       !isDesignTokenFile(file) &&
@@ -5374,6 +5450,7 @@ function buildFlowCandidates(
     changeAnalysis,
     candidatesWithAssets,
     projectType,
+    runner,
     importImpacts,
     domainLanguage,
   );
@@ -5383,6 +5460,7 @@ function prioritizeChangeIntentCandidates(
   analysis: ChangeIntentAnalysis | undefined,
   heuristicCandidates: FlowCandidate[],
   projectType: E2eProjectType,
+  runner: E2eRunnerName,
   importImpacts: ImportImpact[] = [],
   domainLanguage?: DomainLanguageSummary,
 ): FlowCandidate[] {
@@ -5409,8 +5487,23 @@ function prioritizeChangeIntentCandidates(
         ...(primaryScenario?.assertions ?? []),
       ]);
       const baseTitle = intentFlowDisplayTitle(intent, domainLanguage);
+      const kind = intentFlowKind(intent, projectType);
+      const scenarioCoverage = scopedScenarios.map((scenario) => ({
+        title: scenario.title,
+        priority: scenario.priority,
+        reason: scenario.rationale,
+        checks: uniqueStrings([
+          ...scenario.assertions,
+          ...scenario.edgeCases.map((edgeCase) => `Exercise ${lowercaseFirst(edgeCase)}.`),
+        ]),
+      }));
+      const contractCoverage = kind === "transformation"
+        ? buildCoverageTargets(kind, scope.files, runner).filter(
+            (target) => target.title !== "Primary success path",
+          )
+        : [];
       return {
-        kind: intentFlowKind(intent, projectType),
+        kind,
         title: scope.split && scope.label ? scopedIntentFlowTitle(baseTitle, scope.label) : baseTitle,
         reason: (intent.confidence === "low"
           ? `Located diff evidence supports this review-required change intent even though commit text was not behavior-bearing. ${intent.summary}`
@@ -5423,12 +5516,7 @@ function prioritizeChangeIntentCandidates(
               : ""),
         files: scope.files,
         steps,
-        coverage: scopedScenarios.map((scenario) => ({
-          title: scenario.title,
-          priority: scenario.priority,
-          reason: scenario.rationale,
-          checks: uniqueStrings([...scenario.assertions, ...scenario.edgeCases.map((edgeCase) => `Exercise ${lowercaseFirst(edgeCase)}.`)]),
-        })),
+        coverage: uniqueCoverageTargets([...scenarioCoverage, ...contractCoverage]),
         intentId: intent.id,
         intentConfidence: intent.confidence,
         intentEvidence: scopedEvidence,
@@ -5821,6 +5909,9 @@ function intentFlowKind(intent: ChangeIntentAnalysis["intents"][number], project
   if (projectType === "cli") {
     return "command";
   }
+  if (intent.files.some(isTransformationSourcePath)) {
+    return "transformation";
+  }
   if (/\b(?:endpoint|request|response|api|contract)\b/.test(searchable) && projectType === "api-service") {
     return "api";
   }
@@ -5981,7 +6072,8 @@ async function buildFlow(
 }
 
 function isVerificationOnlyKind(kind: E2eFlowKind): boolean {
-  return kind === "config" || kind === "test-evidence" || kind === "documentation" || kind === "generated-artifact";
+  return kind === "transformation" || kind === "config" || kind === "test-evidence" || kind === "documentation" ||
+    kind === "generated-artifact";
 }
 
 function groundSingleDiffActionInPrimaryScenario(
@@ -7460,6 +7552,9 @@ function isStateLikeFile(file: string): boolean {
 }
 
 function isContentOrStyleFile(file: string): boolean {
+  if (isTransformationSourcePath(file)) {
+    return false;
+  }
   return /(?:theme|themes|i18n|locale|locales|translation|translations|copy|styles?|tokens?|\.css|\.scss|\.sass|\.less)/i.test(
     file,
   );
@@ -8089,7 +8184,8 @@ function shouldUseDomainScenariosForDraft(plan: E2ePlanResult): boolean {
 }
 
 function isEvidenceVerificationFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
-  return isAnalysisRuleFocusedFlow(flow) || isTestEvidenceFocusedFlow(flow) || isDocumentationFocusedFlow(flow) || isGeneratedArtifactFocusedFlow(flow);
+  return isAnalysisRuleFocusedFlow(flow) || isTransformationContractFocusedFlow(flow) ||
+    isTestEvidenceFocusedFlow(flow) || isDocumentationFocusedFlow(flow) || isGeneratedArtifactFocusedFlow(flow);
 }
 
 function isVerificationOnlyFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
@@ -8524,7 +8620,11 @@ function specializedDomainScenarioDraft(
       steps: baseFlow.steps,
     };
   }
-  if (isDesignTokenFocusedFlow(baseFlow) || isCatalogFocusedFlow(baseFlow)) {
+  if (
+    isTransformationContractFocusedFlow(baseFlow) ||
+    isDesignTokenFocusedFlow(baseFlow) ||
+    isCatalogFocusedFlow(baseFlow)
+  ) {
     return {
       title: baseFlow.title,
       reason: baseFlow.reason,

@@ -18,4 +18,9 @@ Security-sensitive areas include:
 
 ## Expectations
 
-QAMap is a guardrail, not a sandbox. It does not execute scanned project code, install dependencies from scanned repositories, or validate that generated code is safe to run.
+QAMap is a guardrail, not a sandbox.
+
+- `qamap qa` performs static analysis only. It does not execute project code, install dependencies, or write an automation draft.
+- `qamap qa run` is an explicit execution command. It runs only the existing repository validation command selected in the current QA route, applies a timeout, and reports bounded output and Git-state evidence.
+- `qamap e2e draft` can write generated files only when the user omits `--dry-run`; generated code still requires review before execution.
+- QAMap never guarantees that a selected repository command or generated test is safe. Run untrusted repositories inside an appropriate sandbox.

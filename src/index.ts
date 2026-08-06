@@ -78,7 +78,13 @@ export {
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 export { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
-export { formatAgentQaDraft, formatAgentQaFullReport, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+export {
+  formatAgentQaDraft,
+  formatAgentQaFullReport,
+  formatMarkdownQaDraft,
+  formatTextQaDraft,
+  generateQaDraft,
+} from "./qa.js";
 export { formatMarkdownQaValidation, runQaValidation } from "./qa-execution.js";
 export {
   evaluateQaCapabilities,

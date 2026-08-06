@@ -1,8 +1,12 @@
 name: Bug report
-description: Report a QAMap bug or false positive.
+description: Report a CLI failure, incorrect result, or compatibility problem.
 title: "[Bug]: "
-labels: ["bug"]
+labels: ["type: fix"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove private source, repository names, customer data, and secrets. A minimized public reproduction is the most useful evidence.
   - type: textarea
     id: summary
     attributes:
@@ -14,7 +18,14 @@ body:
     id: repro
     attributes:
       label: Reproduction
-      description: Include a minimal repo layout, config, or command if possible.
+      description: Include the QAMap version, command, repository type, and a safe minimal fixture or diff if possible.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual output
+      description: Include the relevant concise result or reasoning trace after removing private information.
     validations:
       required: true
   - type: textarea

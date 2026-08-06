@@ -221,7 +221,7 @@ You do not need a manifest to start. Without one, QAMap uses commit subjects and
 QAMap is intentionally small:
 
 - time-saving: it surfaces missing context, risky settings, and validation gaps before agent work becomes review churn
-- static by default: it does not execute scanned project code
+- static by default: `qamap qa` does not execute project code; only the explicit `qamap qa run` command executes one selected existing repository validation
 - no-token by default: it does not call an LLM API
 - verification-focused: it tells reviewers what evidence is missing, not how to style code
 - PR QA skill output: `qamap qa` turns a branch into change intent, behavior lifecycle, QA scenarios, affected-flow evidence, optional automation drafts, and a copyable checklist

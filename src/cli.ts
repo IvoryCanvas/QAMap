@@ -41,7 +41,13 @@ import {
   writeVerificationManifestBaseline,
 } from "./manifest.js";
 import { formatMarkdownReport, formatSarifReport, formatTextReport, hasFindingsAtOrAbove } from "./report.js";
-import { formatAgentQaDraft, formatAgentQaFullReport, formatMarkdownQaDraft, generateQaDraft } from "./qa.js";
+import {
+  formatAgentQaDraft,
+  formatAgentQaFullReport,
+  formatMarkdownQaDraft,
+  formatTextQaDraft,
+  generateQaDraft,
+} from "./qa.js";
 import { formatMarkdownQaValidation, runQaValidation } from "./qa-execution.js";
 import { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 import { scanProject } from "./scanner.js";
@@ -290,7 +296,7 @@ async function main(argv: string[]): Promise<number> {
       runner: options.e2eRunner,
       manifestPath: options.manifestPath,
     };
-    const format = options.format ?? (options.json ? "json" : "markdown");
+    const format = options.format ?? (options.json ? "json" : "text");
     const streamCommandOutput = runValidation &&
       !options.output &&
       (format === "markdown" || format === "text");
@@ -882,7 +888,7 @@ function formatQaDraftOutput(result: Awaited<ReturnType<typeof generateQaDraft>>
   if (format !== "markdown" && format !== "text") {
     throw new Error(`QA draft supports text, json, markdown, or agent output, not ${format}`);
   }
-  return formatMarkdownQaDraft(result);
+  return format === "markdown" ? formatMarkdownQaDraft(result) : formatTextQaDraft(result);
 }
 
 function qaValidationExitCode(
@@ -978,8 +984,8 @@ Start here, from inside your repository, on the branch you want to check:
 
   qamap qa
       What did this branch intend to change, and what should it prove before
-      merge? Prints behavior lifecycle, QA scenarios, affected flows, missing
-      evidence, and an optional automation adapter.
+      merge? Prints a concise change, scenario, evidence, and next-action
+      summary. Add --format markdown for the complete reasoning trace.
       The base branch defaults to origin/main (then main); override with
       --base <ref> --head <ref>.
 
@@ -1048,7 +1054,7 @@ Severities:
   info, low, medium, high
 
 Formats:
-  text, json, markdown, sarif
+  text (concise human summary), markdown (full review artifact), json, sarif
   agent (qa only: compact machine-readable summary for coding agents)
 
 Examples:

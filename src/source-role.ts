@@ -14,6 +14,18 @@ export interface ChangeSourceRoleClassification {
   reason: string;
 }
 
+export function isTransformationSourcePath(fileInput: string): boolean {
+  const file = toPosixPath(fileInput);
+  return (
+    /(?:^|\/)(?:transformers?|parsers?|serializers?|deserializers?|formatters?|mappers?|converters?|normalizers?|encoders?|decoders?|codecs?)(?:\/|$)/i.test(
+      file,
+    ) ||
+    /(?:^|\/)[^/]*(?:transform|parse|serializ|deserializ|format|convert|normaliz|encode|decode|codec)[^/]*\.[cm]?[jt]sx?$/i.test(
+      file,
+    )
+  );
+}
+
 export function classifyChangeSourceRole(
   fileInput: string,
   changedText = "",

@@ -36,10 +36,16 @@ function colorizeLine(line: string): string {
   if (/^#{1,3} /.test(line)) {
     return `${BOLD}${CYAN}${line}${RESET}`;
   }
+  if (/^(?:QAMap QA|Change|Verify before merge|Evidence|Next)$/.test(line)) {
+    return `${BOLD}${CYAN}${line}${RESET}`;
+  }
   if (line.startsWith("> ")) {
     return `${DIM}${line}${RESET}`;
   }
   let output = line;
+  output = output.replace(/^(\s+)(REQUIRED)(\s+)/, `$1${BOLD}${RED}$2${RESET}$3`);
+  output = output.replace(/^(\s+)(RECOMMENDED|REVIEW)(\s+)/, `$1${BOLD}${YELLOW}$2${RESET}$3`);
+  output = output.replace(/^(\s+)(Proof|Evidence):/, `$1${BOLD}$2${RESET}:`);
   output = output.replace(
     /^(- (?:Affected|Change intent|Behavior lifecycle|Do next|Blocking(?: \d+)?|Base|Head|Project|Automation adapter|Recommended runner|Manifest|Stage|Draft flows)):/,
     `${BOLD}$1${RESET}:`,
