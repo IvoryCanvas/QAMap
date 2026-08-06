@@ -5192,7 +5192,7 @@ function buildFlowCandidates(
           ? directUiFiles
           : [...impactSurfaceFiles, ...directUiFiles],
       );
-  const apiFiles = candidateFiles.filter(isApiLikeFile);
+  const apiFiles = candidateFiles.filter((file) => !isConfigLikeFile(file) && isApiLikeFile(file));
   const apiServiceSourceFiles =
     projectType === "api-service"
       ? candidateFiles.filter(

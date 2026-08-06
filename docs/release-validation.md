@@ -1,5 +1,28 @@
 # Release Validation
 
+## 0.4.11 - 2026-08-06
+
+QAMap 0.4.11 is a cross-repository precision and skills-only plugin submission candidate. Read-only trials across unrelated web, mobile, API, service, design-token, and developer-tool repositories exposed three general failures: calendar UI vocabulary could fabricate scheduling QA, instrumentation changes lacked event timing and duplication proof, and issue-template configuration could be misclassified as an API flow. The release fixes those boundaries, keeps repository-validation changes on their existing test route, and packages the same local-first QA skill for official directory review without adding an MCP server or hosted service.
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 315/315 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 27/27 static recommendation contracts passing |
+| `pnpm bench:execution` | 3/3 execution contracts passing; duplicate-request, missing-persistence, and stale-validation regressions caught |
+| Coverage | Lines 89.65%, branches 86.30%, functions 95.66% |
+| Skills-only package check | 5 positive cases, 3 negative cases, 3 starter prompts, a 512x512 logo, and legal/support metadata validated |
+| Isolated install smoke | The packed npm artifact installed as 0.4.11 in a clean temporary project and produced one intent with one exact evidence trace |
+| Public repository execution | Focused tests selected for `GLips/Figma-Context-MCP` passed in 4.641 seconds; QAMap's own selected regression command passed in 63.674 seconds; both runs left Git-observable paths unchanged |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.11`; 169 files packed |
+
+The new instrumentation contract requires evidence for when an event should fire, which payload boundary matters, and whether retries or rerenders can emit it twice. A `calendar` icon or display mode alone no longer creates timezone or scheduling scenarios. Files under issue-template configuration no longer become API contracts merely because their names contain `request`, so existing repository tests remain the selected verification route.
+
+The official plugin candidate is deliberately skills-only. It invokes the published local CLI and does not add network-backed analysis, an MCP server, or a hosted QAMap service. QAMap itself makes no additional model call, but the calling agent still uses its own model tokens. The compact handoff reduces repeated repository rediscovery; it is not advertised as zero total token usage. The submission package also discloses the one-off npm download, write-capable commands, owner-only temporary recovery reports, privacy terms, support path, and positive and negative activation cases.
+
+The public execution canaries prove only the selected repository commands, not every product scenario. Full product QA remains explicitly `not run` until a user or agent chooses an execution action. Cross-repository trials were read-only, and no private repository names, source, or domain assumptions are included in the release fixtures or documentation.
+
 ## 0.4.10 - 2026-08-06
 
 QAMap 0.4.10 makes the first-run experience shorter without hiding the reasoning path. The default `qamap qa` output now leads with changed behavior, required proof, exact evidence, and the selected verification route; the complete Markdown report remains available through `--format markdown`. The README and demo were rebuilt from this actual output, and the contributor workflow now asks for minimized QA misses, false-positive controls, and execution evidence instead of broad feature descriptions.

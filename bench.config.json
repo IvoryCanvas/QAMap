@@ -528,6 +528,9 @@
         "mustNotIncludeLifecycle": [
           "is finite"
         ],
+        "mustNotNameFlows": [
+          "Rule Request API contract"
+        ],
         "mustNotFindEvidence": [
           "Network response setup",
           "Fixture data setup",
@@ -703,6 +706,41 @@
           "jobs/notifications/tests/test_delivery_notice_destination.py"
         ],
         "mustRecommendCommands": ["test_delivery_notice_destination.py"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
+      "name": "web-calendar-view-mode",
+      "fixture": "test/benchmarks/web-calendar-view-mode",
+      "commitMessage": "feat: add compact notebook home layout",
+      "expect": {
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "mustReachFiles": ["src/pages/home.tsx"],
+        "mustNameIntents": ["compact notebook home layout"],
+        "mustNotIncludeQaScenarios": ["Scheduling, calendar, and duplicate boundary"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
+      "name": "web-instrumentation-success",
+      "fixture": "test/benchmarks/web-instrumentation-success",
+      "commitMessage": "fix: restore registration completion instrumentation",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 2,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": ["src/pages/register.tsx"],
+        "mustNameIntents": ["registration completion instrumentation"],
+        "mustIncludeQaScenarios": ["Instrumentation event timing, payload, and duplication"],
+        "mustTraceScenarioFiles": ["src/pages/register.tsx"],
+        "mustFindSelectors": ["register-submit"],
         "maxBlankActions": 0,
         "maxGenericTitles": 0,
         "maxAgentBytes": 4096

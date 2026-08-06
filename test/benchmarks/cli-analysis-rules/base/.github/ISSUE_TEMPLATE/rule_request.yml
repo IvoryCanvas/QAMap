@@ -1,0 +1,7 @@
+name: Rule request
+description: Propose a general static analysis rule
+body:
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior

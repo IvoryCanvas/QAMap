@@ -1246,10 +1246,28 @@ function buildIntentQaScenarios(
     ], ["Missing optional parameter", "Encoded value", "Repeated navigation"], destinationParameterEvidence));
   }
 
+  const instrumentationEvidence = scenarioEvidenceFor(
+    productLifecycle,
+    productEvidence,
+    /instrumentation event/i,
+  );
+  if (instrumentationEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "instrumentation-contract", "failure", "critical", "Instrumentation event timing, payload, and duplication", [
+      "Prepare the qualifying success state and the nearest failure, cancellation, or denied state.",
+      "Record the emitted event name and payload without sending production analytics.",
+    ], [
+      "Complete the changed behavior once in the qualifying state.",
+      "Repeat the render, callback, or retry path, then exercise the non-qualifying state.",
+    ], [
+      "Verify the intended event is emitted once at the changed behavior boundary with the expected payload.",
+      "Verify retries or re-renders do not duplicate it and non-qualifying states do not emit it.",
+    ], ["Duplicate callback", "Retry or re-render", "Failure before completion", "Missing optional payload"], instrumentationEvidence));
+  }
+
   const calendarEvidence = scenarioEvidenceFor(
     productLifecycle,
     productEvidence,
-    /schedul|reminder|calendar|daily|tomorrow|timezone/i,
+    /schedul|reminder|tomorrow|timezone|recurr|cron|deadline|dueat|duedate|starts?at|ends?at/i,
   );
   if (calendarEvidence.length > 0) {
     scenarios.push(makeScenario(intentId, "calendar-boundary", "boundary", "critical", "Scheduling, calendar, and duplicate boundary", [
@@ -2030,7 +2048,7 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
             continue;
           }
           const calendarMatch = line.text.match(
-            /(timezone|scheduledAt|\bschedule\w*\b|\breminder\w*\b|\bcalendar\b|\btomorrow\b|\bdaily\b)/i,
+            /(timezone|scheduledAt|\bschedule\w*\b|\breminder\w*\b|\btomorrow\b|\brecurr\w*\b|\bcron\w*\b|\bdeadline\w*\b|\bdueAt\b|\bdueDate\b|\bstarts?At\b|\bends?At\b)/i,
           );
           const recordsCurrentTimestamp = /^timezone$/i.test(calendarMatch?.[1] ?? "") &&
             /\btimezone\.now\s*\(/i.test(line.text);
@@ -2042,6 +2060,22 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
               line.line,
               calendarMatch[1],
               `${side === "base" ? "Removed" : "Changed"} line contains calendar or scheduling evidence for ${calendarMatch[1]}.`,
+              side,
+            ));
+          }
+          const instrumentationMatch = line.text.match(
+            /\b([A-Za-z_$][\w$]*(?:analytics|telemetry|metrics|events?|tracking|instrumentation|client)[\w$]*)\.(track|capture|identify|logEvent)\s*\(/i,
+          ) ?? line.text.match(/\b(logEvent)\s*\(/i);
+          if (instrumentationMatch) {
+            const target = instrumentationMatch[2]
+              ? `${instrumentationMatch[1]}.${instrumentationMatch[2]}`
+              : instrumentationMatch[1];
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              target,
+              `${side === "base" ? "Removed" : "Changed"} line emits an instrumentation event through ${target}.`,
               side,
             ));
           }

@@ -1,6 +1,6 @@
 {
   "name": "qamap",
-  "version": "0.4.10",
+  "version": "0.4.11",
   "description": "Turn PR changes into traceable local QA decisions and optional automation handoffs without an LLM call.",
   "author": {
     "name": "IvoryCanvas",
@@ -24,9 +24,19 @@
     "developerName": "IvoryCanvas",
     "category": "Developer Tools",
     "capabilities": [
-      "Interactive"
+      "Interactive",
+      "Write"
     ],
     "websiteURL": "https://github.com/IvoryCanvas/QAMap",
-    "defaultPrompt": "Analyze the current PR with QAMap and carry out the safest evidence-backed QA action."
+    "privacyPolicyURL": "https://github.com/IvoryCanvas/QAMap/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/IvoryCanvas/QAMap/blob/main/TERMS.md",
+    "defaultPrompt": [
+      "Analyze this branch with QAMap and show what must be verified before merge.",
+      "Trace this PR's highest-risk QA scenario to its exact diff evidence with QAMap.",
+      "Show QAMap's selected validation and its action contract before running anything."
+    ],
+    "brandColor": "#0E7490",
+    "composerIcon": "./skills/qamap-pr-qa/assets/qamap-logo.png",
+    "logo": "./skills/qamap-pr-qa/assets/qamap-logo.png"
   }
 }

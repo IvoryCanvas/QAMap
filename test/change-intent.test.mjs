@@ -385,6 +385,111 @@ test("change intent clusters related commits into one evidence-backed lifecycle"
   assert.ok(intent.scenarios.every((scenario) => scenario.evidence.length > 0));
 });
 
+test("calendar view vocabulary does not imply scheduling boundaries", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "src/home-view.tsx",
+    "export function HomeView() { return <button>Notebook</button>; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/notebook-layout");
+
+  await write(
+    root,
+    "src/home-view.tsx",
+    [
+      "import { Calendar } from 'lucide-react';",
+      "export function HomeView({ view, setView }) {",
+      "  return <button aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>",
+      "    <Calendar /> Calendar",
+      "  </button>;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: add compact notebook home layout");
+
+  const analysis = await analyze(root, ["src/home-view.tsx"]);
+  const scenarios = analysis.intents.flatMap((intent) => intent.scenarios);
+
+  assert.equal(scenarios.some((scenario) => /scheduling, calendar, and duplicate boundary/i.test(scenario.title)), false);
+});
+
+test("instrumentation changes route timing payload and duplicate-event QA", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "src/registration.ts",
+    "export async function register() { return submitRegistration(); }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/registration-event");
+
+  await write(
+    root,
+    "src/registration.ts",
+    [
+      "export async function register(analyticsClient) {",
+      "  const result = await submitRegistration();",
+      "  if (result.ok) analyticsClient.track('registration_completed', { source: 'form' });",
+      "  return result;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "fix: restore registration completion instrumentation");
+
+  const analysis = await analyze(root, ["src/registration.ts"]);
+  const scenario = analysis.intents
+    .flatMap((intent) => intent.scenarios)
+    .find((candidate) => /instrumentation event timing, payload, and duplication/i.test(candidate.title));
+
+  assert.ok(scenario);
+  assert.equal(scenario.priority, "critical");
+  assert.ok(scenario.evidence.some((item) =>
+    item.kind === "diff" &&
+    item.file === "src/registration.ts" &&
+    item.startLine
+  ));
+  assert.ok(scenario.assertions.some((assertion) => /emitted once/i.test(assertion)));
+  assert.ok(scenario.edgeCases.some((edgeCase) => /duplicate callback/i.test(edgeCase)));
+});
+
+test("concise QA output shows repeated scenario titles only once", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/preferences.tsx", "export const Preferences = () => <p>Idle</p>;\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/preferences-state");
+  await write(
+    root,
+    "src/preferences.tsx",
+    [
+      "export function Preferences({ isEnabled }) {",
+      "  return isEnabled ? <p>Preferences enabled</p> : <p>Preferences disabled</p>;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: show the current preferences state");
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.ok(qa.traces.length > 0);
+  const original = qa.traces[0];
+  const repeated = structuredClone(original);
+  repeated.id = `${original.id}:repeated`;
+  const independent = structuredClone(original);
+  independent.id = `${original.id}:independent`;
+  independent.scenario.title = "Independent boundary proof";
+  qa.traces = [original, repeated, independent];
+
+  const output = formatTextQaDraft(qa);
+  const verifySection = output.split("Verify before merge\n")[1].split("\n\nEvidence")[0];
+  assert.equal(verifySection.split(original.scenario.title).length - 1, 1);
+  assert.match(verifySection, /Independent boundary proof/);
+  assert.match(verifySection, /1 more scenario\(s\) are available in the full report/);
+});
+
 test("change intent keeps unrelated feature commits separate", async (t) => {
   const root = await makeRepo(t);
   await write(root, "src/profile.ts", "export const profile = {};\n");

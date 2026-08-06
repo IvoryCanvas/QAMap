@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">QAMap</title>
+  <desc id="description">Three change sources converge into a verified QA result.</desc>
+  <rect width="512" height="512" rx="92" fill="#07111f"/>
+  <rect x="16" y="16" width="480" height="480" rx="78" fill="none" stroke="#27466e" stroke-width="8"/>
+  <g transform="translate(188 58) scale(1.45)">
+    <path d="M0 40V84C0 115 18 134 48 144" fill="none" stroke="#19bef2" stroke-width="7" stroke-linecap="round"/>
+    <path d="M94 40V84C94 115 76 134 48 144" fill="none" stroke="#19bef2" stroke-width="7" stroke-linecap="round"/>
+    <path d="M47 40V144" fill="none" stroke="#19bef2" stroke-width="7" stroke-linecap="round"/>
+    <path d="M48 144V179" fill="none" stroke="#19bef2" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="0" cy="29" r="17" fill="#07111f" stroke="#19bef2" stroke-width="7"/>
+    <circle cx="47" cy="29" r="17" fill="#07111f" stroke="#19bef2" stroke-width="7"/>
+    <circle cx="94" cy="29" r="17" fill="#07111f" stroke="#19bef2" stroke-width="7"/>
+    <circle cx="48" cy="144" r="17" fill="#07111f" stroke="#19bef2" stroke-width="7"/>
+    <circle cx="48" cy="211" r="35" fill="#07111f" stroke="#ffb414" stroke-width="8"/>
+    <path d="M29 211L43 225L68 197" fill="none" stroke="#ffb414" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

@@ -149,6 +149,8 @@ npx --yes @ivorycanvas/qamap@latest init --agent
 
 The skill calls the same local CLI. It does not introduce another analysis engine or LLM request. See the [agent format contract](docs/agent-format.md) and [agent skill guide](docs/agent-skill.md).
 
+The repository also packages the same workflow as a skills-only OpenAI plugin candidate. It adds no MCP server or hosted service. QAMap itself makes no extra LLM call, while the calling agent still uses its own model tokens to invoke and interpret the skill. See the [plugin submission contract](docs/plugin-submission.md). Public directory availability is not implied until OpenAI approves the listing.
+
 ## Optional Team Memory
 
 The first run works without configuration. When QAMap repeatedly misunderstands a durable flow, create repo-local QA memory:
@@ -181,6 +183,7 @@ QAMap is early and pre-`1.0`. Static analysis cannot know every product decision
 | [Adoption guide](docs/adoption.md) | Local, CI, and team rollout |
 | [Verification manifest](docs/manifest.md) | Repo-local QA memory and correction |
 | [Agent integration](docs/agent-skill.md) | Skill and agent workflow |
+| [OpenAI plugin submission](docs/plugin-submission.md) | Skills-only package, evaluation cases, and release gate |
 | [Benchmarking](docs/benchmarking.md) | Public inference and execution contracts |
 | [Architecture](docs/architecture.md) | Behavior graph, routing, adapters, and safety |
 | [Roadmap](docs/roadmap.md) | Current limits and release direction |

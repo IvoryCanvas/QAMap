@@ -2447,7 +2447,18 @@ export function formatTextQaDraft(result: QaDraftResult): string {
       lines.push("  No diff-backed QA scenario was produced.");
     }
   } else {
-    for (const trace of result.traces.slice(0, 4)) {
+    const seenScenarioTitles = new Set<string>();
+    const displayedTraces = result.traces
+      .filter((trace) => {
+        const key = trace.scenario.title.trim().toLowerCase();
+        if (seenScenarioTitles.has(key)) {
+          return false;
+        }
+        seenScenarioTitles.add(key);
+        return true;
+      })
+      .slice(0, 4);
+    for (const trace of displayedTraces) {
       lines.push(`  ${trace.scenario.decision.toUpperCase()}  ${plainText(trace.scenario.title)}`);
       if (trace.scenario.assertions[0]) {
         lines.push(`    Proof: ${plainText(trace.scenario.assertions[0])}`);
@@ -2457,8 +2468,8 @@ export function formatTextQaDraft(result: QaDraftResult): string {
         lines.push(`    Evidence: ${formatPlainEvidenceReference(source)}`);
       }
     }
-    if (result.traces.length > 4) {
-      lines.push(`  ${result.traces.length - 4} more scenario(s) are available in the full report.`);
+    if (result.traces.length > displayedTraces.length) {
+      lines.push(`  ${result.traces.length - displayedTraces.length} more scenario(s) are available in the full report.`);
     }
   }
 
@@ -2509,7 +2520,7 @@ export function formatTextQaDraft(result: QaDraftResult): string {
     lines.push("  Review the selected scenarios before choosing an execution step.");
   }
   if (needsGeneratedDraft(result)) {
-    lines.push("  Preview an optional E2E draft: qamap e2e draft . --dry-run");
+    lines.push("  Preview an optional automation or checklist draft: qamap e2e draft . --dry-run");
   }
   lines.push("  Open the full reasoning trace: qamap qa --format markdown");
   return `${lines.join("\n")}\n`;
@@ -3720,7 +3731,9 @@ function verificationModeForDraftFile(file: E2eDraftFile): QaVerificationMode | 
 }
 
 function needsGeneratedDraft(result: QaDraftResult): boolean {
-  return result.flows.some((flow) => !flow.verificationMode);
+  return result.readiness.basis !== "repository-validation" &&
+    result.readiness.automationApplicable !== false &&
+    result.flows.some((flow) => !flow.verificationMode);
 }
 
 function formatVerificationMode(mode: QaVerificationMode): string {
