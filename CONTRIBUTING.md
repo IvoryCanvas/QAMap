@@ -32,6 +32,7 @@ Choose additional checks by the surface you changed:
 | E2E compiler or execution fixture | `pnpm bench:execution` |
 | Scanner, security, or repository policy | `pnpm scan` |
 | Public API or type contract | `pnpm build` and focused import/type coverage |
+| Agent skill, plugin metadata, or packaged assets | `pnpm plugin:check` and `pnpm plugin:smoke` |
 | Release preparation | `pnpm release:check` from a clean checkout |
 
 Documentation-only changes do not need synthetic product tests, but commands and examples must match the current CLI.
@@ -112,7 +113,7 @@ Repository assignment and labels are maintainer triage. Contributors do not need
 Maintainers use one canonical annotated tag and release title: `vX.Y.Z`.
 
 ```sh
-git tag -a v0.4.10 -m v0.4.10
+git tag -a v0.4.11 -m v0.4.11
 ```
 
 The npm package, CLI version, changelog, Git tag, GitHub Release, `.codex-plugin/plugin.json`, and `.claude-plugin/plugin.json` versions must agree. See the [release runbook](docs/releasing.md).

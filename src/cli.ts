@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
-import { promises as fs, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { writeAgentRecoveryReport } from "./agent-report.js";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { formatAgentInitReport, initAgentSetup } from "./agent-init.js";
 import { generateAgentContext } from "./context.js";
@@ -877,9 +878,13 @@ function formatQaDraftOutput(result: Awaited<ReturnType<typeof generateQaDraft>>
       .update(`${result.root}\0${result.base}\0${result.head}`)
       .digest("hex")
       .slice(0, 12);
-    const fullReportPath = path.join(os.tmpdir(), `qamap-qa-agent-full-${digest}.json`);
+    const nonce = randomBytes(6).toString("hex");
+    const fullReportPath = path.join(
+      os.tmpdir(),
+      `qamap-qa-agent-full-${digest}-${nonce}.json`,
+    );
     try {
-      writeFileSync(fullReportPath, formatAgentQaFullReport(result));
+      writeAgentRecoveryReport(fullReportPath, formatAgentQaFullReport(result));
       return formatAgentQaDraft(result, { fullReportPath });
     } catch {
       return formatAgentQaDraft(result);

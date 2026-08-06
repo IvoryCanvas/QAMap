@@ -22,6 +22,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+      - run: pnpm plugin:check
+      - run: pnpm plugin:smoke
       - run: pnpm bench:ci
       - run: pnpm scan
 

@@ -12,19 +12,21 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
 1. Detect the comparison base.
    - Prefer the target PR base branch when known.
    - Otherwise use `origin/main`, then `origin/master`, then the repository default branch.
-2. Run QAMap from the repository root. Prefer the compact agent format — it carries the same decision content as the markdown report in a fraction of the tokens:
-
-   ```sh
-   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa . --base <base> --head HEAD --format agent
-   ```
-
-   This one-off form runs outside the target repository's package-manager contract, so it does not invoke Corepack or add a `packageManager` field. For a project that already installs QAMap, prefer its local binary, for example:
+2. Run QAMap from the repository root. Prefer an already installed local binary:
 
    ```sh
    pnpm exec qamap qa . --base <base> --head HEAD --format agent
    ```
 
-   Drop `--format agent` when a human will read the output directly; the default markdown report is written for people.
+   If QAMap is not installed, disclose that the next command downloads the pinned package from the npm registry and follow the host's network approval policy before running it:
+
+   ```sh
+   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.4.11 -- qamap qa . --base <base> --head HEAD --format agent
+   ```
+
+   This one-off form runs outside the target repository's package-manager contract, so it does not invoke Corepack or add a `packageManager` field. QAMap's analysis does not upload source code or make another LLM call. The calling agent still uses its own model tokens to invoke the skill and interpret the compact result.
+
+   Prefer the compact agent format because it carries the decision contract in a fraction of the tokens. Drop `--format agent` for concise human-readable text, or use `--format markdown` for the full trace report.
    The agent JSON is a versioned contract (`schema: qamap.qa` v1, additive-only): see docs/agent-format.md in the QAMap repository.
 
 3. Read `analysisScope` before interpreting package-relative evidence or commands.
@@ -33,7 +35,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
    - Use an explicit scoped pass only when a human wants to override that decision:
 
    ```sh
-   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa <package-path> --workspace-root . --base <base> --head HEAD
+   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.4.11 -- qamap qa <package-path> --workspace-root . --base <base> --head HEAD
    ```
 
 4. Read and verify intent before generating code. In agent format:
@@ -56,7 +58,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
    - `run-repository-command` — when policy permits repository code execution, prefer QAMap's bounded executor so analysis and execution share one receipt:
 
      ```sh
-     npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa run . --base <base> --head HEAD --format agent
+     npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.4.11 -- qamap qa run . --base <base> --head HEAD --format agent
      ```
 
      It re-analyzes the change and runs only the exact selected existing repository command. Do not substitute another command or run it again when `execution.performed` is true.
@@ -66,7 +68,7 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
 6. Only after a human or team accepts the scenario and automation adapter, create or preview executable coverage:
 
    ```sh
-   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap e2e draft . --base <base> --head HEAD --dry-run
+   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.4.11 -- qamap e2e draft . --base <base> --head HEAD --dry-run
    ```
 
    If the selected adapter is absent, inspect and explicitly accept the `automation.setupCommand` proposal. Never install a runner merely because QAMap detected a web or mobile surface.
@@ -102,7 +104,7 @@ When the recommendation is wrong or too broad, do not repeatedly re-prompt for t
 If the team accepts QAMap for ongoing use, suggest this follow-up:
 
 ```sh
-npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap manifest init .
+npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.4.11 -- qamap manifest init .
 ```
 
 Then humans should review `.qamap/manifest.yaml` and keep only durable team QA language.

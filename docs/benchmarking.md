@@ -26,7 +26,7 @@ The command fails when any target violates its declared expectations. The corpus
 - a repository-backed web persistence change that must connect one changed storage write to the matching read key, editable field, save action, route, and reload assertion before its primary draft can be fully mapped;
 - a form-validation timing change that must connect the changed trigger mode to one validated input, visible error, submit action, and success outcome before it can compile invalid-input, correction, and successful-submission coverage;
 - a mobile reminder change that must become scheduling, calendar, duplicate, resynchronization, and entry-routing QA;
-- a CLI plus static-analysis-rule change that must verify command I/O and positive/negative controls without turning rule vocabulary into product scheduling, routing, API, or fixture QA;
+- a CLI plus static-analysis-rule change that must verify command I/O and positive/negative controls without turning rule vocabulary or a `.github` rule-request template into product scheduling, routing, API, or fixture QA;
 - an Expo app with Maestro;
 - an API service that should produce a contract checklist instead of a browser journey;
 - a Python API change whose exact changed regression test must become the repository-validation route while settings files remain configuration evidence;
@@ -34,6 +34,8 @@ The command fails when any target violates its declared expectations. The corpus
 - a shared component change that must reach its consuming page through reverse imports;
 - an Expo native configuration-only change that must stay out of product journeys and prefer existing build commands;
 - a Maestro test-only change that must run existing evidence instead of generating a duplicate journey.
+- a calendar-named view toggle that must remain presentation behavior instead of fabricating scheduling, timezone, or duplicate-job QA;
+- an instrumentation change that must verify event timing, payload, and duplicate emission at the changed success boundary.
 
 ## Run the execution contract
 

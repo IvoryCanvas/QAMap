@@ -1,0 +1,11 @@
+{
+  "name": "benchmark-web-calendar-view-mode",
+  "private": true,
+  "scripts": {
+    "dev": "vite"
+  },
+  "dependencies": {
+    "react": "19.0.0",
+    "vite": "7.3.5"
+  }
+}

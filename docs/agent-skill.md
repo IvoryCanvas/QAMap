@@ -95,7 +95,16 @@ From a source checkout, validate the Claude Code manifest without invoking a mod
 claude plugin validate .
 ```
 
-For a local Claude Code session, the same checkout can be loaded with `claude --plugin-dir .`. Codex plugin validation and marketplace packaging use `.codex-plugin/plugin.json`. Public marketplace availability is not implied by the presence of either manifest; until a listing is published, `qamap init --agent` and the portable skill install remain the stable onboarding paths.
+For a local Claude Code session, the same checkout can be loaded with `claude --plugin-dir .`. OpenAI plugin packaging uses `.codex-plugin/plugin.json`. The packaged skill pins the exact QAMap release so a reviewed plugin does not silently change when npm `latest` moves.
+
+Validate the OpenAI submission package without invoking a model:
+
+```sh
+pnpm plugin:check
+pnpm plugin:smoke
+```
+
+Public directory availability is not implied by the presence of either manifest. Until a listing is approved, `qamap init --agent` and the portable skill install remain the stable onboarding paths. The full skills-only boundary and submission sequence are documented in [plugin-submission.md](plugin-submission.md).
 
 ## What The Agent Should Do With The Output
 

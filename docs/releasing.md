@@ -41,6 +41,8 @@ The gate must pass:
 
 - `pnpm test`
 - `pnpm scan`
+- `pnpm plugin:check`
+- `pnpm plugin:smoke`
 - `pnpm bench:ci`
 - `pnpm bench:execution`
 - `git diff --check`
@@ -67,9 +69,13 @@ The tarball must include runtime output, public documentation, schemas, and pack
 - `skills`
 - `.codex-plugin`
 - `.claude-plugin`
+- `plugin`
 - `schema`
 - `README.md`
 - `CHANGELOG.md`
+- `PRIVACY.md`
+- `SUPPORT.md`
+- `TERMS.md`
 - `LICENSE`
 - `package.json`
 
@@ -96,6 +102,8 @@ pnpm dlx "@ivorycanvas/qamap@$VERSION" e2e draft . --base origin/main --head HEA
 ```
 
 Use a fresh shell or temporary directory for the smoke check when possible.
+
+If the release is the version pinned by the OpenAI skill package, also run the published-package form of the smoke before submitting the plugin. The directory submission must refer to a package version that already resolves from the public registry. Follow [the plugin submission runbook](plugin-submission.md); npm publication does not imply directory approval.
 
 ## GitHub Release
 

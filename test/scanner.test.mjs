@@ -2911,6 +2911,8 @@ test("generateQaDraft treats transformer changes as input-output contracts inste
   assert.match(text, /Repository verification:/);
   assert.match(text, /input-to-output transformation contract verification/);
   assert.doesNotMatch(text, /Optional E2E mapping:/);
+  assert.doesNotMatch(text, /Preview an optional automation or checklist draft:/);
+  assert.equal(JSON.parse(formatAgentQaDraft(qa)).automation, undefined);
   assert.doesNotMatch(text, /status, response shape, auth behavior/);
 });
 
@@ -8716,7 +8718,13 @@ test("package metadata includes the portable PR QA skill template", async () => 
 
   assert.ok(packageJson.files.includes("skills"));
   assert.match(skillText, /name: qamap-pr-qa/);
-  assert.match(skillText, /npm exec --yes --registry=https:\/\/registry\.npmjs\.org --package=@ivorycanvas\/qamap@latest -- qamap qa/);
+  assert.match(
+    skillText,
+    new RegExp(
+      `npm exec --yes --registry=https://registry\\.npmjs\\.org --package=@ivorycanvas/qamap@${packageJson.version.replaceAll(".", "\\.")} -- qamap qa`,
+    ),
+  );
+  assert.doesNotMatch(skillText, /@ivorycanvas\/qamap@latest/);
   assert.doesNotMatch(skillText, /pnpm dlx/);
   assert.match(skillText, /Manifest Repair/);
 });
@@ -9777,7 +9785,7 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   );
   assert.match(portableSkill, /name: qamap-pr-qa/);
   assert.equal(claudeSkill, portableSkill);
-  assert.match(portableMetadata, /display_name: QAMap PR QA/);
+  assert.match(portableMetadata, /display_name: ["']?QAMap PR QA["']?/);
   assert.equal(claudeMetadata, portableMetadata);
   await stat(path.join(root, "qamap.config.json"));
 
@@ -9852,7 +9860,7 @@ test("initAgentSetup upgrades skill-only installs with host metadata", async () 
       path.join(root, hostRoot, "skills", "qamap-pr-qa", "agents", "openai.yaml"),
       "utf8",
     );
-    assert.match(metadata, /display_name: QAMap PR QA/);
+    assert.match(metadata, /display_name: ["']?QAMap PR QA["']?/);
   }
 });
 

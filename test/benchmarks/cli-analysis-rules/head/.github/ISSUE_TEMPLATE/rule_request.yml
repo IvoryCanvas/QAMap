@@ -1,0 +1,11 @@
+name: Rule request
+description: Propose a general static analysis rule with a negative control
+body:
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+  - type: textarea
+    id: negative
+    attributes:
+      label: Unrelated behavior that must not match

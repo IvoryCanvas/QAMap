@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+## 0.4.11 - 2026-08-06
+
+### Added
+
+- Added a skills-only OpenAI plugin submission package with listing copy, three starter prompts, five positive evaluations, three negative controls, and a canonical 512px QAMap logo.
+- Added `plugin:check` to validate version alignment, listing metadata, legal URLs, prompt limits, skill metadata, package pinning, assets, and the public evaluation corpus.
+- Added `plugin:smoke` to pack and install QAMap in an isolated temporary project, verify every plugin artifact ships, and require evidence-backed agent output from the installed binary.
+- Added public privacy, terms, support, and plugin-submission documents that define local data use, network boundaries, side effects, and the maintainer submission sequence.
+- Added domain-neutral benchmark contracts for a calendar-named view mode and a completion-event instrumentation change, bringing the static corpus to 27 unrelated recommendation targets.
+
+### Changed
+
+- The packaged agent skill pins QAMap `0.4.11` instead of following npm `latest`, prefers an installed local binary, and discloses the one-off npm download before network use.
+- Agent guidance now distinguishes QAMap's zero-additional-LLM analysis from the calling host's own model-token use and distinguishes concise text from the full Markdown trace.
+- CI and the release gate now validate both plugin metadata and a fresh packaged install.
+- Instrumentation changes now route explicit timing, payload, and duplicate-emission QA instead of stopping at a generic function-call assertion.
+- Concise terminal output shows a repeated scenario title once while preserving the complete trace count and full report.
+
+### Security
+
+- Compacted agent recovery reports use owner-only file permissions and stale QAMap recovery files are removed after 24 hours without touching unrelated temporary files.
+
+### Fixed
+
+- Calendar icons and calendar-named presentation modes no longer create scheduling, timezone, and duplicate-job QA without real scheduling evidence.
+- Repository configuration under `.github`, including issue templates whose names contain `request`, no longer becomes an API contract flow or displaces an existing repository validation command.
+- Repository-validation changes no longer advertise an optional automation draft as the next action when QAMap has already selected the applicable existing command.
+
 ## 0.4.10 - 2026-08-06
 
 ### Added
