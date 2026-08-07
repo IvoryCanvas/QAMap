@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Changed
+
+- Change-intent clustering now uses commit scope and subject rather than body prose, treats distinct issue tags as intent boundaries, and splits transitive keyword chains around a behavior-bearing anchor.
+- Cleanup-only commits remain visible as provenance with zero standalone QA scenarios, while behavior-describing refactors stay eligible for review.
+- Human and agent documentation now explains provenance-only intents and explicit observable-proof gaps.
+
+### Fixed
+
+- Cleanup-only changes no longer re-enter QA through a generic heuristic or app-launch fallback.
+- Primary assertions no longer promote raw result-shaped helper names, side-effect names, or the scenario title as externally observable proof.
+- Unrelated lifecycle stages no longer contaminate the primary intent merely because an intermediate commit shares broad vocabulary.
+
 ## 0.4.11 - 2026-08-06
 
 ### Added

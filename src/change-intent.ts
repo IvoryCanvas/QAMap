@@ -113,6 +113,9 @@ export interface ChangeIntentSymbolAnnotationSummary {
   diagnostics: number;
 }
 
+export const unresolvedPrimaryScenarioAssertion =
+  "Record the expected externally observable result; no changed-file evidence proves an externally observable result yet.";
+
 export interface ChangeIntentAnalysisOptions {
   base: string;
   head: string;
@@ -127,6 +130,7 @@ interface ParsedCommit extends ChangeIntentCommit {
   seed: boolean;
   supporting: boolean;
   keywords: string[];
+  clusteringKeywords: string[];
   tickets: string[];
 }
 
@@ -329,6 +333,9 @@ function rankChangeIntentsForReview(
       intent,
       index,
       cleanupOnly: isCleanupOnlyIntent(intent) ? 1 : 0,
+      featureBearing: intent.commits.some((commit) =>
+        commit.conventionalType === "feat" || commit.conventionalType === "feature"
+      ) ? 0 : 1,
       latestCommit: intent.commits.length === 0
         ? -1
         : Math.max(...intent.commits.map((commit) => commitOrder.get(commit.sha) ?? -1)),
@@ -338,6 +345,7 @@ function rankChangeIntentsForReview(
     }))
     .sort((left, right) =>
       left.cleanupOnly - right.cleanupOnly ||
+      left.featureBearing - right.featureBearing ||
       right.latestCommit - left.latestCommit ||
       right.locatedEvidence - left.locatedEvidence ||
       left.index - right.index
@@ -464,8 +472,10 @@ function parseCommit(commit: ChangeIntentCommit): ParsedCommit {
     nonConventionalBehaviorVerbPattern.test(statement) &&
     (commit.files ?? []).some(isBehaviorBearingFile) &&
     !isLowSignalCommitStatement(statement);
+  const behaviorDescribingRefactor =
+    conventionalType === "refactor" && isBehaviorDescribingRefactorStatement(statement);
   const seed = conventionalType
-    ? behavioralCommitTypes.has(conventionalType)
+    ? behavioralCommitTypes.has(conventionalType) || behaviorDescribingRefactor
     : (actionSignals >= 2 || nonConventionalBehavior) && !isLowSignalCommitStatement(statement);
   const supporting = conventionalType
     ? supportingCommitTypes.has(conventionalType)
@@ -478,8 +488,17 @@ function parseCommit(commit: ChangeIntentCommit): ParsedCommit {
     seed,
     supporting: supporting && !seed,
     keywords: extractKeywords(`${scope ?? ""} ${statement} ${commit.body ?? ""}`),
+    clusteringKeywords: extractKeywords(`${scope ?? ""} ${statement}`),
     tickets,
   };
+}
+
+function isBehaviorDescribingRefactorStatement(statement: string): boolean {
+  if (isImplementationOnlyLifecycleStep(statement)) {
+    return false;
+  }
+  return /^(?:allow|enable|handle|persist|preserve|prevent|restore|show|surface|validate)\b/i.test(statement) ||
+    /^(?:remove|replace)\b.+\b(?:after|before|when|while|without)\b/i.test(statement);
 }
 
 function clusterBehaviorCommits(commits: ParsedCommit[]): ParsedCommit[][] {
@@ -528,18 +547,41 @@ function clusterBehaviorCommits(commits: ParsedCommit[]): ParsedCommit[][] {
   });
 
   return [...components.values()]
+    .flatMap(splitTransitiveIntentComponent)
     .filter((group) => group.some((commit) => commit.seed))
     .sort((left, right) => commits.indexOf(left[0]) - commits.indexOf(right[0]));
 }
 
+function splitTransitiveIntentComponent(component: ParsedCommit[]): ParsedCommit[][] {
+  const groups: ParsedCommit[][] = [];
+  let remaining = [...component];
+  while (remaining.some((commit) => commit.seed)) {
+    const anchor = selectIntentTitleCommit(remaining);
+    const group = remaining.filter((commit) =>
+      commit === anchor || commitsShareIntent(anchor, commit)
+    );
+    groups.push(group);
+    const selected = new Set(group);
+    remaining = remaining.filter((commit) => !selected.has(commit));
+  }
+  return groups;
+}
+
 function commitsShareIntent(left: ParsedCommit, right: ParsedCommit): boolean {
-  const rightKeywords = new Set(right.keywords);
+  if (
+    left.tickets.length > 0 &&
+    right.tickets.length > 0 &&
+    !left.tickets.some((ticket) => right.tickets.includes(ticket))
+  ) {
+    return false;
+  }
+  const rightKeywords = new Set(right.clusteringKeywords);
   const scopeTokens = new Set(
     [left.scope, right.scope]
       .filter((scope): scope is string => Boolean(scope))
       .flatMap((scope) => [normalizeToken(scope), ...extractKeywords(scope)]),
   );
-  const sharedKeywords = left.keywords.filter((keyword) =>
+  const sharedKeywords = left.clusteringKeywords.filter((keyword) =>
     rightKeywords.has(keyword) && keyword.length >= 4 && !scopeTokens.has(keyword)
   );
   if (sharedKeywords.length >= 2) {
@@ -558,6 +600,12 @@ function commitsShareIntent(left: ParsedCommit, right: ParsedCommit): boolean {
   // `app`), not one user intent. A single shared word can also create a
   // transitive bridge across a long PR, so it needs same-file evidence.
   return false;
+}
+
+function selectIntentTitleCommit(commits: ParsedCommit[]): ParsedCommit {
+  return commits.find((commit) =>
+    commit.conventionalType === "feat" || commit.conventionalType === "feature"
+  ) ?? commits.find((commit) => commit.seed) ?? commits[0];
 }
 
 function buildCommitIntent(
@@ -586,9 +634,7 @@ function buildCommitIntent(
   const relevantAnnotationEvidence = annotationEvidence.filter((item) => item.file && files.includes(item.file));
   const lifecycle = buildLifecycle(commits, relevantSignals, relevantRiskEvidence);
   const confidence = confidenceForIntent(commits, lifecycle, relevantSignals);
-  const titleCommit = commits.find((commit) => commit.conventionalType === "feat" || commit.conventionalType === "feature") ??
-    commits.find((commit) => commit.seed) ??
-    commits[0];
+  const titleCommit = selectIntentTitleCommit(commits);
   const titleTicket = titleCommit.tickets[0] ?? commits.flatMap((commit) => commit.tickets)[0];
   const title = titleTicket
     ? `${sentenceTitle(titleCommit.statement)} [${titleTicket}]`
@@ -612,7 +658,10 @@ function buildCommitIntent(
     .filter(Boolean)
     .slice(0, 4)
     .join("; ");
-  const scenarios = buildIntentQaScenarios(id, title, lifecycle, keywords, evidence, confidence);
+  const housekeepingOnly = commits.every((commit) => isCleanupCommitStatement(commit.statement));
+  const scenarios = housekeepingOnly
+    ? []
+    : buildIntentQaScenarios(id, title, lifecycle, keywords, evidence, confidence);
   return {
     id,
     title,
@@ -957,14 +1006,26 @@ function buildIntentQaScenarios(
 ): IntentQaScenario[] {
   const conditions = lifecycle.filter((stage) => stage.kind === "condition").map((stage) => stage.label);
   const actions = selectPrimaryLifecycleSteps(lifecycle, keywords);
-  const outcomeStages = lifecycle.filter((stage) => stage.kind === "observable-outcome");
-  const locatedOutcomeStages = outcomeStages.filter((stage) => hasActionableLocatedDiffEvidence(stage.evidence));
-  const outcomes = (locatedOutcomeStages.length > 0 ? locatedOutcomeStages : outcomeStages)
+  const outcomeStages = lifecycle
+    .filter((stage) => stage.kind === "observable-outcome")
+    .filter((stage) => hasActionableLocatedDiffEvidence(stage.evidence))
+    .filter(isMateriallyObservableOutcomeStage);
+  const outcomes = outcomeStages
     .map((stage) => assertionForStage(stage));
+  const hasLocatedPersistenceEvidence = lifecycle.some((stage) =>
+    hasActionableLocatedDiffEvidence(stage.evidence) &&
+    stage.evidence.some((item) =>
+      /\b(?:asyncstorage|cache|localstorage|persist|sessionstorage|storage|store)\b/i.test(
+        `${item.symbol ?? ""} ${item.value}`,
+      )
+    )
+  );
   const stateChanges = lifecycle
     .filter(isDurableStateChangeRequirement)
+    .filter((stage) =>
+      hasActionableLocatedDiffEvidence(stage.evidence) || hasLocatedPersistenceEvidence
+    )
     .map((stage) => assertionForStage(stage));
-  const sideEffects = lifecycle.filter((stage) => stage.kind === "side-effect").map((stage) => assertionForStage(stage));
   const primaryEvidence = lifecycleEvidence(lifecycle, evidence);
   const primaryHasActionableEvidence = hasActionableLocatedDiffEvidence(primaryEvidence);
   const primary: IntentQaScenario = {
@@ -976,7 +1037,7 @@ function buildIntentQaScenarios(
     setup: conditions.length > 0 ? conditions : ["Prepare representative pre-change and changed-branch state."],
     steps: actions,
     assertions: uniqueStrings([
-      ...(outcomes.length > 0 ? outcomes : sideEffects.slice(0, 2)),
+      ...outcomes,
       ...stateChanges,
     ]).slice(0, 4),
     edgeCases: [],
@@ -985,7 +1046,7 @@ function buildIntentQaScenarios(
     reviewRequired: confidence !== "high" || !primaryHasActionableEvidence,
   };
   if (primary.assertions.length === 0) {
-    primary.assertions.push("Verify the externally observable result matches the commit intent.");
+    primary.assertions.push(unresolvedPrimaryScenarioAssertion);
   }
 
   const scenarios = [primary];
@@ -1537,6 +1598,18 @@ function buildIntentQaScenarios(
   }
 
   return rankIntentQaScenarios(uniqueScenarios(scenarios)).slice(0, maxQaScenariosPerIntent);
+}
+
+function isMateriallyObservableOutcomeStage(stage: BehaviorLifecycleStage): boolean {
+  const label = stripTerminalPunctuation(stage.label);
+  if (/^Show\s+.+/i.test(label)) {
+    return true;
+  }
+  if (/^Observe\s+(?!the result of\b).+/i.test(label)) {
+    return true;
+  }
+  return stage.symbol !== undefined &&
+    /(?:navigate|redirect|router\.(?:push|replace)|openurl|openlink)/i.test(stage.symbol);
 }
 
 function lifecycleEvidence(
@@ -2984,7 +3057,14 @@ function isStructuredDataFile(file: string): boolean {
 }
 
 function stripParsedCommitFields(commit: ParsedCommit): ChangeIntentCommit {
-  const { seed: _seed, supporting: _supporting, keywords: _keywords, tickets: _tickets, ...result } = commit;
+  const {
+    seed: _seed,
+    supporting: _supporting,
+    keywords: _keywords,
+    clusteringKeywords: _clusteringKeywords,
+    tickets: _tickets,
+    ...result
+  } = commit;
   return result;
 }
 

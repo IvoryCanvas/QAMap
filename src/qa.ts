@@ -3210,46 +3210,50 @@ function appendQaChangeIntentMarkdown(lines: string[], result: QaDraftResult): v
       lines.push(`  - ${stage.kind}: ${escapeMarkdownInline(stage.label)}${sourceSuffix}`);
     }
     lines.push("- QA scenarios:");
-    for (const scenario of intent.scenarios.slice(0, 4)) {
-      const confidence = scenario.confidence ?? "low";
-      const reviewRequired = scenario.reviewRequired ?? true;
-      const routing = routeQaScenario(scenario);
-      const automation = findScenarioAutomation(result, scenario.id);
-      lines.push(
-        `  - [${scenario.priority}] ${escapeMarkdownInline(scenario.title)} ` +
-        `(confidence: ${confidence}${reviewRequired ? "; review required" : ""})`,
-      );
-      const trace = result.traces.find((item) => item.scenario.id === scenario.id);
-      if (trace) {
-        lines.push(`    - Trace: \`${escapeMarkdownInline(trace.id)}\``);
-      }
-      lines.push(`    - Routing: ${routing.decision} - ${escapeMarkdownInline(routing.reason)}`);
-      lines.push(
-        `    - Evidence role: ${routing.requiredEvidence.length} required diff source${routing.requiredEvidence.length === 1 ? "" : "s"}; ` +
-          `${routing.referenceEvidence.length} reference source${routing.referenceEvidence.length === 1 ? "" : "s"}`,
-      );
-      if (automation) {
-        if (verificationMode) {
-          lines.push(
-            `    - Repository verification: ${formatVerificationMode(verificationMode)}; product E2E mapping is not applicable.`,
-          );
-        } else {
-          lines.push(
-            `    - E2E draft mapping: ${formatScenarioAutomationStatus(automation.status)} ` +
-              `(steps ${automation.mappedSteps}/${automation.totalSteps}; assertions ${automation.mappedAssertions}/${automation.totalAssertions})`,
-          );
-          for (const blocker of automation.blockers.slice(0, 2)) {
-            lines.push(`      - Blocker: ${escapeMarkdownInline(blocker)}`);
+    if (intent.scenarios.length === 0) {
+      lines.push("  - No standalone QA scenario; retained as commit provenance only.");
+    } else {
+      for (const scenario of intent.scenarios.slice(0, 4)) {
+        const confidence = scenario.confidence ?? "low";
+        const reviewRequired = scenario.reviewRequired ?? true;
+        const routing = routeQaScenario(scenario);
+        const automation = findScenarioAutomation(result, scenario.id);
+        lines.push(
+          `  - [${scenario.priority}] ${escapeMarkdownInline(scenario.title)} ` +
+          `(confidence: ${confidence}${reviewRequired ? "; review required" : ""})`,
+        );
+        const trace = result.traces.find((item) => item.scenario.id === scenario.id);
+        if (trace) {
+          lines.push(`    - Trace: \`${escapeMarkdownInline(trace.id)}\``);
+        }
+        lines.push(`    - Routing: ${routing.decision} - ${escapeMarkdownInline(routing.reason)}`);
+        lines.push(
+          `    - Evidence role: ${routing.requiredEvidence.length} required diff source${routing.requiredEvidence.length === 1 ? "" : "s"}; ` +
+            `${routing.referenceEvidence.length} reference source${routing.referenceEvidence.length === 1 ? "" : "s"}`,
+        );
+        if (automation) {
+          if (verificationMode) {
+            lines.push(
+              `    - Repository verification: ${formatVerificationMode(verificationMode)}; product E2E mapping is not applicable.`,
+            );
+          } else {
+            lines.push(
+              `    - E2E draft mapping: ${formatScenarioAutomationStatus(automation.status)} ` +
+                `(steps ${automation.mappedSteps}/${automation.totalSteps}; assertions ${automation.mappedAssertions}/${automation.totalAssertions})`,
+            );
+            for (const blocker of automation.blockers.slice(0, 2)) {
+              lines.push(`      - Blocker: ${escapeMarkdownInline(blocker)}`);
+            }
           }
         }
-      }
-      for (const source of strongestEvidence(scenario.evidence, 3)) {
-        lines.push(
-          `    - Source: ${formatEvidenceReference(source)}: ${escapeMarkdownInline(source.value)}`,
-        );
-      }
-      for (const assertion of scenario.assertions.slice(0, 2)) {
-        lines.push(`    - Assert: ${escapeMarkdownInline(assertion)}`);
+        for (const source of strongestEvidence(scenario.evidence, 3)) {
+          lines.push(
+            `    - Source: ${formatEvidenceReference(source)}: ${escapeMarkdownInline(source.value)}`,
+          );
+        }
+        for (const assertion of scenario.assertions.slice(0, 2)) {
+          lines.push(`    - Assert: ${escapeMarkdownInline(assertion)}`);
+        }
       }
     }
     lines.push("");

@@ -51,7 +51,7 @@ All source-derived strings cross an untrusted-data boundary before human or agen
 
 ## Change Intent
 
-`src/change-intent.ts` reads behavior-bearing commits in the selected base/head range and joins related `feat`, `fix`, `hotfix`, `perf`, and supporting `refactor` commits through normalized domain terms. Added diff symbols provide independent evidence for triggers, conditions, state changes, side effects, and observable outcomes.
+`src/change-intent.ts` reads behavior-bearing commits in the selected base/head range and joins related `feat`, `fix`, `hotfix`, `perf`, and behavior-describing `refactor` commits through normalized scope and subject terms. Commit bodies can enrich later evidence ranking, but they do not join intents by themselves. Distinct issue tags form a hard boundary, and every connected component is checked against one behavior-bearing anchor so a chain of pairwise-similar commits cannot pull an unrelated lifecycle into the primary intent. Added diff symbols provide independent evidence for triggers, conditions, state changes, side effects, and observable outcomes.
 
 Each intent contains:
 
@@ -60,7 +60,9 @@ Each intent contains:
 - an ordered behavior lifecycle;
 - runner-independent primary, failure, boundary, and state-transition QA scenarios.
 
-One richly evidenced squash commit can reach high confidence. A title without connected diff evidence cannot. Working-tree-only inference is always low confidence and review-required. Release, docs, style, CI, and test-only commits do not become product intents.
+One richly evidenced squash commit can reach high confidence. A title without connected diff evidence cannot. Working-tree-only inference is always low confidence and review-required. Release, docs, style, CI, and test-only commits do not become product intents. Cleanup-shaped commits such as a minor refactor remain visible in commit provenance but carry zero standalone QA scenarios. A refactor whose subject describes an externally meaningful behavior remains eligible.
+
+A primary QA assertion needs a located, materially observable outcome or a durable state requirement connected to changed persistence evidence. Raw setter names, callback names, result-shaped helper names, and commit prose remain useful lifecycle evidence but are not proof by themselves. When no changed-file evidence proves the result, the scenario carries an explicit proof gap for a reviewer or manifest to complete.
 
 The initial JS/TS symbol adapter reads `@qamapFlow`, `@qamapStage`, `@qamapOutcome`, and `@qamapRisk` from JSDoc attached to named top-level exports. It activates the context only when the declaration overlaps the current diff. The annotation is retained as contextual source evidence while the changed line remains the evidence required for scenario routing, so adding a comment alone cannot manufacture a behavior change.
 

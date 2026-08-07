@@ -56,6 +56,12 @@ npx --yes @ivorycanvas/qamap@latest qa --format markdown
 QAMap keeps static reasoning and executed QA separate. A proposed scenario or E2E
 draft is never reported as a passing test.
 
+Cleanup-only commits remain visible as provenance but do not become standalone
+QA requirements. Unrelated issue tags and lifecycle stages stay separate. When
+the changed source does not prove an externally observable result, QAMap reports
+that proof gap instead of turning a commit title or function name into an
+assertion.
+
 ## See A Real Run
 
 This recording uses a committed public fixture. QAMap finds a duplicate-request
