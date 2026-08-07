@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.12 - 2026-08-07
+
 ### Changed
 
 - The README first screen now makes the OpenAI plugin installation path explicit, links the published listing and official installation guide, and distinguishes app installation from a one-off local CLI run.

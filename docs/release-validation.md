@@ -4,13 +4,15 @@
 > evidence. Older sections are preserved as historical receipts and are not
 > required reading for contributors or users.
 
-## Unreleased
+## 0.4.12 - 2026-08-07
 
-The current development branch tightens the first-run contract between commit
-history and required QA. Cleanup-only commits remain visible without creating
-standalone scenarios, unrelated work cannot join through transitive keyword
-bridges or repeated commit-body prose, and a primary scenario cannot use a raw
-implementation symbol or its own title as observable proof.
+QAMap 0.4.12 tightens the first-run contract between commit history and
+required QA. Cleanup-only commits remain visible without creating standalone
+scenarios, unrelated work cannot join through transitive keyword bridges or
+repeated commit-body prose, and a primary scenario cannot use a raw
+implementation symbol or its own title as observable proof. The README also
+makes the published OpenAI plugin installation route explicit while preserving
+the one-off local CLI path.
 
 | Gate | Current result |
 | --- | --- |
@@ -19,9 +21,9 @@ implementation symbol or its own title as observable proof.
 | `pnpm scan` | 0 findings |
 | `pnpm bench:ci` | All static recommendation contracts passing |
 | `pnpm bench:execution` | 3/3 execution contracts passing; duplicate-request, missing-persistence, and stale-validation regressions caught |
-| Coverage | Lines 89.73%, branches 86.48%, functions 95.70% |
+| Coverage | Lines 89.73%, branches 86.46%, functions 95.70% |
 | Plugin package check | Submission metadata valid; isolated packed install produced one intent with one exact evidence trace |
-| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.11`; 172 files packed |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.12`; 172 files packed |
 | Focused regressions | Cleanup-only, behavior-changing refactor, distinct issue tags, repeated commit-body vocabulary, transitive bridges, visible proof, and proof-gap controls pass |
 | Public repository replay | Documenso PRs #3032 and #2889 plus Formbricks PRs #8683 and #8691 analyzed read-only |
 | Cleanup handling | `Minor refactor` and `Tidy up and add tests` remain provenance-only and do not produce QA contracts or fallback smoke flows |
