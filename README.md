@@ -5,8 +5,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <a href="https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629">
-  <img src="docs/assets/openai-plugin-directory-badge.svg" alt="QAMap is available in the OpenAI Plugin Directory" height="64">
+  <img src="docs/assets/openai-plugin-directory-badge.svg" alt="Install QAMap from the OpenAI Plugin Directory" height="64">
 </a>
+
+**Install in ChatGPT or Codex:** open **Plugins**, search for **QAMap**, select
+**+**, then start a new chat. [Open QAMap](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
+· [Installation guide](https://learn.chatgpt.com/docs/plugins)
 
 ![QAMap: find what a change needs to prove](docs/assets/qamap-cover.png)
 
@@ -23,7 +27,7 @@ existing tests, and diff evidence to answer:
 QAMap itself makes no cloud analysis, source upload, or additional LLM call. A
 manifest and test runner are optional.
 
-## Start In 60 Seconds
+## Run The CLI In 60 Seconds
 
 Requires Node.js 20 or newer. Run this from the branch you want to review:
 
