@@ -4,7 +4,10 @@ import YAML from "yaml";
 import { analyzeBehaviorGraph, createInferredFlowBehaviorAdapter } from "./behavior.js";
 import { createChangeIntentBehaviorAdapter } from "./behavior-intent.js";
 import { createManifestBehaviorAdapter } from "./behavior-manifest.js";
-import { analyzeChangeIntents } from "./change-intent.js";
+import {
+  analyzeChangeIntents,
+  unresolvedPrimaryScenarioAssertion,
+} from "./change-intent.js";
 import { buildDomainLanguageSummary } from "./domain-language.js";
 import { defaultDomainManifestPath, loadDomainManifest, matchDomains } from "./domains.js";
 import { analyzeFixtureSource, insightCoversEndpoint } from "./fixture-insight.js";
@@ -705,10 +708,16 @@ function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flow
       replacedObservableAssertion = true;
       return concreteAssertion;
     });
+    const addedConcreteAssertion =
+      !assertions.includes(concreteAssertion) &&
+      originalAssertions.every((assertion) => isUncompiledPersistenceAssertion(flow, assertion));
+    if (addedConcreteAssertion) {
+      assertions.push(concreteAssertion);
+    }
     const replacedAssertions = new Set(
       originalAssertions.filter((assertion, index) => assertion !== assertions[index]),
     );
-    if (replacedAssertions.size > 0) {
+    if (replacedAssertions.size > 0 || addedConcreteAssertion) {
       if (!hasMultipleFlows) {
         primary.assertions = assertions;
       }
@@ -718,6 +727,9 @@ function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flow
       flow.steps = flow.steps.map((step) => replacedAssertions.has(step) ? concreteAssertion : step);
       for (const target of flow.coverage) {
         target.checks = target.checks.map((check) => replacedAssertions.has(check) ? concreteAssertion : check);
+      }
+      if (addedConcreteAssertion && !flow.steps.includes(concreteAssertion)) {
+        flow.steps.push(concreteAssertion);
       }
     }
     const scenarioAssertions = new Set(assertions);
@@ -2631,7 +2643,7 @@ function resolveFlowSuccessSignal(
   candidate: string,
   flowTitle: string,
 ): { successSignal: string; unresolved: boolean } {
-  if (isEchoSuccessSignal(candidate, flowTitle)) {
+  if (candidate === unresolvedPrimaryScenarioAssertion || isEchoSuccessSignal(candidate, flowTitle)) {
     return { successSignal: unresolvedSuccessSignalText, unresolved: true };
   }
   return { successSignal: candidate, unresolved: false };
@@ -2645,6 +2657,9 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
   const actor = inferFlowActor(flow);
   const analysisRuleFocused = isAnalysisRuleFocusedFlow(flow);
   if (flow.intentId && flow.lifecycle && flow.lifecycle.length > 0) {
+    const primaryProofUnresolved = flow.qaScenarios
+      ?.find((scenario) => scenario.kind === "primary")
+      ?.assertions.includes(unresolvedPrimaryScenarioAssertion) ?? false;
     const lifecycleTrigger = flow.lifecycle.find((stage) => stage.kind === "trigger");
     const commitAction = flow.lifecycle.find(
       (stage) => stage.kind === "action" && stage.evidence.some((item) => item.kind === "commit"),
@@ -2667,9 +2682,23 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
         ? `the intended side effect completes: ${effects.slice(0, 2).join("; ")}`
         : "the observable result matches the commit intent";
     const repositorySuccessSignal = inferFlowSuccessSignal(flow);
-    const chosenSignal = repositorySuccessSignal === "the changed journey reaches a visible, stable success state"
-      ? lifecycleSuccessSignal
-      : repositorySuccessSignal;
+    const structuredContract = analysisRuleFocused ||
+      isApiContractFocusedFlow(flow) ||
+      isTransformationContractFocusedFlow(flow) ||
+      isDesignTokenFocusedFlow(flow) ||
+      isCatalogFocusedFlow(flow) ||
+      isTestEvidenceFocusedFlow(flow) ||
+      isDocumentationFocusedFlow(flow) ||
+      isGeneratedArtifactFocusedFlow(flow) ||
+      isCliCommandFocusedFlow(flow) ||
+      /\bconfiguration verification\b/i.test(flow.title);
+    const chosenSignal = primaryProofUnresolved &&
+        !structuredContract &&
+        !/^visible text ".+" appears$/u.test(repositorySuccessSignal)
+      ? unresolvedPrimaryScenarioAssertion
+      : repositorySuccessSignal === "the changed journey reaches a visible, stable success state"
+        ? lifecycleSuccessSignal
+        : repositorySuccessSignal;
     const resolved = resolveFlowSuccessSignal(chosenSignal, flow.title);
     const successSignal = resolved.successSignal;
     const scenarioEdges = (flow.qaScenarios ?? [])
@@ -3456,22 +3485,26 @@ function appendChangeIntentMarkdown(lines: string[], analysis: ChangeIntentAnaly
     });
     lines.push("");
     lines.push("Routed QA scenarios:");
-    for (const scenario of intent.scenarios.slice(0, 4)) {
-      const routing = routeQaScenario(scenario);
-      lines.push(`- **${scenario.priority} / ${scenario.kind}**: ${escapeMarkdownInline(scenario.title)}`);
-      lines.push(`  - Routing: ${routing.decision} - ${escapeMarkdownInline(routing.reason)}`);
-      lines.push(
-        `  - Evidence: ${routing.requiredEvidence.length} required diff source${routing.requiredEvidence.length === 1 ? "" : "s"}, ` +
-          `${routing.referenceEvidence.length} reference source${routing.referenceEvidence.length === 1 ? "" : "s"}`,
-      );
-      for (const step of scenario.steps.slice(0, 3)) {
-        lines.push(`  - Step: ${escapeMarkdownInline(step)}`);
-      }
-      for (const assertion of scenario.assertions.slice(0, 3)) {
-        lines.push(`  - Assert: ${escapeMarkdownInline(assertion)}`);
-      }
-      if (scenario.edgeCases.length > 0) {
-        lines.push(`  - Boundaries: ${scenario.edgeCases.slice(0, 4).map(escapeMarkdownInline).join(", ")}`);
+    if (intent.scenarios.length === 0) {
+      lines.push("- No standalone QA scenario; this intent is retained as commit provenance only.");
+    } else {
+      for (const scenario of intent.scenarios.slice(0, 4)) {
+        const routing = routeQaScenario(scenario);
+        lines.push(`- **${scenario.priority} / ${scenario.kind}**: ${escapeMarkdownInline(scenario.title)}`);
+        lines.push(`  - Routing: ${routing.decision} - ${escapeMarkdownInline(routing.reason)}`);
+        lines.push(
+          `  - Evidence: ${routing.requiredEvidence.length} required diff source${routing.requiredEvidence.length === 1 ? "" : "s"}, ` +
+            `${routing.referenceEvidence.length} reference source${routing.referenceEvidence.length === 1 ? "" : "s"}`,
+        );
+        for (const step of scenario.steps.slice(0, 3)) {
+          lines.push(`  - Step: ${escapeMarkdownInline(step)}`);
+        }
+        for (const assertion of scenario.assertions.slice(0, 3)) {
+          lines.push(`  - Assert: ${escapeMarkdownInline(assertion)}`);
+        }
+        if (scenario.edgeCases.length > 0) {
+          lines.push(`  - Boundaries: ${scenario.edgeCases.slice(0, 4).map(escapeMarkdownInline).join(", ")}`);
+        }
       }
     }
     lines.push("");
@@ -5501,8 +5534,13 @@ function prioritizeChangeIntentCandidates(
   importImpacts: ImportImpact[] = [],
   domainLanguage?: DomainLanguageSummary,
 ): FlowCandidate[] {
+  const provenanceOnlyFiles = new Set(
+    (analysis?.intents ?? [])
+      .filter((intent) => intent.scenarios.length === 0)
+      .flatMap((intent) => intent.files),
+  );
   const intentCandidates = (analysis?.intents ?? [])
-    .filter((intent) => intent.files.length > 0 && (
+    .filter((intent) => intent.scenarios.length > 0 && intent.files.length > 0 && (
       intent.confidence !== "low" ||
       intent.evidence.some((item) =>
         item.kind === "diff" && item.file && item.startLine !== undefined && item.relation !== "contextual"
@@ -5562,7 +5600,15 @@ function prioritizeChangeIntentCandidates(
       } satisfies FlowCandidate;
     }));
   if (intentCandidates.length === 0) {
-    return heuristicCandidates;
+    if (provenanceOnlyFiles.size === 0) {
+      return heuristicCandidates;
+    }
+    return heuristicCandidates.flatMap((candidate): FlowCandidate[] => {
+      const remainingFiles = candidate.files.filter((file) => !provenanceOnlyFiles.has(file));
+      return remainingFiles.length > 0
+        ? [scopeResidualHeuristicCandidate(candidate, remainingFiles, domainLanguage)]
+        : [];
+    });
   }
 
   const changedAssetFiles = uniqueStrings(
@@ -5575,10 +5621,18 @@ function prioritizeChangeIntentCandidates(
       ...changedAssetFiles.filter((asset) => isSupportingAssetForFiles(asset, candidate.files)),
     ]),
   }));
-  const intentFiles = new Set(intentCandidatesWithAssets.flatMap((candidate) => candidate.files));
+  const intentFiles = new Set([
+    ...provenanceOnlyFiles,
+    ...intentCandidatesWithAssets.flatMap((candidate) => candidate.files),
+  ]);
   const nonOverlapping = heuristicCandidates.flatMap((candidate): FlowCandidate[] => {
     if (isVerificationOnlyKind(candidate.kind)) {
-      return [candidate];
+      const remainingVerificationFiles = candidate.files.filter(
+        (file) => !provenanceOnlyFiles.has(file),
+      );
+      return remainingVerificationFiles.length > 0
+        ? [{ ...candidate, files: remainingVerificationFiles }]
+        : [];
     }
     const remainingFiles = candidate.files.filter((file) => !intentFiles.has(file));
     return remainingFiles.length > 0
@@ -8078,9 +8132,16 @@ async function buildDraftFlows(
   plan: E2ePlanResult,
   addedDiffText: Record<string, string> = {},
 ): Promise<DraftE2eFlow[]> {
-  const baseFlows = plan.flows.length > 0 ? plan.flows : [buildFallbackFlow(plan)];
+  const provenanceOnlyChange =
+    plan.changeAnalysis.intents.length > 0 &&
+    plan.changeAnalysis.intents.every((intent) => intent.scenarios.length === 0);
+  const baseFlows = plan.flows.length > 0
+    ? plan.flows
+    : provenanceOnlyChange
+      ? []
+      : [buildFallbackFlow(plan)];
   const manifestFlows = await buildManifestDraftFlows(plan, baseFlows, addedDiffText);
-  const domainScenarios = shouldUseDomainScenariosForDraft(plan)
+  const domainScenarios = !provenanceOnlyChange && shouldUseDomainScenariosForDraft(plan)
     ? plan.domainLanguage.scenarios.filter((scenario) =>
         scenario.source === "core-flow" || scenario.files.some(
           (file) => classifyChangeSourceRole(file, addedDiffText[file] ?? "").role === "product",

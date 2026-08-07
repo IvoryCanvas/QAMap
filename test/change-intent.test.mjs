@@ -554,6 +554,122 @@ test("single-keyword bridges do not collapse a long PR into one change intent", 
   assert.ok(analysis.intents.every((intent) => intent.files.length === 1));
 });
 
+test("transitive commit bridges do not mix an unrelated lifecycle into the primary intent", async (t) => {
+  const root = await makeRepo(t);
+  const formFile = "src/profile/email-form.ts";
+  const panelFile = "src/layout/profile-panel.ts";
+  await write(root, formFile, "export const validateEmail = () => true;\n");
+  await write(root, panelFile, "export const panelClass = 'profile-panel';\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/profile-validation");
+
+  await write(
+    root,
+    formFile,
+    [
+      "export function validateEmailBeforeSubmit(email) {",
+      "  if (!email.includes('@')) return 'Email is invalid';",
+      "  return 'Email is valid';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: validate profile email before submit");
+
+  await write(
+    root,
+    formFile,
+    [
+      "export function validateEmailBeforeSubmit(email, panelReady) {",
+      "  if (!panelReady || !email.includes('@')) return 'Email is invalid';",
+      "  return 'Email is valid';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await write(root, panelFile, "export const panelClass = 'profile-panel profile-panel--ready';\n");
+  commit(root, "fix: validate profile panel before submit");
+
+  await write(root, panelFile, "export const panelClass = 'profile-panel overflow-x-hidden';\n");
+  commit(root, "fix: remove phantom horizontal scrollbar from profile panel");
+
+  const analysis = await analyze(root, [formFile, panelFile]);
+  const validationIntent = analysis.intents.find((intent) =>
+    /validate profile email before submit/i.test(intent.title)
+  );
+  const scrollbarIntent = analysis.intents.find((intent) =>
+    /remove phantom horizontal scrollbar/i.test(intent.title)
+  );
+
+  assert.ok(validationIntent);
+  assert.ok(scrollbarIntent);
+  assert.equal(
+    validationIntent.lifecycle.some((stage) => /phantom|horizontal scrollbar/i.test(stage.label)),
+    false,
+  );
+  assert.equal(
+    validationIntent.commits.some((item) => /phantom horizontal scrollbar/i.test(item.subject)),
+    false,
+  );
+  assert.match(analysis.intents[0].title, /validate profile email before submit/i);
+});
+
+test("distinct ticket tags keep broadly similar validation changes in separate intents", async (t) => {
+  const root = await makeRepo(t);
+  const summaryFile = "src/reports/summary-validation.ts";
+  const deliveryFile = "src/reports/delivery-validation.ts";
+  await write(root, summaryFile, "export const validateSummary = () => true;\n");
+  await write(root, deliveryFile, "export const validateDelivery = () => true;\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/report-validation");
+
+  await write(root, summaryFile, "export const validateSummary = () => 'Summary is valid';\n");
+  commit(root, "[APP-101] feat: validate report summary workflow");
+
+  await write(root, deliveryFile, "export const validateDelivery = () => 'Delivery is valid';\n");
+  commit(root, "[APP-202] fix: validate report delivery workflow");
+
+  const analysis = await analyze(root, [summaryFile, deliveryFile]);
+  const summaryIntent = analysis.intents.find((intent) => /\[APP-101\]$/.test(intent.title));
+  const deliveryIntent = analysis.intents.find((intent) => /\[APP-202\]$/.test(intent.title));
+
+  assert.ok(summaryIntent);
+  assert.ok(deliveryIntent);
+  assert.equal(summaryIntent.commits.length, 1);
+  assert.equal(deliveryIntent.commits.length, 1);
+});
+
+test("repeated commit-body vocabulary does not merge unrelated intent titles", async (t) => {
+  const root = await makeRepo(t);
+  const exportFile = "src/exports/confirm-export.ts";
+  const noticeFile = "src/notices/retain-notice.ts";
+  await write(root, exportFile, "export const confirmExport = () => false;\n");
+  await write(root, noticeFile, "export const retainNotice = () => false;\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/unrelated-work");
+
+  await write(root, exportFile, "export const confirmExport = () => 'Export complete';\n");
+  commit(
+    root,
+    "feat: confirm exported records\n\nUpdate the shared profile validation workflow.",
+  );
+
+  await write(root, noticeFile, "export const retainNotice = () => 'Notice retained';\n");
+  commit(
+    root,
+    "fix: retain dismissed notices\n\nUpdate the shared profile validation workflow.",
+  );
+
+  const analysis = await analyze(root, [exportFile, noticeFile]);
+  const exportIntent = analysis.intents.find((intent) => /confirm exported records/i.test(intent.title));
+  const noticeIntent = analysis.intents.find((intent) => /retain dismissed notices/i.test(intent.title));
+
+  assert.ok(exportIntent);
+  assert.ok(noticeIntent);
+  assert.equal(exportIntent.commits.length, 1);
+  assert.equal(noticeIntent.commits.length, 1);
+});
+
 test("infrastructure commit keywords do not attach to unrelated product symbols", async (t) => {
   const root = await makeRepo(t);
   await write(root, "turbo.json", '{"globalEnv":[]}\n');
@@ -4121,6 +4237,44 @@ test("a cleanup tip commit does not displace the substantive change intent", asy
     /minor refactor/i.test(intent.title)
   );
   assert.ok(cleanupIntentIndex > 0, "cleanup intent must be demoted, not dropped");
+  assert.deepEqual(
+    analysis.intents[cleanupIntentIndex].scenarios,
+    [],
+    "housekeeping stays as provenance but must not become a standalone QA contract",
+  );
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.equal(qa.flows.some((flow) => /minor refactor/i.test(flow.title)), false);
+  assert.equal(
+    qa.traces.some((trace) => /minor refactor/i.test(trace.scenario.title)),
+    false,
+  );
+});
+
+test("a behavior-changing refactor remains eligible for QA", async (t) => {
+  const root = await makeRepo(t);
+  const retryFile = "src/checkout/retry-status.tsx";
+  await write(root, retryFile, "export const RetryStatus = () => <p>Idle</p>;\n");
+  commit(root, "benchmark baseline");
+  branch(root, "refactor/checkout-retry");
+
+  await write(
+    root,
+    retryFile,
+    [
+      "export function RetryStatus({ reconnected }) {",
+      "  return reconnected ? <p>Checkout retry restored</p> : <p>Retry pending</p>;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "refactor: preserve checkout retry status after reconnect");
+
+  const analysis = await analyze(root, [retryFile]);
+
+  assert.equal(analysis.intents.length, 1);
+  assert.match(analysis.intents[0].title, /preserve checkout retry status/i);
+  assert.ok(analysis.intents[0].scenarios.length > 0);
 });
 
 test("a flow without a diff-anchored outcome gets an honest success signal instead of a tautology", async (t) => {
@@ -4165,6 +4319,39 @@ test("a flow without a diff-anchored outcome gets an honest success signal inste
   // Fallback draft steps must not turn the honest sentence into an assertion.
   const qaMarkdown = formatMarkdownQaDraft(qa);
   assert.doesNotMatch(qaMarkdown, /Assert no diff-anchored observable outcome/i);
+});
+
+test("a primary scenario without material outcome evidence reports an honest proof gap", async (t) => {
+  const root = await makeRepo(t);
+  const validationFile = "src/messages/recipient-validation.ts";
+  await write(root, validationFile, "export const validateRecipient = () => true;\n");
+  commit(root, "benchmark baseline");
+  branch(root, "fix/recipient-validation");
+
+  await write(
+    root,
+    validationFile,
+    [
+      "export function validateRecipient(value) {",
+      "  if (!value) return false;",
+      "  return value.includes('@');",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "fix: inline recipient validation on the delivery step");
+
+  const analysis = await analyze(root, [validationFile]);
+  const primary = analysis.intents[0].scenarios.find((scenario) => scenario.kind === "primary");
+
+  assert.ok(primary);
+  assert.equal(primary.assertions.length, 1);
+  assert.match(primary.assertions[0], /no changed-file evidence proves an externally observable result/i);
+  assert.doesNotMatch(primary.assertions[0], /inline recipient validation/i);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.equal(qa.flows[0].userJourney?.successSignalUnresolved, true);
+  assert.match(qa.flows[0].userJourney?.successSignal ?? "", /define the expected user-visible result/i);
 });
 
 test("a diff-anchored visible outcome keeps its concrete success signal", async (t) => {
@@ -4321,11 +4508,15 @@ test("symbol-derived lifecycle labels read behaviorally instead of exposing raw 
   assert.match(joined, /Invoke `sendJournalReceipt`\./);
   assert.match(joined, /Observe the result of `showSavedBanner`\./);
 
-  // Derived assertions keep the code marking.
+  // Raw result-shaped function names stay available as lifecycle evidence,
+  // but they are not promoted into user-visible proof on their own.
   const assertions = analysis.intents.flatMap((intent) =>
     intent.scenarios.flatMap((scenario) => scenario.assertions)
   );
-  assert.ok(assertions.some((assertion) => assertion.includes("`showSavedBanner`")));
+  assert.equal(assertions.some((assertion) => assertion.includes("`showSavedBanner`")), false);
+  assert.ok(assertions.some((assertion) =>
+    /no changed-file evidence proves an externally observable result/i.test(assertion)
+  ));
 
   // Exact symbols stay available as evidence.
   const evidenceSymbols = analysis.intents.flatMap((intent) =>
@@ -4354,6 +4545,13 @@ test("a branch of only cleanup commits keeps its newest cleanup intent first", a
 
   assert.ok(analysis.intents.length >= 2);
   assert.match(analysis.intents[0].title, /minor refactor/i);
+  assert.ok(analysis.intents.every((intent) => intent.scenarios.length === 0));
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.deepEqual(qa.flows, []);
+  assert.deepEqual(qa.traces, []);
+  const markdown = formatMarkdownQaDraft(qa);
+  assert.match(markdown, /retained as commit provenance only/i);
 });
 
 test("diff evidence reserves the latest commit before large branch history", async (t) => {

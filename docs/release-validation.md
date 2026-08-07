@@ -4,6 +4,34 @@
 > evidence. Older sections are preserved as historical receipts and are not
 > required reading for contributors or users.
 
+## Unreleased
+
+The current development branch tightens the first-run contract between commit
+history and required QA. Cleanup-only commits remain visible without creating
+standalone scenarios, unrelated work cannot join through transitive keyword
+bridges or repeated commit-body prose, and a primary scenario cannot use a raw
+implementation symbol or its own title as observable proof.
+
+| Gate | Current result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 330/330 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | All static recommendation contracts passing |
+| `pnpm bench:execution` | 3/3 execution contracts passing; duplicate-request, missing-persistence, and stale-validation regressions caught |
+| Coverage | Lines 89.73%, branches 86.48%, functions 95.70% |
+| Plugin package check | Submission metadata valid; isolated packed install produced one intent with one exact evidence trace |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.11`; 172 files packed |
+| Focused regressions | Cleanup-only, behavior-changing refactor, distinct issue tags, repeated commit-body vocabulary, transitive bridges, visible proof, and proof-gap controls pass |
+| Public repository replay | Documenso PRs #3032 and #2889 plus Formbricks PRs #8683 and #8691 analyzed read-only |
+| Cleanup handling | `Minor refactor` and `Tidy up and add tests` remain provenance-only and do not produce QA contracts or fallback smoke flows |
+| Intent isolation | Separate Formbricks issue tags retain separate validation, scrolling, and editor lifecycles instead of one transitive flow |
+| Proof honesty | Missing externally observable results are explicit proof gaps; raw helper names are retained only as source evidence |
+
+The public replays are static analysis and remain `not run`. They prove output
+selection and evidence ownership, not product correctness. No public fixture or
+documentation contains private repository or product-domain material.
+
 ## 0.4.11 - 2026-08-06
 
 QAMap 0.4.11 is a cross-repository precision and skills-only plugin submission candidate. Read-only trials across unrelated web, mobile, API, service, design-token, and developer-tool repositories exposed three general failures: calendar UI vocabulary could fabricate scheduling QA, instrumentation changes lacked event timing and duplication proof, and issue-template configuration could be misclassified as an API flow. The release fixes those boundaries, keeps repository-validation changes on their existing test route, and packages the same local-first QA skill for official directory review without adding an MCP server or hosted service.
