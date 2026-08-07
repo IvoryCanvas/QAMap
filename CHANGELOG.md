@@ -4,6 +4,7 @@
 
 ### Changed
 
+- The README first screen now makes the OpenAI plugin installation path explicit, links the published listing and official installation guide, and distinguishes app installation from a one-off local CLI run.
 - Change-intent clustering now uses commit scope and subject rather than body prose, treats distinct issue tags as intent boundaries, and splits transitive keyword chains around a behavior-bearing anchor.
 - Cleanup-only commits remain visible as provenance with zero standalone QA scenarios, while behavior-describing refactors stay eligible for review.
 - Human and agent documentation now explains provenance-only intents and explicit observable-proof gaps.
