@@ -27,6 +27,7 @@ export type BehaviorLifecycleStageKind =
   | "observable-outcome";
 export type IntentQaScenarioKind = "primary" | "failure" | "boundary" | "state-transition";
 export type IntentQaScenarioPriority = "critical" | "recommended";
+type AsyncLifecycleRole = "dispatch" | "state" | "completion" | "consistency";
 
 export interface ChangeIntentEvidence {
   kind: ChangeIntentEvidenceKind;
@@ -1281,6 +1282,114 @@ function buildIntentQaScenarios(
     ], ["Timezone change", "Day rollover", "Duplicate invocation"], calendarEvidence));
   }
 
+  const asyncLifecycleGroups = groupAsyncLifecycleEvidence(productEvidence);
+  const asyncLifecycleRoles = new Set(asyncLifecycleGroups.keys());
+  const hasDispatch = asyncLifecycleRoles.has("dispatch");
+  const hasState = asyncLifecycleRoles.has("state");
+  const hasCompletion = asyncLifecycleRoles.has("completion");
+  const hasConsistency = asyncLifecycleRoles.has("consistency");
+  const hasAsyncLifecycleContract = (
+    hasCompletion && (hasDispatch || hasState || hasConsistency)
+  ) || (
+    hasConsistency && (hasDispatch || hasState)
+  );
+  if (hasAsyncLifecycleContract) {
+    const asyncEvidence = uniqueEvidence(
+      [...asyncLifecycleGroups.values()].flatMap((items) => items.slice(0, 2)),
+    );
+    const symbolsFor = (role: AsyncLifecycleRole): string[] =>
+      (asyncLifecycleGroups.get(role) ?? [])
+        .map((item) => item.symbol?.toLowerCase())
+        .filter((symbol): symbol is string => Boolean(symbol));
+    const stateSymbols = symbolsFor("state");
+    const completionSymbols = symbolsFor("completion");
+    const consistencySymbols = symbolsFor("consistency");
+    const hasIntermediateState = stateSymbols.some((symbol) =>
+      /pending|queued|processing|in[_-]?progress/.test(symbol)
+    );
+    const hasTerminalState = stateSymbols.some((symbol) =>
+      /completed|succeeded|failed|cancelled|canceled/.test(symbol)
+    );
+    const hasFailureState = stateSymbols.some((symbol) =>
+      /failed|cancelled|canceled/.test(symbol)
+    ) || completionSymbols.some((symbol) => /nack|failure|retry/.test(symbol));
+    const hasAcknowledgement = completionSymbols.some((symbol) =>
+      /ack|acknowledge|nack/.test(symbol)
+    );
+    const hasDuplicateProtection = consistencySymbols.some((symbol) =>
+      /idempot|deduplicat|duplicate/.test(symbol)
+    );
+    const hasStaleProtection = consistencySymbols.some((symbol) =>
+      /stale|version|revision|compareandset/.test(symbol)
+    );
+    const hasOrderingPath = hasDispatch && hasState && hasCompletion;
+    const asyncScenario = makeScenario(
+      intentId,
+      "async-lifecycle-ordering",
+      "state-transition",
+      "critical",
+      "Asynchronous lifecycle ordering and result delivery",
+      uniqueStrings([
+        "Prepare one identifiable work item represented by the changed code.",
+        hasState ? "Prepare the asynchronous states represented by the changed code." : undefined,
+        hasCompletion
+          ? "Prepare the result or callback delivery represented by the changed code."
+          : undefined,
+        hasFailureState ? "Prepare the changed terminal failure outcome." : undefined,
+        hasDuplicateProtection ? "Prepare repeated delivery with the same work identity." : undefined,
+        hasStaleProtection ? "Prepare older and newer result versions for the same work item." : undefined,
+      ].filter((item): item is string => Boolean(item))),
+      uniqueStrings([
+        hasDispatch
+          ? "Trigger the changed dispatch once and capture its work identity."
+          : "Enter the changed asynchronous lifecycle through its normal repository entry point.",
+        hasState ? "Move the work item through the states represented by the changed code." : undefined,
+        hasCompletion ? "Deliver the changed result, callback, or acknowledgement." : undefined,
+        hasOrderingPath && hasIntermediateState
+          ? "Deliver the result before and after the intermediate state is persisted."
+          : undefined,
+        hasDuplicateProtection
+          ? "Replay the same result or delivery without changing its identity."
+          : undefined,
+        hasStaleProtection ? "Deliver the older result after the newer result." : undefined,
+      ].filter((item): item is string => Boolean(item))),
+      uniqueStrings([
+        hasState && hasTerminalState
+          ? "Verify accepted work reaches the supported terminal state and cannot regress to an earlier state."
+          : undefined,
+        hasState && !hasTerminalState
+          ? "Verify the changed asynchronous state remains observable."
+          : undefined,
+        hasOrderingPath && hasIntermediateState
+          ? "Verify an early or delayed result is not lost."
+          : undefined,
+        hasFailureState
+          ? "Verify the changed failed or cancelled result remains observable."
+          : undefined,
+        hasAcknowledgement
+          ? "Verify acknowledgement occurs only after the changed result handling reaches its durable outcome."
+          : undefined,
+        hasDuplicateProtection
+          ? "Verify repeated delivery creates one durable effect."
+          : undefined,
+        hasStaleProtection
+          ? "Verify an older result cannot overwrite the newer persisted state."
+          : undefined,
+      ].filter((item): item is string => Boolean(item))),
+      uniqueStrings([
+        hasOrderingPath && hasIntermediateState ? "Result before pending persistence" : undefined,
+        hasAcknowledgement ? "Ambiguous acknowledgement" : undefined,
+        hasDuplicateProtection ? "Repeated delivery" : undefined,
+        hasStaleProtection ? "Stale result" : undefined,
+        hasFailureState ? "Terminal failure" : undefined,
+      ].filter((item): item is string => Boolean(item))),
+      asyncEvidence,
+    );
+    asyncScenario.rationale =
+      "Located diff evidence connects multiple asynchronous lifecycle roles, so the selected ordering and delivery risks are change-backed rather than keyword guesses.";
+    scenarios.push(asyncScenario);
+  }
+
   if (/toggle|enable|disable|permission|authoriz|auth|guard/.test(searchable)) {
     scenarios.push(makeScenario(intentId, "guard-state", "state-transition", "critical", "Disabled, denied, and re-enabled state", [
       "Prepare allowed, disabled, and denied states for the changed condition.",
@@ -2052,7 +2161,10 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
           );
           const recordsCurrentTimestamp = /^timezone$/i.test(calendarMatch?.[1] ?? "") &&
             /\btimezone\.now\s*\(/i.test(line.text);
-          const schedulerInfrastructure = /^scheduler$/i.test(calendarMatch?.[1] ?? "");
+          const schedulerInfrastructure = isBackgroundDispatchSchedulingLine(
+            line.text,
+            calendarMatch?.[1],
+          );
           if (calendarMatch && !recordsCurrentTimestamp && !schedulerInfrastructure) {
             evidence.push(diffRiskEvidence(
               file,
@@ -2060,6 +2172,16 @@ function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIn
               line.line,
               calendarMatch[1],
               `${side === "base" ? "Removed" : "Changed"} line contains calendar or scheduling evidence for ${calendarMatch[1]}.`,
+              side,
+            ));
+          }
+          for (const signal of asyncLifecycleSignals(line.text)) {
+            evidence.push(diffRiskEvidence(
+              file,
+              hunk,
+              line.line,
+              signal.symbol,
+              `${side === "base" ? "Removed" : "Changed"} line contains asynchronous lifecycle ${signal.role} evidence for ${signal.symbol}.`,
               side,
             ));
           }
@@ -2235,6 +2357,97 @@ function isStaticVocabularyOrMetadataLine(text: string): boolean {
     /\b(?:vocabulary|pattern|matcher|regex)\w*\s*=\s*\/(?:\\.|[^/\n]){3,}\/[dgimsuvy]*/i.test(trimmed);
 }
 
+function isBackgroundDispatchSchedulingLine(text: string, calendarSymbol: string | undefined): boolean {
+  if (!calendarSymbol || !/^schedul/i.test(calendarSymbol)) {
+    return /^scheduler$/i.test(calendarSymbol ?? "");
+  }
+  const hasBackgroundWork = /\b(?:job|task|worker|queue|dispatch|enqueue|consumer|scheduler)\b/i.test(
+    text.replace(/([a-z])([A-Z])/g, "$1 $2"),
+  );
+  const hasTemporalBoundary =
+    /\b(?:at|date|time|delay|cron|reminder|deadline|due|start|end|timezone|tomorrow)\b/i.test(
+      text.replace(/([a-z])([A-Z])/g, "$1 $2"),
+    );
+  return hasBackgroundWork && !hasTemporalBoundary;
+}
+
+function asyncLifecycleSignals(
+  text: string,
+): Array<{ role: AsyncLifecycleRole; symbol: string }> {
+  const trimmed = text.trim();
+  if (/^(?:\/\/|\/\*|\*|#)/.test(trimmed) || /^\s*import\b/.test(text)) {
+    return [];
+  }
+  const signals: Array<{ role: AsyncLifecycleRole; symbol: string }> = [];
+  const dispatch = text.match(
+    /\b((?:enqueue|dispatch|publish|produce|queue|schedule|sendTask|send_task|apply_async|delay)[A-Za-z0-9_]*)\s*\(/i,
+  );
+  if (dispatch) {
+    signals.push({ role: "dispatch", symbol: dispatch[1] });
+  }
+
+  if (/\b(?:status|state)\b\s*[:=]/i.test(text)) {
+    for (const state of text.matchAll(
+      /\b(pending|queued|processing|in[_-]?progress|completed|succeeded|failed|cancelled|canceled)\b/gi,
+    )) {
+      signals.push({ role: "state", symbol: state[1] });
+    }
+  } else {
+    const stateMethod = text.match(
+      /\b((?:mark|set|update|transitionTo)[A-Za-z0-9_]*(?:Pending|Queued|Processing|Completed|Succeeded|Failed|Cancelled|Canceled)[A-Za-z0-9_]*)\s*\(/,
+    );
+    if (stateMethod) {
+      signals.push({ role: "state", symbol: stateMethod[1] });
+    }
+  }
+
+  const completion = text.match(
+    /\b((?:ack|nack|acknowledge|consume|consumer|worker|callback|webhook|handleResult|processResult|receiveResult|onComplete|onFailure|retry)[A-Za-z0-9_]*)\s*\(/i,
+  );
+  if (completion) {
+    signals.push({ role: "completion", symbol: completion[1] });
+  }
+
+  const consistency = text.match(
+    /\b([A-Za-z_$][\w$]*(?:idempotenc|deduplicat|duplicate)[A-Za-z0-9_$]*)\s*\(/i,
+  ) ?? text.match(
+    /\b(idempotenc[A-Za-z0-9_]*|deduplicat[A-Za-z0-9_]*|duplicate[A-Za-z0-9_]*|compareAndSet[A-Za-z0-9_]*|selectForUpdate[A-Za-z0-9_]*|lockForUpdate[A-Za-z0-9_]*|advisoryLock[A-Za-z0-9_]*|stale[A-Za-z0-9_]*)\b/i,
+  ) ?? text.match(/\b((?:version|revision))\b\s*(?:[<>]=?|={1,3}|!={1,2})/i);
+  if (consistency) {
+    signals.push({ role: "consistency", symbol: consistency[1] });
+  }
+
+  return signals.filter((signal, index) =>
+    signals.findIndex((candidate) =>
+      candidate.role === signal.role && candidate.symbol.toLowerCase() === signal.symbol.toLowerCase()
+    ) === index
+  );
+}
+
+function groupAsyncLifecycleEvidence(
+  evidence: ChangeIntentEvidence[],
+): Map<AsyncLifecycleRole, ChangeIntentEvidence[]> {
+  const groups = new Map<AsyncLifecycleRole, ChangeIntentEvidence[]>();
+  for (const item of evidence) {
+    if (
+      item.kind !== "diff" ||
+      item.relation !== "direct" ||
+      (item.sourceRole !== undefined && item.sourceRole !== "product")
+    ) {
+      continue;
+    }
+    const match = item.value.match(/asynchronous lifecycle (dispatch|state|completion|consistency) evidence/i);
+    const role = match?.[1]?.toLowerCase() as AsyncLifecycleRole | undefined;
+    if (!role) {
+      continue;
+    }
+    const items = groups.get(role) ?? [];
+    items.push(item);
+    groups.set(role, items);
+  }
+  return groups;
+}
+
 function isUiBehaviorEvidence(evidence: ChangeIntentEvidence): boolean {
   const file = evidence.file?.replaceAll("\\", "/");
   if (!file) {
@@ -2266,6 +2479,17 @@ function selectRiskEvidence(evidence: ChangeIntentEvidence[], limit: number): Ch
     if (!item) continue;
     selected.push(item);
     selectedKeys.add(evidenceSelectionKey(item));
+    if (selected.length >= limit) return selected;
+  }
+  for (const role of ["dispatch", "state", "completion", "consistency"] as const) {
+    const item = unique.find((candidate) =>
+      candidate.value.includes(`asynchronous lifecycle ${role} evidence`)
+    );
+    if (!item) continue;
+    const key = evidenceSelectionKey(item);
+    if (selectedKeys.has(key)) continue;
+    selected.push(item);
+    selectedKeys.add(key);
     if (selected.length >= limit) return selected;
   }
   for (const item of unique) {

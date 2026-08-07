@@ -712,6 +712,34 @@
       }
     },
     {
+      "name": "api-async-job-lifecycle",
+      "fixture": "test/benchmarks/api-async-job-lifecycle",
+      "commitMessage": "feat: persist the asynchronous job lifecycle",
+      "expect": {
+        "runner": "manual",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "mustReachFiles": [
+          "jobs/submit.py",
+          "jobs/consume.py"
+        ],
+        "mustNameIntents": ["asynchronous job lifecycle"],
+        "mustIncludeQaScenarios": [
+          "Asynchronous lifecycle ordering and result delivery"
+        ],
+        "mustNotIncludeQaScenarios": [
+          "Scheduling, calendar, and duplicate boundary"
+        ],
+        "mustTraceScenarioFiles": [
+          "jobs/submit.py",
+          "jobs/consume.py"
+        ],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "web-calendar-view-mode",
       "fixture": "test/benchmarks/web-calendar-view-mode",
       "commitMessage": "feat: add compact notebook home layout",
