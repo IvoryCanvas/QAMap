@@ -73,5 +73,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "Initial skills-only submission. QAMap analyzes local branch changes without an additional LLM call, returns compact evidence-backed QA routing, and keeps repository execution and optional automation behind explicit action contracts."
+  "releaseNotes": "QAMap 0.4.12 keeps cleanup-only work as provenance, separates unrelated commit lifecycles, reports missing observable proof explicitly, and makes the published plugin installation route easier to find."
 }

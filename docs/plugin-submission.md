@@ -4,6 +4,11 @@ QAMap packages one `skills-only` plugin for the shared OpenAI Plugins Directory.
 
 QAMap `0.4.11` is approved and [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629). This repository remains the source of truth for the reviewed skill package and future listing updates.
 
+Publishing a newer npm package or repository release does not update the
+directory listing automatically. Keep the approved version available, upload
+the replacement package as a new plugin version, and publish it only after the
+replacement passes review.
+
 ## Product Boundary
 
 - The first action is the read-only `qamap qa --format agent` analysis.
