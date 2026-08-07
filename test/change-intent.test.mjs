@@ -3946,6 +3946,138 @@ test("change intents prioritize the newest independent feature for review", asyn
   assert.ok(residualIntentIndex > 1);
 });
 
+test("JavaScript producer and consumer changes expose asynchronous ordering risks", async (t) => {
+  const root = await makeRepo(t);
+  const producerFile = "src/jobs/submit.ts";
+  const consumerFile = "src/jobs/consume.ts";
+
+  await write(root, producerFile, "export const submitJob = async () => ({ status: 'idle' });\n");
+  await write(root, consumerFile, "export const consumeResult = async () => undefined;\n");
+  commit(root, "chore: add job lifecycle baseline");
+  branch(root, "feature/job-lifecycle");
+
+  await write(
+    root,
+    producerFile,
+    [
+      "export async function submitJob(payload) {",
+      "  const idempotencyKey = payload.requestId;",
+      "  const job = await enqueueJob('render', payload, { idempotencyKey });",
+      "  await jobs.update(job.id, { status: 'pending' });",
+      "  return { jobId: job.id, status: 'pending' };",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    consumerFile,
+    [
+      "export async function consumeResult(result) {",
+      "  const job = await jobs.find(result.jobId);",
+      "  if (job.status === 'completed') return;",
+      "  await jobs.compareAndSetVersion(job.id, job.version, { status: result.ok ? 'completed' : 'failed' });",
+      "  await acknowledge(result.messageId);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: persist the asynchronous job lifecycle");
+
+  const analysis = await analyze(root, [producerFile, consumerFile]);
+  const scenario = analysis.intents
+    .flatMap((intent) => intent.scenarios)
+    .find((candidate) => candidate.title === "Asynchronous lifecycle ordering and result delivery");
+
+  assert.ok(scenario);
+  assert.equal(scenario.priority, "critical");
+  assert.equal(new Set(scenario.evidence.map((item) => item.file)).size, 2);
+  assert.ok(scenario.evidence.every((item) => item.startLine !== undefined));
+  assert.ok(scenario.evidence.some((item) => /lifecycle dispatch evidence/i.test(item.value)));
+  assert.ok(scenario.evidence.some((item) => /lifecycle state evidence/i.test(item.value)));
+  assert.ok(scenario.evidence.some((item) => /lifecycle completion evidence/i.test(item.value)));
+  assert.ok(scenario.evidence.some((item) => /lifecycle consistency evidence/i.test(item.value)));
+  assert.ok(scenario.assertions.some((assertion) => /repeated delivery creates one durable effect/i.test(assertion)));
+});
+
+test("Python task and callback changes expose the same asynchronous lifecycle contract", async (t) => {
+  const root = await makeRepo(t);
+  const taskFile = "service/tasks.py";
+  const callbackFile = "service/callbacks.py";
+
+  await write(root, taskFile, "def submit_task(payload):\n    return {'status': 'idle'}\n");
+  await write(root, callbackFile, "def handle_result(result):\n    return None\n");
+  commit(root, "chore: add task lifecycle baseline");
+  branch(root, "feature/task-result-lifecycle");
+
+  await write(
+    root,
+    taskFile,
+    [
+      "def submit_task(payload):",
+      "    task = enqueue_task('render', payload)",
+      "    task.status = 'pending'",
+      "    task.save()",
+      "    return task",
+      "",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    callbackFile,
+    [
+      "def handle_result(result):",
+      "    task = find_task(result.task_id)",
+      "    if result.version < task.version:",
+      "        return",
+      "    task.status = 'succeeded' if result.ok else 'failed'",
+      "    acknowledge(result.message_id)",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: reconcile asynchronous task results");
+
+  const analysis = await analyze(root, [taskFile, callbackFile]);
+  const scenario = analysis.intents
+    .flatMap((intent) => intent.scenarios)
+    .find((candidate) => candidate.title === "Asynchronous lifecycle ordering and result delivery");
+
+  assert.ok(scenario);
+  assert.equal(scenario.kind, "state-transition");
+  assert.ok(scenario.edgeCases.includes("Result before pending persistence"));
+  assert.ok(scenario.edgeCases.includes("Stale result"));
+  assert.equal(scenario.edgeCases.includes("Repeated delivery"), false);
+  assert.ok(scenario.evidence.some((item) => item.file === callbackFile && /consistency evidence/i.test(item.value)));
+});
+
+test("status vocabulary and background scheduling names do not fabricate lifecycle or calendar QA", async (t) => {
+  const root = await makeRepo(t);
+  const metadataFile = "src/jobs/status.ts";
+
+  await write(root, metadataFile, "export const generatedAt = Date.now();\n");
+  commit(root, "chore: add status metadata baseline");
+  branch(root, "chore/status-metadata");
+  await write(
+    root,
+    metadataFile,
+    [
+      "export const JobStatus = { pending: 'pending', completed: 'completed' };",
+      "export const generatedAt = Date.now();",
+      "export function configureQueue(queue) {",
+      "  return queue.scheduleTask('cleanup');",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "chore: document background task states");
+
+  const analysis = await analyze(root, [metadataFile]);
+  const titles = analysis.intents.flatMap((intent) => intent.scenarios.map((scenario) => scenario.title));
+
+  assert.equal(titles.includes("Asynchronous lifecycle ordering and result delivery"), false);
+  assert.equal(titles.includes("Scheduling, calendar, and duplicate boundary"), false);
+});
+
 test("a cleanup tip commit does not displace the substantive change intent", async (t) => {
   const root = await makeRepo(t);
   const dialogFile = "src/reports/resetReportPreferences.ts";

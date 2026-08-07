@@ -1,3 +1,4 @@
+import { constants as fsConstants } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -268,7 +269,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
           selectedPath: selected.path,
           packageName: selected.packageName,
           candidates,
-          reason: `${selected.changedFileCount} changed file${selected.changedFileCount === 1 ? "" : "s"} belong to one declared workspace package, so QAMap used that package's routes, scripts, fixtures, and runner settings.`,
+          reason: `${selected.changedFileCount} changed file${selected.changedFileCount === 1 ? "" : "s"} belong to one changed package, so QAMap used that package's routes, scripts, fixtures, and runner settings.`,
         },
       };
     }
@@ -332,7 +333,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
       .map((contract) => contract.file),
     draft.plan.suggestedCommands,
   );
-  const suggestedCommands = currentDelta
+  const candidateCommands = currentDelta
     ? uniqueStrings([
         ...currentDeltaCommands,
         ...latestCommitCommands,
@@ -345,6 +346,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
         ...preferredVerificationCommands,
         ...draft.plan.suggestedCommands,
       ]);
+  const suggestedCommands = await preferLocallyRunnableValidationCommands(root, candidateCommands);
   const missingEvidence = buildMissingEvidence(qaFiles);
   const traces = buildQaReasoningTraces(
     draft.plan.changeAnalysis.intents,
@@ -585,7 +587,7 @@ function qualifyPackageCommand(command: string, packagePath: string): string {
   if (/^npm\s/.test(command)) {
     return command.replace(/^npm\s/, `npm --prefix ${target} `);
   }
-  return command;
+  return `cd ${target} && ${command}`;
 }
 
 function qaScopeCandidate(target: E2eWorkspaceTarget): QaAnalysisScopeCandidate {
@@ -614,10 +616,10 @@ function selectAutomaticWorkspaceTarget(
 
 function workspaceRootScopeReason(targets: E2eWorkspaceTarget[], changedFiles: string[]): string {
   if (targets.length === 0) {
-    return "No changed file mapped to a declared workspace package, so QAMap analyzed the repository root.";
+    return "No changed file mapped to a nested package, so QAMap analyzed the repository root.";
   }
   if (targets.length > 1) {
-    return `${targets.length} declared workspace packages changed, so QAMap kept the repository-wide scope instead of silently selecting one package.`;
+    return `${targets.length} packages changed, so QAMap kept the repository-wide scope instead of silently selecting one package.`;
   }
   const outsideTarget = changedFiles.filter((file) => !workspaceTargetOwnsFile(targets[0], file));
   if (outsideTarget.length > 0) {
@@ -644,7 +646,7 @@ function explicitOrRootAnalysisScope(root: string, workspaceRootInput: string | 
       workspaceRoot,
       selectedPath,
       candidates: [],
-      reason: "The caller explicitly selected this workspace package.",
+      reason: "The caller explicitly selected this package.",
     };
   }
   return {
@@ -658,10 +660,10 @@ function explicitOrRootAnalysisScope(root: string, workspaceRootInput: string | 
 function formatAnalysisScope(scope: QaAnalysisScope): string {
   if (scope.mode === "automatic-package" && scope.selectedPath) {
     const packageLabel = scope.packageName ? ` (${scope.packageName})` : "";
-    return `automatically selected workspace package ${scope.selectedPath}${packageLabel}. ${scope.reason}`;
+    return `automatically selected package ${scope.selectedPath}${packageLabel}. ${scope.reason}`;
   }
   if (scope.mode === "explicit-package" && scope.selectedPath) {
-    return `explicit workspace package ${scope.selectedPath}. ${scope.reason}`;
+    return `explicit package ${scope.selectedPath}. ${scope.reason}`;
   }
   const candidates = scope.candidates.length > 0
     ? ` Changed package candidates: ${scope.candidates.map((candidate) => candidate.path).join(", ")}.`
@@ -772,6 +774,110 @@ async function buildChangedTestVerificationCommands(
     return [];
   }
   return buildTestVerificationCommands(root, changedEvidence, suggestedCommands);
+}
+
+async function preferLocallyRunnableValidationCommands(
+  root: string,
+  commands: string[],
+): Promise<string[]> {
+  const preferred: string[] = [];
+  for (const command of commands) {
+    const pythonCommand = await locallyRunnablePythonValidationCommand(root, command);
+    if (pythonCommand === null) {
+      continue;
+    }
+    preferred.push(pythonCommand ?? command);
+  }
+  return uniqueStrings(preferred);
+}
+
+async function locallyRunnablePythonValidationCommand(
+  root: string,
+  command: string,
+): Promise<string | null | undefined> {
+  const match = command.match(
+    /^(?:(uv|poetry)\s+run\s+)?(pytest|tox|ruff|mypy)(\s.*)?$/i,
+  );
+  if (!match) {
+    return undefined;
+  }
+  const wrapper = match[1]?.toLowerCase();
+  const moduleName = match[2].toLowerCase();
+  const argumentsSuffix = match[3] ?? "";
+  if (!wrapper) {
+    return undefined;
+  }
+  if (wrapper && await executableOnPath(wrapper)) {
+    return command;
+  }
+
+  for (const python of ["python3", "python"]) {
+    if (
+      await executableOnPath(python) &&
+      await repositoryDeclaresPythonModule(root, moduleName)
+    ) {
+      return `${python} -m ${moduleName}${argumentsSuffix}`;
+    }
+  }
+  return null;
+}
+
+async function executableOnPath(command: string): Promise<boolean> {
+  const directories = (process.env.PATH ?? "")
+    .split(path.delimiter)
+    .map((directory) => directory.trim())
+    .filter(Boolean);
+  const extensions = process.platform === "win32"
+    ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";")
+    : [""];
+  for (const directory of directories) {
+    for (const extension of extensions) {
+      try {
+        await access(
+          path.join(directory, `${command}${extension}`),
+          process.platform === "win32" ? fsConstants.F_OK : fsConstants.X_OK,
+        );
+        return true;
+      } catch {
+        // Continue through the local PATH without invoking a shell.
+      }
+    }
+  }
+  return false;
+}
+
+async function repositoryDeclaresPythonModule(root: string, moduleName: string): Promise<boolean> {
+  const markerFiles = [
+    "pyproject.toml",
+    "requirements.txt",
+    "requirements-dev.txt",
+    "setup.cfg",
+    "tox.ini",
+    "Pipfile",
+  ];
+  const escapedModule = moduleName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const dependencyPattern = new RegExp(`(?:^|[^A-Za-z0-9_-])${escapedModule}(?:[^A-Za-z0-9_-]|$)`, "i");
+  for (const markerFile of markerFiles) {
+    try {
+      if (dependencyPattern.test(await readFile(path.join(root, markerFile), "utf8"))) {
+        return true;
+      }
+    } catch {
+      // Missing or unreadable project metadata is not dependency evidence.
+    }
+  }
+  if (moduleName === "pytest") {
+    return pathExists(path.join(root, "pytest.ini"));
+  }
+  if (moduleName === "ruff") {
+    return pathExists(path.join(root, "ruff.toml")) ||
+      pathExists(path.join(root, ".ruff.toml"));
+  }
+  if (moduleName === "mypy") {
+    return pathExists(path.join(root, "mypy.ini")) ||
+      pathExists(path.join(root, ".mypy.ini"));
+  }
+  return moduleName === "tox" && pathExists(path.join(root, "tox.ini"));
 }
 
 async function buildTestVerificationCommands(
@@ -2175,9 +2281,9 @@ function compactAgentAnalysisScope(value: unknown, includeCandidates: boolean): 
         }))
     : [];
   const defaultReason = mode === "automatic-package"
-    ? "One declared package owns every changed file."
+    ? "One supported package owns every changed file."
     : mode === "explicit-package"
-      ? "The caller selected this workspace package."
+      ? "The caller selected this package."
       : "Repository scope was retained.";
   return {
     mode,

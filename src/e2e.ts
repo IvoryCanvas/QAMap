@@ -4893,7 +4893,10 @@ export async function resolveE2eWorkspaceTargets(
     return [];
   }
 
-  const packageDirectories = await discoverWorkspacePackageDirectories(root);
+  const packageDirectories = await discoverCandidatePackageDirectories(
+    root,
+    testPlan.changedFiles.map((file) => file.path),
+  );
   if (packageDirectories.length === 0) {
     return [];
   }
@@ -4930,12 +4933,12 @@ export async function resolveE2eWorkspaceTargets(
   return targets.slice(0, 8);
 }
 
-async function discoverWorkspacePackageDirectories(root: string): Promise<string[]> {
+async function discoverCandidatePackageDirectories(
+  root: string,
+  changedFiles: string[],
+): Promise<string[]> {
   const packageJson = await readPackageJson(root);
   const patterns = await readWorkspaceMemberPatterns(root, packageJson);
-  if (patterns.length === 0) {
-    return [];
-  }
   const declaredDirectories = await expandWorkspaceMemberPatterns(root, patterns);
   const directories: string[] = [];
   for (const directory of declaredDirectories) {
@@ -4943,7 +4946,41 @@ async function discoverWorkspacePackageDirectories(root: string): Promise<string
       directories.push(directory);
     }
   }
+  directories.push(...await discoverNearestChangedPackageDirectories(root, changedFiles));
   return uniqueStrings(directories).sort((left, right) => right.length - left.length);
+}
+
+async function discoverNearestChangedPackageDirectories(
+  root: string,
+  changedFiles: string[],
+): Promise<string[]> {
+  const directories: string[] = [];
+  for (const changedFile of changedFiles) {
+    const normalizedPath = toPosixPath(changedFile).replace(/^\.\/+/, "");
+    if (
+      !normalizedPath ||
+      path.posix.isAbsolute(normalizedPath) ||
+      normalizedPath === ".." ||
+      normalizedPath.startsWith("../") ||
+      /(?:^|\/)(?:\.git|node_modules)(?:\/|$)/.test(normalizedPath)
+    ) {
+      continue;
+    }
+
+    let directory = path.posix.dirname(normalizedPath);
+    while (directory !== "." && directory !== "/") {
+      if (await exists(path.join(root, directory, "package.json"))) {
+        directories.push(directory);
+        break;
+      }
+      const parent = path.posix.dirname(directory);
+      if (parent === directory) {
+        break;
+      }
+      directory = parent;
+    }
+  }
+  return uniqueStrings(directories);
 }
 
 function nearestPackageDirectory(filePath: string, packageDirectories: string[]): string | undefined {

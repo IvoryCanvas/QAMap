@@ -70,7 +70,7 @@ Committed analysis uses the base/head merge-base range. Working-tree analysis co
 
 When working-tree analysis is enabled, QAMap also compares `HEAD` with the worktree and emits a separate `currentDelta`. Its files, repository test contracts, and safely focused validation commands are ranked ahead of older branch evidence. The complete branch remains available for impact analysis, but a long-running branch cannot silently hide the task being edited now.
 
-Committed analysis reserves diff evidence from the newest commit before filling the bounded branch-wide evidence set. This keeps the latest independent intent and its exact test contracts visible even when an accumulated branch changes more files than the broad analysis cap. When that evidence belongs to one declared workspace package, copied validation commands include the selected package directory and execute from the workspace root.
+Committed analysis reserves diff evidence from the newest commit before filling the bounded branch-wide evidence set. This keeps the latest independent intent and its exact test contracts visible even when an accumulated branch changes more files than the broad analysis cap. When every changed file belongs to one supported package, including an independent nested package, copied validation commands include its directory and execute from the workspace root.
 
 ## Change Source Roles
 

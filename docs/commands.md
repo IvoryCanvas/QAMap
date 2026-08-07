@@ -86,7 +86,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap eval . --base origin/main --head HEAD --pr-body-file pr-body.md` | Score change readiness across intent, risk, tests, and review size. |
 | `qamap github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `qamap test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
-| `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. A single changed declared workspace package is selected automatically. |
+| `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. A single supported changed package is selected automatically, including an independent nested package. |
 | `qamap qa run . --base origin/main --head HEAD` | Re-analyze the change and execute only the exact existing repository validation command selected by the canonical route. Returns pass, fail, timeout, or blocked evidence; it never installs a runner or runs a proposed product E2E draft. |
 | `qamap qa . --base origin/main --head HEAD --format agent` | The same decision content as one compact JSON line for coding agents — a versioned contract documented in [docs/agent-format.md](agent-format.md). |
 | `qamap e2e plan . --base origin/main --head HEAD` | Derive change intent and QA scenarios, then map them to coverage, test evidence, testability gaps, and an automation adapter. |
@@ -103,6 +103,12 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap domains init .` | Create a starter `.qamap/domains.yml` for shared product/domain language. |
 | `qamap domains suggest . --base origin/main --head HEAD` | Generate suggested `.qamap/domains.yml` entries with commit-readiness guidance from changed files and inferred product language. |
 | `qamap history init .` | Create local QAMap history directories and protect generated run history with `.gitignore`. |
+
+For Python repositories, a declared `uv` or Poetry command is selected only when
+that wrapper is available on the local `PATH`. If it is absent, QAMap can route an
+interpreter-backed module command when both the interpreter and repository
+framework metadata are present. It inspects these facts without executing the
+interpreter; otherwise the QA route reports that a repository command is needed.
 | `qamap doctor services/listing --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `qamap context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `qamap init .` | Create a starter `qamap.config.json`. |

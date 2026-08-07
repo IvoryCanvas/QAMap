@@ -1,7 +1,8 @@
 name: Rule request
 description: Suggest a new QAMap scanner rule.
-title: "[Rule]: "
+title: "Feat: "
 labels: ["type: feat", "area: scanner"]
+assignees: ["ivory-code"]
 body:
   - type: textarea
     id: problem
@@ -15,3 +16,12 @@ body:
     attributes:
       label: Examples
       description: Share safe, minimal examples of risky config or behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Include positive examples, unrelated negative controls, and the validation command.
+    validations:
+      required: true
