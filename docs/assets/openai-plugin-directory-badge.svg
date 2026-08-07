@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="64" viewBox="0 0 360 64" role="img" aria-labelledby="title description">
+  <title id="title">QAMap in the OpenAI Plugin Directory</title>
+  <desc id="description">Open the published QAMap listing in the OpenAI Plugin Directory.</desc>
+  <rect x="0.5" y="0.5" width="359" height="63" rx="8" fill="#07111f" stroke="#27466e"/>
+  <g transform="translate(10 10)">
+    <rect x="0.5" y="0.5" width="43" height="43" rx="10" fill="#07111f" stroke="#27466e"/>
+    <path d="M12 13V22C12 28 16 32 22 34" fill="none" stroke="#19bef2" stroke-width="2" stroke-linecap="round"/>
+    <path d="M32 13V22C32 28 28 32 22 34" fill="none" stroke="#19bef2" stroke-width="2" stroke-linecap="round"/>
+    <path d="M22 13V34" fill="none" stroke="#19bef2" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="12" cy="10" r="3.5" fill="#07111f" stroke="#19bef2" stroke-width="2"/>
+    <circle cx="22" cy="10" r="3.5" fill="#07111f" stroke="#19bef2" stroke-width="2"/>
+    <circle cx="32" cy="10" r="3.5" fill="#07111f" stroke="#19bef2" stroke-width="2"/>
+    <circle cx="22" cy="34" r="3.5" fill="#07111f" stroke="#19bef2" stroke-width="2"/>
+    <circle cx="22" cy="41" r="6" fill="#07111f" stroke="#ffb414" stroke-width="2"/>
+    <path d="M18.5 41L21 43.5L25.5 38.5" fill="none" stroke="#ffb414" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="68" y="25" fill="#8ea4bc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11" font-weight="600">AVAILABLE IN</text>
+  <text x="68" y="47" fill="#f5f8fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="600">OpenAI Plugin Directory</text>
+</svg>
