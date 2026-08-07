@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -972,7 +972,7 @@ test("generateQaDraft automatically uses the only changed workspace package", as
     qa.analysisScope.candidates.map((candidate) => candidate.path),
     ["services/listing"],
   );
-  assert.match(markdown, /automatically selected workspace package services\/listing/);
+  assert.match(markdown, /automatically selected package services\/listing/);
   assert.match(markdown, /Workspace root: .*qamap-test-/);
   assert.equal(agent.analysisScope.mode, "automatic-package");
   assert.equal(agent.analysisScope.selectedPath, "services/listing");
@@ -1014,7 +1014,7 @@ test("generateQaDraft keeps repository scope when multiple workspace packages ch
     qa.analysisScope.candidates.map((candidate) => candidate.path).sort(),
     ["apps/mobile", "services/listing"],
   );
-  assert.match(qa.analysisScope.reason, /2 declared workspace packages changed/);
+  assert.match(qa.analysisScope.reason, /2 packages changed/);
   assert.equal(agent.analysisScope.selectedPath, undefined);
   assert.equal(agent.analysisScope.candidates.length, 2);
 });
@@ -1041,7 +1041,7 @@ test("generateQaDraft does not hide root changes behind a package scope", async 
   assert.match(qa.analysisScope.reason, /1 file outside that package/);
 });
 
-test("generateQaDraft ignores nested packages outside declared workspaces", async () => {
+test("generateQaDraft automatically scopes to a changed package outside declared workspaces", async () => {
   const { root } = await createQaWorkspaceFixture();
   const exampleRoot = path.join(root, "examples/demo");
   await mkdir(path.join(exampleRoot, "app"), { recursive: true });
@@ -1065,9 +1065,51 @@ test("generateQaDraft ignores nested packages outside declared workspaces", asyn
 
   const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
 
+  assert.equal(qa.analysisScope.mode, "automatic-package");
+  assert.equal(qa.analysisScope.selectedPath, "examples/demo");
+  assert.equal(qa.analysisScope.packageName, "@fixture/demo");
+  assert.equal(qa.root, exampleRoot);
+  assert.deepEqual(
+    qa.analysisScope.candidates.map((candidate) => candidate.path),
+    ["examples/demo"],
+  );
+  assert.match(qa.analysisScope.reason, /belong to one changed package/);
+});
+
+test("generateQaDraft keeps repository scope when an independent package and root both change", async () => {
+  const { root } = await createQaWorkspaceFixture();
+  const workerRoot = path.join(root, "tools/worker");
+  await mkdir(path.join(workerRoot, "src"), { recursive: true });
+  await writeFile(
+    path.join(workerRoot, "package.json"),
+    JSON.stringify({
+      name: "@fixture/worker",
+      bin: {
+        worker: "src/index.ts",
+      },
+      scripts: {
+        test: "node --test",
+      },
+    }),
+  );
+  await writeFile(path.join(workerRoot, "src/index.ts"), "export const run = () => 'idle';\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add independent worker"]);
+  await git(root, ["switch", "-c", "feature/worker-and-policy"]);
+  await writeFile(path.join(workerRoot, "src/index.ts"), "export const run = () => 'ready';\n");
+  await writeFile(path.join(root, "README.md"), "# Fixture workspace\n\nWorker policy changed.\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "update worker and root policy"]);
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
   assert.equal(qa.analysisScope.mode, "repository-root");
-  assert.deepEqual(qa.analysisScope.candidates, []);
-  assert.match(qa.analysisScope.reason, /No changed file mapped to a declared workspace package/);
+  assert.equal(qa.root, root);
+  assert.deepEqual(
+    qa.analysisScope.candidates.map((candidate) => candidate.path),
+    ["tools/worker"],
+  );
+  assert.match(qa.analysisScope.reason, /1 file outside that package/);
 });
 
 test("generateE2ePlan recommends mobile flows for Expo changes", async () => {
@@ -1611,6 +1653,9 @@ test("generateQaDraft routes undeclared nested package contracts to their own te
       name: "triage-runner",
       private: true,
       type: "module",
+      bin: {
+        "triage-runner": "lib/evidence.mjs",
+      },
       scripts: {
         test: "node --test test/*.test.mjs",
       },
@@ -1647,16 +1692,151 @@ test("generateQaDraft routes undeclared nested package contracts to their own te
 
   const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
 
+  assert.equal(qa.analysisScope.mode, "automatic-package");
+  assert.equal(qa.analysisScope.selectedPath, "tools/triage-runner");
+  assert.equal(qa.root, packageRoot);
   assert.ok(qa.changedTestContracts.some((contract) =>
     contract.title === "stays quiet without a hypothesis"
   ));
-  assert.equal(qa.suggestedCommands[0], "npm --prefix tools/triage-runner test");
+  assert.equal(qa.suggestedCommands[0], "cd tools/triage-runner && node --test test/evidence.test.mjs");
   assert.deepEqual(qa.route, {
     basis: "repository-validation",
     status: "verification-ready-to-run",
     nextAction: "run-repository-command",
-    command: "npm --prefix tools/triage-runner test",
+    command: "cd tools/triage-runner && node --test test/evidence.test.mjs",
   });
+});
+
+test("generateQaDraft replaces an unavailable Python wrapper without executing the interpreter", async (context) => {
+  const root = await makeTempRepo();
+  const fakeBin = await mkdtemp(path.join(tmpdir(), "qamap-python-path-"));
+  const executionMarker = path.join(fakeBin, "python-was-executed");
+  context.after(() => rm(fakeBin, { recursive: true, force: true }));
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, "tests"), { recursive: true });
+  await writeFile(
+    path.join(root, "pyproject.toml"),
+    [
+      "[project]",
+      "name = \"worker-service\"",
+      "version = \"0.1.0\"",
+      "",
+      "[tool.pytest.ini_options]",
+      "testpaths = [\"tests\"]",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, "uv.lock"), "version = 1\n");
+  await writeFile(path.join(root, "src/jobs.py"), "def status():\n    return 'idle'\n");
+  await writeFile(
+    path.join(root, "tests/test_jobs.py"),
+    "def test_job_status():\n    assert True\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+  await git(root, ["switch", "-c", "fix/job-status"]);
+  await writeFile(path.join(root, "src/jobs.py"), "def status():\n    return 'ready'\n");
+  await writeFile(
+    path.join(root, "tests/test_jobs.py"),
+    [
+      "def test_job_status():",
+      "    assert True",
+      "",
+      "def test_job_failure_status():",
+      "    assert True",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "fix: preserve job failure status"]);
+
+  const fakePython = path.join(fakeBin, "python3");
+  await writeFile(
+    fakePython,
+    `#!/bin/sh\nprintf touched > "${executionMarker}"\nexit 0\n`,
+  );
+  await chmod(fakePython, 0o755);
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${fakeBin}:/usr/bin:/bin`;
+  try {
+    const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+    assert.equal(qa.suggestedCommands[0], "python3 -m pytest tests/test_jobs.py");
+    assert.deepEqual(qa.route, {
+      basis: "repository-validation",
+      status: "verification-ready-to-run",
+      nextAction: "run-repository-command",
+      command: "python3 -m pytest tests/test_jobs.py",
+    });
+    assert.equal(qa.suggestedCommands.some((command) => command.startsWith("uv run ")), false);
+    await assert.rejects(readFile(executionMarker, "utf8"), { code: "ENOENT" });
+  } finally {
+    process.env.PATH = previousPath;
+  }
+});
+
+test("generateQaDraft blocks an unavailable Python wrapper without framework evidence", async (context) => {
+  const root = await makeTempRepo();
+  const fakeBin = await mkdtemp(path.join(tmpdir(), "qamap-python-blocked-path-"));
+  const executionMarker = path.join(fakeBin, "python-was-executed");
+  context.after(() => rm(fakeBin, { recursive: true, force: true }));
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, "tests"), { recursive: true });
+  await writeFile(
+    path.join(root, "pyproject.toml"),
+    [
+      "[project]",
+      "name = \"worker-service\"",
+      "version = \"0.1.0\"",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, "uv.lock"), "version = 1\n");
+  await writeFile(path.join(root, "src/jobs.py"), "def status():\n    return 'idle'\n");
+  await writeFile(path.join(root, "tests/test_jobs.py"), "def test_job_status():\n    assert True\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+  await git(root, ["switch", "-c", "fix/job-status"]);
+  await writeFile(path.join(root, "src/jobs.py"), "def status():\n    return 'ready'\n");
+  await writeFile(
+    path.join(root, "tests/test_jobs.py"),
+    [
+      "def test_job_status():",
+      "    assert True",
+      "",
+      "def test_job_failure_status():",
+      "    assert True",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "fix: preserve job failure status"]);
+
+  const fakePython = path.join(fakeBin, "python3");
+  await writeFile(
+    fakePython,
+    `#!/bin/sh\nprintf touched > "${executionMarker}"\nexit 0\n`,
+  );
+  await chmod(fakePython, 0o755);
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${fakeBin}:/usr/bin:/bin`;
+  try {
+    const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+    assert.deepEqual(qa.suggestedCommands, []);
+    assert.deepEqual(qa.route, {
+      basis: "repository-validation",
+      status: "verification-command-needed",
+      nextAction: "define-repository-command",
+    });
+    await assert.rejects(readFile(executionMarker, "utf8"), { code: "ENOENT" });
+  } finally {
+    process.env.PATH = previousPath;
+  }
 });
 
 test("generateQaDraft scopes supported JavaScript runners to changed test evidence", async (context) => {
