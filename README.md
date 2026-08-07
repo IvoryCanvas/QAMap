@@ -4,9 +4,15 @@
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/qamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+<a href="https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629">
+  <img src="docs/assets/openai-plugin-directory-badge.svg" alt="QAMap is available in the OpenAI Plugin Directory" height="64">
+</a>
+
 ![QAMap: find what a change needs to prove](docs/assets/qamap-cover.png)
 
 **Find what a change needs to prove before merge.**
+
+[QAMap is available in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629) as a skills-only plugin. On supported OpenAI surfaces with a checked-out repository and local shell, it invokes the same local QAMap CLI.
 
 QAMap is a local-first, zero-LLM QA tool. It reads the current branch, repository structure, existing tests, and diff evidence to answer four questions:
 
@@ -149,7 +155,7 @@ npx --yes @ivorycanvas/qamap@latest init --agent
 
 The skill calls the same local CLI. It does not introduce another analysis engine or LLM request. See the [agent format contract](docs/agent-format.md) and [agent skill guide](docs/agent-skill.md).
 
-The repository also packages the same workflow as a skills-only OpenAI plugin candidate. It adds no MCP server or hosted service. QAMap itself makes no extra LLM call, while the calling agent still uses its own model tokens to invoke and interpret the skill. See the [plugin submission contract](docs/plugin-submission.md). Public directory availability is not implied until OpenAI approves the listing.
+The same workflow is also [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629) as a skills-only plugin. It adds no MCP server or hosted service. QAMap itself makes no extra LLM call, while the calling agent still uses its own model tokens to invoke and interpret the skill. See the [plugin submission contract](docs/plugin-submission.md).
 
 ## Optional Team Memory
 

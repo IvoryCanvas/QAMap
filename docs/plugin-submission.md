@@ -2,7 +2,7 @@
 
 QAMap packages one `skills-only` plugin for the shared OpenAI Plugins Directory. It reuses the same local CLI and `qamap.qa` contract as every other QAMap integration. It does not add an MCP server, hosted service, background hook, or second QA engine.
 
-The source package is a submission candidate. It is not an approved or publicly listed OpenAI plugin until OpenAI accepts it.
+QAMap `0.4.11` is approved and [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629). This repository remains the source of truth for the reviewed skill package and future listing updates.
 
 ## Product Boundary
 
@@ -42,7 +42,7 @@ pnpm plugin:smoke
 
 The repository CI and `release:check` run both gates.
 
-## Maintainer Submission Sequence
+## Maintainer Submission And Update Sequence
 
 1. Complete the normal QAMap release gate and publish the exact package version referenced by the skill.
 2. Run a fresh public-registry install and agent-format smoke against that published version.
@@ -51,6 +51,6 @@ The repository CI and `release:check` run both gates.
 5. Use `plugin/submission.json` as the source of truth for listing copy, starter prompts, and the five positive and three negative evaluations.
 6. Upload the canonical logo from `skills/qamap-pr-qa/assets/qamap-logo.png`.
 7. Review every requested permission and test receipt before submitting.
-8. Do not announce directory availability until the listing is approved and visible.
+8. For a new plugin version, keep the currently published listing available until the replacement has been reviewed and is visible.
 
 See the official [Plugins overview](https://developers.openai.com/plugins/) and [submission guide](https://developers.openai.com/plugins/deploy/submission) for current platform requirements.
