@@ -1,5 +1,5 @@
 name: QA miss or false positive
-description: Share a minimized case where QAMap selected, missed, or grounded QA incorrectly.
+description: Report a missed behavior, unsupported scenario, wrong trace, or unusable draft.
 title: "Fix: "
 labels: ["type: fix", "area: qa-planning"]
 assignees: ["ivory-code"]
@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Real failures make QAMap better. Use invented names and remove private source, paths, customer data, credentials, and internal output.
+        Real failure cases make QAMap better. Use invented names and remove private source, paths, customer data, credentials, and internal output.
   - type: dropdown
     id: kind
     attributes:
@@ -15,18 +15,26 @@ body:
       options:
         - Wrong change intent
         - Missed affected behavior or user flow
-        - Unsupported QA scenario or false positive
+        - Unsupported scenario or false positive
         - Missing or incorrect diff evidence
-        - Unusable E2E draft
+        - Wrong validation route
+        - Unusable E2E or checklist draft
         - Incorrect execution receipt
         - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: QAMap version and command
+      placeholder: "0.4.11 · qamap qa . --base origin/main --head HEAD"
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
       label: Minimal reproduction
-      description: Provide a safe diff, fixture, or public repository link plus the exact QAMap command and version.
+      description: Provide a safe diff shape, fixture, or public repository and commit.
     validations:
       required: true
   - type: textarea
@@ -34,19 +42,32 @@ body:
     attributes:
       label: QAMap result
       description: Paste the relevant concise output or reasoning trace.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: execution
+    attributes:
+      label: What was actually executed?
+      options:
+        - Nothing; static analysis only
+        - Existing repository validation
+        - Generated automation draft
+        - Manual product QA
+        - Unknown
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
       label: Expected QA reasoning
-      description: What behavior, risk, scenario, and source evidence should QAMap have selected?
+      description: What behavior, risk, scenario, evidence, or next action should QAMap have selected?
     validations:
       required: true
   - type: textarea
-    id: acceptance
+    id: notes
     attributes:
-      label: Acceptance criteria
-      description: Name the unrelated positive cases, false-positive controls, and checks that should guard this behavior.
+      label: Suggested guardrail
+      description: Optional positive case, unrelated context, or false-positive control.
     validations:
-      required: true
+      required: false

@@ -1,27 +1,33 @@
-## Why
+## Summary
 
-<!-- What real failure, missed risk, false positive, or user problem does this change address? -->
+<!-- What changed, and why does it matter to a QAMap user? Keep this short. -->
 
 ## Behavioral Contract
 
-<!-- What should QAMap infer, route, cite, generate, or execute after this change? -->
+<!-- What should QAMap infer, route, cite, generate, or execute after this PR? Use "No runtime behavior change" for docs-only work. -->
 
 ## Evidence
 
-<!-- Name the minimized fixture, positive/negative controls, or public reproduction. -->
+<!-- Link the issue or name the minimized fixture, positive case, and negative control. -->
 
-- [ ] Focused regression test added or updated.
+## Checks
+
+Check only what applies. Mark the rest `N/A` in Review Notes.
+
+- [ ] Focused regression test
 - [ ] `pnpm test`
-- [ ] `pnpm bench:ci` for QA inference, routing, trace, or output changes.
-- [ ] `pnpm bench:execution` for E2E compiler or execution-fixture changes.
-- [ ] `pnpm scan` for scanner, security, or repository-policy changes.
+- [ ] `pnpm bench:ci` for inference, routing, trace, or output
+- [ ] `pnpm bench:execution` for E2E compiler or execution fixtures
+- [ ] `pnpm scan` for scanner, security, or repository policy
+- [ ] `pnpm plugin:check` and `pnpm plugin:smoke` for plugin changes
+- [ ] Documentation links and commands verified
 
 ## Public OSS Check
 
-- [ ] No private repository name, path, source, customer data, credential, or internal smoke output is included.
-- [ ] Shared inference is proven across unrelated positive cases and a negative control, or this PR explains why that contract is not applicable.
+- [ ] No private repository, source, path, customer data, credential, or internal smoke output is included.
+- [ ] Shared inference has unrelated positive and negative coverage, or this is not applicable.
 - [ ] User-facing commands and claims match actual behavior.
 
 ## Review Notes
 
-<!-- Compatibility, safety, rollout, remaining limits, or "None". Maintainers handle assignment and labels. -->
+<!-- Compatibility, safety, rollout, remaining limits, and N/A checks. Maintainers handle assignment and labels. -->

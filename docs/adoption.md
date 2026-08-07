@@ -2,6 +2,10 @@
 
 QAMap works best when teams treat it as the local QA design pass for any PR, not as a replacement for review or security tooling.
 
+> **Fast path:** run the command in **First Run**, confirm that the change and
+> evidence are useful, then stop. Continue to **Recommended Rollout** only when
+> the team wants repeatable scripts or CI.
+
 ## First Run
 
 Start with the PR QA draft on a changed branch — no manifest, no config:

@@ -1,16 +1,38 @@
 # Issue Conventions
 
-QAMap issues turn observed failures and proposed behavior into public, reproducible contracts. They are not work diaries.
+QAMap issues turn observed failures and proposed behavior into reproducible
+public contracts. They are not work diaries.
 
-## Before Opening An Issue
+## Pick The Right Template
 
-Search open issues and pull requests first. Remove private repository names, paths, source, customer data, credentials, and internal output. Reproduce the behavior with invented, domain-neutral names whenever possible.
+| Situation | Template |
+| --- | --- |
+| CLI crash, incorrect output, or compatibility problem | **Bug report** |
+| Missed behavior, false positive, wrong evidence, or unusable draft | **QA miss or false positive** |
+| New user-facing capability or workflow | **Feature request** |
+| New scanner or repository-policy rule | **Scanner rule request** |
+| Vulnerability or sensitive security concern | Follow [SECURITY.md](../SECURITY.md) |
 
-Security reports belong in [SECURITY.md](../SECURITY.md), not the public issue tracker.
+Search existing issues first. Remove private source, repository names, paths,
+customer data, credentials, and internal output.
+
+## What A Useful Issue Contains
+
+A reporter only needs to provide four things:
+
+1. **Problem:** the incorrect or missing user-visible judgment.
+2. **Minimal reproduction:** a safe fixture, diff shape, or public repository.
+3. **Actual result:** the relevant QAMap output and execution state.
+4. **Expected behavior:** what QAMap should infer, cite, route, or refuse to
+   claim.
+
+Maintainers can refine acceptance criteria. Exact files, symbols, hunks,
+commands, and `not-run | passed | failed | blocked` states are more useful than
+broad descriptions.
 
 ## Titles
 
-Use a capitalized type followed by an imperative outcome:
+Use a capitalized type and a product outcome:
 
 ```txt
 Fix: select the nearest changed package
@@ -18,19 +40,9 @@ Feat: trace asynchronous lifecycle risks
 Docs: clarify repository validation receipts
 ```
 
-Use `Fix`, `Feat`, `Docs`, `Test`, `Refactor`, or `Chore`. Describe the product outcome, not the implementation session or the tool used to write it.
-
-## Required Structure
-
-Every implementation issue should make these sections answerable:
-
-1. **Problem**: the incorrect or missing user-visible judgment.
-2. **Minimal reproduction**: a safe fixture, diff shape, or public repository.
-3. **Actual result**: the concise QAMap output that demonstrates the problem.
-4. **Expected contract**: what QAMap should infer, route, cite, or refuse to claim.
-5. **Acceptance criteria**: positive cases, unrelated positive contexts, negative controls, and required validation.
-
-Prefer exact file, symbol, hunk, command, and execution-state evidence over screenshots or broad descriptions.
+Allowed types are `Fix`, `Feat`, `Docs`, `Test`, `Refactor`, `Chore`, and
+`Hotfix`. Do not name the editor, model, assistant, bot, or generation tool used
+to prepare the issue.
 
 ## Assignment And Labels
 
@@ -38,31 +50,34 @@ Maintainer-created issues are assigned to `@ivory-code`.
 
 Apply exactly one type label:
 
-- `type: fix`
-- `type: feat`
-- `type: docs`
-- `type: test`
-- `type: refactor`
-- `type: chore`
-- `type: hotfix`
+```txt
+type: fix
+type: feat
+type: docs
+type: test
+type: refactor
+type: chore
+type: hotfix
+```
 
-Add only the relevant area labels, such as `area: qa-planning`, `area: validation`, `area: review`, `area: e2e`, or `area: manifest`. Avoid labels that merely repeat the title.
+Add only relevant `area:` labels. Labels should help routing, not repeat the
+title. External contributors can leave assignment and final labels to
+maintainers.
 
-## Progress Updates
+## Durable Progress Updates
 
-Add a public comment only when it leaves durable evidence:
+Comment only when the update leaves reusable evidence:
 
-- **Reproduced**: link the minimized fixture and state the observed versus expected result.
-- **Implementation ready**: link the pull request and summarize the behavioral contract it changes.
-- **Verified**: list the exact checks and results, then close through the pull request with `Closes #<issue>`.
+- **Reproduced:** link the minimized case and state actual versus expected.
+- **Implementation ready:** link the pull request and summarize its contract.
+- **Verified:** list exact checks and results.
 
-Do not post minute-by-minute activity, local filesystem paths, private smoke-test details, or editor and generation provenance.
-
-Keep public metadata product-focused. Do not add model, assistant, bot, or automation
-names to issue titles, bodies, comments, branch names, commit subjects, or pull
-request titles. Do not add generated-by signatures or co-author trailers for tools
-that are not human contributors.
+Close implementation issues through the pull request with `Closes #<issue>`.
+Avoid minute-by-minute activity, local paths, private smoke output, generated-by
+signatures, and non-human co-author trailers.
 
 ## Pull Request Linkage
 
-One pull request may close multiple tightly related issues when they share one behavioral contract. Otherwise keep the change focused. The pull request body should name the issue, explain the generalized fix, and preserve the same acceptance evidence.
+One pull request may close multiple issues only when they share one behavioral
+contract. The pull request should explain the generalized fix and preserve the
+same acceptance evidence.

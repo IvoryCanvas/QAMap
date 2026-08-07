@@ -2,6 +2,10 @@
 
 QAMap reads `qamap.config.json` or `.qamap.json` from the scanned repository root.
 
+> **Configuration is optional.** Run `qamap qa` first. Return here only when you
+> need stable defaults, rule severity, ignored paths, validation commands, or
+> output limits.
+
 Create a starter config:
 
 ```sh

@@ -2,6 +2,10 @@
 
 Every QAMap command, with what it produces and when to reach for it. For the shortest path, see the [README](../README.md) quick start; for rollout order, see [adoption](adoption.md).
 
+> **This is a lookup page.** Most users need only `qamap qa`, `qamap qa run`,
+> and `qamap e2e draft --dry-run`. Search for a command name instead of reading
+> this document from top to bottom.
+
 ## Quick Commands
 
 ```sh

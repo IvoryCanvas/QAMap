@@ -1,27 +1,40 @@
-name: Rule request
-description: Suggest a new QAMap scanner rule.
+name: Scanner rule request
+description: Suggest a domain-neutral repository policy or scanner rule.
 title: "Feat: "
 labels: ["type: feat", "area: scanner"]
 assignees: ["ivory-code"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Scanner rules need a clear risky case and an unrelated safe case. Do not include private repository details.
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: What repo-level AI agent risk should QAMap catch?
+      label: Risk to detect
+      description: What repository-level risk should QAMap report, and why?
     validations:
       required: true
   - type: textarea
-    id: examples
+    id: risky
     attributes:
-      label: Examples
-      description: Share safe, minimal examples of risky config or behavior.
+      label: Risky example
+      description: Share a safe, minimal configuration or code example.
+      render: text
     validations:
       required: true
   - type: textarea
-    id: acceptance
+    id: safe
     attributes:
-      label: Acceptance criteria
-      description: Include positive examples, unrelated negative controls, and the validation command.
+      label: Safe negative control
+      description: Show a similar case that the rule must not report.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected finding
+      description: Suggested rule message, severity, and evidence boundary.
     validations:
       required: true
