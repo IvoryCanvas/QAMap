@@ -207,6 +207,6 @@ QAMap은 현재 작업 브랜치의 커밋과 diff, 저장소 구조, 기존 테
 
 ## Contributing
 
-Real false positives, missed risks, unusable drafts, and minimized failing repositories are especially valuable. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Real false positives, missed risks, unusable drafts, and minimized failing repositories are especially valuable. Read the [issue conventions](docs/issues.md) before reporting a case and [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 QAMap does not replace human review, executable tests, or security tooling. It reduces the repeated work between receiving a change and deciding what that change must prove.

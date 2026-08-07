@@ -1,7 +1,8 @@
 name: QA miss or false positive
 description: Share a minimized case where QAMap selected, missed, or grounded QA incorrectly.
-title: "[QA]: "
+title: "Fix: "
 labels: ["type: fix", "area: qa-planning"]
+assignees: ["ivory-code"]
 body:
   - type: markdown
     attributes:
@@ -40,5 +41,12 @@ body:
     attributes:
       label: Expected QA reasoning
       description: What behavior, risk, scenario, and source evidence should QAMap have selected?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Name the unrelated positive cases, false-positive controls, and checks that should guard this behavior.
     validations:
       required: true

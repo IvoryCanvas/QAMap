@@ -1,7 +1,8 @@
 name: Bug report
 description: Report a CLI failure, incorrect result, or compatibility problem.
-title: "[Bug]: "
+title: "Fix: "
 labels: ["type: fix"]
+assignees: ["ivory-code"]
 body:
   - type: markdown
     attributes:
@@ -32,5 +33,12 @@ body:
     id: expected
     attributes:
       label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Include positive cases, negative controls, and the validation that should prove the fix.
     validations:
       required: true

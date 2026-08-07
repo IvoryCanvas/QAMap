@@ -16,6 +16,8 @@ Search existing issues and pull requests first. For a broad feature or public co
 
 Never publish private repository names, source, paths, customer data, credentials, or internal smoke-test output. Reduce a failure to invented, domain-neutral vocabulary before sharing it.
 
+Use the [issue conventions](docs/issues.md) for titles, evidence, assignment, labels, progress updates, and pull request linkage.
+
 ## Development
 
 ```sh
