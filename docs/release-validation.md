@@ -1,5 +1,9 @@
 # Release Validation
 
+> **Maintainer reference:** the first version section is the current release
+> evidence. Older sections are preserved as historical receipts and are not
+> required reading for contributors or users.
+
 ## 0.4.11 - 2026-08-06
 
 QAMap 0.4.11 is a cross-repository precision and skills-only plugin submission candidate. Read-only trials across unrelated web, mobile, API, service, design-token, and developer-tool repositories exposed three general failures: calendar UI vocabulary could fabricate scheduling QA, instrumentation changes lacked event timing and duplication proof, and issue-template configuration could be misclassified as an API flow. The release fixes those boundaries, keeps repository-validation changes on their existing test route, and packages the same local-first QA skill for official directory review without adding an MCP server or hosted service.

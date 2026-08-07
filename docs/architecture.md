@@ -2,6 +2,10 @@
 
 QAMap is moving from deterministic PR-to-draft heuristics toward a local, change-aware QA engine. The core must remain useful without cloud services, source upload, or LLM calls.
 
+> **Audience:** maintainers and contributors changing inference, routing,
+> execution, or public contracts. For normal use, start with the
+> [first-run walkthrough](quickstart-demo.md).
+
 The target pipeline is:
 
 ```txt

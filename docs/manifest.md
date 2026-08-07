@@ -2,6 +2,11 @@
 
 `.qamap/manifest.yaml` is QAMap's repo-local verification memory. It lets a team capture the product domains, flows, anchors, and checks that static analysis cannot reliably infer from code alone.
 
+> **Do not start here.** Run QAMap without a manifest first. Add a manifest only
+> when the same important flow is repeatedly missed or misunderstood. For a
+> first shared baseline, follow **Concrete Bootstrap Example** and stop after
+> validation.
+
 > **Important:** create the shared team baseline from the repository's default branch, after pulling the latest changes. QAMap reads the current checkout and does not silently switch branches, so a manifest generated on a feature branch represents that feature branch rather than the team's default QA map.
 
 The intended workflow for the first shared baseline is:

@@ -2,6 +2,17 @@
 
 These examples show the shape of QAMap output that should be good enough for the current public release. They are intentionally short snippets, not full generated files. The important property is that they are derived from repository structure, git changes, manifests, and test evidence without an LLM call.
 
+Choose one section instead of reading every example:
+
+| Repository shape | Section |
+| --- | --- |
+| Browser application | [Web Core Flow](#web-core-flow) |
+| Expo or React Native application | [Expo / React Native Flow](#expo--react-native-flow) |
+| Backend service | [API / Service Contract](#api--service-contract) |
+| Command-line package | [CLI Command Verification](#cli-command-verification) |
+| Repository with little or no test setup | [Test-Light Project](#test-light-project) |
+| Monorepo package | [Monorepo Package](#monorepo-package) |
+
 ## PR QA Skill Preview
 
 First contact should work without a manifest:

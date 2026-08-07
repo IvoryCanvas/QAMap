@@ -7,38 +7,54 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please remove private source, repository names, customer data, and secrets. A minimized public reproduction is the most useful evidence.
+        Thanks for the report. Remove private source, repository names, customer data, paths, and secrets. A small public reproduction is best.
+  - type: input
+    id: version
+    attributes:
+      label: QAMap version
+      placeholder: "0.4.11"
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      placeholder: "npx --yes @ivorycanvas/qamap@latest qa"
+    validations:
+      required: true
   - type: textarea
     id: summary
     attributes:
-      label: Summary
-      description: What happened?
+      label: What happened?
+      description: Describe the failure in one or two paragraphs.
     validations:
       required: true
   - type: textarea
     id: repro
     attributes:
-      label: Reproduction
-      description: Include the QAMap version, command, repository type, and a safe minimal fixture or diff if possible.
+      label: Minimal reproduction
+      description: Provide safe steps, a small fixture, or a public repository and commit.
     validations:
       required: true
   - type: textarea
     id: actual
     attributes:
-      label: Actual output
-      description: Include the relevant concise result or reasoning trace after removing private information.
+      label: Actual result
+      description: Paste only the relevant output and preserve its execution state.
+      render: shell
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
       label: Expected behavior
+      description: What should QAMap have returned, selected, or refused to claim?
     validations:
       required: true
   - type: textarea
-    id: acceptance
+    id: notes
     attributes:
-      label: Acceptance criteria
-      description: Include positive cases, negative controls, and the validation that should prove the fix.
+      label: Additional context
+      description: Optional environment details, suspected boundary, or acceptance ideas.
     validations:
-      required: true
+      required: false

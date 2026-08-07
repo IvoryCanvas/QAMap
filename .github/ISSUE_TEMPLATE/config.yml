@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/IvoryCanvas/QAMap/security/advisories/new
+    about: Report vulnerabilities privately instead of opening a public issue.
+  - name: Documentation map
+    url: https://github.com/IvoryCanvas/QAMap/blob/main/docs/README.md
+    about: Find setup, command, integration, and maintainer guides.

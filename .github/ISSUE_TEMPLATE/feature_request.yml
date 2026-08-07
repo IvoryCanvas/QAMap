@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a new user-facing QAMap capability or workflow.
+title: "Feat: "
+labels: ["type: feat"]
+assignees: ["ivory-code"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user problem before the implementation idea. Keep examples public and domain-neutral.
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: What repeated QA decision or cost should QAMap reduce?
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Desired workflow
+      description: What would the user run, see, or decide differently?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Example
+      description: Provide a safe diff shape, repository type, or public case that needs this capability.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Boundaries and alternatives
+      description: Optional false-positive risks, safety limits, or existing workarounds.
+    validations:
+      required: false
