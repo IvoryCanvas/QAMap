@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Added separate English and Korean documentation entry points, including Korean quickstart, agent integration, and verification manifest guides.
+- Added a Korean QAMap cover image that preserves the existing public visual identity.
+
 ## 0.4.12 - 2026-08-07
 
 ### Changed
