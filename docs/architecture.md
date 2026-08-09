@@ -86,6 +86,8 @@ Product sources can contribute user actions, state, effects, and outcomes. Comma
 
 The same boundary applies downstream. E2E setup and fixture discovery only inspect runtime-relevant product, command, and configuration evidence. Analyzer rules and benchmark vocabulary may explain why a QA scenario exists, but `/api`, `fixture`, payment, scheduling, or routing words inside those files cannot create product setup requirements by themselves.
 
+Lifecycle extraction applies the same rule inside source lines. Tokens inside regular-expression literals are matcher vocabulary, not function calls, and source-role classifiers require analyzer structure before they can contribute analysis-rule evidence. Real calls in product sources remain eligible, so this boundary removes fabricated actions without hiding executable behavior.
+
 Repository boundaries are evidence boundaries too. A nested directory containing its own `.git` file or directory is a separate working copy, even when it lives under the analyzed root. Project, import-graph, workspace-package, test, mock, and fixture discovery must not borrow evidence from that nested repository. This prevents an abandoned worktree or local clone from making the current change appear tested or fixture-ready.
 
 ## Scenario Routing and Compilation Receipts
