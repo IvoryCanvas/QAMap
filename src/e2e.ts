@@ -5755,11 +5755,16 @@ function prioritizeChangeIntentCandidates(
         qaScenarios: scopedScenarios,
       } satisfies FlowCandidate;
     }));
+  const hasSubstantiveCandidate = intentCandidates.length > 0 ||
+    heuristicCandidates.some((candidate) => !isSupportingReleaseMetadataCandidate(candidate));
+  const effectiveHeuristicCandidates = hasSubstantiveCandidate
+    ? heuristicCandidates.filter((candidate) => !isSupportingReleaseMetadataCandidate(candidate))
+    : heuristicCandidates;
   if (intentCandidates.length === 0) {
     if (provenanceOnlyFiles.size === 0) {
-      return heuristicCandidates;
+      return effectiveHeuristicCandidates;
     }
-    return heuristicCandidates.flatMap((candidate): FlowCandidate[] => {
+    return effectiveHeuristicCandidates.flatMap((candidate): FlowCandidate[] => {
       const remainingFiles = candidate.files.filter((file) => !provenanceOnlyFiles.has(file));
       return remainingFiles.length > 0
         ? [scopeResidualHeuristicCandidate(candidate, remainingFiles, domainLanguage)]
@@ -5768,7 +5773,7 @@ function prioritizeChangeIntentCandidates(
   }
 
   const changedAssetFiles = uniqueStrings(
-    heuristicCandidates.flatMap((candidate) => candidate.files).filter(isStaticAssetFile),
+    effectiveHeuristicCandidates.flatMap((candidate) => candidate.files).filter(isStaticAssetFile),
   );
   const intentCandidatesWithAssets = intentCandidates.map((candidate) => ({
     ...candidate,
@@ -5781,7 +5786,7 @@ function prioritizeChangeIntentCandidates(
     ...provenanceOnlyFiles,
     ...intentCandidatesWithAssets.flatMap((candidate) => candidate.files),
   ]);
-  const nonOverlapping = heuristicCandidates.flatMap((candidate): FlowCandidate[] => {
+  const nonOverlapping = effectiveHeuristicCandidates.flatMap((candidate): FlowCandidate[] => {
     if (isVerificationOnlyKind(candidate.kind)) {
       const sameKindIntentClaims = intentCandidatesWithAssets.some((intentCandidate) =>
         intentCandidate.kind === candidate.kind
@@ -5801,6 +5806,12 @@ function prioritizeChangeIntentCandidates(
       : [];
   });
   return [...intentCandidatesWithAssets, ...nonOverlapping].slice(0, 4);
+}
+
+function isSupportingReleaseMetadataCandidate(candidate: FlowCandidate): boolean {
+  return candidate.kind === "config" &&
+    candidate.files.length > 0 &&
+    candidate.files.every(isReleaseMetadataFile);
 }
 
 function scopeResidualHeuristicCandidate(

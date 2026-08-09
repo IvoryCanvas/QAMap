@@ -20,6 +20,7 @@
 - Documentation and contributor-workflow changes no longer produce clean-install, app-launch, endpoint, authentication, response-shape, selector, fixture, or product E2E guidance without runtime evidence.
 - Compact agent output now prioritizes changed guides and contributor templates over accompanying release notes and generated documentation assets.
 - Static-analysis source classifiers and regular-expression vocabulary no longer become fabricated user actions; executable product calls remain eligible when the diff supports them.
+- Release notes remain supporting provenance instead of a competing configuration flow when substantive diff evidence already defines the QA intent; release-only and real configuration changes keep their own verification paths.
 
 ## 0.4.12 - 2026-08-07
 

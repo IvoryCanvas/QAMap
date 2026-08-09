@@ -2671,6 +2671,154 @@ test("generateE2ePlan avoids turning release metadata into domain journeys", asy
   assert.ok(plan.flows.some((flow) => /configuration verification/.test(flow.title)));
 });
 
+test("generateE2ePlan treats release notes as supporting evidence beside substantive intent", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, "test"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "analysis-fixture",
+      scripts: {
+        test: "node --test test/*.test.mjs",
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/change-intent.ts"),
+    "export function collectEvidence(value) { return value.includes('expected'); }\n",
+  );
+  await writeFile(path.join(root, "test/change-intent.test.mjs"), "assert.equal(collectEvidence('expected'), true);\n");
+  await writeFile(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## Unreleased\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "fix/analyzer-boundary"]);
+  await writeFile(
+    path.join(root, "src/change-intent.ts"),
+    [
+      "const matcherVocabulary = /expected(?:-control)?/;",
+      "export function collectEvidence(value) {",
+      "  return matcherVocabulary.test(value);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "test/change-intent.test.mjs"),
+    [
+      "assert.equal(collectEvidence('expected'), true);",
+      "assert.equal(collectEvidence('unrelated'), false);",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "CHANGELOG.md"),
+    "# Changelog\n\n## Unreleased\n\n- Keep matcher vocabulary out of user lifecycles.\n",
+  );
+
+  const workingTreePlan = await generateE2ePlan(root, {
+    base: "main",
+    head: "HEAD",
+    includeWorkingTree: true,
+  });
+
+  assert.equal(
+    workingTreePlan.flows.some((flow) => /release metadata configuration verification/i.test(flow.title)),
+    false,
+  );
+
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "fix: keep matcher vocabulary out of lifecycles"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const agent = JSON.parse(formatAgentQaDraft(qa));
+
+  assert.ok(plan.flows.some((flow) => flow.intentId && /matcher vocabulary/i.test(flow.title)));
+  assert.equal(plan.flows.some((flow) => /release metadata configuration verification/i.test(flow.title)), false);
+  assert.equal(agent.flows.some((flow) => /release metadata configuration verification/i.test(flow.title)), false);
+  assert.deepEqual(agent.commands, ["node --test test/change-intent.test.mjs"]);
+
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "analysis-fixture",
+      scripts: {
+        test: "node --test test/*.test.mjs",
+      },
+      dependencies: {
+        undici: "^7.0.0",
+      },
+    }),
+  );
+  await git(root, ["add", "package.json"]);
+  await git(root, ["commit", "-m", "chore: add the runtime transport dependency"]);
+
+  const configurationPlan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const configurationFlow = configurationPlan.flows.find((flow) =>
+    /configuration verification/i.test(flow.title),
+  );
+
+  assert.ok(configurationFlow);
+  assert.ok(configurationFlow.files.includes("package.json"));
+});
+
+test("generateE2ePlan does not require commit intent to treat release notes as supporting evidence", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, "test"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "command-fixture",
+      bin: {
+        fixture: "dist/cli.js",
+      },
+      scripts: {
+        test: "node --test test/*.test.mjs",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "src/e2e.ts"), "export function prioritize(candidates) { return candidates; }\n");
+  await writeFile(path.join(root, "test/e2e.test.mjs"), "assert.equal(prioritize([]).length, 0);\n");
+  await writeFile(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## Unreleased\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "fix/local-candidate-priority"]);
+  await writeFile(
+    path.join(root, "src/e2e.ts"),
+    [
+      "export function prioritize(candidates) {",
+      "  return candidates.filter((candidate) => candidate.kind !== 'release-note');",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "test/e2e.test.mjs"),
+    "assert.deepEqual(prioritize([{ kind: 'release-note' }]), []);\n",
+  );
+  await writeFile(
+    path.join(root, "CHANGELOG.md"),
+    "# Changelog\n\n## Unreleased\n\n- Keep supporting release notes out of the primary QA flow.\n",
+  );
+
+  const plan = await generateE2ePlan(root, {
+    base: "main",
+    head: "HEAD",
+    includeWorkingTree: true,
+  });
+
+  assert.ok(plan.flows.some((flow) => /CLI command verification/i.test(flow.title)));
+  assert.equal(plan.flows.some((flow) => /release metadata configuration verification/i.test(flow.title)), false);
+});
+
 test("generateE2ePlan keeps package release metadata out of product workflows", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
