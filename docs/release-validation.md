@@ -1,8 +1,38 @@
 # Release Validation
 
-> **Maintainer reference:** the first version section is the current release
-> evidence. Older sections are preserved as historical receipts and are not
-> required reading for contributors or users.
+> **Maintainer reference:** an unreleased candidate may appear before the current
+> public release. Older released sections are preserved as historical receipts
+> and are not required reading for contributors or users.
+
+## Next patch candidate - 2026-08-09 (unreleased)
+
+The next patch candidate adds target-branch-aware Django migration graph
+analysis. When a changed migration branches from a node that is no longer the
+target branch leaf, QAMap joins the exact dependency diff to every current base
+leaf and routes the critical risk to repository-owned graph or deployment-plan
+validation. It does not invent a browser journey, runner setup, or passing
+command. Normal successor migrations, reviewed merge migrations, numbered files
+outside Django, package-scoped apps, and working-tree changes are covered by
+positive and negative controls.
+
+| Gate | Candidate result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 337/337 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 28/28 static recommendation contracts passing |
+| `pnpm bench:execution` | 3/3 execution contracts passing; all three seeded regressions caught |
+| Coverage | Lines 89.72%, branches 86.55%, functions 95.71% |
+| Focused graph regressions | 7/7 passing across conflict, valid successor, merge, non-Django, package scope, working tree, and agent-schema contracts |
+| Plugin package smoke | Packed 183 files, installed the current 0.4.12 artifact in isolation, and produced one intent with one exact evidence trace |
+| Package preview | `pnpm pack --dry-run` passes and includes the new `schema-graph` declarations and runtime files |
+
+The static `qa` command remains `not-run`. A synthetic CLI replay proves that
+the report names the changed migration, the target-branch leaf, the conflicting
+dependency line, and the missing repository command without presenting optional
+E2E mapping as a gap. Dynamic dependency expressions and squashed migrations are
+deliberately left for explicit manual graph review rather than guessed. This
+section is candidate evidence only; no `0.4.13` package has been published.
 
 ## 0.4.12 - 2026-08-07
 

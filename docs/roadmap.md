@@ -42,9 +42,12 @@ The OpenAI Plugin Directory is now a real first-run surface, so the next patches
 prioritize recommendation quality over adding another distribution channel or
 runner name. The current generalized work queue is:
 
-1. Detect versioned schema-graph conflicts, beginning with migrations whose
-   dependency no longer points at the base branch's current leaf. Route these
-   changes to graph or migration-plan validation before broader product QA.
+1. The next patch candidate now detects target-branch-aware Django migration
+   graph conflicts when a changed migration branches from a non-leaf node. It
+   preserves exact changed-dependency and base-leaf evidence, works for committed
+   and working-tree changes, and routes the result to a repository-declared graph
+   or deployment-plan command instead of fabricated product E2E. Dynamic and
+   squashed dependency declarations remain explicit manual-review boundaries.
 2. Extract framework-neutral presentation contracts from changed UI code. An
    overlay becoming inline content, scroll-lock removal, responsive overflow,
    replaced-element sizing, and inherited icon color should produce concrete
