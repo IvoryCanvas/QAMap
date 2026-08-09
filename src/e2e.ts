@@ -18,6 +18,7 @@ import { buildReverseImportIndex, expandChangedFilesWithImporters, findImporting
 import type { ImportImpact } from "./import-graph.js";
 import { loadCoreFlowManifest, matchCoreFlows } from "./flows.js";
 import { loadVerificationManifest, matchVerificationManifest } from "./manifest.js";
+import { analyzeRepositoryWorkflowChange } from "./repository-workflow.js";
 import {
   collectTestSuiteInventory,
   evaluateFlowCoverageEvidence,
@@ -561,6 +562,15 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     addedDiffText,
     addedDiffEvidence,
   });
+  const repositoryWorkflowAnalysis = analyzeRepositoryWorkflowChange({
+    changedFiles: testPlan.changedFiles,
+    addedDiffEvidence,
+  });
+  applyRepositoryWorkflowIntent(
+    changeAnalysis,
+    repositoryWorkflowAnalysis.intent,
+    repositoryWorkflowAnalysis.diagnostics,
+  );
   const schemaGraphAnalysis = await analyzeDjangoMigrationGraph({
     root,
     workspaceRoot: testPlan.workspaceRoot,
@@ -684,6 +694,39 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     missingTestability,
     setupNotes,
   };
+}
+
+function applyRepositoryWorkflowIntent(
+  analysis: ChangeIntentAnalysis,
+  repositoryIntent: ChangeIntent | undefined,
+  diagnostics: string[],
+): void {
+  if (!repositoryIntent) {
+    analysis.diagnostics.push(...diagnostics);
+    return;
+  }
+  const claimedFiles = new Set(repositoryIntent.files);
+  const relatedCommits = analysis.intents
+    .filter((intent) => intent.files.some((file) => claimedFiles.has(file)))
+    .flatMap((intent) => intent.commits);
+  const seen = new Set<string>();
+  repositoryIntent.commits = relatedCommits.filter((commit) => {
+    if (seen.has(commit.sha)) {
+      return false;
+    }
+    seen.add(commit.sha);
+    return true;
+  });
+  analysis.intents = [
+    repositoryIntent,
+    ...analysis.intents.filter((intent) =>
+      intent.files.length === 0 || !intent.files.every((file) => claimedFiles.has(file))
+    ),
+  ];
+  if (analysis.source === "none") {
+    analysis.source = "diff-only";
+  }
+  analysis.diagnostics.push(...diagnostics);
 }
 
 function applySchemaGraphIntents(
@@ -2797,6 +2840,8 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
         ? `Does ${flow.title} emit only the intended findings while preserving neighboring rules: ${successSignal}?`
         : schemaGraphFocused
           ? inferFlowReviewQuestion(flow, successSignal)
+        : isDocumentationFocusedFlow(flow)
+          ? inferFlowReviewQuestion(flow, successSignal)
         : resolved.unresolved
           ? unresolvedReviewQuestion(flow.title)
           : `Does ${flow.title} follow the inferred lifecycle and produce this outcome: ${successSignal}?`,
@@ -3159,7 +3204,9 @@ function isTestEvidenceFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolea
 }
 
 function isDocumentationFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
-  return /\bdocumentation verification\b/i.test(flow.title) || (flow.files.length > 0 && flow.files.every(isDocumentationFile));
+  return flow.kind === "documentation" ||
+    /\bdocumentation verification\b/i.test(flow.title) ||
+    (flow.files.length > 0 && flow.files.every(isDocumentationFile));
 }
 
 function isGeneratedArtifactFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
@@ -5338,7 +5385,14 @@ function buildFlowCandidates(
 ): FlowCandidate[] {
   const lowSignalCandidate = importImpacts.length === 0 ? buildLowSignalChangeCandidate(files) : undefined;
   if (lowSignalCandidate) {
-    return [lowSignalCandidate];
+    return prioritizeChangeIntentCandidates(
+      changeAnalysis,
+      [lowSignalCandidate],
+      projectType,
+      runner,
+      importImpacts,
+      domainLanguage,
+    );
   }
 
   const candidateFiles = files.filter((file) => {
@@ -5729,8 +5783,13 @@ function prioritizeChangeIntentCandidates(
   ]);
   const nonOverlapping = heuristicCandidates.flatMap((candidate): FlowCandidate[] => {
     if (isVerificationOnlyKind(candidate.kind)) {
+      const sameKindIntentClaims = intentCandidatesWithAssets.some((intentCandidate) =>
+        intentCandidate.kind === candidate.kind
+      );
       const remainingVerificationFiles = candidate.files.filter(
-        (file) => !provenanceOnlyFiles.has(file),
+        (file) =>
+          !provenanceOnlyFiles.has(file) &&
+          !(sameKindIntentClaims && intentFiles.has(file)),
       );
       return remainingVerificationFiles.length > 0
         ? [{ ...candidate, files: remainingVerificationFiles }]
@@ -6017,6 +6076,11 @@ function intentFlowDisplayTitle(
   intent: ChangeIntentAnalysis["intents"][number],
   domainLanguage?: DomainLanguageSummary,
 ): string {
+  if (intent.keywords.includes("repository-verification")) {
+    return intent.keywords.includes("contribution-workflow")
+      ? "Repository workflow documentation verification"
+      : "Repository documentation verification";
+  }
   if (
     !isBroadIntentDisplayTitle(intent.title) &&
     ((intent.confidence !== "low" && !intent.reviewRequired) || isSpecificIntentDisplayTitle(intent.title))
@@ -6096,6 +6160,9 @@ function intentFlowKind(intent: ChangeIntentAnalysis["intents"][number], project
     .map((evidence) => evidence.sourceRole);
   const analysisRuleOnly = locatedRoles.includes("analysis-rule") &&
     locatedRoles.every((role) => role === "analysis-rule");
+  if (intent.keywords.includes("repository-verification")) {
+    return "documentation";
+  }
   if (analysisRuleOnly) {
     return "domain";
   }

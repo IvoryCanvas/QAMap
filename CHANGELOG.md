@@ -12,6 +12,13 @@
 
 - Migration graph conflicts now route to repository graph or deployment-plan validation instead of product-journey E2E generation; QAMap requires a repository-declared command before offering execution.
 - Agent output now exposes `schema-graph` and the previously supported `transformation-contract` as explicit verification modes.
+- Documentation, localized guides, packaged docs, issue forms, and pull request templates now route to one repository contract with exact diff evidence and the nearest repository-owned validation command.
+- Repository-validation readiness now reports `ready` only when an applicable command exists, instead of inheriting blocked product-automation readiness.
+
+### Fixed
+
+- Documentation and contributor-workflow changes no longer produce clean-install, app-launch, endpoint, authentication, response-shape, selector, fixture, or product E2E guidance without runtime evidence.
+- Compact agent output now prioritizes changed guides and contributor templates over accompanying release notes and generated documentation assets.
 
 ## 0.4.12 - 2026-08-07
 

@@ -4,6 +4,7 @@ export type ChangeSourceRole =
   | "product"
   | "command"
   | "analysis-rule"
+  | "repository-workflow"
   | "configuration"
   | "test"
   | "documentation"
@@ -35,6 +36,12 @@ export function classifyChangeSourceRole(
   if (isTestPath(file)) {
     return { role: "test", reason: "The path is test, fixture, benchmark, or snapshot evidence." };
   }
+  if (isRepositoryWorkflowPath(file)) {
+    return {
+      role: "repository-workflow",
+      reason: "The path defines contributor-facing issue, pull request, or ownership workflow metadata.",
+    };
+  }
   if (isDocumentationPath(file)) {
     return { role: "documentation", reason: "The path contains documentation rather than executable behavior." };
   }
@@ -57,6 +64,13 @@ export function classifyChangeSourceRole(
     return { role: "configuration", reason: "The path defines build, runtime, package, or repository configuration." };
   }
   return { role: "product", reason: "The changed source can contribute product or service behavior evidence." };
+}
+
+export function isRepositoryWorkflowPath(fileInput: string): boolean {
+  const file = toPosixPath(fileInput);
+  return /(?:^|\/)\.github\/(?:ISSUE_TEMPLATE\/.+|PULL_REQUEST_TEMPLATE(?:\/.*)?\.md|pull_request_template\.md|CODEOWNERS)$/i.test(
+    file,
+  );
 }
 
 function isTestPath(file: string): boolean {
