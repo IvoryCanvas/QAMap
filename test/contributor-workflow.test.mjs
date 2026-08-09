@@ -71,8 +71,14 @@ test("the pull request template asks for behavior and evidence", async () => {
 test("entry-point documentation links resolve inside the repository", async () => {
   for (const relativeDocument of [
     "README.md",
+    "README.ko.md",
     "CONTRIBUTING.md",
     "docs/README.md",
+    "docs/en/README.md",
+    "docs/ko/README.md",
+    "docs/ko/quickstart.md",
+    "docs/ko/agent-integration.md",
+    "docs/ko/manifest.md",
     "docs/issues.md",
   ]) {
     const absoluteDocument = path.join(repositoryRoot, relativeDocument);

@@ -1,5 +1,7 @@
 # QAMap
 
+**English** | [한국어](README.ko.md)
+
 [![CI](https://github.com/IvoryCanvas/QAMap/actions/workflows/ci.yml/badge.svg)](https://github.com/IvoryCanvas/QAMap/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/qamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -112,7 +114,7 @@ The generated browser checks are exercised separately by the
 | Correct repeated misunderstandings | [Verification manifest](docs/manifest.md) |
 | Understand every command | [Command reference](docs/commands.md) |
 | Contribute a fix or failure case | [Contributing](CONTRIBUTING.md) |
-| Browse all documentation | [Documentation map](docs/README.md) |
+| Browse all documentation | [English documentation](docs/en/README.md) |
 
 Most users only need the first two rows.
 
@@ -197,22 +199,10 @@ false-positive, scenario-to-diff trace, generated-browser-test, package, coverag
 and no-private-fixture contracts. See [Benchmarking](docs/benchmarking.md) for
 the exact evidence.
 
-<details>
-<summary>한국어 소개</summary>
+## Other Languages
 
-QAMap은 현재 작업 브랜치의 커밋과 diff, 저장소 구조, 기존 테스트를
-로컬에서 읽고 "이 변경이 병합 전에 무엇을 증명해야 하는가"를 정리하는
-QA 도구입니다.
-
-변경 의도와 영향을 받는 흐름을 찾고, 정상·실패·경계·상태 전환
-시나리오를 선택하며, 각 판단에 실제 파일과 줄 근거를 붙입니다. 테스트
-환경이 없어도 QA 판단은 제공하고, 충분한 실행 근거가 있을 때만 기존
-검증이나 선택적 E2E 초안으로 연결합니다.
-
-`qa`는 정적 분석만 수행합니다. `qa run`은 선택된 기존 저장소 명령을
-명시적으로 실행하고, `e2e draft`는 검토 가능한 자동화 초안을 만듭니다.
-
-</details>
+- [한국어 README](README.ko.md)
+- [한국어 문서](docs/ko/README.md)
 
 ## Contributing
 
