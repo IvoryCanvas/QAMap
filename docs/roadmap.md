@@ -36,6 +36,33 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 There is no fixed end date or patch count for `0.4.x`. QAMap will remain on compatible patch releases while real repositories still expose material gaps in change intent, affected-flow selection, scenario evidence, or automation-draft quality. `0.5.x` is not the next scheduled milestone; it is a release bar that must be earned by a stable, explicitly approved execution contract and evidence from repeated use outside the maintainer's repositories.
 
+### Current Focus After 0.4.12
+
+The OpenAI Plugin Directory is now a real first-run surface, so the next patches
+prioritize recommendation quality over adding another distribution channel or
+runner name. The current generalized work queue is:
+
+1. Detect versioned schema-graph conflicts, beginning with migrations whose
+   dependency no longer points at the base branch's current leaf. Route these
+   changes to graph or migration-plan validation before broader product QA.
+2. Extract framework-neutral presentation contracts from changed UI code. An
+   overlay becoming inline content, scroll-lock removal, responsive overflow,
+   replaced-element sizing, and inherited icon color should produce concrete
+   interaction or visual checks only when the diff carries the required
+   evidence.
+3. Keep repository workflow metadata in its own behavior class. Documentation,
+   issue forms, pull-request templates, and their contract tests must route to
+   link, schema, field, label, and template validation rather than fabricated
+   endpoint or application-launch scenarios.
+4. Turn each real miss into a domain-neutral public fixture with a positive
+   contract and an unrelated negative control. A new shared heuristic is not
+   complete until both sides pass the static benchmark and the existing
+   execution contract remains honest.
+5. Re-run the published skill against unrelated repositories and compare its
+   deterministic result with independent human or agent review. Preserve
+   `not-run`, `passed`, `failed`, and `blocked` exactly; plugin availability is
+   not evidence that product QA ran.
+
 - Stabilize commit-range Change Intent analysis: related behavior commits, diff symbols, confidence, review requirements, lifecycle stages, and runner-independent QA scenarios.
 - Preserve a conservative diff-only intent when commit messages are not descriptive, while keeping low-confidence scenarios recommended and review-required until stronger evidence exists.
 - Classify changed sources before interpreting vocabulary: product, command, analysis-rule, configuration, test, documentation, and generated evidence must produce role-appropriate QA instead of borrowing one another's domain signals.
@@ -51,7 +78,7 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 - Make `qa` the primary product surface. Its first screen and `--format agent` payload must agree on change intent, lifecycle, QA scenarios, affected behavior, repository evidence, draft path, and missing trust requirements.
 - Keep `qa --format agent` below 4KB without dropping the highest-priority intent, routed scenarios, primary affected flow, a compact second flow for multi-surface changes, and omitted counts needed for an agent handoff.
 - Keep one vendor-neutral QAMap skill source, install it through the open `.agents/skills` project path plus explicit compatibility paths, and keep native Codex and Claude Code plugin manifests as thin distribution wrappers around the same local CLI and `qamap.qa` contract.
-- Package that same skill as a reproducible skills-only OpenAI plugin: pin the reviewed npm version, disclose its network and token boundaries, validate five positive and three negative invocation cases, and prove a fresh tarball install before submission. Do not add MCP merely for directory presence.
+- Keep the published skills-only OpenAI plugin aligned with the reviewed npm release: pin the exact version, disclose its network and token boundaries, validate five positive and three negative invocation cases, and prove a fresh tarball install before every listing update. Do not add MCP merely for directory presence.
 - Measure the complete agent handoff: skill discovery, invocation, schema parsing, strongest-source verification, one canonical next action, and an execution receipt that remains separate from static analysis.
 - Keep red-team agent fixtures beside semantic QA fixtures: real flow evidence must survive while instruction-like source text is neutralized, false-positive controls remain readable, and the selected action remains unchanged.
 - Improve changed-file impact mapping from shared symbols and components to consuming routes, screens, API contracts, and manifest flows.
