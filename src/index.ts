@@ -100,7 +100,8 @@ export {
 export { buildQaReasoningTraces, qaTraceIdForScenario, summarizeQaTraceEvidence } from "./qa-trace.js";
 export { formatMarkdownReviewReport, formatReviewReport, reviewProject } from "./review.js";
 export { isRequiredScenarioEvidence, routeQaScenario } from "./scenario-routing.js";
-export { collectChangedFiles, resolveBaseRef, resolveMergeBase } from "./git-context.js";
+export { collectChangedFiles, listFilesAtRef, resolveBaseRef, resolveMergeBase } from "./git-context.js";
+export { analyzeDjangoMigrationGraph } from "./schema-graph.js";
 export { classifyChangeSourceRole } from "./source-role.js";
 export {
   collectChangedQaSymbolAnnotations,
@@ -167,6 +168,11 @@ export type {
   GitChangedFile,
 } from "./git-context.js";
 export type { ChangeIntentBehaviorAdapterOptions } from "./behavior-intent.js";
+export type {
+  DjangoMigrationGraphAnalysis,
+  DjangoMigrationGraphConflict,
+  DjangoMigrationGraphOptions,
+} from "./schema-graph.js";
 export type {
   BehaviorLifecycleStage,
   BehaviorLifecycleStageKind,

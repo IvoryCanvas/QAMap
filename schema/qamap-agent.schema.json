@@ -624,7 +624,7 @@
           "draft": { "type": "string", "description": "Path of the fallback draft artifact for this flow. When verificationMode is present, run existing repository evidence first instead of generating it by default." },
           "verificationMode": {
             "type": "string",
-            "enum": ["command-contract", "analysis-rule", "existing-test-evidence", "configuration", "documentation", "generated-artifact"],
+            "enum": ["command-contract", "analysis-rule", "schema-graph", "transformation-contract", "existing-test-evidence", "configuration", "documentation", "generated-artifact"],
             "description": "Why this flow should validate existing evidence instead of generating a new product-journey E2E draft."
           },
           "runnable": {

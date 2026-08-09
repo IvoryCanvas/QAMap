@@ -6,6 +6,12 @@
 
 - Added separate English and Korean documentation entry points, including Korean quickstart, agent integration, and verification manifest guides.
 - Added a Korean QAMap cover image that preserves the existing public visual identity.
+- Added target-branch-aware Django migration graph analysis that reports newly divergent leaves with exact changed dependency and current base-leaf evidence.
+
+### Changed
+
+- Migration graph conflicts now route to repository graph or deployment-plan validation instead of product-journey E2E generation; QAMap requires a repository-declared command before offering execution.
+- Agent output now exposes `schema-graph` and the previously supported `transformation-contract` as explicit verification modes.
 
 ## 0.4.12 - 2026-08-07
 

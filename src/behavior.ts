@@ -514,7 +514,7 @@ function surfaceForFlow(flow: InferredBehaviorFlow, fallback: BehaviorSurfaceKin
   if (flow.kind === "command") {
     return "cli";
   }
-  if (flow.kind === "artifact" || flow.kind === "catalog" || flow.kind === "generated-artifact") {
+  if (flow.kind === "schema" || flow.kind === "artifact" || flow.kind === "catalog" || flow.kind === "generated-artifact") {
     return "artifact";
   }
   return fallback;

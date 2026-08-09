@@ -186,6 +186,32 @@ export async function readFileAtRef(
   }
 }
 
+export async function listFilesAtRef(
+  root: string,
+  ref: string,
+  directory?: string,
+): Promise<string[]> {
+  const normalizedDirectory = directory
+    ?.replaceAll("\\", "/")
+    .replace(/^\.\/+|\/+$/g, "");
+  if (normalizedDirectory?.startsWith("../") || normalizedDirectory?.includes("\0")) {
+    return [];
+  }
+  try {
+    const args = ["ls-tree", "-r", "--name-only", ref];
+    if (normalizedDirectory) {
+      args.push("--", normalizedDirectory);
+    }
+    const { stdout } = await git(root, args);
+    return stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 async function collectBaseCandidates(root: string, remotes: string[]): Promise<string[]> {
   const candidates: string[] = [];
   for (const remote of remotes) {

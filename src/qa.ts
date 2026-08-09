@@ -225,6 +225,7 @@ export interface QaCurrentDelta {
 type QaVerificationMode =
   | "command-contract"
   | "analysis-rule"
+  | "schema-graph"
   | "transformation-contract"
   | "existing-test-evidence"
   | "configuration"
@@ -346,7 +347,10 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
         ...preferredVerificationCommands,
         ...draft.plan.suggestedCommands,
       ]);
-  const suggestedCommands = await preferLocallyRunnableValidationCommands(root, candidateCommands);
+  const routedCandidateCommands = flows.some((flow) => flow.verificationMode === "schema-graph")
+    ? candidateCommands.filter(isMigrationGraphValidationCommand)
+    : candidateCommands;
+  const suggestedCommands = await preferLocallyRunnableValidationCommands(root, routedCandidateCommands);
   const missingEvidence = buildMissingEvidence(qaFiles);
   const traces = buildQaReasoningTraces(
     draft.plan.changeAnalysis.intents,
@@ -1419,7 +1423,7 @@ function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
         approvalRequired: trace.scenario.approvalRequired,
         testClass: trace.scenario.testClass,
       },
-      artifact: trace.artifact
+      artifact: !verificationModeForScenario(result.flows, trace.scenario.id) && trace.artifact
         ? {
             draft: trace.artifact.draftPath,
             status: trace.artifact.status,
@@ -1455,6 +1459,7 @@ function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
       scenarios: intent.scenarios.slice(0, 2).map((scenario) => {
         const routing = routeQaScenario(scenario);
         const automation = scenarioAutomationById.get(scenario.id);
+        const verificationMode = verificationModeForScenario(result.flows, scenario.id);
         const trace = traceByScenarioId.get(scenario.id);
         return {
           id: scenario.id,
@@ -1474,7 +1479,7 @@ function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
             requiredSources: routing.requiredEvidence.length,
             referenceSources: routing.referenceEvidence.length,
           },
-          automation: automation
+          automation: !verificationMode && automation
             ? {
                 status: automation.receipt.status,
                 flowCoverage: automation.flowCount > 1
@@ -1528,11 +1533,13 @@ function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
         existingEvidence: flow.existingEvidencePaths.length > 0
           ? flow.existingEvidencePaths.slice(0, 4)
           : undefined,
-        scenarioAutomation: flow.scenarioAutomation.slice(0, 4).map((receipt) => ({
-          id: receipt.scenarioId,
-          decision: receipt.decision,
-          status: receipt.status,
-        })),
+        scenarioAutomation: flow.verificationMode
+          ? []
+          : flow.scenarioAutomation.slice(0, 4).map((receipt) => ({
+              id: receipt.scenarioId,
+              decision: receipt.decision,
+              status: receipt.status,
+            })),
         evidence: flow.why.slice(0, 2).map((reason) => truncateForAgent(reason)),
       };
     }),
@@ -2764,7 +2771,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
       );
       lines.push(
         `- Repository verification mapping: ${routedScenarios} routed scenario${routedScenarios === 1 ? "" : "s"}` +
-          `${modes.length > 0 ? ` use ${modes.join(", ")}` : " use existing repository evidence"}; ` +
+          `${modes.length > 0 ? ` ${routedScenarios === 1 ? "uses" : "use"} ${modes.join(", ")}` : ` ${routedScenarios === 1 ? "uses" : "use"} existing repository evidence`}; ` +
           "no product E2E draft mapping is expected.",
       );
     } else {
@@ -2786,7 +2793,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
       const traceable = result.traces.filter((trace) => trace.status === "traceable").length;
       lines.push(
         `- Reasoning trace: ${result.traces.length}/${routedScenarios} scenario${routedScenarios === 1 ? "" : "s"} traced; ` +
-          `${traceable} fully connect diff evidence to affected behavior, risk, and QA routing.`,
+          `${traceable} ${traceable === 1 ? "fully connects" : "fully connect"} diff evidence to affected behavior, risk, and QA routing.`,
       );
       lines.push(
         `- Evidence status: ${result.evidenceSummary.confirmed} confirmed, ` +
@@ -2903,7 +2910,11 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
         `- Run existing test evidence: ${flow.existingEvidencePaths.slice(0, 4).map((file) => `\`${escapeMarkdownInline(file)}\``).join(", ")}`,
       );
     } else if (flow.verificationMode) {
-      lines.push(`- Run ${formatVerificationMode(flow.verificationMode)} with the suggested repository validation command; no new product-journey E2E draft is proposed.`);
+      lines.push(
+        result.suggestedCommands[0]
+          ? `- Run ${formatVerificationMode(flow.verificationMode)} with \`${escapeMarkdownInline(result.suggestedCommands[0])}\`; no new product-journey E2E draft is proposed.`
+          : `- Define a repository-owned command for ${formatVerificationMode(flow.verificationMode)}; QAMap will not invent a command or a product-journey E2E draft.`,
+      );
     } else {
       lines.push(`- ${escapeMarkdownInline(flow.title)}`);
     }
@@ -2927,7 +2938,13 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("### Draft Mapping And Context Gaps");
   lines.push("");
   if (result.missingEvidence.length === 0) {
-    lines.push("- No required automation or context gap was detected. Still review the QA reasoning and run the project validation command before merge.");
+    if (result.readiness.basis === "repository-validation" && result.readiness.verificationStatus === "command-needed") {
+      lines.push("- Repository verification target found, but no trusted command is declared. Add or pass the repository-owned validation command before merge; QAMap will not invent or execute one.");
+    } else if (result.readiness.basis === "repository-validation") {
+      lines.push("- Product automation mapping is not applicable. Review the QA reasoning and run the selected repository validation command before merge.");
+    } else {
+      lines.push("- No required automation or context gap was detected. Still review the QA reasoning and run the project validation command before merge.");
+    }
   } else {
     for (const item of result.missingEvidence.slice(0, 6)) {
       lines.push(`- [${item.priority}] ${item.kind}: ${escapeMarkdownInline(item.title)} - ${escapeMarkdownInline(item.detail)} (${escapeMarkdownInline(item.flowTitle)})`);
@@ -2996,7 +3013,7 @@ function appendQaDecisionLayers(
   lines.push("");
   lines.push(
     scenarios.length > 0
-      ? `- ${scenarios.length} diff-backed scenario${scenarios.length === 1 ? "" : "s"} remain in the review scope regardless of current automation readiness.`
+      ? `- ${scenarios.length} diff-backed scenario${scenarios.length === 1 ? " remains" : "s remain"} in the review scope regardless of current automation readiness.`
       : "- No diff-backed scenario was inferred; heuristic suggestions remain review-only.",
   );
   lines.push(
@@ -3027,6 +3044,7 @@ function appendQaDecisionLayers(
   } else {
     for (const scenario of contractScenarios.slice(0, 6)) {
       const automation = automationByScenario.get(scenario.id)?.receipt;
+      const verificationMode = verificationModeForScenario(result.flows, scenario.id);
       const trace = result.traces.find((item) => item.scenario.id === scenario.id);
       const testClass = trace?.scenario.testClass ?? (scenario.kind === "primary" ? "regression" : "edge");
       const authority = trace?.scenario.authority ?? "qamap-inference";
@@ -3043,7 +3061,7 @@ function appendQaDecisionLayers(
       if (scenario.assertions[0]) {
         lines.push(`  - Proof: ${escapeMarkdownInline(scenario.assertions[0])}`);
       }
-      if (automation?.blockers[0]) {
+      if (!verificationMode && automation?.blockers[0]) {
         lines.push(`  - Automation gap: ${escapeMarkdownInline(automation.blockers[0])}`);
       }
     }
@@ -3081,7 +3099,6 @@ function summarizeTraceAutomation(traces: QaReasoningTrace[]): {
 }
 
 function appendQaReasoningTraceMarkdown(lines: string[], result: QaDraftResult): void {
-  const verificationMode = result.flows.find((flow) => flow.verificationMode)?.verificationMode;
   lines.push("## QA Reasoning Trace");
   lines.push("");
   lines.push(
@@ -3095,6 +3112,7 @@ function appendQaReasoningTraceMarkdown(lines: string[], result: QaDraftResult):
   }
 
   for (const trace of result.traces.slice(0, 6)) {
+    const verificationMode = verificationModeForScenario(result.flows, trace.scenario.id);
     lines.push(`### \`${escapeMarkdownInline(trace.id)}\` [${trace.status}]`);
     lines.push("");
     lines.push(
@@ -3146,7 +3164,7 @@ function appendQaReasoningTraceMarkdown(lines: string[], result: QaDraftResult):
     }
     lines.push("7. Execution: not run.");
     const relevantGaps = verificationMode
-      ? trace.gaps.filter((gap) => !/automation artifact|draft mapping/i.test(gap))
+      ? trace.gaps.filter((gap) => !/automation artifact|flow artifacts|draft mapping/i.test(gap))
       : trace.gaps;
     for (const gap of relevantGaps.slice(0, 2)) {
       lines.push(`- Trace gap: ${escapeMarkdownInline(gap)}`);
@@ -3164,7 +3182,6 @@ function appendQaReasoningTraceMarkdown(lines: string[], result: QaDraftResult):
 }
 
 function appendQaChangeIntentMarkdown(lines: string[], result: QaDraftResult): void {
-  const verificationMode = result.flows.find((flow) => flow.verificationMode)?.verificationMode;
   lines.push("## Change Intent Evidence");
   lines.push("");
   if (result.changeAnalysis.symbolAnnotations) {
@@ -3218,6 +3235,7 @@ function appendQaChangeIntentMarkdown(lines: string[], result: QaDraftResult): v
         const reviewRequired = scenario.reviewRequired ?? true;
         const routing = routeQaScenario(scenario);
         const automation = findScenarioAutomation(result, scenario.id);
+        const verificationMode = verificationModeForScenario(result.flows, scenario.id);
         lines.push(
           `  - [${scenario.priority}] ${escapeMarkdownInline(scenario.title)} ` +
           `(confidence: ${confidence}${reviewRequired ? "; review required" : ""})`,
@@ -3272,6 +3290,19 @@ function findScenarioAutomation(
   scenarioId: string,
 ): E2eScenarioAutomationReceipt | undefined {
   return aggregateScenarioAutomationById(result.flows).get(scenarioId)?.receipt;
+}
+
+function verificationModeForScenario(
+  flows: QaDraftFlow[],
+  scenarioId: string,
+): QaVerificationMode | undefined {
+  const matched = flows.find((flow) =>
+    flow.verificationMode && flow.scenarioAutomation.some((receipt) => receipt.scenarioId === scenarioId)
+  );
+  if (matched?.verificationMode) {
+    return matched.verificationMode;
+  }
+  return flows.length === 1 ? flows[0]?.verificationMode : undefined;
 }
 
 interface QaScenarioAutomationAggregate {
@@ -3653,6 +3684,9 @@ function buildFlowReasons(file: E2eDraftFile): string[] {
   if (verificationMode === "analysis-rule") {
     return ["Analyzer rules changed; verify positive, negative, and neighboring-rule controls instead of inventing a product journey."];
   }
+  if (verificationMode === "schema-graph") {
+    return ["The changed migration dependency diverges from the target branch graph; restore one leaf and validate the deployment order instead of inventing a product journey."];
+  }
   if (verificationMode === "existing-test-evidence") {
     return ["Changed test files are existing QA evidence; run them instead of generating a duplicate draft."];
   }
@@ -3727,7 +3761,9 @@ function buildPrChecklist(
   const evidenceChecklist = testEvidencePaths.length
       ? `Run the ${testEvidenceLabel}: ${testEvidencePaths.slice(0, 4).join(", ")}.`
       : flows[0]?.verificationMode
-        ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${suggestedCommands[0] ?? "the nearest repository validation command"}.`
+        ? suggestedCommands[0]
+          ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${suggestedCommands[0]}.`
+          : `Define a repository-owned command for ${formatVerificationMode(flows[0].verificationMode)} before merge.`
       : draft.plan.changeAnalysis.intents[0]
         ? `Review the proposed QA scenarios and their sources for: ${draft.plan.changeAnalysis.intents[0].title}.`
       : flows.length > 0
@@ -3775,7 +3811,9 @@ function buildAgentHandoff(
     testEvidencePaths.length
       ? `Run the ${testEvidenceLabel} (${testEvidencePaths.slice(0, 3).join(", ")}) and record the result before handoff.`
       : flows[0]?.verificationMode
-        ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${suggestedCommands[0] ?? "the nearest repository command"} and record the result before handoff; do not invent a product-journey E2E for this diff alone.`
+        ? suggestedCommands[0]
+          ? `Run ${formatVerificationMode(flows[0].verificationMode)} with ${suggestedCommands[0]} and record the result before handoff; do not invent a product-journey E2E for this diff alone.`
+          : `Define a repository-owned command for ${formatVerificationMode(flows[0].verificationMode)} before handoff; do not invent a command or product-journey E2E for this diff alone.`
       : draft.plan.changeAnalysis.intents[0]
         ? `Review each proposed scenario and its diff sources for ${draft.plan.changeAnalysis.intents[0].title} before using it as PR policy.`
       : flows.length > 0
@@ -3824,6 +3862,9 @@ function verificationModeForTitle(title: string): QaVerificationMode | undefined
 }
 
 function verificationModeForDraftFile(file: E2eDraftFile): QaVerificationMode | undefined {
+  if (file.flowKind === "schema") {
+    return "schema-graph";
+  }
   if (file.flowKind === "transformation") {
     return "transformation-contract";
   }
@@ -3853,6 +3894,9 @@ function formatVerificationMode(mode: QaVerificationMode): string {
   if (mode === "analysis-rule") {
     return "analyzer rule boundary verification";
   }
+  if (mode === "schema-graph") {
+    return "migration graph and deployment-order verification";
+  }
   if (mode === "transformation-contract") {
     return "input-to-output transformation contract verification";
   }
@@ -3866,6 +3910,12 @@ function formatVerificationMode(mode: QaVerificationMode): string {
     return "documentation contract verification";
   }
   return "generated artifact verification";
+}
+
+function isMigrationGraphValidationCommand(command: string): boolean {
+  return /\bmanage\.py\s+(?:makemigrations\b[^\n]*(?:--check|--dry-run)|showmigrations\b[^\n]*--plan|migrate\b[^\n]*--plan)/i.test(command) ||
+    /\b(?:migration|migrations)(?::|[-_])(?:check|plan|validate)\b/i.test(command) ||
+    /\b(?:check|validate)(?::|[-_])(?:migration|migrations)\b/i.test(command);
 }
 
 function fallbackDraftSteps(flow: QaDraftFlow): string[] {

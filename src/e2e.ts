@@ -39,6 +39,7 @@ import type { CoverageEvidence, TestSuiteInventory, TestSuiteSummary } from "./t
 import type { BehaviorGraph, BehaviorSurfaceKind, InferredBehaviorFlow } from "./behavior.js";
 import type {
   BehaviorLifecycleStage,
+  ChangeIntent,
   ChangeIntentAnalysis,
   ChangeIntentConfidence,
   ChangeIntentEvidence,
@@ -48,6 +49,7 @@ import { routeQaScenario } from "./scenario-routing.js";
 import type { QaScenarioDecision } from "./scenario-routing.js";
 import { qaTraceIdForScenario } from "./qa-trace.js";
 import { classifyChangeSourceRole, isTransformationSourcePath } from "./source-role.js";
+import { analyzeDjangoMigrationGraph } from "./schema-graph.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
 export type E2eProjectType =
@@ -63,6 +65,7 @@ export type E2eRunnerName = "maestro" | "playwright" | "manual";
 export type E2eFlowKind =
   | "ui"
   | "api"
+  | "schema"
   | "transformation"
   | "state"
   | "content"
@@ -558,6 +561,20 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     addedDiffText,
     addedDiffEvidence,
   });
+  const schemaGraphAnalysis = await analyzeDjangoMigrationGraph({
+    root,
+    workspaceRoot: testPlan.workspaceRoot,
+    base: testPlan.base,
+    head: testPlan.head,
+    includeWorkingTree: testPlan.includeWorkingTree,
+    changedFiles: testPlan.changedFiles,
+    addedDiffEvidence,
+  });
+  applySchemaGraphIntents(
+    changeAnalysis,
+    schemaGraphAnalysis.conflicts.map((conflict) => conflict.intent),
+    schemaGraphAnalysis.diagnostics,
+  );
   const domainLanguage = await buildDomainLanguageSummary(root, testPlan.changedFiles, coreFlows, domains, addedDiffText);
   const workspaceTargets = await resolveE2eWorkspaceTargets(root, testPlan);
   const flows = await buildFlows(
@@ -667,6 +684,44 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     missingTestability,
     setupNotes,
   };
+}
+
+function applySchemaGraphIntents(
+  analysis: ChangeIntentAnalysis,
+  schemaIntents: ChangeIntent[],
+  diagnostics: string[],
+): void {
+  if (schemaIntents.length === 0) {
+    analysis.diagnostics.push(...diagnostics);
+    return;
+  }
+  const claimedFiles = new Set(schemaIntents.flatMap((intent) => intent.files));
+  for (const schemaIntent of schemaIntents) {
+    const relatedCommits = analysis.intents
+      .filter((intent) => intent.files.some((file) => schemaIntent.files.includes(file)))
+      .flatMap((intent) => intent.commits);
+    const seen = new Set<string>();
+    schemaIntent.commits = relatedCommits.filter((commit) => {
+      if (seen.has(commit.sha)) {
+        return false;
+      }
+      seen.add(commit.sha);
+      return true;
+    });
+  }
+  analysis.intents = [
+    ...schemaIntents,
+    ...analysis.intents.filter((intent) =>
+      intent.files.length === 0 || !intent.files.every((file) => claimedFiles.has(file))
+    ),
+  ];
+  if (analysis.source === "none") {
+    analysis.source = "diff-only";
+  }
+  analysis.diagnostics.push(
+    ...diagnostics,
+    `Detected ${schemaIntents.length} target-branch migration graph conflict${schemaIntents.length === 1 ? "" : "s"}.`,
+  );
 }
 
 function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flows: E2eFlow[]): void {
@@ -958,6 +1013,28 @@ export async function generateE2eDraft(rootInput: string, options: E2eDraftOptio
 }
 
 function buildCoverageTargets(kind: E2eFlowKind, files: string[], runner: E2eRunnerName): E2eCoverageTarget[] {
+  if (kind === "schema") {
+    return [
+      coverageTarget(
+        "Migration graph consistency",
+        "critical",
+        "A deployable migration graph must keep one unambiguous leaf after the branch is merged into its target.",
+        [
+          "Compare the changed dependency with every current target-branch leaf.",
+          "Verify a rebase or reviewed merge migration reconnects every competing leaf.",
+        ],
+      ),
+      coverageTarget(
+        "Deployment plan validation",
+        "critical",
+        "Static graph evidence should be confirmed by the repository's own migration-plan command before deployment.",
+        [
+          "Run the repository-declared migration graph or deployment-plan validation command.",
+          "Verify the resulting migration order is complete and deterministic.",
+        ],
+      ),
+    ];
+  }
   const targets: E2eCoverageTarget[] = [
     coverageTarget(
       "Primary success path",
@@ -2684,6 +2761,7 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
     const repositorySuccessSignal = inferFlowSuccessSignal(flow);
     const structuredContract = analysisRuleFocused ||
       isApiContractFocusedFlow(flow) ||
+      isSchemaGraphFocusedFlow(flow) ||
       isTransformationContractFocusedFlow(flow) ||
       isDesignTokenFocusedFlow(flow) ||
       isCatalogFocusedFlow(flow) ||
@@ -2704,16 +2782,21 @@ function buildFlowLanguageBrief(flow: Omit<E2eFlow, "languageBrief">): E2eFlowLa
     const scenarioEdges = (flow.qaScenarios ?? [])
       .filter((scenario) => scenario.kind !== "primary")
       .flatMap((scenario) => [scenario.title, ...scenario.edgeCases]);
+    const schemaGraphFocused = isSchemaGraphFocusedFlow(flow);
     return {
       actor,
       trigger,
       goal: analysisRuleFocused
         ? `Validate ${flow.title} against positive, negative, and neighboring-rule controls.`
+        : schemaGraphFocused
+          ? inferFlowGoal(flow)
         : `Complete the intended behavior: ${flow.title}.`,
       successSignal,
       successSignalUnresolved: resolved.unresolved || undefined,
       reviewQuestion: analysisRuleFocused
         ? `Does ${flow.title} emit only the intended findings while preserving neighboring rules: ${successSignal}?`
+        : schemaGraphFocused
+          ? inferFlowReviewQuestion(flow, successSignal)
         : resolved.unresolved
           ? unresolvedReviewQuestion(flow.title)
           : `Does ${flow.title} follow the inferred lifecycle and produce this outcome: ${successSignal}?`,
@@ -2743,6 +2826,9 @@ function inferFlowActor(flow: Omit<E2eFlow, "languageBrief">): string {
   }
   if (isApiContractFocusedFlow(flow)) {
     return "API consumer or upstream service";
+  }
+  if (isSchemaGraphFocusedFlow(flow)) {
+    return "Service maintainer or release operator";
   }
   if (isTransformationContractFocusedFlow(flow)) {
     return "Library consumer or maintainer";
@@ -2799,6 +2885,9 @@ function hasUserFacingEntrypointOrFile(flow: Omit<E2eFlow, "languageBrief">): bo
 function inferFlowTrigger(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isAnalysisRuleFocusedFlow(flow)) {
     return "Run the changed analyzer against positive, negative, and neighboring-rule controls.";
+  }
+  if (isSchemaGraphFocusedFlow(flow)) {
+    return "Compare the target branch migration graph with the changed migration dependencies.";
   }
   const route = flow.entrypoints.find((entrypoint) => entrypoint.kind === "route");
   if (route) {
@@ -2867,6 +2956,9 @@ function inferFlowGoal(flow: Omit<E2eFlow, "languageBrief">): string {
   if (isApiContractFocusedFlow(flow)) {
     return `Protect ${flow.title} by verifying the changed request, response, auth, and failure contract.`;
   }
+  if (isSchemaGraphFocusedFlow(flow)) {
+    return `Protect ${flow.title} by restoring one deployable migration leaf and an unambiguous order.`;
+  }
   if (isTransformationContractFocusedFlow(flow)) {
     return `Protect ${flow.title} by verifying exact outputs, boundary inputs, and backward compatibility.`;
   }
@@ -2908,6 +3000,9 @@ function inferFlowSuccessSignal(flow: Omit<E2eFlow, "languageBrief">): string {
   }
   if (isApiContractFocusedFlow(flow)) {
     return "the changed contract returns the expected status, response shape, auth behavior, and failure handling";
+  }
+  if (isSchemaGraphFocusedFlow(flow)) {
+    return "the combined migration graph has one leaf and an unambiguous deployment order";
   }
   if (isTransformationContractFocusedFlow(flow)) {
     return "representative inputs produce the exact intended output while unsupported and unchanged variants remain intentional";
@@ -2999,6 +3094,9 @@ function inferFlowReviewQuestion(flow: Omit<E2eFlow, "languageBrief">, successSi
   if (isApiContractFocusedFlow(flow)) {
     return `Can a reviewer confirm that the changed endpoint, handler, or service contract is exercised and this outcome is verified: ${successSignal}?`;
   }
+  if (isSchemaGraphFocusedFlow(flow)) {
+    return `Can a reviewer confirm that the changed dependency is reconciled with every target-branch leaf and this outcome is verified: ${successSignal}?`;
+  }
   if (isTransformationContractFocusedFlow(flow)) {
     return `Can a reviewer confirm that representative and boundary inputs exercise the changed transformation and this outcome is verified: ${successSignal}?`;
   }
@@ -3042,6 +3140,10 @@ function isTransformationContractFocusedFlow(flow: Omit<E2eFlow, "languageBrief"
   return flow.kind === "transformation" ||
     /\btransformation contract\b/i.test(flow.title) ||
     flow.files.some(isTransformationSourcePath);
+}
+
+function isSchemaGraphFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
+  return flow.kind === "schema" || /migration graph|deployable leaf/i.test(flow.title);
 }
 
 function isDesignTokenFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
@@ -5572,10 +5674,10 @@ function prioritizeChangeIntentCandidates(
           ...scenario.edgeCases.map((edgeCase) => `Exercise ${lowercaseFirst(edgeCase)}.`),
         ]),
       }));
-      const contractCoverage = kind === "transformation"
+      const contractCoverage = kind === "transformation" || kind === "schema"
         ? buildCoverageTargets(kind, scope.files, runner).filter(
-            (target) => target.title !== "Primary success path",
-          )
+          (target) => target.title !== "Primary success path",
+        )
         : [];
       return {
         kind,
@@ -5997,6 +6099,12 @@ function intentFlowKind(intent: ChangeIntentAnalysis["intents"][number], project
   if (analysisRuleOnly) {
     return "domain";
   }
+  if (
+    intent.files.some((file) => /(?:^|\/)migrations\/[0-9]{4}_[^/]+\.py$/i.test(file)) &&
+    intent.scenarios.some((scenario) => /migration graph|deployable leaf/i.test(`${scenario.title} ${scenario.rationale}`))
+  ) {
+    return "schema";
+  }
   if (projectType === "cli") {
     return "command";
   }
@@ -6163,7 +6271,7 @@ async function buildFlow(
 }
 
 function isVerificationOnlyKind(kind: E2eFlowKind): boolean {
-  return kind === "transformation" || kind === "config" || kind === "test-evidence" || kind === "documentation" ||
+  return kind === "schema" || kind === "transformation" || kind === "config" || kind === "test-evidence" || kind === "documentation" ||
     kind === "generated-artifact";
 }
 
@@ -6423,6 +6531,7 @@ async function inferFlowSetupHints(
   if (
     kind === "artifact" ||
     kind === "catalog" ||
+    kind === "schema" ||
     kind === "test-evidence" ||
     kind === "documentation" ||
     kind === "generated-artifact"
@@ -6632,6 +6741,17 @@ async function inferFlowFixtureReadiness(
     return {
       status: "not-needed",
       reason: "This verification flow targets analyzer rule boundaries; repository tests and positive or negative controls matter more than product API fixtures.",
+      apiSignals: [],
+      apiEndpoints: [],
+      backendSignals: [],
+      mockSignals: [],
+      nextActions: [],
+    };
+  }
+  if (kind === "schema") {
+    return {
+      status: "not-needed",
+      reason: "This verification flow targets a repository migration graph; graph leaves and the declared deployment-plan command matter more than product API fixtures.",
       apiSignals: [],
       apiEndpoints: [],
       backendSignals: [],
@@ -8282,7 +8402,7 @@ function shouldUseDomainScenariosForDraft(plan: E2ePlanResult): boolean {
 }
 
 function isEvidenceVerificationFocusedFlow(flow: Omit<E2eFlow, "languageBrief">): boolean {
-  return isAnalysisRuleFocusedFlow(flow) || isTransformationContractFocusedFlow(flow) ||
+  return isAnalysisRuleFocusedFlow(flow) || isSchemaGraphFocusedFlow(flow) || isTransformationContractFocusedFlow(flow) ||
     isTestEvidenceFocusedFlow(flow) || isDocumentationFocusedFlow(flow) || isGeneratedArtifactFocusedFlow(flow);
 }
 
