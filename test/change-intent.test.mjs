@@ -1104,6 +1104,80 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
   assert.ok(compactSummary.flows[0].steps.length > 0);
 });
 
+test("analyzer path constants do not become executable lifecycle actions", async (t) => {
+  const root = await makeRepo(t);
+  const sourceRoleFile = "src/source-role.ts";
+  await write(
+    root,
+    sourceRoleFile,
+    [
+      "export type SourceRole =",
+      '  | "product";',
+      "export function classifySourceRole(_file) {",
+      "  return 'product';",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "fix/repository-workflow-role");
+  await write(
+    root,
+    sourceRoleFile,
+    [
+      "export type SourceRole =",
+      '  | "product"',
+      '  | "repository-workflow";',
+      "export function classifySourceRole(file) {",
+      "  if (isRepositoryWorkflowPath(file)) return 'repository-workflow';",
+      "  return 'product';",
+      "}",
+      "export function isRepositoryWorkflowPath(file) {",
+      "  return /(?:^|\\/)\\.github\\/(?:ISSUE_TEMPLATE\\/.+|PULL_REQUEST_TEMPLATE(?:\\/.*)?\\.md|CODEOWNERS)$/i.test(file);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "fix: classify repository workflow metadata");
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const lifecycle = qa.changeAnalysis.intents.flatMap((intent) => intent.lifecycle);
+  const evidence = qa.changeAnalysis.intents.flatMap((intent) => intent.evidence);
+  const agent = formatAgentQaDraft(qa);
+
+  assert.ok(evidence.some((item) => item.sourceRole === "analysis-rule"));
+  assert.ok(lifecycle.some((stage) => /positive and negative controls/i.test(stage.label)));
+  assert.equal(lifecycle.some((stage) => /PULL_REQUEST_TEMPLATE|CODEOWNERS/.test(stage.label)), false);
+  assert.doesNotMatch(agent, /Invoke `(?:PULL_REQUEST_TEMPLATE|CODEOWNERS)`/);
+});
+
+test("regex group vocabulary does not hide real product calls or become one", async (t) => {
+  const root = await makeRepo(t);
+  const resolverFile = "src/features/templates/resolveTemplate.ts";
+  await write(root, resolverFile, "export function resolveTemplate() { return false; }\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feature/template-audit");
+  await write(
+    root,
+    resolverFile,
+    [
+      "const templatePattern = /PULL_REQUEST_TEMPLATE(?:\\/.*)?\\.md/;",
+      "export function resolveTemplate(value) {",
+      "  sendTemplateAudit(value);",
+      "  return templatePattern.test(value);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: audit selected repository templates");
+
+  const analysis = await analyze(root, [resolverFile]);
+  const labels = analysis.intents.flatMap((intent) => intent.lifecycle.map((stage) => stage.label));
+
+  assert.ok(labels.some((label) => /Invoke `sendTemplateAudit`/.test(label)));
+  assert.equal(labels.some((label) => /PULL_REQUEST_TEMPLATE/.test(label)), false);
+});
+
 test("compacted agent payloads keep identifier values whole and disclose a full report", async (t) => {
   const root = await makeRepo(t);
   const pageFile = "src/deeply/nested/preferences/panels/workspace/settingsPanel.tsx";

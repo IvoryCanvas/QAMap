@@ -2796,6 +2796,9 @@ function collectCodeBehaviorSignalsFromText(
   }
   for (const match of text.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*\(/g)) {
     const symbol = match[1];
+    if (isInsideRegexLiteral(text, match.index ?? 0)) {
+      continue;
+    }
     const prefix = text.slice(0, match.index ?? 0);
     if (/\b(?:function|class)\s+$/.test(prefix)) {
       continue;
@@ -2817,6 +2820,11 @@ function collectCodeBehaviorSignalsFromText(
       evidence: codeSignalEvidence(label, file, symbol, hunk, line),
     });
   }
+}
+
+function isInsideRegexLiteral(text: string, index: number): boolean {
+  const prefix = text.slice(0, index);
+  return /(?:^|\b(?:return|case)\s+|[=(:,!\[{};?&|]\s*)\/(?![/*])(?:\\.|[^/\\\n])*$/.test(prefix);
 }
 
 function codeSignalEvidence(

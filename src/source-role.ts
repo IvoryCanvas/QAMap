@@ -106,6 +106,8 @@ function hasCommandSourceSignal(text: string): boolean {
 function isAnalysisRuleSource(file: string, text: string): boolean {
   const pathSignal = /(?:^|\/)(?:analyzers?|classifiers?|heuristics?|linters?|matchers?|policies|rules?|scanner)(?:\/|$)/i.test(file) ||
     /(?:^|\/)(?:change-intent|scenario-routing|qa|qa-trace|rule-engine|analyzer|classifier|heuristic|linter|matcher|scanner)(?:\.[^/]+)?$/i.test(file);
+  const sourceRoleClassifier = /(?:^|\/)source-role(?:\.[^/]+)?$/i.test(file) &&
+    /\b(?:classify\w*SourceRole|is\w*Path|repository-workflow)\b/i.test(text);
   const staticAnalysisSignal = /\b(?:static[- ]analysis|false positive|negative control|qa scenario|reasoning trace|scenario routing|change intent|diff evidence|source role|routed scenario|analyzer adapter|lint(?:er|ing)?)\b|\b(?:AddedDiffEvidence|ChangeIntentEvidence|QaReasoningTrace|build\w*(?:Trace|Evidence|Scenario)|collectAddedDiffEvidence|routeQaScenario|scenarioAutomation|scenarioEvidence|classifyChangeSourceRole|sourceRole|mustNot\w*|mustFind\w*)\b/i.test(text);
   const vocabularyRuleSignal = /\b(?:analyze\w*Evidence|collect\w*Evidence|\w+Vocabulary|evidencePattern|rulePattern)\b/i.test(text);
   const ruleStructure = /\bRegExp\b|\.match(?:All)?\s*\(|\.test\s*\(|(?:^|\s)\/(?:\\.|[^/\n]){3,}\/\w*|mustNot|mustFind|pattern/i.test(text);
@@ -121,7 +123,8 @@ function isAnalysisRuleSource(file: string, text: string): boolean {
   if (analyzerSchema) {
     return true;
   }
-  return (pathSignal && (staticAnalysisSignal || vocabularyRuleSignal || analyzerContractStructure)) ||
+  return sourceRoleClassifier ||
+    (pathSignal && (staticAnalysisSignal || vocabularyRuleSignal || analyzerContractStructure)) ||
     (staticAnalysisSignal && (ruleStructure || analyzerContractStructure)) ||
     agentActionContractStructure ||
     (repositoryAnalysisStructure && (qaPlanningStructure || repositoryContextPath));
