@@ -53,6 +53,11 @@ npx --yes @ivorycanvas/qamap@latest qa --format agent
 4. repository command 실행이나 파일 생성은 action contract와 사용자 승인을 확인합니다.
 5. 생성된 초안과 실행 결과를 구분해서 보고합니다.
 
+문서, 번역 안내, 패키지에 포함되는 문서 목록, 이슈 폼, PR 템플릿만 바뀐
+경우 QAMap은 이를 제품 기능 변경으로 간주하지 않습니다. 링크와 명령,
+YAML 필드, 라벨·할당자, 필수 PR 섹션을 확인하는 저장소 검증으로 라우팅하며,
+실행 가능한 기존 명령을 찾았을 때만 검증 준비 상태를 `ready`로 표시합니다.
+
 QAMap 결과가 일반 코드 검토와 다르면 실제 코드와 실행 근거를 우선합니다.
 차이는 false positive, miss, evidence gap, action gap으로 남겨 QAMap의 다음
 회귀 fixture로 사용할 수 있습니다.

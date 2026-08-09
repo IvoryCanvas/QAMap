@@ -744,12 +744,19 @@ function buildQaReadiness(
       automationApplicable: true,
     };
   }
+  const commandAvailable = suggestedCommands.length > 0;
   return {
     ...readiness,
+    score: commandAvailable ? 100 : 50,
+    level: commandAvailable ? "ready" : "needs-work",
+    recommendation: commandAvailable
+      ? `Run the selected repository validation command: ${suggestedCommands[0]}.`
+      : "Define a repository-owned validation command for this change before merge.",
     requiredScenarioGaps: 0,
+    topBlockers: commandAvailable ? [] : ["A repository-owned validation command is not declared."],
     basis: "repository-validation",
     automationApplicable: false,
-    verificationStatus: suggestedCommands.length > 0 ? "ready-to-run" : "command-needed",
+    verificationStatus: commandAvailable ? "ready-to-run" : "command-needed",
   };
 }
 

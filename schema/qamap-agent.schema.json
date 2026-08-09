@@ -69,7 +69,7 @@
         "reason": { "type": "string" },
         "sourceRole": {
           "type": "string",
-          "enum": ["product", "command", "analysis-rule", "configuration", "test", "documentation", "generated"]
+          "enum": ["product", "command", "analysis-rule", "repository-workflow", "configuration", "test", "documentation", "generated"]
         },
         "commit": { "type": "string" },
         "file": { "type": "string" },

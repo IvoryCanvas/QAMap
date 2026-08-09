@@ -2934,11 +2934,12 @@ test("generateE2ePlan treats docs-only changes as documentation verification", a
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
   const markdown = formatMarkdownE2ePlan(plan);
 
-  assert.deepEqual(plan.flows.map((flow) => flow.title), ["Documentation verification checklist"]);
+  assert.deepEqual(plan.flows.map((flow) => flow.title), ["Repository documentation verification"]);
+  assert.deepEqual(plan.changeAnalysis.intents.map((intent) => intent.title), ["Repository documentation"]);
   assert.equal(plan.domainLanguage.scenarios.length, 0);
   assert.equal(plan.flows[0].languageBrief.actor, "Maintainer or documentation reviewer");
   assert.match(plan.flows[0].languageBrief.reviewQuestion, /docs validation/);
-  assert.match(markdown, /Documentation verification checklist/);
+  assert.match(markdown, /Repository documentation verification/);
   assert.doesNotMatch(markdown, /Suggested user scenarios:[\s\S]*Listing primary journey/);
 });
 

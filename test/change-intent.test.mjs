@@ -924,6 +924,9 @@ test("source roles distinguish product behavior from commands and analysis rules
   assert.equal(classifyChangeSourceRole("bench.config.json").role, "test");
   assert.equal(classifyChangeSourceRole("scripts/bench.mjs").role, "test");
   assert.equal(classifyChangeSourceRole("playwright.config.ts").role, "test");
+  assert.equal(classifyChangeSourceRole(".github/ISSUE_TEMPLATE/bug.yml").role, "repository-workflow");
+  assert.equal(classifyChangeSourceRole(".github/pull_request_template.md").role, "repository-workflow");
+  assert.equal(classifyChangeSourceRole(".github/workflows/ci.yml").role, "configuration");
   assert.equal(classifyChangeSourceRole("vite.config.ts").role, "configuration");
 });
 
