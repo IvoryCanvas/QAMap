@@ -197,6 +197,11 @@
           "type": "string",
           "enum": ["repository-root", "automatic-package", "explicit-package"]
         },
+        "commandCwd": {
+          "type": "string",
+          "enum": ["workspace-root", "selected-package"],
+          "description": "Relative working-directory contract for commands. Older v1 payloads may omit it; workspace-root is the safe default."
+        },
         "selectedPath": { "type": "string" },
         "packageName": { "type": "string" },
         "reason": { "type": "string" },

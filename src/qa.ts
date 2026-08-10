@@ -175,6 +175,7 @@ export type QaExecutionReceipt =
   | QaCompletedExecutionReceipt;
 
 export type QaAnalysisScopeMode = "repository-root" | "automatic-package" | "explicit-package";
+export type QaCommandWorkingDirectory = "workspace-root" | "selected-package";
 
 export interface QaAnalysisScopeCandidate {
   path: string;
@@ -187,6 +188,7 @@ export interface QaAnalysisScopeCandidate {
 export interface QaAnalysisScope {
   mode: QaAnalysisScopeMode;
   workspaceRoot: string;
+  commandCwd?: QaCommandWorkingDirectory;
   selectedPath?: string;
   packageName?: string;
   candidates: QaAnalysisScopeCandidate[];
@@ -267,6 +269,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
         analysisScope: {
           mode: "automatic-package",
           workspaceRoot: root,
+          commandCwd: "workspace-root",
           selectedPath: selected.path,
           packageName: selected.packageName,
           candidates,
@@ -277,6 +280,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     detectedScope = {
       mode: "repository-root",
       workspaceRoot: root,
+      commandCwd: "workspace-root",
       candidates,
       reason: workspaceRootScopeReason(workspaceTargets, preflight.changedFiles.map((file) => file.path)),
     };
@@ -648,6 +652,7 @@ function explicitOrRootAnalysisScope(root: string, workspaceRootInput: string | 
     return {
       mode: "explicit-package",
       workspaceRoot,
+      commandCwd: "selected-package",
       selectedPath,
       candidates: [],
       reason: "The caller explicitly selected this package.",
@@ -656,6 +661,7 @@ function explicitOrRootAnalysisScope(root: string, workspaceRootInput: string | 
   return {
     mode: "repository-root",
     workspaceRoot,
+    commandCwd: "workspace-root",
     candidates: [],
     reason: "QAMap analyzed the requested repository root.",
   };
@@ -1370,6 +1376,7 @@ function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
       : undefined,
     analysisScope: {
       mode: result.analysisScope.mode,
+      commandCwd: result.analysisScope.commandCwd,
       selectedPath: result.analysisScope.selectedPath,
       packageName: result.analysisScope.packageName,
       candidates: result.analysisScope.candidates.slice(0, 4),
@@ -2274,6 +2281,9 @@ function compactAgentAnalysisScope(value: unknown, includeCandidates: boolean): 
   }
   const scope = value as Record<string, unknown>;
   const mode = typeof scope.mode === "string" ? scope.mode : "repository-root";
+  const commandCwd = scope.commandCwd === "selected-package"
+    ? "selected-package"
+    : "workspace-root";
   const rawCandidates = Array.isArray(scope.candidates) ? scope.candidates : [];
   if (mode === "repository-root" && !scope.selectedPath && rawCandidates.length === 0) {
     return undefined;
@@ -2301,6 +2311,7 @@ function compactAgentAnalysisScope(value: unknown, includeCandidates: boolean): 
       : "Repository scope was retained.";
   return {
     mode,
+    commandCwd,
     selectedPath: scope.selectedPath
       ? truncateForAgent(String(scope.selectedPath), 70)
       : undefined,
@@ -2629,7 +2640,13 @@ export function formatTextQaDraft(result: QaDraftResult): string {
   }
   const validationCommand = nextStepCommand(result);
   if (validationCommand) {
-    lines.push(`  Existing validation: ${plainText(validationCommand)} (selected, not run)`);
+    const commandLocation = result.analysisScope.commandCwd === "selected-package" &&
+        result.analysisScope.selectedPath
+      ? `selected package ${result.analysisScope.selectedPath}`
+      : "workspace root";
+    lines.push(
+      `  Existing validation (${plainText(commandLocation)}): ${plainText(validationCommand)} (selected, not run)`,
+    );
   }
 
   lines.push("");
@@ -2728,9 +2745,10 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   }
   const nextCommand = nextStepCommand(result);
   if (nextCommand) {
-    const commandLocation = result.analysisScope.selectedPath
-      ? ` from \`${escapeMarkdownInline(result.analysisScope.selectedPath)}\``
-      : "";
+    const commandLocation = result.analysisScope.commandCwd === "selected-package" &&
+        result.analysisScope.selectedPath
+      ? ` from selected package \`${escapeMarkdownInline(result.analysisScope.selectedPath)}\``
+      : " from the workspace root";
     lines.push(`- Repository validation${commandLocation}: \`${escapeMarkdownInline(nextCommand)}\``);
   }
   const verificationOnly = result.readiness.basis === "repository-validation";

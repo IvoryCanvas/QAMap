@@ -44,6 +44,8 @@ test("profile output stays visible", () => {
   assert.equal(result.execution.status, "passed");
   assert.equal(result.execution.performed, true);
   assert.equal(result.execution.scope, "repository-validation");
+  assert.equal(result.analysisScope.commandCwd, "workspace-root");
+  assert.equal(result.execution.cwd, ".");
   assert.match(result.execution.command, /profile\.test\.mjs/);
   assert.equal(result.execution.exitCode, 0);
   assert.equal(result.execution.timedOut, false);
@@ -81,6 +83,36 @@ test("profile output stays visible", () => {
   assert.equal(agentResult.execution.status, "passed");
   assert.equal(agentResult.execution.command, result.execution.command);
   assert.doesNotMatch(agentOutput, /PRIVATE_FIXTURE_OUTPUT_SHOULD_NOT_ENTER_THE_RECEIPT/);
+});
+
+test("qa run honors automatic and explicit package working-directory contracts", async () => {
+  const { root, packageRoot } = await makeNestedPackageValidationFixture();
+
+  const automatic = await runQaValidation(root, {
+    base: "main",
+    head: "HEAD",
+    timeoutMs: 15_000,
+  });
+
+  assert.equal(automatic.analysisScope.mode, "automatic-package");
+  assert.equal(automatic.analysisScope.commandCwd, "workspace-root");
+  assert.equal(automatic.execution.status, "passed");
+  assert.equal(automatic.execution.cwd, ".");
+  assert.match(automatic.execution.command, /npm --prefix packages\/widget test/);
+
+  const explicit = await runQaValidation(packageRoot, {
+    base: "main",
+    head: "HEAD",
+    workspaceRoot: root,
+    timeoutMs: 15_000,
+  });
+
+  assert.equal(explicit.analysisScope.mode, "explicit-package");
+  assert.equal(explicit.analysisScope.commandCwd, "selected-package");
+  assert.equal(explicit.execution.status, "passed");
+  assert.equal(explicit.execution.cwd, ".");
+  assert.match(explicit.execution.command, /^npm test/);
+  assert.doesNotMatch(explicit.execution.command, /--prefix/);
 });
 
 test("qa run distinguishes command mutations from pre-existing dirty worktree state", async () => {
@@ -570,6 +602,47 @@ async function makeRepositoryTestFixture({
   await writeFile(path.join(root, "test/profile.test.mjs"), testBody.trimStart());
   await commitAll(root, "test: cover profile output");
   return root;
+}
+
+async function makeNestedPackageValidationFixture() {
+  const root = await makeGitRepository();
+  const packageRoot = path.join(root, "packages/widget");
+  await mkdir(path.join(packageRoot, "src"), { recursive: true });
+  await mkdir(path.join(packageRoot, "test"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    `${JSON.stringify({
+      name: "qamap-workspace-fixture",
+      private: true,
+      workspaces: ["packages/*"],
+    }, null, 2)}\n`,
+  );
+  await writeFile(
+    path.join(packageRoot, "package.json"),
+    `${JSON.stringify({
+      name: "@fixture/widget",
+      private: true,
+      scripts: { test: "node --test" },
+      dependencies: {
+        next: "15.5.0",
+        react: "19.0.0",
+        "react-dom": "19.0.0",
+      },
+    }, null, 2)}\n`,
+  );
+  await writeFile(path.join(packageRoot, "next.config.mjs"), "export default {};\n");
+  await writeFile(
+    path.join(packageRoot, "src/widget.js"),
+    `export function widgetLabel() { return "Widget ready"; }\n`,
+  );
+  await commitAll(root, "chore: create nested package fixture");
+  await git(root, "checkout", "-b", "feature/widget-validation");
+  await writeFile(
+    path.join(packageRoot, "test/widget.test.mjs"),
+    `import assert from "node:assert/strict";\nimport test from "node:test";\n\ntest("widget output stays visible", () => {\n  assert.equal("Widget ready", "Widget ready");\n});\n`,
+  );
+  await commitAll(root, "test: cover widget output");
+  return { root, packageRoot };
 }
 
 async function makeWebProductFixture() {

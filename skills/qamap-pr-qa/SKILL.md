@@ -30,7 +30,9 @@ Use QAMap as a final local QA pass before presenting a pull request for human re
    The agent JSON is a versioned contract (`schema: qamap.qa` v1, additive-only): see docs/agent-format.md in the QAMap repository.
 
 3. Read `analysisScope` before interpreting package-relative evidence or commands.
-   - `automatic-package` means the root command already reran analysis with the selected package's routes, scripts, fixtures, and runner settings. Run package-relative `commands` from `selectedPath`; use the workspace-aware `automation.draftCommand` as printed.
+   - Read `commandCwd` as the command working-directory contract. `workspace-root` means run the command from the repository root; `selected-package` means run it from `selectedPath`. Older v1 payloads may omit the field; default to the workspace root instead of guessing.
+   - `automatic-package` means the root command already reran analysis with the selected package's routes, scripts, fixtures, and runner settings. Its commands include the package path and use `commandCwd: "workspace-root"`; use the workspace-aware `automation.draftCommand` as printed.
+   - `explicit-package` keeps package-local commands and uses `commandCwd: "selected-package"` with `selectedPath`.
    - `repository-root` means QAMap could not safely select one package. Review `candidates` and `reason`; do not silently choose a package for a cross-package or root-spanning change.
    - Use an explicit scoped pass only when a human wants to override that decision:
 
