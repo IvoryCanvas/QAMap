@@ -974,7 +974,9 @@ test("generateQaDraft automatically uses the only changed workspace package", as
   );
   assert.match(markdown, /automatically selected package services\/listing/);
   assert.match(markdown, /Workspace root: .*qamap-test-/);
+  assert.match(markdown, /Repository validation from the workspace root/);
   assert.equal(agent.analysisScope.mode, "automatic-package");
+  assert.equal(agent.analysisScope.commandCwd, "workspace-root");
   assert.equal(agent.analysisScope.selectedPath, "services/listing");
   assert.deepEqual(collectSchemaViolations(agentSchema, agent), []);
   assert.match(
@@ -988,7 +990,28 @@ test("generateQaDraft automatically uses the only changed workspace package", as
     workspaceRoot: root,
   });
   assert.equal(explicit.analysisScope.mode, "explicit-package");
+  assert.equal(explicit.analysisScope.commandCwd, "selected-package");
   assert.equal(explicit.analysisScope.selectedPath, "services/listing");
+  assert.match(
+    formatMarkdownQaDraft(explicit),
+    /Repository validation from selected package `services\/listing`/,
+  );
+  assert.equal(
+    JSON.parse(formatAgentQaDraft(explicit)).analysisScope.commandCwd,
+    "selected-package",
+  );
+
+  const oversized = structuredClone(qa);
+  oversized.flows = Array.from({ length: 20 }, (_, index) => ({
+    ...structuredClone(qa.flows[0]),
+    title: `Package flow ${index} ${"detail ".repeat(60)}`,
+    changedFiles: Array.from({ length: 12 }, (__, fileIndex) =>
+      `app/${"nested/".repeat(12)}package-${index}-${fileIndex}.tsx`
+    ),
+  }));
+  const compactAgent = JSON.parse(formatAgentQaDraft(oversized));
+  assert.ok(compactAgent.compaction);
+  assert.equal(compactAgent.analysisScope.commandCwd, "workspace-root");
 });
 
 test("generateQaDraft keeps repository scope when multiple workspace packages change", async () => {
@@ -7900,7 +7923,7 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.match(markdown, /### 2\. Executable Evidence Available Now/);
   assert.match(markdown, /### 3\. Manual Or Agent QA Contracts/);
   assert.match(markdown, /QA analysis and scenario routing do not require the optional automation runner/);
-  assert.match(markdown, /- Repository validation: `/);
+  assert.match(markdown, /- Repository validation from the workspace root: `/);
   assert.match(markdown, /- Optional automation gap/);
   assert.match(markdown, /Draft Mapping And Context Gaps/);
   assert.match(markdown, /Manifest: not found; using repo signals and PR diff only/);

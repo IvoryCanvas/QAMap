@@ -34,6 +34,15 @@ npx --yes @ivorycanvas/qamap@latest qa --format agent
 4. `intents`와 `flows`: 변경 의도, 시나리오, 영향받는 흐름
 5. `requiredEvidence`: 신뢰하기 전에 필요한 근거
 
+## 모노레포 명령 실행 위치
+
+에이전트 출력의 `analysisScope.commandCwd`를 먼저 확인합니다.
+
+- `workspace-root`: 저장소 루트에서 명령을 실행합니다. QAMap이 자동으로 고른 패키지 명령은 `--dir`, `--cwd`, `--prefix` 또는 명시적인 `cd`에 패키지 경로가 이미 포함되어 있습니다.
+- `selected-package`: `analysisScope.selectedPath`에서 패키지 로컬 명령을 실행합니다. 사용자가 `--workspace-root`와 함께 패키지를 명시한 경우에 사용됩니다.
+
+이 필드가 없는 이전 v1 출력은 저장소 루트를 기본값으로 사용합니다. 경로를 추측해 `selectedPath`를 두 번 적용하지 않습니다.
+
 ## 토큰과 데이터 경계
 
 - QAMap 정적 분석 자체는 추가 LLM 호출을 하지 않습니다.

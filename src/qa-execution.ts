@@ -73,8 +73,8 @@ export async function runQaValidation(
   }
 
   const timeoutMs = normalizeTimeout(options.timeoutMs);
-  const workspaceRoot = path.resolve(result.analysisScope.workspaceRoot);
-  const execution = await executeSelectedCommand(command, workspaceRoot, {
+  const executionRoot = qaCommandWorkingDirectory(result);
+  const execution = await executeSelectedCommand(command, executionRoot, {
     timeoutMs,
     onStdout: options.onStdout,
     onStderr: options.onStderr,
@@ -89,6 +89,17 @@ export async function runQaValidation(
         result.evidenceBoundary.neutralizedValues + protectedExecution.neutralizedValues,
     },
   };
+}
+
+function qaCommandWorkingDirectory(result: QaDraftResult): string {
+  const workspaceRoot = path.resolve(result.analysisScope.workspaceRoot);
+  if (
+    result.analysisScope.commandCwd === "selected-package" &&
+    result.analysisScope.selectedPath
+  ) {
+    return path.resolve(workspaceRoot, result.analysisScope.selectedPath);
+  }
+  return workspaceRoot;
 }
 
 export function formatMarkdownQaValidation(result: QaDraftResult): string {
@@ -139,7 +150,11 @@ export function formatMarkdownQaValidation(result: QaDraftResult): string {
     lines.push(`- Status: ${result.execution.status}`);
     lines.push("- Performed: yes");
     lines.push(`- Command: \`${markdownCode(result.execution.command)}\``);
-    lines.push(`- Working directory: \`${result.execution.cwd}\``);
+    const commandLocation = result.analysisScope.commandCwd === "selected-package" &&
+        result.analysisScope.selectedPath
+      ? `selected package \`${markdownCode(result.analysisScope.selectedPath)}\``
+      : "workspace root";
+    lines.push(`- Working directory: ${commandLocation} (command-relative \`${result.execution.cwd}\`)`);
     lines.push(`- Exit code: ${result.execution.exitCode ?? "not available"}`);
     lines.push(`- Duration: ${result.execution.durationMs} ms`);
     lines.push(`- Timed out: ${result.execution.timedOut ? "yes" : "no"}`);
