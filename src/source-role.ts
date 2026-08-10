@@ -15,6 +15,71 @@ export interface ChangeSourceRoleClassification {
   reason: string;
 }
 
+export type ChangedSourceRoleMap = Record<string, ChangeSourceRoleClassification>;
+
+export function classifyChangedSourceRoles(
+  changedTextByFile: Record<string, string>,
+): ChangedSourceRoleMap {
+  const classifications = Object.fromEntries(
+    Object.entries(changedTextByFile).map(([file, text]) => [
+      toPosixPath(file),
+      classifyChangeSourceRole(file, text),
+    ]),
+  );
+  const analysisFiles = new Set(
+    Object.entries(classifications)
+      .filter(([, classification]) => classification.role === "analysis-rule")
+      .map(([file]) => file),
+  );
+  if (analysisFiles.size === 0) {
+    return classifications;
+  }
+
+  let promoted = true;
+  while (promoted) {
+    promoted = false;
+    for (const [file, text] of Object.entries(changedTextByFile)) {
+      const normalizedFile = toPosixPath(file);
+      if (classifications[normalizedFile]?.role !== "product") {
+        continue;
+      }
+      if (!referencesChangedAnalysisSource(normalizedFile, text, analysisFiles)) {
+        continue;
+      }
+      classifications[normalizedFile] = {
+        role: "analysis-rule",
+        reason: "The changed source imports or re-exports another changed static-analysis source.",
+      };
+      analysisFiles.add(normalizedFile);
+      promoted = true;
+    }
+  }
+
+  const analysisIdentifiers = new Set(
+    [...analysisFiles].flatMap((file) => contractIdentifiers(changedTextByFile[file] ?? "")),
+  );
+  for (const [file, text] of Object.entries(changedTextByFile)) {
+    const normalizedFile = toPosixPath(file);
+    if (
+      classifications[normalizedFile]?.role !== "product" ||
+      !isAnalyzerContractDataPath(normalizedFile)
+    ) {
+      continue;
+    }
+    const sharedIdentifiers = schemaContractIdentifiers(text).filter((identifier) =>
+      analysisIdentifiers.has(identifier)
+    );
+    if (sharedIdentifiers.length === 0) {
+      continue;
+    }
+    classifications[normalizedFile] = {
+      role: "analysis-rule",
+      reason: `The changed contract shares analyzer result fields: ${sharedIdentifiers.slice(0, 3).join(", ")}.`,
+    };
+  }
+  return classifications;
+}
+
 export function isTransformationSourcePath(fileInput: string): boolean {
   const file = toPosixPath(fileInput);
   return (
@@ -138,6 +203,77 @@ function isConfigurationPath(file: string): boolean {
     /^(?:package\.json|tsconfig(?:\.[^.]+)?\.json|jsconfig\.json|app\.json|eas\.json|pyproject\.toml|Cargo\.toml|go\.mod)$/i.test(basename) ||
     /(?:^|[.-])config\.[^/]+$/i.test(basename) ||
     /^(?:Dockerfile|Makefile|\.env(?:\..+)?)$/i.test(basename);
+}
+
+function referencesChangedAnalysisSource(
+  file: string,
+  text: string,
+  analysisFiles: Set<string>,
+): boolean {
+  const imports = [...text.matchAll(
+    /(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*["']([^"']+)["']/g,
+  )].map((match) => match[1]);
+  return imports.some((specifier) => {
+    if (!specifier.startsWith(".")) {
+      return false;
+    }
+    const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
+    return [...analysisFiles].some((analysisFile) => sameModulePath(resolved, analysisFile));
+  });
+}
+
+function sameModulePath(left: string, right: string): boolean {
+  const normalizedLeft = stripModuleExtension(left);
+  const normalizedRight = stripModuleExtension(right);
+  return normalizedLeft === normalizedRight ||
+    `${normalizedLeft}/index` === normalizedRight ||
+    normalizedLeft === `${normalizedRight}/index`;
+}
+
+function stripModuleExtension(value: string): string {
+  return value.replace(/\.(?:[cm]?[jt]sx?|json)$/i, "");
+}
+
+function isAnalyzerContractDataPath(file: string): boolean {
+  return /(?:^|\/)(?:schemas?|contracts?)(?:\/|$)/i.test(file) &&
+    /\.(?:json|json5|ya?ml)$/i.test(file);
+}
+
+function contractIdentifiers(text: string): string[] {
+  const ignored = new Set([
+    "array",
+    "boolean",
+    "default",
+    "description",
+    "enum",
+    "false",
+    "matched",
+    "none",
+    "null",
+    "number",
+    "object",
+    "properties",
+    "required",
+    "result",
+    "source",
+    "status",
+    "string",
+    "true",
+    "type",
+  ]);
+  return [...new Set(
+    [...text.matchAll(/\b[A-Za-z_$][A-Za-z0-9_$]{4,}\b/g)]
+      .map((match) => match[0].toLowerCase())
+      .filter((identifier) => identifier.length >= 8 && !ignored.has(identifier)),
+  )];
+}
+
+function schemaContractIdentifiers(text: string): string[] {
+  return contractIdentifiers(
+    [...text.matchAll(/["']?([A-Za-z_$][A-Za-z0-9_$]{4,})["']?\s*:/g)]
+      .map((match) => match[1])
+      .join("\n"),
+  );
 }
 
 function toPosixPath(value: string): string {

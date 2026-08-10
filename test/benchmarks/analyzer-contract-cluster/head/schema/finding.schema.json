@@ -1,0 +1,7 @@
+{
+  "type": "object",
+  "properties": {
+    "matched": { "type": "boolean" },
+    "evidenceKind": { "enum": ["session-boundary", "none"] }
+  }
+}

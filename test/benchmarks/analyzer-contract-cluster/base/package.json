@@ -1,0 +1,8 @@
+{
+  "name": "analyzer-contract-cluster-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -573,6 +573,9 @@ function evaluateContract(expect, result, plan, qa) {
   if (expect.minFlows !== undefined && result.flows < expect.minFlows) {
     failures.push(`expected at least ${expect.minFlows} flow(s), got ${result.flows}`);
   }
+  if (expect.maxFlows !== undefined && result.flows > expect.maxFlows) {
+    failures.push(`flow count ${result.flows} exceeds ${expect.maxFlows}`);
+  }
   if (
     expect.minImportPropagatedFlows !== undefined &&
     result.importPropagatedFlows < expect.minImportPropagatedFlows

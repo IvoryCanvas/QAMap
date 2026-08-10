@@ -1,8 +1,13 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { classifyChangeSourceRole, isTransformationSourcePath } from "./source-role.js";
+import {
+  classifyChangedSourceRoles,
+  classifyChangeSourceRole,
+  isTransformationSourcePath,
+} from "./source-role.js";
 import type { ChangeSourceRole } from "./source-role.js";
 import {
   collectChangedQaSymbolAnnotations,
@@ -237,6 +242,9 @@ export async function analyzeChangeIntents(
   const diagnostics: string[] = [];
   const commits = await collectCommitEvidence(gitRoot, options.base, options.head, relativeRoot, diagnostics);
   const parsedCommits = commits.map(parseCommit);
+  const changedSourceRoles = classifyChangedSourceRoles(
+    await collectChangedSourceRoleText(root, gitRoot, options),
+  );
   const annotationAnalysis = await collectChangedQaSymbolAnnotations(root, {
     head: options.head,
     workspaceRoot: options.workspaceRoot,
@@ -246,23 +254,23 @@ export async function analyzeChangeIntents(
   });
   diagnostics.push(...annotationAnalysis.diagnostics.map(formatQaSymbolAnnotationDiagnostic));
   const productAnnotations = annotationAnalysis.annotations.filter((annotation) =>
-    classifyChangeSourceRole(
+    (changedSourceRoles[annotation.file]?.role ?? classifyChangeSourceRole(
       annotation.file,
-      [
-        annotation.symbol,
-        ...(options.addedDiffEvidence?.[annotation.file] ?? [])
-          .flatMap((hunk) => hunk.lines.map((line) => line.text)),
-      ].join("\n"),
-    ).role === "product"
+      annotation.symbol,
+    ).role) === "product"
   );
   const annotationSignals = collectQaSymbolAnnotationSignals(productAnnotations);
   const annotationEvidence = collectQaSymbolAnnotationEvidence(productAnnotations);
   const codeSignals = selectCodeSignals([
     ...annotationSignals,
-    ...collectCodeBehaviorSignals(options.addedDiffText ?? {}, options.addedDiffEvidence ?? {}),
+    ...collectCodeBehaviorSignals(
+      options.addedDiffText ?? {},
+      options.addedDiffEvidence ?? {},
+      changedSourceRoles,
+    ),
   ]);
   const riskEvidence = uniqueEvidence([
-    ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}),
+    ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}, changedSourceRoles),
     ...collectQaSymbolAnnotationRiskEvidence(productAnnotations),
   ]);
   const changedFiles = options.changedFiles.map((file) => file.path);
@@ -321,6 +329,83 @@ export async function analyzeChangeIntents(
       : undefined,
     diagnostics: uniqueStrings(diagnostics),
   };
+}
+
+async function collectChangedSourceRoleText(
+  root: string,
+  gitRoot: string,
+  options: ChangeIntentAnalysisOptions,
+): Promise<Record<string, string>> {
+  const headIsCurrent = await refsResolveToSameCommit(gitRoot, options.head, "HEAD");
+  const dirtyFiles = headIsCurrent && !options.includeWorkingTree
+    ? await collectDirtyRepositoryFiles(gitRoot)
+    : new Set<string>();
+  const relativeRoot = toPosixPath(path.relative(gitRoot, root)).replace(/^\.\/+|\/+$/g, "");
+  const entries = new Array<readonly [string, string]>(options.changedFiles.length);
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(8, options.changedFiles.length) },
+    async () => {
+      for (;;) {
+        const index = cursor;
+        cursor += 1;
+        if (index >= options.changedFiles.length) {
+          return;
+        }
+        const changedFile = options.changedFiles[index];
+        const file = changedFile.path;
+        const locatedText = options.addedDiffEvidence?.[file]
+          ? diffTextForRoleClassification(options.addedDiffEvidence[file])
+          : options.addedDiffText?.[file] ?? "";
+        const repositoryFile = relativeRoot ? `${relativeRoot}/${file}` : file;
+        try {
+          const currentText = options.includeWorkingTree || (headIsCurrent && !dirtyFiles.has(repositoryFile))
+            ? await readFile(path.join(root, file), "utf8")
+            : (await execFileAsync(
+                "git",
+                ["show", `${options.head}:${repositoryFile}`],
+                { cwd: gitRoot, maxBuffer: 512 * 1024 },
+              )).stdout;
+          entries[index] = [file, `${locatedText}\n${currentText.slice(0, 256 * 1024)}`];
+        } catch {
+          entries[index] = [file, locatedText];
+        }
+      }
+    },
+  );
+  await Promise.all(workers);
+  return Object.fromEntries(entries);
+}
+
+async function collectDirtyRepositoryFiles(root: string): Promise<Set<string>> {
+  try {
+    const results = await Promise.all([
+      execFileAsync("git", ["diff", "--name-only", "-z"], { cwd: root }),
+      execFileAsync("git", ["diff", "--cached", "--name-only", "-z"], { cwd: root }),
+      execFileAsync("git", ["ls-files", "--others", "--exclude-standard", "-z"], { cwd: root }),
+    ]);
+    return new Set(
+      results.flatMap(({ stdout }) => stdout.split("\0").map(toPosixPath).filter(Boolean)),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+async function refsResolveToSameCommit(
+  root: string,
+  left: string,
+  right: string,
+): Promise<boolean> {
+  try {
+    const [{ stdout: leftSha }, { stdout: rightSha }] = await Promise.all([
+      execFileAsync("git", ["rev-parse", "--verify", `${left}^{commit}`], { cwd: root }),
+      execFileAsync("git", ["rev-parse", "--verify", `${right}^{commit}`], { cwd: root }),
+    ]);
+    return leftSha.trim() === rightSha.trim();
+  } catch {
+    return false;
+  }
 }
 
 function rankChangeIntentsForReview(
@@ -707,8 +792,11 @@ function buildDiffOnlyIntent(
   const annotatedFlow = firstQaAnnotationFlow(annotationEvidence);
   const titleSubject = annotatedFlow
     ? humanizeIdentifier(annotatedFlow)
-    : diffIntentSubject(files[0], roleEvidence[0]?.sourceRole);
-  const title = `${titleSubject} ${includesWorkingTree ? "working-tree" : "changed"} behavior`;
+    : diffIntentSubject(files[0], roleEvidence[0]?.sourceRole, roleEvidence);
+  const analysisRuleChange = roleEvidence.some((item) => item.sourceRole === "analysis-rule");
+  const title = analysisRuleChange
+    ? `${titleSubject} ${includesWorkingTree ? "working-tree change" : "change"}`
+    : `${titleSubject} ${includesWorkingTree ? "working-tree" : "changed"} behavior`;
   const evidence = uniqueEvidence([
     ...codeSignals.slice(0, 16).map((signal) => signal.evidence),
     ...selectRiskEvidence(riskEvidence, 24),
@@ -737,8 +825,27 @@ function buildDiffOnlyIntent(
   };
 }
 
-function diffIntentSubject(file: string | undefined, sourceRole?: ChangeSourceRole): string {
-  if (sourceRole === "analysis-rule") return "Static analysis rule";
+function diffIntentSubject(
+  file: string | undefined,
+  sourceRole?: ChangeSourceRole,
+  roleEvidence: ChangeIntentEvidence[] = [],
+): string {
+  if (sourceRole === "analysis-rule" || roleEvidence.some((item) => item.sourceRole === "analysis-rule")) {
+    const specificRuleFile = roleEvidence
+      .filter((item) => item.sourceRole === "analysis-rule" && item.file)
+      .map((item) => item.file as string)
+      .find(isSpecificAnalysisRulePath);
+    if (specificRuleFile) {
+      return `${humanizeIdentifier(path.basename(specificRuleFile).replace(/\.[^.]+$/, ""))} analysis rule`;
+    }
+    const specificSymbol = roleEvidence
+      .filter((item) => item.sourceRole === "analysis-rule")
+      .map((item) => item.symbol ?? "")
+      .find((symbol) => !/^(?:analysis|analyzer|classifier|engine|matcher|qa|rule|scanner)$/i.test(symbol));
+    return specificSymbol
+      ? `${humanizeIdentifier(specificSymbol)} analysis rule`
+      : "Static analysis rule";
+  }
   if (sourceRole === "command") return "CLI command";
   if (!file) return "Working tree";
   const extensionless = path.basename(file).replace(/\.[^.]+$/, "");
@@ -746,6 +853,14 @@ function diffIntentSubject(file: string | undefined, sourceRole?: ChangeSourceRo
     ? path.basename(path.dirname(file))
     : extensionless;
   return humanizeIdentifier(subject || "changed behavior");
+}
+
+function isSpecificAnalysisRulePath(file: string): boolean {
+  const normalized = toPosixPath(file);
+  const basename = path.posix.basename(normalized).replace(/\.[^.]+$/, "");
+  return /(?:^|\/)(?:analyzers?|classifiers?|heuristics?|linters?|matchers?|policies|rules?|scanner)(?:\/|$)/i.test(
+    normalized,
+  ) && !/^(?:analysis|analyzer|classifier|engine|index|matcher|policy|qa|rule|rule-engine|scanner)$/i.test(basename);
 }
 
 function selectIntentFiles(
@@ -2025,11 +2140,13 @@ function summarizeQaSymbolAnnotations(
 function collectCodeBehaviorSignals(
   addedDiffText: Record<string, string>,
   addedDiffEvidence: AddedDiffEvidence,
+  changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
 ): CodeBehaviorSignal[] {
   const signals: CodeBehaviorSignal[] = [];
   const locatedFiles = new Set<string>();
   for (const [file, hunks] of Object.entries(addedDiffEvidence)) {
-    const sourceRole = classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
+    const sourceRole = changedSourceRoles[file]?.role ??
+      classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
     if (sourceRole !== "product") {
       continue;
     }
@@ -2043,7 +2160,7 @@ function collectCodeBehaviorSignals(
     }
   }
   for (const [file, text] of Object.entries(addedDiffText)) {
-    const sourceRole = classifyChangeSourceRole(file, text).role;
+    const sourceRole = changedSourceRoles[file]?.role ?? classifyChangeSourceRole(file, text).role;
     if (sourceRole !== "product" || locatedFiles.has(file)) {
       continue;
     }
@@ -2197,10 +2314,14 @@ function selectCodeSignals(signals: CodeBehaviorSignal[]): CodeBehaviorSignal[] 
   return selected;
 }
 
-function collectDiffRiskEvidence(addedDiffEvidence: AddedDiffEvidence): ChangeIntentEvidence[] {
+function collectDiffRiskEvidence(
+  addedDiffEvidence: AddedDiffEvidence,
+  changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
+): ChangeIntentEvidence[] {
   const evidence: ChangeIntentEvidence[] = [];
   for (const [file, hunks] of Object.entries(addedDiffEvidence)) {
-    const sourceRole = classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
+    const sourceRole = changedSourceRoles[file]?.role ??
+      classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
     if (sourceRole === "test" || sourceRole === "documentation" || sourceRole === "generated") {
       continue;
     }
