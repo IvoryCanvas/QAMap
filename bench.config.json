@@ -546,6 +546,52 @@
       }
     },
     {
+      "name": "analyzer-contract-cluster",
+      "fixture": "test/benchmarks/analyzer-contract-cluster",
+      "commitMessage": "fix: preserve session boundary findings across analyzer output",
+      "expect": {
+        "runner": "manual",
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "verificationStatus": "ready-to-run",
+        "routeStatus": "verification-ready-to-run",
+        "routeNextAction": "run-repository-command",
+        "mustRouteCommands": ["test/session-boundary.test.mjs"],
+        "minFlows": 1,
+        "maxFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 1,
+        "maxMissingReasoningTraces": 0,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": [
+          "src/rules/session-boundary.ts",
+          "src/analyzer-execution.ts",
+          "src/index.ts",
+          "schema/finding.schema.json"
+        ],
+        "mustNameIntents": ["session boundary findings"],
+        "mustIncludeQaScenarios": [
+          "Changed analysis rule positive and negative controls"
+        ],
+        "mustNotNameFlows": [
+          "Analyzer Execution",
+          "Finding Schema",
+          "primary journey"
+        ],
+        "mustNotFindEvidence": [
+          "Network response setup",
+          "Fixture data setup"
+        ],
+        "mustTraceScenarioFiles": ["src/rules/session-boundary.ts"],
+        "maxUntracedCriticalScenarios": 0,
+        "maxMissingScenarioReceipts": 0,
+        "maxRequiredScenarioGaps": 0,
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "expo-maestro-profile",
       "fixture": "test/benchmarks/expo-maestro-profile",
       "expect": {

@@ -19,7 +19,10 @@ import {
   summarizeQaTraceEvidence,
 } from "../dist/qa-trace.js";
 import { routeQaScenario } from "../dist/scenario-routing.js";
-import { classifyChangeSourceRole } from "../dist/source-role.js";
+import {
+  classifyChangedSourceRoles,
+  classifyChangeSourceRole,
+} from "../dist/source-role.js";
 import {
   addedDiffTextFromEvidence,
   collectAddedDiffEvidence,
@@ -930,6 +933,47 @@ test("source roles distinguish product behavior from commands and analysis rules
   assert.equal(classifyChangeSourceRole("vite.config.ts").role, "configuration");
 });
 
+test("changed source roles follow analyzer imports without absorbing unrelated product rules", () => {
+  const roles = classifyChangedSourceRoles({
+    "src/rules/session-boundary.ts": [
+      "const evidencePattern = /session\\.(?:start|resume)/;",
+      "export function analyzeEvidence(source) { return evidencePattern.test(source); }",
+    ].join("\n"),
+    "src/analyzer-execution.ts": [
+      "import { analyzeEvidence } from './rules/session-boundary.js';",
+      "export function runAnalysis(source) {",
+      "  const matched = analyzeEvidence(source);",
+      "  return { matched, evidenceKind: matched ? 'session-boundary' : 'none' };",
+      "}",
+    ].join("\n"),
+    "src/index.ts": "export { runAnalysis } from './analyzer-execution.js';",
+    "schema/finding.schema.json": JSON.stringify({
+      type: "object",
+      properties: { evidenceKind: { enum: ["session-boundary", "none"] } },
+    }),
+    "schema/account.schema.json": JSON.stringify({
+      type: "object",
+      properties: { session: { type: "string" }, timeoutSeconds: { type: "number" } },
+    }),
+    "src/rules/discount.ts": [
+      "const couponPattern = /^[A-Z]+$/;",
+      "export function evaluateDiscount(code) { return couponPattern.test(code); }",
+    ].join("\n"),
+    "src/features/checkout.ts": [
+      "import { evaluateDiscount } from '../rules/discount.js';",
+      "export function applyDiscount(code) { return evaluateDiscount(code); }",
+    ].join("\n"),
+  });
+
+  assert.equal(roles["src/rules/session-boundary.ts"].role, "analysis-rule");
+  assert.equal(roles["src/analyzer-execution.ts"].role, "analysis-rule");
+  assert.equal(roles["src/index.ts"].role, "analysis-rule");
+  assert.equal(roles["schema/finding.schema.json"].role, "analysis-rule");
+  assert.equal(roles["schema/account.schema.json"].role, "product");
+  assert.equal(roles["src/rules/discount.ts"].role, "product");
+  assert.equal(roles["src/features/checkout.ts"].role, "product");
+});
+
 test("analysis rules and CLI surfaces receive role-specific QA without product-domain false positives", async (t) => {
   const root = await makeRepo(t);
   await write(
@@ -1102,6 +1146,177 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
   assert.equal(typeof compactSummary.flows[0].reviewQuestion, "string");
   assert.equal(typeof compactSummary.flows[0].successSignal, "string");
   assert.ok(compactSummary.flows[0].steps.length > 0);
+});
+
+test("one analyzer rule change keeps adapters and schema in one verification intent", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "package.json",
+    JSON.stringify({
+      name: "evidence-cli",
+      type: "module",
+      bin: { evidence: "dist/cli.js" },
+      scripts: { test: "node --test" },
+    }),
+  );
+  await write(
+    root,
+    "src/rules/session-boundary.ts",
+    [
+      "export function analyzeSessionEvidence(source) {",
+      "  return /session/.test(source);",
+      "}",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "src/analyzer-execution.ts",
+    [
+      "import { analyzeSessionEvidence } from './rules/session-boundary.js';",
+      "export function analyzeSource(source) {",
+      "  return { matched: analyzeSessionEvidence(source) };",
+      "}",
+    ].join("\n"),
+  );
+  await write(root, "src/index.ts", "export { analyzeSource } from './analyzer-execution.js';\n");
+  await write(
+    root,
+    "schema/finding.schema.json",
+    JSON.stringify({ type: "object", properties: { matched: { type: "boolean" } } }),
+  );
+  await write(
+    root,
+    "test/session-boundary.test.mjs",
+    "import test from 'node:test'; test('detects a session boundary', () => {});\n",
+  );
+  await write(root, "docs/rules.md", "# Session boundary\n\nDetect session evidence.\n");
+  commit(root, "benchmark baseline");
+  branch(root, "fix/session-boundary-evidence");
+
+  await write(
+    root,
+    "src/rules/session-boundary.ts",
+    [
+      "const boundaryPattern = /session\\.(?:start|resume)/;",
+      "const vocabularyOnlyPattern = /session boundary/i;",
+      "export function analyzeSessionEvidence(source) {",
+      "  return boundaryPattern.test(source) && !vocabularyOnlyPattern.test(source);",
+      "}",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "src/analyzer-execution.ts",
+    [
+      "import { analyzeSessionEvidence } from './rules/session-boundary.js';",
+      "export function analyzeSource(source) {",
+      "  const matched = analyzeSessionEvidence(source);",
+      "  return { matched, evidenceKind: matched ? 'session-boundary' : 'none' };",
+      "}",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "src/index.ts",
+    [
+      "export { analyzeSource } from './analyzer-execution.js';",
+      "export { analyzeSessionEvidence } from './rules/session-boundary.js';",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "schema/finding.schema.json",
+    JSON.stringify({
+      type: "object",
+      properties: {
+        matched: { type: "boolean" },
+        evidenceKind: { enum: ["session-boundary", "none"] },
+      },
+    }),
+  );
+  await write(
+    root,
+    "test/session-boundary.test.mjs",
+    [
+      "import test from 'node:test';",
+      "test('emits a finding for a session start call', () => {});",
+      "test('ignores vocabulary without a session call', () => {});",
+      "test('keeps the neighboring request rule unchanged', () => {});",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    "docs/rules.md",
+    "# Session boundary\n\nA finding requires a session call, not vocabulary alone.\n",
+  );
+  commit(root, "fix: preserve session boundary findings across analyzer output");
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const intent = qa.changeAnalysis.intents[0];
+
+  assert.equal(qa.changeAnalysis.intents.length, 1);
+  assert.match(intent.title, /session boundary findings/i);
+  assert.equal(
+    qa.flows.length,
+    1,
+    JSON.stringify({
+      flows: qa.flows.map((flow) => ({
+        title: flow.title,
+        verificationMode: flow.verificationMode,
+        changedFiles: flow.changedFiles,
+        source: flow.source,
+      })),
+      evidence: intent.evidence.map((item) => ({
+        file: item.file,
+        sourceRole: item.sourceRole,
+        relation: item.relation,
+      })),
+    }, null, 2),
+  );
+  assert.equal(qa.flows[0].verificationMode, "analysis-rule");
+  assert.ok(qa.flows[0].changedFiles.includes("src/rules/session-boundary.ts"));
+  assert.ok(qa.flows[0].changedFiles.includes("src/analyzer-execution.ts"));
+  assert.ok(qa.flows[0].changedFiles.includes("schema/finding.schema.json"));
+  assert.ok(qa.flows[0].existingEvidencePaths.includes("test/session-boundary.test.mjs"));
+  assert.match(qa.route.command ?? "", /test\/session-boundary\.test\.mjs/);
+  assert.equal(qa.execution.status, "not-run");
+  assert.equal(qa.execution.performed, false);
+  assert.equal(qa.bootstrap.steps.some((step) => step.category === "domain-language"), false);
+  assert.equal(qa.bootstrap.steps.some((step) => step.category === "core-flow"), false);
+});
+
+test("diff-only analyzer changes recover a concrete rule subject", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "src/rules/session-boundary.ts",
+    [
+      "export function analyzeSessionEvidence(source) {",
+      "  return /session/.test(source);",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "chore/analyzer-controls");
+  await write(
+    root,
+    "src/rules/session-boundary.ts",
+    [
+      "const evidencePattern = /session\\.(?:start|resume)/;",
+      "export function analyzeSessionEvidence(source) {",
+      "  return evidencePattern.test(source);",
+      "}",
+    ].join("\n"),
+  );
+  commit(root, "chore: refresh analyzer controls");
+
+  const analysis = await analyze(root, ["src/rules/session-boundary.ts"]);
+
+  assert.equal(analysis.source, "diff-only");
+  assert.equal(analysis.intents.length, 1);
+  assert.match(analysis.intents[0].title, /Session Boundary analysis rule change/i);
+  assert.doesNotMatch(analysis.intents[0].title, /^Static analysis rule/i);
 });
 
 test("analyzer path constants do not become executable lifecycle actions", async (t) => {
@@ -4134,9 +4349,10 @@ test("change intents prioritize the newest independent feature for review", asyn
   assert.match(analysis.intents[0].title, /open archived records/i);
   assert.match(analysis.intents[1].title, /save profile preferences/i);
   const residualIntentIndex = analysis.intents.findIndex((intent) =>
-    /static analysis rule|changed behavior/i.test(intent.title)
+    /analysis rule (?:working-tree )?change|changed behavior/i.test(intent.title)
   );
   assert.ok(residualIntentIndex > 1);
+  assert.match(analysis.intents[residualIntentIndex].title, /Request Rule analysis rule change/i);
 });
 
 test("JavaScript producer and consumer changes expose asynchronous ordering risks", async (t) => {

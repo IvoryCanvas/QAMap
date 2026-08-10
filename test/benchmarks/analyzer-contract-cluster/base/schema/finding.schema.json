@@ -1,0 +1,6 @@
+{
+  "type": "object",
+  "properties": {
+    "matched": { "type": "boolean" }
+  }
+}

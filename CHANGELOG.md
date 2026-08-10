@@ -18,6 +18,8 @@
 
 ### Fixed
 
+- One analyzer-rule change now keeps its import/export adapters and matching result schema in a single repository-verification intent instead of expanding internal filenames into product-domain QA flows.
+- Diff-only analyzer changes now recover a concrete rule subject from the changed rule path when commit text does not describe behavior.
 - Automatic package commands now remain workspace-root executable, while explicitly selected package validation runs from the selected package instead of the workspace root.
 - Documentation and contributor-workflow changes no longer produce clean-install, app-launch, endpoint, authentication, response-shape, selector, fixture, or product E2E guidance without runtime evidence.
 - Compact agent output now prioritizes changed guides and contributor templates over accompanying release notes and generated documentation assets.
