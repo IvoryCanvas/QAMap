@@ -1094,18 +1094,37 @@ async function mergePriorityDiffEvidence(
   options: AddedDiffTextOptions,
 ): Promise<void> {
   try {
+    const priorityCommit = await resolvePriorityDiffCommit(gitRoot, options.base, options.head);
+    if (!priorityCommit) {
+      return;
+    }
     const { stdout } = await git(gitRoot, [
       "diff",
       "--no-color",
       "--find-renames",
       "--unified=0",
-      `${options.head}^`,
-      options.head,
+      `${priorityCommit}^`,
+      priorityCommit,
     ]);
     mergeAddedDiffEvidence(byFile, stdout, relativeRoot);
   } catch {
     // A root commit has no parent; the complete base/head diff below remains valid.
   }
+}
+
+async function resolvePriorityDiffCommit(
+  gitRoot: string,
+  base: string,
+  head: string,
+): Promise<string | undefined> {
+  const { stdout } = await git(gitRoot, [
+    "rev-list",
+    "--first-parent",
+    "--no-merges",
+    "--max-count=1",
+    `${base}..${head}`,
+  ]);
+  return stdout.trim() || undefined;
 }
 
 async function mergeUntrackedDiffEvidence(

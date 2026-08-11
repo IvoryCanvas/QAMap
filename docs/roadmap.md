@@ -42,26 +42,36 @@ The OpenAI Plugin Directory is now a real first-run surface, so the next patches
 prioritize recommendation quality over adding another distribution channel or
 runner name. The current generalized work queue is:
 
-1. The next patch candidate now detects target-branch-aware Django migration
-   graph conflicts when a changed migration branches from a non-leaf node. It
-   preserves exact changed-dependency and base-leaf evidence, works for committed
-   and working-tree changes, and routes the result to a repository-declared graph
-   or deployment-plan command instead of fabricated product E2E. Dynamic and
-   squashed dependency declarations remain explicit manual-review boundaries.
-2. Extract framework-neutral presentation contracts from changed UI code. An
+1. Keep long-lived and recently synchronized branches inside the real PR
+   evidence boundary. The complete comparison stays merge-base aware, while
+   latest-change priority must come from the branch's own non-merge first-parent
+   history rather than target-only hunks introduced by a merge commit.
+2. Trace runtime prerequisites across reused code. A route or entry point that
+   bypasses a provider, wrapper, dependency injection boundary, or required
+   initialization path should surface a render or startup regression before
+   selector and fixture advice.
+3. Treat changed repository tests as behavior contracts. Preserve explicit
+   normalization boundaries, negative assertions, state transitions, retry
+   prohibitions, and cross-file value continuity instead of reducing them to a
+   generic request to run the suite.
+4. Extract framework-neutral presentation contracts from changed UI code. An
    overlay becoming inline content, scroll-lock removal, responsive overflow,
    replaced-element sizing, and inherited icon color should produce concrete
    interaction or visual checks only when the diff carries the required
    evidence.
-3. Keep repository workflow metadata in its own behavior class. Documentation,
+5. Keep repository workflow metadata in its own behavior class. Documentation,
    issue forms, pull-request templates, and their contract tests must route to
    link, schema, field, label, and template validation rather than fabricated
    endpoint or application-launch scenarios.
-4. Turn each real miss into a domain-neutral public fixture with a positive
+6. Prefer repository-owned validation commands from package scripts, CI
+   workflows, and adjacent test harnesses over blocked optional automation.
+   Vocabulary in a property or filename must not create a domain risk without
+   matching behavior evidence.
+7. Turn each real miss into a domain-neutral public fixture with a positive
    contract and an unrelated negative control. A new shared heuristic is not
    complete until both sides pass the static benchmark and the existing
    execution contract remains honest.
-5. Re-run the published skill against unrelated repositories and compare its
+8. Re-run the published skill against unrelated repositories and compare its
    deterministic result with independent human or agent review. Preserve
    `not-run`, `passed`, `failed`, and `blocked` exactly; plugin availability is
    not evidence that product QA ran.

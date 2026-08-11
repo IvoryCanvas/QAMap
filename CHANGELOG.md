@@ -18,6 +18,7 @@
 
 ### Fixed
 
+- Target-branch merge commits no longer place imported baseline hunks ahead of the feature branch's own QA evidence; ordinary non-merge review fixes keep their latest-change priority.
 - One analyzer-rule change now keeps its import/export adapters and matching result schema in a single repository-verification intent instead of expanding internal filenames into product-domain QA flows.
 - Diff-only analyzer changes now recover a concrete rule subject from the changed rule path when commit text does not describe behavior.
 - Automatic package commands now remain workspace-root executable, while explicitly selected package validation runs from the selected package instead of the workspace root.
