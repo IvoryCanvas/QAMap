@@ -6,14 +6,6 @@
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/qamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-<a href="https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629">
-  <img src="docs/assets/openai-plugin-directory-badge.svg" alt="Install QAMap from the OpenAI Plugin Directory" height="64">
-</a>
-
-**Install in ChatGPT or Codex:** open **Plugins**, search for **QAMap**, select
-**+**, then start a new chat. [Open QAMap](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
-· [Official installation steps](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
-
 ![QAMap: find what a change needs to prove](docs/assets/qamap-cover.png)
 
 **Find what a change needs to prove before merge.**
@@ -29,51 +21,62 @@ existing tests, and diff evidence to answer:
 QAMap itself makes no cloud analysis, source upload, or additional LLM call. A
 manifest and test runner are optional.
 
-## Run The CLI In 60 Seconds
+## Install And Run
+
+Choose the local CLI for any repository, or
+[install the QAMap plugin](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
+when you want ChatGPT or Codex to invoke the same workflow.
+
+### Local CLI (Recommended)
 
 QAMap requires Node.js 20 or newer. Use an
 [actively supported Node.js LTS release](https://nodejs.org/en/about/previous-releases)
-when possible; Node.js 20 remains package-compatible but is upstream EOL. The
-same QAMap command works on every compatible Node.js version.
+when possible.
 
-Run this from the branch you want to review. It works regardless of whether the
-repository uses npm, pnpm, Yarn, or Bun, and it does not add QAMap to the
-project's dependencies:
+Run commands from the branch you want to review.
+
+#### Try Without Changing The Repository
+
+This one-off command works regardless of whether the repository uses npm, pnpm,
+Yarn, or Bun. It does not add QAMap to the project's dependencies:
 
 ```sh
 npx --yes @ivorycanvas/qamap@latest qa
 ```
 
-<details>
-<summary>Validated Node.js lines</summary>
+#### Install For Repeat Use
 
-The published `0.4.13` package completed an install and real `qa` smoke on these
-lines on 2026-08-11. The install command is the same for every line.
+To pin QAMap in a JavaScript project, use the repository's package manager:
 
-| Node.js | Smoke | Guidance |
+| Package manager | Install | Add the short scripts |
 | --- | --- | --- |
-| 20 | Passed | Package-compatible, but upstream EOL; upgrade for security fixes |
-| 22 | Passed | Supported LTS at the time of validation |
-| 24 | Passed | Supported LTS at the time of validation |
-| 26 | Passed | Current release at the time of validation; prefer LTS for production |
+| npm | `npm install --save-dev @ivorycanvas/qamap` | `npm exec -- qamap init --scripts` |
+| pnpm | `pnpm add --save-dev @ivorycanvas/qamap` | `pnpm exec qamap init --scripts` |
+| Yarn 1 or newer | `yarn add --dev @ivorycanvas/qamap` | `yarn qamap init --scripts` |
+| Bun | `bun add --dev @ivorycanvas/qamap` | `bun run qamap init --scripts` |
 
-See the [release validation receipt](docs/release-validation.md#unreleased---2026-08-11)
-for exact versions and package-manager coverage.
+Short scripts, alternative one-off commands, Node.js validation, and advanced
+options are collected in [Daily CLI Use](#daily-cli-use).
 
-</details>
+### ChatGPT And Codex Plugin
 
-QAMap infers the base branch in standard repositories. Override it only when
-needed:
+Install the plugin when you want an agent to call QAMap as part of PR review or
+test planning.
 
-```sh
-npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD
-```
+<a href="https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629">
+  <img src="docs/assets/openai-plugin-directory-badge.svg" alt="Install QAMap from the OpenAI Plugin Directory" height="64">
+</a>
 
-The default output is concise. Open the complete reasoning trace with:
+[Install the QAMap plugin](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
+· [OpenAI's official plugin installation steps](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
 
-```sh
-npx --yes @ivorycanvas/qamap@latest qa --format markdown
-```
+1. Open the QAMap listing.
+2. Select **+**.
+3. Start a new ChatGPT or Codex conversation with access to the checked-out
+   repository and local shell.
+
+The plugin invokes the same local QAMap package. QAMap's static analysis makes
+no additional LLM call, but the host agent uses its own model and permissions.
 
 ## Read The Result
 
@@ -133,44 +136,9 @@ Next
 The generated browser checks are exercised separately by the
 [execution benchmark](docs/benchmarking.md#run-the-execution-contract).
 
-## Choose Your Path
+## Daily CLI Use
 
-| Goal | Start here |
-| --- | --- |
-| Review one branch | [First-run walkthrough](docs/quickstart-demo.md) |
-| Use QAMap every day | [Adoption guide](docs/adoption.md) |
-| Use QAMap from an agent | [Agent integration](docs/agent-skill.md) |
-| Correct repeated misunderstandings | [Verification manifest](docs/manifest.md) |
-| Understand every command | [Command reference](docs/commands.md) |
-| Contribute a fix or failure case | [Contributing](CONTRIBUTING.md) |
-| Browse all documentation | [English documentation](docs/en/README.md) |
-
-Most users only need the first two rows.
-
-## Analysis, Execution, And E2E
-
-| Command | What it does | Writes or runs project code? |
-| --- | --- | --- |
-| `qamap qa` | Maps the diff to behavior, risk, evidence, and QA scenarios. | No |
-| `qamap qa run` | Runs one existing repository validation selected by QAMap. | Yes, explicitly |
-| `qamap e2e draft . --dry-run` | Previews optional Playwright, Maestro, CLI, API, or manual automation. | No |
-
-QAMap does not hide an important QA scenario because a repository lacks a
-selector, fixture, Playwright, Maestro, or test runner. Those are automation
-details. Missing evidence remains visible instead of becoming a fabricated pass.
-
-## Install For Repeat Use
-
-The one-off `npx` command above is the safest first run because it leaves the
-repository's dependency files unchanged. To pin QAMap in a JavaScript project,
-use the repository's package manager:
-
-| Package manager | Install | Add the short scripts |
-| --- | --- | --- |
-| npm | `npm install --save-dev @ivorycanvas/qamap` | `npm exec -- qamap init --scripts` |
-| pnpm | `pnpm add --save-dev @ivorycanvas/qamap` | `pnpm exec qamap init --scripts` |
-| Yarn 1 or newer | `yarn add --dev @ivorycanvas/qamap` | `yarn qamap init --scripts` |
-| Bun | `bun add --dev @ivorycanvas/qamap` | `bun run qamap init --scripts` |
+### Add Short Scripts
 
 `init --scripts` adds `qa`, `qa:local`, `qa:run`, and `qa:e2e`. Run the same
 script with the syntax your project already uses:
@@ -202,6 +170,51 @@ project. Corepack-managed package managers may add or update the repository's
 `packageManager` metadata; use the `npx` first run when a no-write check matters.
 
 </details>
+
+<details>
+<summary>Validated Node.js lines</summary>
+
+The published `0.4.13` package completed an install and real `qa` smoke on these
+lines on 2026-08-11. The install command is the same for every line.
+
+| Node.js | Smoke | Guidance |
+| --- | --- | --- |
+| 20 | Passed | Package-compatible, but upstream EOL; upgrade for security fixes |
+| 22 | Passed | Supported LTS at the time of validation |
+| 24 | Passed | Supported LTS at the time of validation |
+| 26 | Passed | Current release at the time of validation; prefer LTS for production |
+
+See the [release validation receipt](docs/release-validation.md#unreleased---2026-08-11)
+for exact versions and package-manager coverage.
+
+</details>
+
+### Useful CLI Options
+
+QAMap infers the base branch in standard repositories. Override it only when
+needed:
+
+```sh
+npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD
+```
+
+The default output is concise. Open the complete reasoning trace with:
+
+```sh
+npx --yes @ivorycanvas/qamap@latest qa --format markdown
+```
+
+## Analysis, Execution, And E2E
+
+| Command | What it does | Writes or runs project code? |
+| --- | --- | --- |
+| `qamap qa` | Maps the diff to behavior, risk, evidence, and QA scenarios. | No |
+| `qamap qa run` | Runs one existing repository validation selected by QAMap. | Yes, explicitly |
+| `qamap e2e draft . --dry-run` | Previews optional Playwright, Maestro, CLI, API, or manual automation. | No |
+
+QAMap does not hide an important QA scenario because a repository lacks a
+selector, fixture, Playwright, Maestro, or test runner. Those are automation
+details. Missing evidence remains visible instead of becoming a fabricated pass.
 
 ## How It Works
 
@@ -240,6 +253,20 @@ npx --yes @ivorycanvas/qamap@latest manifest init
 
 See [Verification manifest](docs/manifest.md) before committing
 `.qamap/manifest.yaml`.
+
+## Documentation
+
+| Goal | Start here |
+| --- | --- |
+| Review one branch | [First-run walkthrough](docs/quickstart-demo.md) |
+| Use QAMap every day | [Adoption guide](docs/adoption.md) |
+| Use QAMap from an agent | [Agent integration](docs/agent-skill.md) |
+| Correct repeated misunderstandings | [Verification manifest](docs/manifest.md) |
+| Understand every command | [Command reference](docs/commands.md) |
+| Contribute a fix or failure case | [Contributing](CONTRIBUTING.md) |
+| Browse all documentation | [English documentation](docs/en/README.md) |
+
+Most users only need the first two rows.
 
 ## Limits
 

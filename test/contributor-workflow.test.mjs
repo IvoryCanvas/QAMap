@@ -121,3 +121,74 @@ test("public plugin guidance links directly to the official installation steps",
     );
   }
 });
+
+test("public READMEs present local setup before the optional plugin path", async () => {
+  const contracts = [
+    {
+      file: "README.md",
+      install: "## Install And Run",
+      local: "### Local CLI (Recommended)",
+      package: "#### Install For Repeat Use",
+      plugin: "### ChatGPT And Codex Plugin",
+      result: "## Read The Result",
+      demo: "## See A Real Run",
+      daily: "## Daily CLI Use",
+      analysis: "## Analysis, Execution, And E2E",
+      how: "## How It Works",
+      agents: "## Agents And Team Context",
+      docs: "## Documentation",
+      limits: "## Limits",
+      stale: ["## Run The CLI In 60 Seconds", "## Install For Repeat Use"],
+    },
+    {
+      file: "README.ko.md",
+      install: "## 설치하고 실행하기",
+      local: "### 로컬 CLI (권장)",
+      package: "#### 반복 사용을 위해 프로젝트에 설치",
+      plugin: "### ChatGPT·Codex 플러그인",
+      result: "## 결과 읽는 방법",
+      demo: "## 실제 실행 예시",
+      daily: "## 반복해서 CLI 사용하기",
+      analysis: "## 분석, 실행, E2E의 차이",
+      how: "## 동작 방식",
+      agents: "## 에이전트와 팀 맥락",
+      docs: "## 목적별 문서",
+      limits: "## 현재 한계",
+      stale: ["## 60초 만에 실행하기", "## 반복 사용을 위한 설치"],
+    },
+  ];
+
+  for (const contract of contracts) {
+    const source = await readFile(path.join(repositoryRoot, contract.file), "utf8");
+    const orderedSections = [
+      contract.install,
+      contract.local,
+      contract.package,
+      contract.plugin,
+      contract.result,
+      contract.demo,
+      contract.daily,
+      contract.analysis,
+      contract.how,
+      contract.agents,
+      contract.docs,
+      contract.limits,
+    ].map((heading) => source.indexOf(heading));
+
+    assert.ok(
+      orderedSections.every((position) => position >= 0),
+      `${contract.file} must include every setup entry point`,
+    );
+    assert.deepEqual(
+      [...orderedSections].sort((left, right) => left - right),
+      orderedSections,
+      `${contract.file} must present local setup before the plugin and result guide`,
+    );
+    for (const staleHeading of contract.stale) {
+      assert.ok(
+        !source.includes(`\n${staleHeading}\n`),
+        `${contract.file} must not keep the old split installation hierarchy`,
+      );
+    }
+  }
+});
