@@ -32,11 +32,37 @@ manifest와 테스트 runner도 첫 실행에는 필요하지 않습니다.
 
 ## 60초 만에 실행하기
 
-Node.js 20 이상이 필요합니다. 검토하려는 브랜치에서 실행하세요.
+QAMap은 Node.js 20 이상이 필요합니다. 가능하면
+[현재 지원 중인 Node.js LTS](https://nodejs.org/en/about/previous-releases)를
+사용하세요. Node.js 20에서도 패키지는 동작하지만 Node.js 공식 지원은
+종료되었습니다. 호환되는 Node.js 버전에서는 모두 같은 QAMap 명령을
+사용합니다.
+
+검토하려는 브랜치에서 실행하세요. 저장소가 npm, pnpm, Yarn, Bun 중 무엇을
+사용하더라도 실행할 수 있으며 프로젝트 의존성에는 QAMap을 추가하지 않습니다.
 
 ```sh
 npx --yes @ivorycanvas/qamap@latest qa
 ```
+
+<details>
+<summary>검증한 Node.js 버전</summary>
+
+공개된 `0.4.13` 패키지는 2026-08-11에 다음 버전에서 설치와 실제 `qa`
+smoke를 완료했습니다. 모든 버전에서 설치 명령은 같습니다.
+
+| Node.js | smoke | 안내 |
+| --- | --- | --- |
+| 20 | 통과 | 패키지는 호환되지만 공식 지원 종료 상태이므로 보안 업데이트를 위해 업그레이드 권장 |
+| 22 | 통과 | 검증 시점에 지원 중인 LTS |
+| 24 | 통과 | 검증 시점에 지원 중인 LTS |
+| 26 | 통과 | 검증 시점의 Current 버전이며 운영 환경은 LTS 권장 |
+
+정확한 버전과 패키지 매니저 범위는
+[release validation 기록](docs/release-validation.md#unreleased---2026-08-11)에서
+확인할 수 있습니다.
+
+</details>
 
 일반적인 저장소에서는 base branch를 자동으로 찾습니다. 필요한 경우에만
 직접 지정하세요.
@@ -119,25 +145,51 @@ selector, fixture, Playwright, Maestro, 테스트 runner가 없다는 이유로 
 QA 시나리오를 숨기지 않습니다. 이 항목들은 자동화 수단이며, 무엇을
 검증해야 하는가보다 먼저 오지 않습니다.
 
-## 반복 사용을 위한 짧은 명령
+## 반복 사용을 위한 설치
 
-JavaScript 저장소에는 개발 의존성으로 설치할 수 있습니다.
+위의 일회성 `npx` 명령은 저장소의 의존성 파일을 바꾸지 않으므로 첫 실행에
+가장 안전합니다. JavaScript 프로젝트에 QAMap 버전을 고정하려면 저장소가
+이미 사용하는 패키지 매니저로 설치하세요.
+
+| 패키지 매니저 | 설치 | 짧은 스크립트 추가 |
+| --- | --- | --- |
+| npm | `npm install --save-dev @ivorycanvas/qamap` | `npm exec -- qamap init --scripts` |
+| pnpm | `pnpm add --save-dev @ivorycanvas/qamap` | `pnpm exec qamap init --scripts` |
+| Yarn 1 이상 | `yarn add --dev @ivorycanvas/qamap` | `yarn qamap init --scripts` |
+| Bun | `bun add --dev @ivorycanvas/qamap` | `bun run qamap init --scripts` |
+
+`init --scripts`는 `qa`, `qa:local`, `qa:run`, `qa:e2e`를 추가합니다. 저장소가
+사용하는 방식에 맞춰 같은 스크립트를 실행하세요.
 
 ```sh
-pnpm add -D @ivorycanvas/qamap
-pnpm exec qamap init --scripts
+npm run qa       # npm
+pnpm qa          # pnpm
+yarn qa          # Yarn
+bun run qa       # Bun
 ```
 
-이후 다음 명령을 사용합니다.
+아직 커밋하지 않은 변경을 포함하려면 `qa:local`, 선택된 기존 검증을
+실행하려면 `qa:run`, 선택적 E2E 초안을 미리 보려면 `qa:e2e`로 `qa`를
+바꾸면 됩니다. 다른 언어의 저장소는 범용 `npx` 명령을 그대로 사용할 수
+있습니다.
+
+<details>
+<summary>패키지 매니저별 일회성 실행 명령</summary>
+
+프로젝트 의존성에 QAMap을 추가하지 않고 다음 명령도 사용할 수 있습니다.
 
 ```sh
-pnpm qa          # 커밋된 브랜치 변경
-pnpm qa:local    # 아직 커밋하지 않은 변경 포함
-pnpm qa:run      # 선택된 기존 검증 실행
-pnpm qa:e2e      # 선택적 E2E 초안 미리보기
+pnpm dlx @ivorycanvas/qamap@latest qa
+yarn dlx @ivorycanvas/qamap@latest qa  # Yarn 2+
+bunx @ivorycanvas/qamap@latest qa
 ```
 
-다른 언어의 저장소는 범용 `npx` 명령을 그대로 사용할 수 있습니다.
+Yarn Classic은 범용 `npx` 명령을 사용하거나 프로젝트에 QAMap을 설치하세요.
+Corepack으로 관리되는 패키지 매니저는 저장소의 `packageManager` 정보를
+추가하거나 갱신할 수 있습니다. 파일을 전혀 바꾸지 않는 첫 확인이 필요하면
+`npx` 명령을 사용하세요.
+
+</details>
 
 ## 동작 방식
 

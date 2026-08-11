@@ -4,6 +4,28 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
+## Unreleased - 2026-08-11
+
+The public `@ivorycanvas/qamap@0.4.13` package was installed and exercised in
+isolated temporary projects before expanding the README installation guidance.
+Every package-manager path ran the same synthetic duplicate-request branch
+analysis and kept product execution explicitly `not-run`.
+
+| Gate | Current result |
+| --- | --- |
+| Node.js runtime smoke | Node 20.20.2, 22.23.2, 24.19.0, and 26.7.0 loaded QAMap 0.4.13 and produced one `qamap.qa` v1 intent from the same committed diff |
+| npm | npm 10.9.2 installed the development dependency, generated all four repeat-use scripts, and completed the QA smoke |
+| pnpm | pnpm 11.21.0 completed one-off and project-installed QA smokes and generated all four repeat-use scripts |
+| Yarn Classic | Yarn 1.22.22 installed and ran the package, generated all four repeat-use scripts, and completed the QA smoke |
+| Yarn Modern | Yarn 4.6.0 completed one-off and project-installed QA smokes and generated all four repeat-use scripts |
+| Bun | Bun 1.3.1 completed one-off and project-installed QA smokes and generated all four repeat-use scripts |
+| Repository mutation check | The synthetic target repository remained clean after every QA run; Corepack metadata changes occurred only in isolated package-manager host projects |
+
+These results establish package installation and CLI smoke compatibility, not
+a new runtime guarantee beyond the declared Node.js `>=20` engine contract.
+Node.js 20 is upstream EOL, so the README recommends an actively supported LTS
+release even though the compatibility smoke still passes.
+
 ## 0.4.13 - 2026-08-11
 
 QAMap 0.4.13 improves the reasoning path from repository evidence to

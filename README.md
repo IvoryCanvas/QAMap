@@ -31,11 +31,36 @@ manifest and test runner are optional.
 
 ## Run The CLI In 60 Seconds
 
-Requires Node.js 20 or newer. Run this from the branch you want to review:
+QAMap requires Node.js 20 or newer. Use an
+[actively supported Node.js LTS release](https://nodejs.org/en/about/previous-releases)
+when possible; Node.js 20 remains package-compatible but is upstream EOL. The
+same QAMap command works on every compatible Node.js version.
+
+Run this from the branch you want to review. It works regardless of whether the
+repository uses npm, pnpm, Yarn, or Bun, and it does not add QAMap to the
+project's dependencies:
 
 ```sh
 npx --yes @ivorycanvas/qamap@latest qa
 ```
+
+<details>
+<summary>Validated Node.js lines</summary>
+
+The published `0.4.13` package completed an install and real `qa` smoke on these
+lines on 2026-08-11. The install command is the same for every line.
+
+| Node.js | Smoke | Guidance |
+| --- | --- | --- |
+| 20 | Passed | Package-compatible, but upstream EOL; upgrade for security fixes |
+| 22 | Passed | Supported LTS at the time of validation |
+| 24 | Passed | Supported LTS at the time of validation |
+| 26 | Passed | Current release at the time of validation; prefer LTS for production |
+
+See the [release validation receipt](docs/release-validation.md#unreleased---2026-08-11)
+for exact versions and package-manager coverage.
+
+</details>
 
 QAMap infers the base branch in standard repositories. Override it only when
 needed:
@@ -134,25 +159,49 @@ QAMap does not hide an important QA scenario because a repository lacks a
 selector, fixture, Playwright, Maestro, or test runner. Those are automation
 details. Missing evidence remains visible instead of becoming a fabricated pass.
 
-## Daily Commands
+## Install For Repeat Use
 
-Install QAMap once in a JavaScript repository:
+The one-off `npx` command above is the safest first run because it leaves the
+repository's dependency files unchanged. To pin QAMap in a JavaScript project,
+use the repository's package manager:
+
+| Package manager | Install | Add the short scripts |
+| --- | --- | --- |
+| npm | `npm install --save-dev @ivorycanvas/qamap` | `npm exec -- qamap init --scripts` |
+| pnpm | `pnpm add --save-dev @ivorycanvas/qamap` | `pnpm exec qamap init --scripts` |
+| Yarn 1 or newer | `yarn add --dev @ivorycanvas/qamap` | `yarn qamap init --scripts` |
+| Bun | `bun add --dev @ivorycanvas/qamap` | `bun run qamap init --scripts` |
+
+`init --scripts` adds `qa`, `qa:local`, `qa:run`, and `qa:e2e`. Run the same
+script with the syntax your project already uses:
 
 ```sh
-pnpm add -D @ivorycanvas/qamap
-pnpm exec qamap init --scripts
+npm run qa       # npm
+pnpm qa          # pnpm
+yarn qa          # Yarn
+bun run qa       # Bun
 ```
 
-Then use:
+Replace `qa` with `qa:local` to include uncommitted changes, `qa:run` to run the
+selected existing validation, or `qa:e2e` to preview the optional E2E draft.
+Non-JavaScript repositories can keep using the universal `npx` command.
+
+<details>
+<summary>Package-manager-specific one-off commands</summary>
+
+These commands also work without adding QAMap as a project dependency:
 
 ```sh
-pnpm qa          # committed branch changes
-pnpm qa:local    # include uncommitted changes
-pnpm qa:run      # run the selected existing validation
-pnpm qa:e2e      # preview the optional E2E draft
+pnpm dlx @ivorycanvas/qamap@latest qa
+yarn dlx @ivorycanvas/qamap@latest qa  # Yarn 2+
+bunx @ivorycanvas/qamap@latest qa
 ```
 
-Other repository types can keep using the universal `npx` command.
+Yarn Classic users can use the universal `npx` command or install QAMap in the
+project. Corepack-managed package managers may add or update the repository's
+`packageManager` metadata; use the `npx` first run when a no-write check matters.
+
+</details>
 
 ## How It Works
 
