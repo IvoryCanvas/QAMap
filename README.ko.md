@@ -13,7 +13,7 @@
 **ChatGPT 또는 Codex에 설치:** **Plugins**에서 **QAMap**을 검색하고
 **+**를 누른 뒤 새 대화를 시작하세요.
 [QAMap 열기](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
-· [설치 안내](https://learn.chatgpt.com/docs/plugins)
+· [공식 설치 단계](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
 
 ![QAMap: 변경이 무엇을 증명해야 하는지 찾습니다](docs/assets/qamap-cover-ko.png)
 
