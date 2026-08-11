@@ -65,6 +65,10 @@ npx --yes @ivorycanvas/qamap@latest qa --format markdown
 diff가 증명하지 못하면, QAMap은 assertion을 지어내지 않고 근거 부족으로
 표시합니다.
 
+지원하는 실행 전제조건에서는 변경된 진입점부터 로컬 import와 필수
+provider까지 추적합니다. 그 전제조건을 mock으로 우회한 테스트는 충분한
+증명으로 보지 않고 불완전한 근거로 표시합니다.
+
 ## 실제 실행 예시
 
 아래 녹화는 공개 fixture를 사용합니다. QAMap은 중복 요청 위험과 변경

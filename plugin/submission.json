@@ -73,5 +73,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "QAMap 0.4.12 keeps cleanup-only work as provenance, separates unrelated commit lifecycles, reports missing observable proof explicitly, and makes the published plugin installation route easier to find."
+  "releaseNotes": "QAMap 0.4.13 improves evidence-to-validation routing, keeps target-branch merge history out of feature intent, detects migration graph conflicts, and traces supported runtime prerequisites without treating mocked consumers as sufficient proof."
 }

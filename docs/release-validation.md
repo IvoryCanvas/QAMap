@@ -4,9 +4,9 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
-## Next patch candidate - 2026-08-11 (unreleased)
+## 0.4.13 - 2026-08-11
 
-The next patch candidate improves the reasoning path from repository evidence to
+QAMap 0.4.13 improves the reasoning path from repository evidence to
 the validation that should actually be trusted. QAMap now keeps target-branch
 merge commits out of feature intent, clusters analyzer changes around their real
 verification contracts, preserves package working directories, routes repository
@@ -22,17 +22,17 @@ passes. Self-analysis also distinguishes benchmark revision snapshots from real
 repository tests and prefers the declared benchmark harness when the benchmark
 structure changes.
 
-| Gate | Candidate result |
+| Gate | Current result |
 | --- | --- |
 | `pnpm release:check` | Passed end to end |
 | `pnpm test` | 356/356 passing |
 | `pnpm scan` | 0 findings |
 | `pnpm bench:ci` | 30/30 static recommendation contracts passing |
 | `pnpm bench:execution` | 3/3 execution contracts passing; all three seeded regressions caught |
-| Coverage | Lines 89.72%, branches 86.81%, functions 95.73% |
+| Coverage | Lines 89.68%, branches 86.75%, functions 95.73% |
 | Runtime prerequisite controls | 5/5 passing across provider bypass, route-owned provider, wrapper-owned provider, a provider inside the marked wrapper branch, and an absent fail-fast contract |
 | Benchmark routing controls | Revision snapshots are excluded from runnable test evidence; the repository-owned benchmark harness remains selected |
-| Plugin package smoke | Packed 192 files, installed the current 0.4.12 artifact in isolation, and produced one intent with one exact evidence trace |
+| Plugin package smoke | Packed 192 files, installed the current 0.4.13 artifact in isolation, and produced one intent with one exact evidence trace |
 | Package preview | `pnpm pack --dry-run` passes and includes the new runtime-prerequisite and benchmark-path declarations and runtime files |
 
 The static `qa` command remains `not-run`. A public synthetic replay proves that
@@ -46,8 +46,9 @@ the validation route while base, head, and regression snapshots do not.
 These checks establish static selection quality and seeded-regression behavior,
 not correctness of an arbitrary user application. Dynamic context contracts,
 frameworks without supported evidence, and runtime behavior not represented in
-the repository remain explicit review work rather than guessed. This section is
-candidate evidence only; no `0.4.13` package has been published.
+the repository remain explicit review work rather than guessed. npm publication,
+the Git tag, and the GitHub Release follow only after this receipt passes from
+the merged release commit.
 
 ## 0.4.12 - 2026-08-07
 
