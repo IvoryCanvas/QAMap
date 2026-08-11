@@ -38,6 +38,41 @@
       }
     },
     {
+      "name": "web-runtime-provider-bypass",
+      "fixture": "test/benchmarks/web-runtime-provider-bypass",
+      "commitMessage": "feat: add a public workspace preview route",
+      "expect": {
+        "runner": "playwright",
+        "readinessBasis": "optional-automation",
+        "automationApplicable": true,
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minHighConfidenceIntents": 1,
+        "minReasoningTraces": 1,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": [
+          "pages/public-preview.tsx",
+          "src/components/WorkspacePanel.tsx",
+          "src/context/WorkspaceContext.tsx",
+          "pages/_app.tsx"
+        ],
+        "mustNamePrimaryIntent": ["runtime provider prerequisite"],
+        "mustIncludeLifecycle": ["provider-bypass branch"],
+        "mustIncludeQaScenarios": ["required Workspace Provider context"],
+        "mustFindIntentEvidence": ["explicitly requires WorkspaceProvider"],
+        "mustTraceScenarioFiles": ["pages/public-preview.tsx"],
+        "mustNotFindExistingEvidence": ["test/public-preview.test.tsx"],
+        "mustFindEvidence": [
+          "Exercise the real runtime prerequisite",
+          "mocks src/components/WorkspacePanel.tsx"
+        ],
+        "mustNotRecommendCommands": ["test/public-preview.test.tsx"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "web-testless-checkout",
       "fixture": "test/benchmarks/web-testless-checkout",
       "expect": {

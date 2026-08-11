@@ -19,6 +19,7 @@ import type { ImportImpact } from "./import-graph.js";
 import { loadCoreFlowManifest, matchCoreFlows } from "./flows.js";
 import { loadVerificationManifest, matchVerificationManifest } from "./manifest.js";
 import { analyzeRepositoryWorkflowChange } from "./repository-workflow.js";
+import { analyzeRuntimePrerequisites } from "./runtime-prerequisite.js";
 import {
   collectTestSuiteInventory,
   evaluateFlowCoverageEvidence,
@@ -562,6 +563,19 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     addedDiffText,
     addedDiffEvidence,
   });
+  const runtimePrerequisiteAnalysis = await analyzeRuntimePrerequisites({
+    root,
+    workspaceRoot: testPlan.workspaceRoot,
+    head: testPlan.head,
+    includeWorkingTree: testPlan.includeWorkingTree,
+    changedFiles: testPlan.changedFiles,
+    addedDiffEvidence,
+  });
+  applyRuntimePrerequisiteIntents(
+    changeAnalysis,
+    runtimePrerequisiteAnalysis.findings.map((finding) => finding.intent),
+    runtimePrerequisiteAnalysis.diagnostics,
+  );
   const repositoryWorkflowAnalysis = analyzeRepositoryWorkflowChange({
     changedFiles: testPlan.changedFiles,
     addedDiffEvidence,
@@ -694,6 +708,58 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     missingTestability,
     setupNotes,
   };
+}
+
+function applyRuntimePrerequisiteIntents(
+  analysis: ChangeIntentAnalysis,
+  runtimeIntents: ChangeIntent[],
+  diagnostics: string[],
+): void {
+  if (runtimeIntents.length === 0) {
+    analysis.diagnostics.push(...diagnostics);
+    return;
+  }
+  const claimedFiles = new Set(runtimeIntents.flatMap((intent) =>
+    intent.evidence
+      .filter((evidence) => evidence.kind === "diff" && evidence.relation === "direct")
+      .map((evidence) => evidence.file)
+      .filter((file): file is string => Boolean(file))
+  ));
+  for (const runtimeIntent of runtimeIntents) {
+    const runtimeClaimedFiles = new Set(
+      runtimeIntent.evidence
+        .filter((evidence) => evidence.kind === "diff" && evidence.relation === "direct")
+        .map((evidence) => evidence.file)
+        .filter((file): file is string => Boolean(file)),
+    );
+    const relatedCommits = analysis.intents
+      .filter((intent) => intent.files.some((file) => runtimeClaimedFiles.has(file)))
+      .flatMap((intent) => intent.commits);
+    const seen = new Set<string>();
+    runtimeIntent.commits = relatedCommits.filter((commit) => {
+      if (seen.has(commit.sha)) {
+        return false;
+      }
+      seen.add(commit.sha);
+      return true;
+    });
+  }
+  analysis.intents = [
+    ...runtimeIntents,
+    ...analysis.intents.filter((intent) => {
+      const productFiles = intent.files.filter((file) =>
+        classifyChangeSourceRole(file).role === "product"
+      );
+      return productFiles.length === 0 || !productFiles.every((file) => claimedFiles.has(file));
+    }),
+  ];
+  if (analysis.source === "none") {
+    analysis.source = "diff-only";
+  }
+  analysis.diagnostics.push(
+    ...diagnostics,
+    `Detected ${runtimeIntents.length} evidence-backed runtime provider prerequisite${runtimeIntents.length === 1 ? "" : "s"}.`,
+  );
 }
 
 function applyRepositoryWorkflowIntent(
