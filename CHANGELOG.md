@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Documented the shared Node.js 20+ runtime contract, the actively supported LTS recommendation, and verified npm, pnpm, Yarn, and Bun installation and repeat-use commands in both READMEs.
+
 ## 0.4.13 - 2026-08-11
 
 ### Added
