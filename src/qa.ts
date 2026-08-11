@@ -18,8 +18,8 @@ import type {
   E2eScenarioAutomationReceipt,
   E2eWorkspaceTarget,
 } from "./e2e.js";
-import type { ChangeIntentEvidence, IntentQaScenario } from "./change-intent.js";
-import { collectChangedFiles } from "./git-context.js";
+import type { ChangeIntentAnalysis, ChangeIntentEvidence, IntentQaScenario } from "./change-intent.js";
+import { collectChangedFiles, readFileAtRef } from "./git-context.js";
 import {
   evaluateQaCapabilities,
   neutralizeInstructionLikeValues,
@@ -47,6 +47,7 @@ import {
   collectAddedDiffEvidence,
   generateTestPlan,
 } from "./test-plan.js";
+import type { AddedDiffEvidence } from "./test-plan.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
 export interface QaDraftOptions extends Omit<E2eDraftOptions, "dryRun" | "output"> {
@@ -242,6 +243,13 @@ export interface QaDraftMissingEvidence {
   detail: string;
 }
 
+interface QaRuntimePrerequisiteTestGap {
+  testFile: string;
+  routeFile: string;
+  consumerFile: string;
+  wrapperFile?: string;
+}
+
 export async function generateQaDraft(rootInput: string, options: QaDraftOptions = {}): Promise<QaDraftResult> {
   const root = path.resolve(rootInput);
   const {
@@ -307,15 +315,31 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     ...latestCommitContracts,
     ...collectChangedTestContracts(addedDiffEvidence),
   ]);
+  const runtimePrerequisiteTestGaps = await collectRuntimePrerequisiteTestGaps(
+    root,
+    draft.plan.changeAnalysis,
+    changedTestContracts,
+    addedDiffEvidence,
+    {
+      head: draft.plan.head,
+      includeWorkingTree: draft.plan.includeWorkingTree,
+      workspaceRoot: e2eOptions.workspaceRoot,
+    },
+  );
+  const runtimeGapTestFiles = new Set(runtimePrerequisiteTestGaps.map((gap) => gap.testFile));
+  const trustworthyChangedTestContracts = changedTestContracts.filter(
+    (contract) => !runtimeGapTestFiles.has(contract.file),
+  );
   const qaFiles = draft.plan.changedFiles.length > 0 ? draft.files : [];
   const inferredFlows = preferChangedTestEvidence(
     qaFiles.map((file) => qaFlowFromDraftFile(file)),
-    changedTestContracts,
+    trustworthyChangedTestContracts,
+    runtimeGapTestFiles,
   );
   const flows = inferredFlows.length > 0
     ? inferredFlows
-    : changedTestContracts.length > 0
-      ? [qaFlowFromChangedTestContracts(changedTestContracts)]
+    : trustworthyChangedTestContracts.length > 0
+      ? [qaFlowFromChangedTestContracts(trustworthyChangedTestContracts)]
       : [];
   const changedFiles = draft.plan.changedFiles.map((file) => file.path);
   const preferredVerificationCommands = await buildChangedTestVerificationCommands(
@@ -327,14 +351,20 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   const currentDeltaCommands = currentDelta
     ? await buildTestVerificationCommands(
         root,
-        currentDelta.repositoryContracts.map((contract) => contract.file),
+        currentDelta.repositoryContracts
+          .filter((contract) => !runtimeGapTestFiles.has(contract.file))
+          .map((contract) => contract.file),
         draft.plan.suggestedCommands,
       )
     : [];
   const latestCommitCommands = await buildTestVerificationCommands(
     root,
     latestCommitContracts
-      .filter((contract) => flows[0] && changedTestContractScore(flows[0], contract) > 0)
+      .filter((contract) =>
+        !runtimeGapTestFiles.has(contract.file) &&
+        flows[0] &&
+        changedTestContractScore(flows[0], contract) > 0
+      )
       .map((contract) => contract.file),
     draft.plan.suggestedCommands,
   );
@@ -351,11 +381,17 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
         ...preferredVerificationCommands,
         ...draft.plan.suggestedCommands,
       ]);
+  const candidateCommandsWithoutInsufficientTests = candidateCommands.filter((command) =>
+    ![...runtimeGapTestFiles].some((testFile) => focusedCommandTargetsFile(command, testFile))
+  );
   const routedCandidateCommands = flows.some((flow) => flow.verificationMode === "schema-graph")
-    ? candidateCommands.filter(isMigrationGraphValidationCommand)
-    : candidateCommands;
+    ? candidateCommandsWithoutInsufficientTests.filter(isMigrationGraphValidationCommand)
+    : candidateCommandsWithoutInsufficientTests;
   const suggestedCommands = await preferLocallyRunnableValidationCommands(root, routedCandidateCommands);
-  const missingEvidence = buildMissingEvidence(qaFiles);
+  const missingEvidence = uniqueMissingEvidence([
+    ...runtimePrerequisiteTestGaps.map(runtimePrerequisiteMissingEvidence),
+    ...buildMissingEvidence(qaFiles),
+  ]).slice(0, 12);
   const traces = buildQaReasoningTraces(
     draft.plan.changeAnalysis.intents,
     flows.flatMap((flow) => flow.scenarioAutomation.map((receipt) => ({
@@ -404,7 +440,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     repositoryValidation: {
       applicable: readiness.basis === "repository-validation",
       commandAvailable: Boolean(route.command),
-      contractCount: changedTestContracts.length,
+      contractCount: trustworthyChangedTestContracts.length,
       testSuitePresent: draft.plan.testSuite.hasTestSuite,
     },
     automation: {
@@ -456,8 +492,20 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     readiness,
     flows,
     missingEvidence,
-    prChecklist: buildPrChecklist(draft, flows, changedTestContracts, suggestedCommands),
-    agentHandoff: buildAgentHandoff(draft, flows, changedTestContracts, missingEvidence, suggestedCommands),
+    prChecklist: buildPrChecklist(
+      draft,
+      flows,
+      trustworthyChangedTestContracts,
+      suggestedCommands,
+      runtimePrerequisiteTestGaps,
+    ),
+    agentHandoff: buildAgentHandoff(
+      draft,
+      flows,
+      trustworthyChangedTestContracts,
+      missingEvidence,
+      suggestedCommands,
+    ),
     suggestedCommands,
   };
   const protectedResult = neutralizeInstructionLikeValues(result);
@@ -532,6 +580,102 @@ function uniqueChangedTestContracts(contracts: ChangedTestContract[]): ChangedTe
   const seen = new Set<string>();
   return contracts.filter((contract) => {
     const key = `${contract.file}:${contract.line}:${contract.title}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+async function collectRuntimePrerequisiteTestGaps(
+  root: string,
+  analysis: ChangeIntentAnalysis,
+  contracts: ChangedTestContract[],
+  evidence: AddedDiffEvidence,
+  options: {
+    head: string;
+    includeWorkingTree: boolean;
+    workspaceRoot?: string;
+  },
+): Promise<QaRuntimePrerequisiteTestGap[]> {
+  const runtimeIntents = analysis.intents.filter((intent) =>
+    intent.keywords.includes("runtime-prerequisite")
+  );
+  if (runtimeIntents.length === 0 || contracts.length === 0) {
+    return [];
+  }
+  const testFiles = uniqueStrings(contracts.map((contract) => contract.file));
+  const testSources = new Map<string, string>();
+  await Promise.all(testFiles.map(async (testFile) => {
+    const source = await readQaSourceAtEvidenceBoundary(root, testFile, options);
+    const changedText = (evidence[testFile] ?? [])
+      .flatMap((hunk) => hunk.lines.map((line) => line.text))
+      .join("\n");
+    testSources.set(testFile, source ?? changedText);
+  }));
+  const gaps: QaRuntimePrerequisiteTestGap[] = [];
+  for (const intent of runtimeIntents) {
+    const routeFile = intent.evidence.find((item) =>
+      item.kind === "diff" && item.relation === "direct" && item.file
+    )?.file;
+    const condition = intent.lifecycle.find((stage) => stage.kind === "condition");
+    const action = intent.lifecycle.find((stage) => stage.kind === "action");
+    const consumerFile = condition?.files[0];
+    if (!routeFile || !consumerFile) {
+      continue;
+    }
+    const consumerName = path.posix.basename(consumerFile).replace(/\.[^.]+$/, "");
+    for (const testFile of testFiles) {
+      const testSource = testSources.get(testFile) ?? "";
+      if (
+        !/(?:\bvi|\bjest)\.mock\s*\(/.test(testSource) ||
+        !testSource.includes(consumerName)
+      ) {
+        continue;
+      }
+      gaps.push({
+        testFile,
+        routeFile,
+        consumerFile,
+        wrapperFile: action?.files[0],
+      });
+    }
+  }
+  return uniqueRuntimePrerequisiteTestGaps(gaps);
+}
+
+async function readQaSourceAtEvidenceBoundary(
+  root: string,
+  file: string,
+  options: {
+    head: string;
+    includeWorkingTree: boolean;
+    workspaceRoot?: string;
+  },
+): Promise<string | undefined> {
+  const normalized = toPosixPath(file);
+  if (options.includeWorkingTree) {
+    try {
+      return await readFile(path.join(root, normalized), "utf8");
+    } catch {
+      return undefined;
+    }
+  }
+  const gitRoot = path.resolve(options.workspaceRoot ?? root);
+  const scopePrefix = options.workspaceRoot
+    ? toPosixPath(path.relative(gitRoot, root)).replace(/^\.\/+|\/+$/g, "")
+    : "";
+  const gitPath = scopePrefix ? `${scopePrefix}/${normalized}` : normalized;
+  return readFileAtRef(gitRoot, options.head, gitPath);
+}
+
+function uniqueRuntimePrerequisiteTestGaps(
+  gaps: QaRuntimePrerequisiteTestGap[],
+): QaRuntimePrerequisiteTestGap[] {
+  const seen = new Set<string>();
+  return gaps.filter((gap) => {
+    const key = `${gap.testFile}:${gap.routeFile}:${gap.consumerFile}:${gap.wrapperFile ?? ""}`;
     if (seen.has(key)) {
       return false;
     }
@@ -2639,6 +2783,7 @@ export function formatTextQaDraft(result: QaDraftResult): string {
     );
   }
   const validationCommand = nextStepCommand(result);
+  const supplementalCommand = supplementalValidationCommand(result);
   if (validationCommand) {
     const commandLocation = result.analysisScope.commandCwd === "selected-package" &&
         result.analysisScope.selectedPath
@@ -2646,6 +2791,10 @@ export function formatTextQaDraft(result: QaDraftResult): string {
       : "workspace root";
     lines.push(
       `  Existing validation (${plainText(commandLocation)}): ${plainText(validationCommand)} (selected, not run)`,
+    );
+  } else if (supplementalCommand) {
+    lines.push(
+      `  Supplemental validation: ${plainText(supplementalCommand)} (available, not selected for this QA route)`,
     );
   }
 
@@ -2744,12 +2893,22 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
     );
   }
   const nextCommand = nextStepCommand(result);
+  const supplementalCommand = supplementalValidationCommand(result);
   if (nextCommand) {
     const commandLocation = result.analysisScope.commandCwd === "selected-package" &&
         result.analysisScope.selectedPath
       ? ` from selected package \`${escapeMarkdownInline(result.analysisScope.selectedPath)}\``
       : " from the workspace root";
     lines.push(`- Repository validation${commandLocation}: \`${escapeMarkdownInline(nextCommand)}\``);
+  } else if (supplementalCommand) {
+    const commandLocation = result.analysisScope.commandCwd === "selected-package" &&
+        result.analysisScope.selectedPath
+      ? ` from selected package \`${escapeMarkdownInline(result.analysisScope.selectedPath)}\``
+      : " from the workspace root";
+    lines.push(
+      `- Supplemental repository validation${commandLocation}: ` +
+        `\`${escapeMarkdownInline(supplementalCommand)}\` is available but was not selected for this QA route.`,
+    );
   }
   const verificationOnly = result.readiness.basis === "repository-validation";
   const blocking = result.missingEvidence.filter((item) => item.priority === "required").slice(0, 2);
@@ -3431,11 +3590,14 @@ function summarizeIntentLifecycle(lifecycle: QaDraftResult["changeAnalysis"]["in
 }
 
 function nextStepCommand(result: QaDraftResult): string | undefined {
-  const validationCommand = result.suggestedCommands[0];
-  if (validationCommand) {
-    return validationCommand;
+  return result.route.command;
+}
+
+function supplementalValidationCommand(result: QaDraftResult): string | undefined {
+  if (result.route.command) {
+    return undefined;
   }
-  return undefined;
+  return result.suggestedCommands[0];
 }
 
 function formatRepositoryVerificationStage(result: QaDraftResult, command?: string): string {
@@ -3547,8 +3709,9 @@ function qaFlowKnowledge(
 function preferChangedTestEvidence(
   flows: QaDraftFlow[],
   changedTestContracts: ChangedTestContract[],
+  excludedTestFiles: ReadonlySet<string> = new Set(),
 ): QaDraftFlow[] {
-  if (changedTestContracts.length === 0) {
+  if (changedTestContracts.length === 0 && excludedTestFiles.size === 0) {
     return flows;
   }
   const changedContractFiles = new Set(changedTestContracts.map((contract) => contract.file));
@@ -3575,7 +3738,7 @@ function preferChangedTestEvidence(
         .map((candidate) => candidate.contract.file),
     );
     const unchangedEvidencePaths = flow.existingEvidencePaths.filter(
-      (file) => !changedContractFiles.has(file),
+      (file) => !changedContractFiles.has(file) && !excludedTestFiles.has(file),
     );
     return {
       ...flow,
@@ -3585,6 +3748,13 @@ function preferChangedTestEvidence(
         : unchangedEvidencePaths,
     };
   });
+}
+
+function focusedCommandTargetsFile(command: string, file: string): boolean {
+  if (!command.includes(file)) {
+    return false;
+  }
+  return /--runTestsByPath\b|(?:^|\s)[^\s]+(?:test|spec)\.[cm]?[jt]sx?(?:\s|$)/i.test(command);
 }
 
 function changedTestContractScore(flow: QaDraftFlow, contract: ChangedTestContract): number {
@@ -3748,6 +3918,21 @@ function buildMissingEvidence(files: E2eDraftFile[]): QaDraftMissingEvidence[] {
   return [...required, ...recommended].slice(0, 12);
 }
 
+function runtimePrerequisiteMissingEvidence(
+  gap: QaRuntimePrerequisiteTestGap,
+): QaDraftMissingEvidence {
+  const wrapper = gap.wrapperFile ? ` through ${gap.wrapperFile}` : " through the production wrapper";
+  return {
+    flowTitle: `${gap.routeFile} runtime prerequisite`,
+    priority: "required",
+    kind: "validation",
+    title: "Exercise the real runtime prerequisite",
+    detail:
+      `${gap.testFile} mocks ${gap.consumerFile}, so it cannot prove the route receives its required context. ` +
+      `Render ${gap.routeFile}${wrapper} with the real consumer before merge.`,
+  };
+}
+
 function missingEvidenceFromAction(file: E2eDraftFile, item: E2eDraftActionItem): QaDraftMissingEvidence {
   return {
     flowTitle: file.flowTitle,
@@ -3775,6 +3960,7 @@ function buildPrChecklist(
   flows: QaDraftFlow[],
   changedTestContracts: ChangedTestContract[],
   suggestedCommands: string[],
+  runtimePrerequisiteTestGaps: QaRuntimePrerequisiteTestGap[] = [],
 ): string[] {
   const changedEvidencePaths = uniqueStrings(changedTestContracts.map((contract) => contract.file));
   const testEvidencePaths = changedEvidencePaths.length > 0
@@ -3794,7 +3980,12 @@ function buildPrChecklist(
       : flows.length > 0
         ? `Review the affected-flow evidence for: ${flows.map((flow) => flow.title).slice(0, 3).join(", ")}.`
       : "Run QAMap again after adding branch or working tree changes.";
+  const runtimePrerequisiteChecklist = runtimePrerequisiteTestGaps.map((gap) =>
+    `Render ${gap.routeFile} through ${gap.wrapperFile ?? "the production wrapper"} with ` +
+    `${gap.consumerFile} unmocked; ${gap.testFile} does not exercise that provider path.`
+  );
   const checklist = [
+    ...runtimePrerequisiteChecklist,
     changedTestContracts.length > 0
       ? `Confirm the changed repository test contracts: ${changedTestContracts.slice(0, 3).map((contract) => contract.title).join("; ")}.`
       : evidenceChecklist,

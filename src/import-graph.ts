@@ -6,6 +6,7 @@ const maxSourceBytes = 300_000;
 const defaultMaxHops = 2;
 const maxImpactSurfaces = 6;
 const maxExpandedImporters = 40;
+const maxExpandedImports = 80;
 
 const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue", ".svelte"]);
 const resolvableExtensions = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue", ".svelte"];
@@ -43,6 +44,7 @@ export interface ChangedFileExpansion {
 
 interface ReverseImportIndex {
   importersOf: Map<string, Set<string>>;
+  importsOf: Map<string, Set<string>>;
 }
 
 interface WorkspacePackages {
@@ -82,6 +84,7 @@ async function buildReverseImportIndexUncached(root: string): Promise<ReverseImp
   const tsconfigPaths = await readTsconfigPaths(root);
   const workspacePackages = await readWorkspacePackages(root, packageJsonFiles);
   const importersOf = new Map<string, Set<string>>();
+  const importsOf = new Map<string, Set<string>>();
 
   for (const file of sourceFiles) {
     let text: string;
@@ -100,6 +103,12 @@ async function buildReverseImportIndexUncached(root: string): Promise<ReverseImp
       if (!resolved || resolved === file) {
         continue;
       }
+      let imports = importsOf.get(file);
+      if (!imports) {
+        imports = new Set<string>();
+        importsOf.set(file, imports);
+      }
+      imports.add(resolved);
       let importers = importersOf.get(resolved);
       if (!importers) {
         importers = new Set<string>();
@@ -109,7 +118,7 @@ async function buildReverseImportIndexUncached(root: string): Promise<ReverseImp
     }
   }
 
-  return { importersOf };
+  return { importersOf, importsOf };
 }
 
 export function findImportingSurfaces(
@@ -173,6 +182,35 @@ export async function expandChangedFilesWithImporters(
   return { files: expanded, via };
 }
 
+export async function expandFilesWithImports(
+  rootInput: string,
+  files: string[],
+  maxHops: number = defaultMaxHops,
+): Promise<ChangedFileExpansion> {
+  if (files.length === 0) {
+    return { files: [], via: {} };
+  }
+  const index = await buildReverseImportIndex(rootInput);
+  const via: Record<string, string[]> = {};
+  const expanded = [...files];
+  const known = new Set(files);
+
+  for (const file of files) {
+    for (const reached of walkImports(index, file, maxHops)) {
+      if (known.has(reached.file)) {
+        continue;
+      }
+      known.add(reached.file);
+      expanded.push(reached.file);
+      via[reached.file] = reached.chain;
+      if (expanded.length - files.length >= maxExpandedImports) {
+        return { files: expanded, via };
+      }
+    }
+  }
+  return { files: expanded, via };
+}
+
 function* walkImporters(
   index: ReverseImportIndex,
   startFile: string,
@@ -192,6 +230,34 @@ function* walkImporters(
         const chain = [...entry.chain, importer];
         yield { file: importer, hops: hop, chain };
         nextFrontier.push({ file: importer, chain });
+      }
+    }
+    frontier = nextFrontier;
+    if (frontier.length === 0) {
+      return;
+    }
+  }
+}
+
+function* walkImports(
+  index: ReverseImportIndex,
+  startFile: string,
+  maxHops: number,
+): Generator<{ file: string; hops: number; chain: string[] }> {
+  const visited = new Set<string>([startFile]);
+  let frontier: Array<{ file: string; chain: string[] }> = [{ file: startFile, chain: [startFile] }];
+
+  for (let hop = 1; hop <= maxHops; hop += 1) {
+    const nextFrontier: Array<{ file: string; chain: string[] }> = [];
+    for (const entry of frontier) {
+      for (const imported of index.importsOf.get(entry.file) ?? []) {
+        if (visited.has(imported)) {
+          continue;
+        }
+        visited.add(imported);
+        const chain = [...entry.chain, imported];
+        yield { file: imported, hops: hop, chain };
+        nextFrontier.push({ file: imported, chain });
       }
     }
     frontier = nextFrontier;

@@ -43,13 +43,16 @@ prioritize recommendation quality over adding another distribution channel or
 runner name. The current generalized work queue is:
 
 1. Keep long-lived and recently synchronized branches inside the real PR
-   evidence boundary. The complete comparison stays merge-base aware, while
-   latest-change priority must come from the branch's own non-merge first-parent
-   history rather than target-only hunks introduced by a merge commit.
-2. Trace runtime prerequisites across reused code. A route or entry point that
-   bypasses a provider, wrapper, dependency injection boundary, or required
-   initialization path should surface a render or startup regression before
-   selector and fixture advice.
+   evidence boundary. The first merge-aware implementation now selects the
+   branch's latest first-parent non-merge work commit instead of target-only
+   hunks imported by a baseline sync; broader multi-remote histories remain a
+   continuing regression surface.
+2. Trace runtime prerequisites across reused code. The first adapter now joins
+   a changed React or Next.js entry point, a bounded local import chain, an
+   explicit fail-fast context hook, and a provider-bypass wrapper branch. It
+   rejects component-mocked tests as sufficient proof. Broader dependency
+   injection, initialization, router, and non-React wrapper contracts remain
+   future adapters rather than inferred claims.
 3. Treat changed repository tests as behavior contracts. Preserve explicit
    normalization boundaries, negative assertions, state transitions, retry
    prohibitions, and cross-file value continuity instead of reducing them to a

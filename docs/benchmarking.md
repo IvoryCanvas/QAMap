@@ -128,9 +128,9 @@ Each target can declare:
 | `mustFindSuccessSignals` | Observable outcome text that must appear in the flow's success criteria. |
 | `mustFindEntrypoints` | Route, screen, or command entrypoints that affected flows must recover. |
 | `mustFindEvidence` | Required evidence or fixture terms that must be reported. |
-| `mustFindExistingEvidence` | Existing test paths that must be linked to the affected flow. |
+| `mustFindExistingEvidence`, `mustNotFindExistingEvidence` | Existing test paths that must be linked to the affected flow or rejected as insufficient proof. |
 | `mustNotFindEvidence` | Evidence terms that would be false positives for this change. |
-| `mustRecommendCommands` | Commands the setup or validation path must expose. |
+| `mustRecommendCommands`, `mustNotRecommendCommands` | Commands the setup or validation path must expose or must not present as applicable proof. |
 | `maxBlankActions` | Maximum malformed or empty draft steps; public fixtures keep this at zero. |
 | `maxGenericTitles` | Maximum titles ending in generic `primary journey` or `smoke flow` wording. |
 | `maxAgentBytes` | Maximum UTF-8 payload size for `qa --format agent`. Production output has a global 4KB ceiling and preserves the highest-priority intent, a detailed primary flow, a compact second flow for multi-surface changes, and omitted counts. |
@@ -143,6 +143,14 @@ Each target can declare:
 | `maxReviewOnlyFiles` | Maximum generated files that remain reference-only instead of tryable automation. |
 | `maxTodos` | Maximum unresolved TODO markers across generated drafts. |
 | `maxExecutionBlockers` | Maximum unresolved execution blockers across generated drafts. Contract failures name the most common blocker. |
+
+Tests inside a benchmark target's `base`, `head`, or `regression` revision describe
+the synthetic repository. They are benchmark input, not direct validation of the
+tool that owns the fixture. QAMap therefore excludes those paths from focused
+test commands and test-suite proof. If the same change touches benchmark
+structure and `package.json` declares a repository-owned benchmark script,
+QAMap prefers the strongest CI or assertion harness while preserving a related
+analyzer unit test as additional validation.
 
 Set `manifestBaseline: true` on a committed fixture to generate its manifest from the base snapshot into the benchmark temp directory, then pass that external manifest to analysis of the head commit. The fixture repository is never modified by this step. This protects the feedback loop itself: a baseline must affect the next PR, not merely serialize valid YAML.
 

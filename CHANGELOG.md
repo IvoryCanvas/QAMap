@@ -7,6 +7,8 @@
 - Added separate English and Korean documentation entry points, including Korean quickstart, agent integration, and verification manifest guides.
 - Added a Korean QAMap cover image that preserves the existing public visual identity.
 - Added target-branch-aware Django migration graph analysis that reports newly divergent leaves with exact changed dependency and current base-leaf evidence.
+- Added bounded runtime-prerequisite tracing for changed React and Next.js entry points. QAMap can now join a reused local import chain, an explicit fail-fast context contract, and an app-wrapper provider bypass into one critical first-render scenario.
+- Added a public runtime-provider regression fixture and negative benchmark contracts that can reject insufficient test evidence and inapplicable focused commands.
 
 ### Changed
 
@@ -19,6 +21,9 @@
 ### Fixed
 
 - Target-branch merge commits no longer place imported baseline hunks ahead of the feature branch's own QA evidence; ordinary non-merge review fixes keep their latest-change priority.
+- Component-mocked changed tests no longer count as proof of a detected runtime provider prerequisite, even when the mock declaration predates the changed test line.
+- Tests stored inside synthetic benchmark `base`, `head`, or `regression` revisions no longer become focused repository validation. When benchmark structure changes and the repository declares a benchmark harness, QAMap keeps that harness alongside the analyzer's real focused test.
+- Concise and Markdown output now label a repository command as selected only when the canonical QA route actually selected that command.
 - One analyzer-rule change now keeps its import/export adapters and matching result schema in a single repository-verification intent instead of expanding internal filenames into product-domain QA flows.
 - Diff-only analyzer changes now recover a concrete rule subject from the changed rule path when commit text does not describe behavior.
 - Automatic package commands now remain workspace-root executable, while explicitly selected package validation runs from the selected package instead of the workspace root.

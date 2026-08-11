@@ -101,6 +101,103 @@ test("collectChangedTestContracts preserves non-Latin pytest contracts from diff
   ]);
 });
 
+test("collectChangedTestContracts excludes synthetic benchmark revisions", () => {
+  const contracts = collectChangedTestContracts({
+    "test/benchmarks/runtime-provider/base/test/public-preview.test.tsx": [{
+      file: "test/benchmarks/runtime-provider/base/test/public-preview.test.tsx",
+      startLine: 1,
+      endLine: 1,
+      hunkHeader: "@@ -0,0 +1 @@",
+      lines: [{ line: 1, text: 'test("synthetic baseline", () => {});' }],
+    }],
+    "test/benchmarks/runtime-provider/head/test/public-preview.test.tsx": [{
+      file: "test/benchmarks/runtime-provider/head/test/public-preview.test.tsx",
+      startLine: 1,
+      endLine: 1,
+      hunkHeader: "@@ -0,0 +1 @@",
+      lines: [{ line: 1, text: 'test("synthetic changed target", () => {});' }],
+    }],
+    "test/runtime-prerequisite.test.mjs": [{
+      file: "test/runtime-prerequisite.test.mjs",
+      startLine: 20,
+      endLine: 20,
+      hunkHeader: "@@ -19,0 +20 @@",
+      lines: [{ line: 20, text: 'test("detects a missing provider", () => {});' }],
+    }],
+  });
+
+  assert.deepEqual(contracts, [{
+    file: "test/runtime-prerequisite.test.mjs",
+    title: "detects a missing provider",
+    line: 20,
+    framework: "javascript",
+  }]);
+});
+
+test("qa routes benchmark changes through the repository harness", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "scripts"), { recursive: true });
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, "test/benchmarks/runtime-provider/base/test"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "benchmark-routing-fixture",
+      private: true,
+      packageManager: "pnpm@10.0.0",
+      scripts: {
+        test: "node --test test/*.test.mjs",
+        "bench:ci": "node scripts/bench.mjs --config bench.config.json --assert",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "scripts/bench.mjs"), "console.log('benchmark harness');\n");
+  await writeFile(path.join(root, "src/runtime-prerequisite.ts"), "export const detectsBypass = false;\n");
+  await writeFile(path.join(root, "bench.config.json"), '{"targets":[]}\n');
+  await writeFile(
+    path.join(root, "test/benchmarks/runtime-provider/base/test/public-preview.test.tsx"),
+    'test("synthetic baseline", () => {});\n',
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+  await git(root, ["switch", "-c", "feature/runtime-provider"]);
+  await mkdir(path.join(root, "test/benchmarks/runtime-provider/head/test"), { recursive: true });
+  await writeFile(
+    path.join(root, "test/benchmarks/runtime-provider/head/test/public-preview.test.tsx"),
+    'test("synthetic changed target", () => {});\n',
+  );
+  await writeFile(
+    path.join(root, "test/runtime-prerequisite.test.mjs"),
+    [
+      'import { detectsBypass } from "../src/runtime-prerequisite.js";',
+      'test("runtime prerequisite analyzer detects a provider bypass", () => {',
+      "  if (!detectsBypass) throw new Error('expected provider bypass detection');",
+      "});",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, "src/runtime-prerequisite.ts"), "export const detectsBypass = true;\n");
+  await writeFile(path.join(root, "bench.config.json"), '{"targets":["runtime-provider"]}\n');
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "add runtime provider benchmark"]);
+
+  const plan = await generateTestPlan(root, { base: "main", head: "HEAD" });
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+  assert.equal(plan.suggestedCommands[0], "pnpm run bench:ci");
+  assert.equal(qa.suggestedCommands.some((command) => command === "pnpm run bench:ci"), true);
+  assert.equal(
+    qa.suggestedCommands.some((command) => /test\/benchmarks\/runtime-provider\/(?:base|head)/.test(command)),
+    false,
+  );
+  assert.equal(
+    qa.suggestedCommands.some((command) => /test\/runtime-prerequisite\.test\.mjs/.test(command)),
+    true,
+  );
+});
+
 test("scanProject reports common AI agent repository risks", async () => {
   const root = await makeTempRepo();
   await mkdir(path.join(root, ".cursor"), { recursive: true });
@@ -974,7 +1071,7 @@ test("generateQaDraft automatically uses the only changed workspace package", as
   );
   assert.match(markdown, /automatically selected package services\/listing/);
   assert.match(markdown, /Workspace root: .*qamap-test-/);
-  assert.match(markdown, /Repository validation from the workspace root/);
+  assert.match(markdown, /Supplemental repository validation from the workspace root/);
   assert.equal(agent.analysisScope.mode, "automatic-package");
   assert.equal(agent.analysisScope.commandCwd, "workspace-root");
   assert.equal(agent.analysisScope.selectedPath, "services/listing");
@@ -994,7 +1091,7 @@ test("generateQaDraft automatically uses the only changed workspace package", as
   assert.equal(explicit.analysisScope.selectedPath, "services/listing");
   assert.match(
     formatMarkdownQaDraft(explicit),
-    /Repository validation from selected package `services\/listing`/,
+    /Supplemental repository validation from selected package `services\/listing`/,
   );
   assert.equal(
     JSON.parse(formatAgentQaDraft(explicit)).analysisScope.commandCwd,
@@ -7923,7 +8020,7 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.match(markdown, /### 2\. Executable Evidence Available Now/);
   assert.match(markdown, /### 3\. Manual Or Agent QA Contracts/);
   assert.match(markdown, /QA analysis and scenario routing do not require the optional automation runner/);
-  assert.match(markdown, /- Repository validation from the workspace root: `/);
+  assert.match(markdown, /- Supplemental repository validation from the workspace root: `/);
   assert.match(markdown, /- Optional automation gap/);
   assert.match(markdown, /Draft Mapping And Context Gaps/);
   assert.match(markdown, /Manifest: not found; using repo signals and PR diff only/);

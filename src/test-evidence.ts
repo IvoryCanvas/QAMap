@@ -1,4 +1,5 @@
 import path from "node:path";
+import { isBenchmarkRevisionFixturePath } from "./benchmark-paths.js";
 import { collectProjectFiles } from "./fs.js";
 import type { AddedDiffEvidence } from "./test-plan.js";
 import type { ProjectFile } from "./types.js";
@@ -61,7 +62,11 @@ const maxChangedTestContracts = 24;
 export async function collectTestSuiteInventory(root: string): Promise<TestSuiteInventory> {
   const projectFiles = await collectProjectFiles(root, maxInventoryFiles);
   const files = projectFiles
-    .filter((file) => isTestLikeFile(file.path) && !isGeneratedQAMapDraft(file))
+    .filter((file) =>
+      isTestLikeFile(file.path) &&
+      !isBenchmarkRevisionFixturePath(file.path) &&
+      !isGeneratedQAMapDraft(file)
+    )
     .map(toTestEvidenceFile);
   return {
     hasTestSuite: files.length > 0,
@@ -86,7 +91,7 @@ export function summarizeTestSuiteInventory(inventory: TestSuiteInventory): Test
 export function collectChangedTestContracts(evidence: AddedDiffEvidence): ChangedTestContract[] {
   const contracts: ChangedTestContract[] = [];
   for (const [file, hunks] of Object.entries(evidence)) {
-    if (!isTestLikeFile(file)) {
+    if (!isTestLikeFile(file) || isBenchmarkRevisionFixturePath(file)) {
       continue;
     }
     for (const hunk of hunks) {

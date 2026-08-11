@@ -1,0 +1,14 @@
+{
+  "name": "runtime-provider-fixture",
+  "private": true,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "15.0.0",
+    "react": "19.0.0"
+  },
+  "devDependencies": {
+    "vitest": "3.0.0"
+  }
+}

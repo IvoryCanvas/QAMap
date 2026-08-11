@@ -4,35 +4,50 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
-## Next patch candidate - 2026-08-09 (unreleased)
+## Next patch candidate - 2026-08-11 (unreleased)
 
-The next patch candidate adds target-branch-aware Django migration graph
-analysis. When a changed migration branches from a node that is no longer the
-target branch leaf, QAMap joins the exact dependency diff to every current base
-leaf and routes the critical risk to repository-owned graph or deployment-plan
-validation. It does not invent a browser journey, runner setup, or passing
-command. Normal successor migrations, reviewed merge migrations, numbered files
-outside Django, package-scoped apps, and working-tree changes are covered by
-positive and negative controls.
+The next patch candidate improves the reasoning path from repository evidence to
+the validation that should actually be trusted. QAMap now keeps target-branch
+merge commits out of feature intent, clusters analyzer changes around their real
+verification contracts, preserves package working directories, routes repository
+documentation to exact checks, and detects divergent Django migration leaves.
+
+The candidate also adds a conservative runtime-prerequisite adapter. When a
+changed React or Next.js route reuses a fail-fast context consumer through a
+local import chain while its production wrapper bypasses the named provider,
+QAMap emits a required first-render scenario with exact route, consumer,
+contract, and wrapper evidence. A test that mocks that consumer is disclosed as
+insufficient proof and cannot become the selected validation merely because it
+passes. Self-analysis also distinguishes benchmark revision snapshots from real
+repository tests and prefers the declared benchmark harness when the benchmark
+structure changes.
 
 | Gate | Candidate result |
 | --- | --- |
 | `pnpm release:check` | Passed end to end |
-| `pnpm test` | 337/337 passing |
+| `pnpm test` | 356/356 passing |
 | `pnpm scan` | 0 findings |
-| `pnpm bench:ci` | 28/28 static recommendation contracts passing |
+| `pnpm bench:ci` | 30/30 static recommendation contracts passing |
 | `pnpm bench:execution` | 3/3 execution contracts passing; all three seeded regressions caught |
-| Coverage | Lines 89.72%, branches 86.55%, functions 95.71% |
-| Focused graph regressions | 7/7 passing across conflict, valid successor, merge, non-Django, package scope, working tree, and agent-schema contracts |
-| Plugin package smoke | Packed 183 files, installed the current 0.4.12 artifact in isolation, and produced one intent with one exact evidence trace |
-| Package preview | `pnpm pack --dry-run` passes and includes the new `schema-graph` declarations and runtime files |
+| Coverage | Lines 89.72%, branches 86.81%, functions 95.73% |
+| Runtime prerequisite controls | 5/5 passing across provider bypass, route-owned provider, wrapper-owned provider, a provider inside the marked wrapper branch, and an absent fail-fast contract |
+| Benchmark routing controls | Revision snapshots are excluded from runnable test evidence; the repository-owned benchmark harness remains selected |
+| Plugin package smoke | Packed 192 files, installed the current 0.4.12 artifact in isolation, and produced one intent with one exact evidence trace |
+| Package preview | `pnpm pack --dry-run` passes and includes the new runtime-prerequisite and benchmark-path declarations and runtime files |
 
-The static `qa` command remains `not-run`. A synthetic CLI replay proves that
-the report names the changed migration, the target-branch leaf, the conflicting
-dependency line, and the missing repository command without presenting optional
-E2E mapping as a gap. Dynamic dependency expressions and squashed migrations are
-deliberately left for explicit manual graph review rather than guessed. This
-section is candidate evidence only; no `0.4.13` package has been published.
+The static `qa` command remains `not-run`. A public synthetic replay proves that
+the report traces a changed route through its reused consumer to the fail-fast
+provider contract and the production wrapper branch without claiming the
+available general test command was selected or executed. QAMap's own branch
+replay independently exposed benchmark snapshots being mistaken for runnable
+tests; after the fix, the focused analyzer test and `bench:ci` harness remain in
+the validation route while base, head, and regression snapshots do not.
+
+These checks establish static selection quality and seeded-regression behavior,
+not correctness of an arbitrary user application. Dynamic context contracts,
+frameworks without supported evidence, and runtime behavior not represented in
+the repository remain explicit review work rather than guessed. This section is
+candidate evidence only; no `0.4.13` package has been published.
 
 ## 0.4.12 - 2026-08-07
 

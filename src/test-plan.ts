@@ -3,6 +3,11 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import YAML from "yaml";
+import {
+  isBenchmarkRevisionFixturePath,
+  isBenchmarkValidationStructurePath,
+  isRepositoryBenchmarkScript,
+} from "./benchmark-paths.js";
 import { collectProjectFiles } from "./fs.js";
 import { collectChangedFiles, resolveBaseRef, resolveMergeBase } from "./git-context.js";
 import type { BaseRefResolution } from "./git-context.js";
@@ -314,7 +319,9 @@ function buildConfigItem(files: string[]): TestPlanItem | undefined {
 }
 
 function buildTestCoverageItem(files: string[]): TestPlanItem | undefined {
-  const matched = files.filter((file) => isTestLikeFile(file));
+  const matched = files.filter((file) =>
+    isTestLikeFile(file) && !isBenchmarkRevisionFixturePath(file)
+  );
   if (matched.length === 0) {
     return undefined;
   }
@@ -372,7 +379,11 @@ async function discoverJavaScriptCommands(
         affectedPackage.scripts,
         affectedPackage.changedFiles,
       );
-      return preferredJavaScriptScripts(affectedPackage.scripts, platformBuildScripts)
+      return preferredJavaScriptScripts(
+        affectedPackage.scripts,
+        platformBuildScripts,
+        affectedPackage.changedFiles,
+      )
         .map((script) => buildWorkspaceScriptCommand(
           packageManager,
           affectedPackage.name ?? `./${affectedPackage.path}`,
@@ -382,7 +393,11 @@ async function discoverJavaScriptCommands(
   }
 
   const platformBuildScripts = discoverPlatformBuildScripts(parsed.scripts ?? {}, changedFiles.map((file) => file.path));
-  return preferredJavaScriptScripts(parsed.scripts ?? {}, platformBuildScripts)
+  return preferredJavaScriptScripts(
+    parsed.scripts ?? {},
+    platformBuildScripts,
+    changedFiles.map((file) => file.path),
+  )
     .map((script) => (script === "test" ? `${packageManager} test` : `${packageManager} run ${script}`));
 }
 
@@ -455,8 +470,10 @@ async function readJavaScriptPackage(
 function preferredJavaScriptScripts(
   scripts: Record<string, string>,
   platformBuildScripts: string[],
+  changedFiles: string[],
 ): string[] {
   return uniqueCommands([
+    ...discoverBenchmarkValidationScripts(scripts, changedFiles),
     ...platformBuildScripts,
     "test",
     "typecheck",
@@ -465,6 +482,32 @@ function preferredJavaScriptScripts(
     "test:e2e",
     "e2e",
   ]).filter((script) => isUsableScript(scripts[script]));
+}
+
+function discoverBenchmarkValidationScripts(
+  scripts: Record<string, string>,
+  changedFiles: string[],
+): string[] {
+  if (!changedFiles.some(isBenchmarkValidationStructurePath)) {
+    return [];
+  }
+  const selected = Object.entries(scripts)
+    .filter(([name, command]) => isUsableScript(command) && isRepositoryBenchmarkScript(name, command))
+    .sort(([leftName, leftCommand], [rightName, rightCommand]) =>
+      benchmarkScriptRank(leftName, leftCommand) - benchmarkScriptRank(rightName, rightCommand) ||
+      leftName.localeCompare(rightName)
+    )[0];
+  return selected ? [selected[0]] : [];
+}
+
+function benchmarkScriptRank(name: string, command: string): number {
+  if (/(?:^|:)ci(?:$|:)/i.test(name) || /(?:^|\s)--assert(?:\s|$)/i.test(command)) {
+    return 0;
+  }
+  if (/^(?:bench|benchmark)$/i.test(name)) {
+    return 1;
+  }
+  return 2;
 }
 
 export function buildWorkspaceScriptCommand(packageManager: string, target: string, script: string): string {
@@ -706,7 +749,7 @@ async function discoverRelevantPythonTests(
 ): Promise<string[]> {
   const directlyChangedTests = changedFiles
     .map((file) => file.path)
-    .filter(isPythonTestFile);
+    .filter((file) => isPythonTestFile(file) && !isBenchmarkRevisionFixturePath(file));
   if (directlyChangedTests.length > 0) {
     return uniqueCommands(directlyChangedTests).slice(0, 6);
   }
@@ -724,7 +767,9 @@ async function discoverRelevantPythonTests(
   } catch {
     return [];
   }
-  const testFiles = projectFiles.map((file) => file.path).filter(isPythonTestFile);
+  const testFiles = projectFiles
+    .map((file) => file.path)
+    .filter((file) => isPythonTestFile(file) && !isBenchmarkRevisionFixturePath(file));
   const ranked = testFiles
     .map((testFile) => ({
       file: testFile,

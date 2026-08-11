@@ -413,6 +413,12 @@ function evaluateContract(expect, result, plan, qa) {
   appendMissingTerms(failures, "intent evidence", result.intentEvidence, expect.mustFindIntentEvidence);
   appendMissingTerms(failures, "scenario source file", result.scenarioSourceFiles, expect.mustTraceScenarioFiles);
   appendMissingTerms(failures, "existing test evidence", result.existingEvidencePaths, expect.mustFindExistingEvidence);
+  appendUnexpectedTerms(
+    failures,
+    "existing test evidence",
+    result.existingEvidencePaths,
+    expect.mustNotFindExistingEvidence,
+  );
   if (expect.provenanceKind !== undefined && result.provenanceKind !== expect.provenanceKind) {
     failures.push(`provenance kind expected ${expect.provenanceKind}, got ${result.provenanceKind}`);
   }
@@ -606,6 +612,7 @@ function evaluateContract(expect, result, plan, qa) {
   appendMissingTerms(failures, "evidence", evidence, expect.mustFindEvidence);
   appendUnexpectedTerms(failures, "evidence", evidence, expect.mustNotFindEvidence);
   appendMissingTerms(failures, "command", commands, expect.mustRecommendCommands);
+  appendUnexpectedTerms(failures, "command", commands, expect.mustNotRecommendCommands);
 
   if (result.mustReachMissing.length > 0) {
     failures.push(`changed flow did not reach: ${result.mustReachMissing.join(", ")}`);
