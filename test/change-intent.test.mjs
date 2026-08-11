@@ -4889,6 +4889,50 @@ test("diff evidence reserves the latest commit before large branch history", asy
   );
 });
 
+test("diff evidence keeps merged target-branch changes outside the QA evidence boundary", async (t) => {
+  const root = await makeRepo(t);
+  const jobFile = "src/jobs/deliveryWorker.ts";
+  const jobTestFile = "test/deliveryWorker.test.ts";
+  const baselineFile = "src/catalog/CatalogScreen.tsx";
+
+  await write(root, jobFile, "export const deliveryState = 'idle';\n");
+  await write(root, jobTestFile, "it('starts idle', () => expect(true).toBe(true));\n");
+  commit(root, "chore: baseline");
+  branch(root, "feature/delivery-recovery");
+
+  await write(root, jobFile, "export const deliveryState = 'recovering';\n");
+  await write(
+    root,
+    jobTestFile,
+    [
+      "it('starts idle', () => expect(true).toBe(true));",
+      "it('does not dispatch recovery twice', () => expect(true).toBe(true));",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "fix: prevent duplicate delivery recovery");
+
+  git(root, "switch", "main");
+  await write(root, baselineFile, "export function CatalogScreen() { return <main>Catalog</main>; }\n");
+  commit(root, "feat: add catalog browsing screen");
+
+  git(root, "switch", "feature/delivery-recovery");
+  git(root, "merge", "--no-ff", "main", "-m", "Merge main into feature/delivery-recovery");
+
+  const evidence = await collectAddedDiffEvidence(root, { base: "main", head: "HEAD" });
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.equal(evidence[baselineFile], undefined);
+  assert.equal(Object.keys(evidence)[0], jobFile);
+  assert.ok(
+    evidence[jobTestFile].some((hunk) =>
+      hunk.lines.some((line) => /does not dispatch recovery twice/i.test(line.text))
+    ),
+  );
+  assert.equal(JSON.stringify(qa).includes("CatalogScreen"), false);
+  assert.ok(JSON.stringify(qa).includes("deliveryWorker"));
+  assert.equal(qa.execution.status, "not-run");
+});
+
 async function analyze(root, files) {
   const addedDiffEvidence = await collectAddedDiffEvidence(root, { base: "main", head: "HEAD" });
   const addedDiffText = addedDiffTextFromEvidence(addedDiffEvidence);
