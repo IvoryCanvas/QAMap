@@ -2,7 +2,7 @@
 
 QAMap packages one `skills-only` plugin for the shared OpenAI Plugins Directory. It reuses the same local CLI and `qamap.qa` contract as every other QAMap integration. It does not add an MCP server, hosted service, background hook, or second QA engine.
 
-QAMap `0.4.12` is approved and [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629). The directory listing, npm package, and GitHub release currently point to the same version. This repository remains the source of truth for the reviewed skill package and future listing updates.
+QAMap `0.4.12` is currently approved and [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629). npm and GitHub releases can move ahead independently; a newer directory version requires a fresh upload and review. This repository remains the source of truth for the reviewed skill package and future listing updates.
 
 Publishing a newer npm package or repository release does not update the
 directory listing automatically. Keep the approved version available, upload

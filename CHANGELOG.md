@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.13 - 2026-08-11
+
 ### Added
 
 - Added separate English and Korean documentation entry points, including Korean quickstart, agent integration, and verification manifest guides.

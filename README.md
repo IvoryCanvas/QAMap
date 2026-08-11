@@ -62,6 +62,10 @@ npx --yes @ivorycanvas/qamap@latest qa --format markdown
 QAMap keeps static reasoning and executed QA separate. A proposed scenario or E2E
 draft is never reported as a passing test.
 
+For supported runtime contracts, QAMap can trace a changed entry point through
+local imports to a required provider. A test that mocks away that prerequisite
+is disclosed as incomplete evidence instead of being promoted as proof.
+
 Cleanup-only commits remain visible as provenance but do not become standalone
 QA requirements. Unrelated issue tags and lifecycle stages stay separate. When
 the changed source does not prove an externally observable result, QAMap reports

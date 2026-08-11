@@ -36,7 +36,7 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 There is no fixed end date or patch count for `0.4.x`. QAMap will remain on compatible patch releases while real repositories still expose material gaps in change intent, affected-flow selection, scenario evidence, or automation-draft quality. `0.5.x` is not the next scheduled milestone; it is a release bar that must be earned by a stable, explicitly approved execution contract and evidence from repeated use outside the maintainer's repositories.
 
-### Current Focus After 0.4.12
+### Current Focus After 0.4.13
 
 The OpenAI Plugin Directory is now a real first-run surface, so the next patches
 prioritize recommendation quality over adding another distribution channel or
