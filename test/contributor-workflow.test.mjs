@@ -100,3 +100,24 @@ test("entry-point documentation links resolve inside the repository", async () =
     }
   }
 });
+
+test("public plugin guidance links directly to the official installation steps", async () => {
+  const installationUrl =
+    "https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin";
+
+  for (const relativeDocument of [
+    "README.md",
+    "README.ko.md",
+    "docs/ko/agent-integration.md",
+  ]) {
+    const source = await readFile(path.join(repositoryRoot, relativeDocument), "utf8");
+    assert.ok(
+      source.includes(installationUrl),
+      `${relativeDocument} must link directly to the official plugin installation steps`,
+    );
+    assert.ok(
+      !source.includes("https://learn.chatgpt.com/docs/plugins)"),
+      `${relativeDocument} must not send readers to the general Plugins overview`,
+    );
+  }
+});

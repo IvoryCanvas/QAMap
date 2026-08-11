@@ -5,6 +5,7 @@
 ### Changed
 
 - Documented the shared Node.js 20+ runtime contract, the actively supported LTS recommendation, and verified npm, pnpm, Yarn, and Bun installation and repeat-use commands in both READMEs.
+- Linked the English and Korean plugin guidance directly to OpenAI's official installation steps instead of the general Plugins overview.
 
 ## 0.4.13 - 2026-08-11
 

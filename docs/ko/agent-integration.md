@@ -12,7 +12,7 @@ ChatGPT 또는 Codex의 **Plugins**에서 **QAMap**을 검색하고 **+**를 누
 새 대화를 시작합니다.
 
 - [QAMap 플러그인 열기](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
-- [OpenAI 플러그인 설치 안내](https://learn.chatgpt.com/docs/plugins)
+- [OpenAI 공식 플러그인 설치 단계](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
 
 플러그인이 저장소를 분석하려면 호스트가 체크아웃된 저장소와 로컬 shell에
 접근할 수 있어야 합니다. 웹 전용 대화에서 로컬 저장소 접근 권한이 없으면

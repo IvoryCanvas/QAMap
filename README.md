@@ -12,7 +12,7 @@
 
 **Install in ChatGPT or Codex:** open **Plugins**, search for **QAMap**, select
 **+**, then start a new chat. [Open QAMap](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
-· [Installation guide](https://learn.chatgpt.com/docs/plugins)
+· [Official installation steps](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
 
 ![QAMap: find what a change needs to prove](docs/assets/qamap-cover.png)
 
