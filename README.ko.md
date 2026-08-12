@@ -106,22 +106,36 @@ provider까지 추적합니다. 그 전제조건을 mock으로 우회한 테스�
 
 ```txt
 QAMap QA
-Local static analysis. Product QA was not run.
+Local static analysis. No cloud or LLM token. Product QA was not run.
 
 Change
-  Prevent duplicate subscription renewal requests
+  Prevent duplicate subscription renewal requests (medium confidence; review required)
+  Flow:
+    action: Prevent duplicate subscription renewal requests.
+    -> observable-outcome: Subscription status becomes active.
+  Affected behavior: Prevent duplicate subscription renewal requests
 
 Verify before merge
-  REQUIRED     Subscription becomes visibly active
-  RECOMMENDED  Duplicate renewal request is prevented
+  REQUIRED  Prevent duplicate subscription renewal requests
+    Proof: Verify visible text "Subscription active" appears.
+    Evidence: src/pages/renewal.tsx:11 (RenewalPage)
+  RECOMMENDED  Failure, timeout, and retry handling
+    Proof: Verify each response produces the intended visible or persisted state.
+    Evidence: src/pages/renewal.tsx:11 (RenewalPage)
+  RECOMMENDED  Duplicate renewal request
+    Proof: Verify duplicate renewal request is prevented or handled explicitly.
+    Evidence: src/pages/renewal.tsx:11 (RenewalPage)
 
 Evidence
-  3/3 scenarios connect to 6 unique diff sources.
-  Existing validation: npm run test:e2e (selected, not run)
+  3/3 scenarios connect to 5 unique diff source(s).
+  Routing: 1 required, 2 recommended, 0 review-only.
+  Optional E2E mapping: 1 mapped, 1 partial, 1 unmapped; not executed.
+  Supplemental validation: npm run test:e2e (available, not selected for this QA route)
 
 Next
-  Run selected validation: qamap qa run
-  Preview E2E draft: qamap e2e draft . --dry-run
+  Review the selected scenarios before choosing an execution step.
+  Preview an optional automation or checklist draft: qamap e2e draft . --dry-run
+  Open the full reasoning trace: qamap qa --format markdown
 ```
 
 ## 반복해서 CLI 사용하기

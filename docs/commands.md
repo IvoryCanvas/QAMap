@@ -6,6 +6,10 @@ Every QAMap command, with what it produces and when to reach for it. For the sho
 > and `qamap e2e draft --dry-run`. Search for a command name instead of reading
 > this document from top to bottom.
 
+`qamap --help` intentionally shows only that core workflow. Use
+`qamap qa --help` for its analysis and execution options, or `qamap help --all`
+when maintaining an older scanner, CI, manifest, or compatibility workflow.
+
 ## Quick Commands
 
 ```sh

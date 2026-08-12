@@ -23,6 +23,19 @@ commit range + base/head diff
   -> normalized evidence and verdict
 ```
 
+## Public Workflow Boundary
+
+The internal pipeline can grow, but normal users should need only a small set of
+decisions: run `qa`, inspect its evidence, explicitly run a selected existing
+validation, or opt into an automation draft. Scanner, readiness, legacy
+manifest, and adapter commands remain available for advanced and compatibility
+workflows without becoming separate concepts every first-time user must learn.
+
+This boundary is deliberate. QAMap should work without configuration, while
+team context and lower-level controls become visible only when a repository has
+a concrete reason to customize them. Analysis never silently crosses into
+execution, installation, or repository writes.
+
 The repository, not a model session, is the source of truth. Commit subjects and bodies provide author intent, source code supplies observable structure, optional symbol QA annotations bind important exports to local semantics, and `.qamap/manifest.yaml` supplies reviewed team-wide product intent that commits and code alone cannot prove.
 
 ## Knowledge Authority And Test Classes
