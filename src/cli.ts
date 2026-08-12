@@ -107,7 +107,11 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "help" || command === "--help" || command === "-h") {
-    printHelp();
+    if (rest.includes("--all") || rest.includes("all")) {
+      printFullHelp();
+    } else {
+      printHelp();
+    }
     return 0;
   }
 
@@ -285,6 +289,10 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "qa") {
+    if (rest[0] === "help" || rest[0] === "--help" || rest[0] === "-h") {
+      printQaHelp();
+      return 0;
+    }
     const runValidation = rest[0] === "run";
     const options = parseOptions(runValidation ? rest.slice(1) : rest);
     const loadedConfig = await loadOptionsConfig(options);
@@ -1020,10 +1028,76 @@ Want shorter commands for repeat use? Run once: qamap init --scripts
       Adds qa, qa:local, qa:run, and qa:e2e package scripts without replacing
       existing scripts unless --force is passed.
 
-Full command reference: qamap help`);
+Full command reference: qamap help --all`);
 }
 
 function printHelp(): void {
+  console.log(`QAMap ${VERSION}
+
+Find what a change needs to prove before merge.
+
+Core workflow:
+  qamap qa [path]
+      Analyze the current branch and show changed behavior, QA scenarios,
+      diff evidence, and the safest next action. Does not run product QA.
+
+  qamap qa run [path]
+      Re-analyze the branch and run only the exact existing repository
+      validation selected by QAMap. Returns an explicit execution receipt.
+
+  qamap e2e draft [path] --dry-run
+      Preview an optional automation or checklist draft after reviewing the
+      selected QA scenarios. Does not install a runner or execute the draft.
+
+  qamap manifest init [path]
+      Optional: create repo-local QA context when repeated runs need durable
+      team language or flow corrections.
+
+Agent and repeat-use setup:
+  qamap init --agent [path]
+  qamap init --scripts [path]
+
+Output:
+  --format text       concise human summary (default)
+  --format markdown   complete reasoning trace
+  --format agent      compact versioned agent contract
+  --format json       complete structured result
+
+Use \`qamap qa --help\` for QA options or \`qamap help --all\` for every
+advanced and compatibility command.`);
+}
+
+function printQaHelp(): void {
+  console.log(`QAMap ${VERSION}
+
+Analyze first. Execute only through an explicit follow-up command.
+
+Usage:
+  qamap qa [path] [--workspace-root <path>] [--manifest <file>]
+    [--base <ref>] [--head <ref>] [--include-working-tree]
+    [--runner maestro|playwright|manual] [--format <format>] [--output <file>]
+
+  qamap qa run [path] [--workspace-root <path>] [--manifest <file>]
+    [--base <ref>] [--head <ref>] [--include-working-tree]
+    [--timeout-ms <n>] [--format <format>] [--output <file>]
+
+Behavior:
+  qa       maps diff -> affected behavior -> risk -> scenario -> evidence.
+           Product QA and generated drafts remain marked not run.
+  qa run   repeats the analysis, then executes only the selected existing
+           repository command when the action contract permits it.
+
+Common examples:
+  qamap qa
+  qamap qa --include-working-tree
+  qamap qa --format markdown
+  qamap qa --format agent
+  qamap qa run
+
+Use \`qamap help --all\` for every advanced and compatibility command.`);
+}
+
+function printFullHelp(): void {
   console.log(`QAMap ${VERSION}
 
 Local zero-LLM PR QA design, deterministic automation drafts, and repository guardrails.
