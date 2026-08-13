@@ -122,6 +122,35 @@ test("public plugin guidance links directly to the official installation steps",
   }
 });
 
+test("the Korean entry point uses natural copy and portable Markdown", async () => {
+  const readme = await readFile(path.join(repositoryRoot, "README.ko.md"), "utf8");
+  const cover = await readFile(
+    path.join(repositoryRoot, "docs/assets/qamap-cover-ko.svg"),
+    "utf8",
+  );
+
+  for (const source of [readme, cover]) {
+    assert.ok(
+      !source.includes("변경이 무엇을 증명해야 하는지"),
+      "the old translated slogan must not return",
+    );
+  }
+  for (const rawHtml of ["<a ", "<img ", "<details>", "<summary>"]) {
+    assert.ok(
+      !readme.includes(rawHtml),
+      `README.ko.md must use portable Markdown instead of ${rawHtml.trim()}`,
+    );
+  }
+  assert.ok(
+    readme.includes("이 PR에서 꼭 확인해야 할 부분을 찾아줍니다."),
+    "README.ko.md must open with the current Korean product promise",
+  );
+  assert.ok(
+    cover.includes("이 PR에서 꼭 확인해야 할 부분을 찾아줍니다."),
+    "the Korean cover must match the README promise",
+  );
+});
+
 test("public READMEs present local setup before the optional plugin path", async () => {
   const contracts = [
     {
