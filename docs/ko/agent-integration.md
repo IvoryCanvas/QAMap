@@ -1,72 +1,78 @@
-# 에이전트 연동
+# 에이전트에서 QAMap 사용하기
 
 [한국어 문서 홈](README.md) | [English agent guide](../agent-skill.md)
 
-QAMap은 Codex, ChatGPT, Claude Code 등 특정 제품에 종속된 QA 엔진을 따로
-만들지 않습니다. 모든 연동은 같은 로컬 CLI와 versioned `qamap.qa`
-계약을 사용합니다.
+Codex, ChatGPT 또는 다른 코딩 에이전트에서 사용해도 QAMap은 같은 로컬
+CLI를 실행합니다. 특정 에이전트에서만 동작하는 별도 분석 엔진을 두지
+않으며, 결과는 버전이 지정된 `qamap.qa` 형식으로 전달합니다.
 
-## OpenAI Plugin Directory
+## OpenAI 플러그인으로 설치하기
 
 ChatGPT 또는 Codex의 **Plugins**에서 **QAMap**을 검색하고 **+**를 누른 뒤
-새 대화를 시작합니다.
+새 작업을 시작합니다.
 
-- [QAMap 플러그인 열기](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
-- [OpenAI 공식 플러그인 설치 단계](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
+- [QAMap 플러그인 페이지](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
+- [OpenAI 공식 설치 안내](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
 
-플러그인이 저장소를 분석하려면 호스트가 체크아웃된 저장소와 로컬 shell에
-접근할 수 있어야 합니다. 웹 전용 대화에서 로컬 저장소 접근 권한이 없으면
-같은 분석을 수행할 수 없습니다.
+플러그인을 실행하는 앱이 현재 저장소와 로컬 터미널을 읽을 수 있어야
+합니다. 일반 웹 채팅처럼 로컬 파일에 접근할 수 없는 환경에서는 분석할
+코드를 읽을 수 없습니다.
 
-## 범용 agent payload
+## 에이전트용 JSON 출력
 
-다른 에이전트는 다음 명령으로 압축된 JSON 계약을 읽을 수 있습니다.
+다른 에이전트는 다음 명령으로 간결한 JSON 결과를 받을 수 있습니다.
 
 ```sh
 npx --yes @ivorycanvas/qamap@latest qa --format agent
 ```
 
-에이전트는 다음 순서로 읽어야 합니다.
+결과는 다음 순서로 읽으면 됩니다.
 
-1. `execution`: 실제 실행 여부와 상태
-2. `route`: 현재 필요한 한 가지 다음 행동
-3. `action`: 실행·쓰기·network·승인 경계
-4. `intents`와 `flows`: 변경 의도, 시나리오, 영향받는 흐름
-5. `requiredEvidence`: 신뢰하기 전에 필요한 근거
+1. `execution`: 테스트 명령을 실제로 실행했는지와 그 결과
+2. `route`: 현재 권하는 다음 단계 하나
+3. `action`: 명령 실행, 파일 변경, 네트워크 사용, 승인에 관한 조건
+4. `intents`와 `flows`: 변경 의도, 확인할 시나리오, 영향받는 흐름
+5. `requiredEvidence`: 판단을 신뢰하기 전에 더 필요한 근거
 
-## 모노레포 명령 실행 위치
+## 모노레포에서 명령을 실행할 위치
 
-에이전트 출력의 `analysisScope.commandCwd`를 먼저 확인합니다.
+먼저 `analysisScope.commandCwd`를 확인합니다.
 
-- `workspace-root`: 저장소 루트에서 명령을 실행합니다. QAMap이 자동으로 고른 패키지 명령은 `--dir`, `--cwd`, `--prefix` 또는 명시적인 `cd`에 패키지 경로가 이미 포함되어 있습니다.
-- `selected-package`: `analysisScope.selectedPath`에서 패키지 로컬 명령을 실행합니다. 사용자가 `--workspace-root`와 함께 패키지를 명시한 경우에 사용됩니다.
+- `workspace-root`: 저장소 최상위 디렉터리에서 실행합니다. QAMap이 고른
+  패키지 명령에는 `--dir`, `--cwd`, `--prefix` 또는 `cd`와 함께 필요한
+  하위 경로가 이미 들어 있습니다.
+- `selected-package`: `analysisScope.selectedPath`에서 실행합니다. 사용자가
+  `--workspace-root`와 함께 패키지를 직접 지정한 경우에 사용됩니다.
 
-이 필드가 없는 이전 v1 출력은 저장소 루트를 기본값으로 사용합니다. 경로를 추측해 `selectedPath`를 두 번 적용하지 않습니다.
+이 필드가 없는 이전 v1 출력은 저장소 최상위 디렉터리를 기본값으로
+사용합니다. 경로를 추측해서 `selectedPath`를 한 번 더 붙이지 마세요.
 
-## 토큰과 데이터 경계
+## 토큰과 데이터 사용 범위
 
-- QAMap 정적 분석 자체는 추가 LLM 호출을 하지 않습니다.
-- QAMap은 분석을 위해 소스 코드를 업로드하지 않습니다.
-- QAMap을 호출하고 결과를 해석하는 호스트 에이전트는 자체 모델 토큰을 사용합니다.
-- `npx` 일회성 실행은 고정된 npm 패키지를 내려받기 위해 network를 사용할 수 있습니다.
+- QAMap의 정적 분석은 별도의 LLM을 호출하지 않습니다.
+- 분석을 위해 소스 코드를 외부로 업로드하지 않습니다.
+- QAMap을 호출하고 결과를 해석하는 에이전트는 자체 모델 토큰을 사용합니다.
+- `npx`로 처음 실행할 때는 npm에서 패키지를 내려받기 위해 네트워크를
+  사용할 수 있습니다.
 
-따라서 “zero additional LLM”은 전체 에이전트 세션의 토큰이 0이라는 뜻이
-아니라, 반복되는 저장소 분석을 QAMap의 결정론적 로컬 단계가 담당한다는
-뜻입니다.
+따라서 “추가 LLM 호출 없음”은 전체 에이전트 작업에서 토큰을 전혀 쓰지
+않는다는 뜻이 아닙니다. 저장소를 반복해서 읽고 변경 근거를 정리하는
+단계를 QAMap이 로컬에서 맡는다는 뜻입니다.
 
-## 안전한 사용 순서
+## 안전하게 사용하는 순서
 
-1. 먼저 read-only `qa --format agent`를 실행합니다.
-2. 가장 강한 diff 근거가 실제 코드와 맞는지 확인합니다.
-3. `route.nextAction` 하나만 선택합니다.
-4. repository command 실행이나 파일 생성은 action contract와 사용자 승인을 확인합니다.
-5. 생성된 초안과 실행 결과를 구분해서 보고합니다.
+1. 먼저 `qa --format agent`로 변경 없이 분석 결과만 받아봅니다.
+2. 가장 중요한 판단이 실제 변경 코드와 연결되는지 확인합니다.
+3. `route.nextAction`에 적힌 다음 단계 하나를 검토합니다.
+4. 저장소 명령을 실행하거나 파일을 만들기 전에는 `action`의 허용 범위와
+   사용자 승인을 확인합니다.
+5. 만들어진 초안과 실제로 실행한 결과를 구분해서 보고합니다.
 
-문서, 번역 안내, 패키지에 포함되는 문서 목록, 이슈 폼, PR 템플릿만 바뀐
-경우 QAMap은 이를 제품 기능 변경으로 간주하지 않습니다. 링크와 명령,
-YAML 필드, 라벨·할당자, 필수 PR 섹션을 확인하는 저장소 검증으로 라우팅하며,
-실행 가능한 기존 명령을 찾았을 때만 검증 준비 상태를 `ready`로 표시합니다.
+문서, 패키지 문서 목록, 이슈 양식, PR 템플릿만 바뀌었다면 QAMap은 이를
+제품 기능 변경으로 보지 않습니다. 링크, 명령, YAML 필드, 라벨, 할당자,
+필수 PR 항목을 확인하는 저장소 검증으로 분류하고, 실행할 기존 명령을
+찾았을 때만 준비 상태를 `ready`로 표시합니다.
 
-QAMap 결과가 일반 코드 검토와 다르면 실제 코드와 실행 근거를 우선합니다.
-차이는 false positive, miss, evidence gap, action gap으로 남겨 QAMap의 다음
-회귀 fixture로 사용할 수 있습니다.
+QAMap 결과가 일반 코드 검토와 다르면 실제 코드와 실행 결과를 우선하세요.
+의미 있는 차이는 잘못 짚은 항목, 놓친 항목, 근거 부족, 실행 안내 부족으로
+분류해 다음 회귀 테스트를 만드는 데 사용할 수 있습니다.

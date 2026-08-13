@@ -6,26 +6,26 @@
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/qamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-![QAMap: 변경이 무엇을 증명해야 하는지 찾습니다](docs/assets/qamap-cover-ko.png)
+![QAMap: 이 PR에서 꼭 확인해야 할 부분을 찾아줍니다](docs/assets/qamap-cover-ko.svg)
 
-**병합 전에 이 변경이 무엇을 증명해야 하는지 찾습니다.**
+**이 PR에서 꼭 확인해야 할 부분을 찾아줍니다.**
 
-QAMap은 local-first QA CLI입니다. 현재 브랜치, 저장소 구조, 기존 테스트,
-diff 근거를 읽고 다음 질문에 답합니다.
+QAMap은 현재 브랜치의 커밋과 코드 변경, 저장소 구조, 기존 테스트를
+로컬에서 살펴보고 병합 전에 확인할 내용을 정리하는 CLI입니다.
 
-1. 어떤 동작이 바뀌었는가?
-2. 무엇이 실패할 수 있는가?
-3. 병합 전에 무엇을, 왜 검증해야 하는가?
-4. 지금 실행할 수 있는 검증이나 E2E 초안은 무엇인가?
+- 어떤 기능과 사용자 흐름이 달라졌는지
+- 정상 동작뿐 아니라 실패, 경계값, 상태 변화에서 무엇을 확인해야 하는지
+- 각 판단이 어느 파일과 코드에서 나왔는지
+- 지금 실행할 수 있는 검증과 추가로 만들 수 있는 E2E 초안이 무엇인지
 
-QAMap 자체는 클라우드 분석, 소스 업로드, 추가 LLM 호출을 하지 않습니다.
-manifest와 테스트 runner도 첫 실행에는 필요하지 않습니다.
+분석 과정에서 소스 코드를 외부로 보내거나 별도의 LLM을 호출하지 않습니다.
+처음 사용할 때 설정 파일이나 테스트 실행 환경이 없어도 됩니다.
 
 ## 설치하고 실행하기
 
-어떤 저장소에서나 직접 실행하려면 로컬 CLI를 사용하고, ChatGPT나
-Codex가 같은 작업을 호출하게 하려면
-[QAMap 플러그인을 설치](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)하세요.
+터미널에서 직접 사용하려면 로컬 CLI를 실행하세요. ChatGPT나 Codex에서
+같은 분석을 요청하려면 [QAMap 플러그인](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)을
+설치할 수 있습니다.
 
 ### 로컬 CLI (권장)
 
@@ -33,12 +33,12 @@ QAMap은 Node.js 20 이상이 필요합니다. 가능하면
 [현재 지원 중인 Node.js LTS](https://nodejs.org/en/about/previous-releases)를
 사용하세요.
 
-검토하려는 브랜치에서 명령을 실행하세요.
+확인하려는 브랜치로 이동한 뒤 실행합니다.
 
 #### 저장소를 바꾸지 않고 한 번 실행
 
-저장소가 npm, pnpm, Yarn, Bun 중 무엇을 사용하더라도 다음 명령을
-실행할 수 있습니다. 프로젝트 의존성은 변경하지 않습니다.
+저장소가 npm, pnpm, Yarn, Bun 중 무엇을 사용하더라도 다음 명령을 실행할
+수 있습니다. 프로젝트 의존성이나 설정 파일은 바뀌지 않습니다.
 
 ```sh
 npx --yes @ivorycanvas/qamap@latest qa
@@ -46,8 +46,8 @@ npx --yes @ivorycanvas/qamap@latest qa
 
 #### 반복 사용을 위해 프로젝트에 설치
 
-JavaScript 프로젝트에 QAMap 버전을 고정하려면 저장소가 이미 사용하는
-패키지 매니저로 설치하세요.
+프로젝트에서 QAMap 버전을 고정해 사용하려면 이미 쓰고 있는 패키지
+매니저로 개발 의존성에 추가하세요.
 
 | 패키지 매니저 | 설치 | 짧은 스크립트 추가 |
 | --- | --- | --- |
@@ -56,53 +56,55 @@ JavaScript 프로젝트에 QAMap 버전을 고정하려면 저장소가 이미 �
 | Yarn 1 이상 | `yarn add --dev @ivorycanvas/qamap` | `yarn qamap init --scripts` |
 | Bun | `bun add --dev @ivorycanvas/qamap` | `bun run qamap init --scripts` |
 
-짧은 스크립트, 다른 일회성 명령, Node.js 검증 결과, 고급 옵션은
-[반복해서 CLI 사용하기](#반복해서-cli-사용하기)에 모아두었습니다.
+짧은 스크립트와 다른 실행 방법은
+[반복해서 CLI 사용하기](#반복해서-cli-사용하기)에서 확인할 수 있습니다.
 
 ### ChatGPT·Codex 플러그인
 
-에이전트가 PR 검토나 테스트 계획 과정에서 QAMap을 호출하게 하려면
+에이전트가 PR 검토나 테스트 계획 중에 QAMap을 호출하도록 하려면
 플러그인을 설치하세요.
 
-<a href="https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629">
-  <img src="docs/assets/openai-plugin-directory-badge.svg" alt="OpenAI Plugin Directory에서 QAMap 설치" height="64">
-</a>
+[![OpenAI 플러그인 디렉터리에서 QAMap 설치](docs/assets/openai-plugin-directory-badge.svg)](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
 
-[QAMap 플러그인 설치](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
-· [OpenAI 공식 플러그인 설치 단계](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
+[QAMap 플러그인 페이지](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
+· [OpenAI 공식 설치 안내](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
 
 1. QAMap 플러그인 페이지를 엽니다.
-2. **+**를 누릅니다.
-3. 체크아웃한 저장소와 로컬 shell에 접근할 수 있는 ChatGPT 또는
-   Codex 대화를 새로 시작합니다.
+2. **+**를 눌러 설치합니다.
+3. 분석할 저장소를 연 ChatGPT 또는 Codex 작업에서 QAMap을 선택합니다.
 
-플러그인은 같은 로컬 QAMap 패키지를 호출합니다. QAMap 정적 분석 자체는
-추가 LLM을 호출하지 않지만, 호스트 에이전트는 자신의 모델과 권한을 사용합니다.
+플러그인도 같은 로컬 QAMap 패키지를 실행합니다. QAMap의 정적 분석은
+별도의 LLM을 호출하지 않지만, QAMap을 호출하고 결과를 읽는 에이전트는
+자체 모델과 권한을 사용합니다. 로컬 파일을 읽을 수 없는 일반 웹
+대화에서는 현재 저장소를 분석할 수 없습니다.
 
 ## 결과 읽는 방법
 
-| 영역 | 답하는 질문 |
+| 출력 영역 | 확인할 내용 |
 | --- | --- |
-| **Change** | 어떤 동작이 바뀌었을 가능성이 있는가? |
-| **Verify before merge** | 정상·실패·경계·상태 전환 중 무엇을 확인해야 하는가? |
-| **Evidence** | 어떤 커밋, 파일, 줄, 심볼이 판단을 뒷받침하는가? |
-| **Next** | 기존 검증을 실행할지, 선택적 초안을 검토할지? |
+| **Change** | 이번 변경에서 달라졌을 가능성이 높은 동작 |
+| **Verify before merge** | 병합 전에 확인할 정상·실패·경계값·상태 변화 |
+| **Evidence** | 판단에 사용한 커밋, 파일, 코드 위치 |
+| **Next** | 지금 실행할 검증 또는 검토할 자동화 초안 |
 
-정적 분석과 실제 QA 실행은 분리됩니다. 제안된 시나리오나 생성된 E2E
-초안은 통과한 테스트로 보고되지 않습니다. 외부에서 확인 가능한 결과를
-diff가 증명하지 못하면, QAMap은 assertion을 지어내지 않고 근거 부족으로
-표시합니다.
+기본 `qa` 명령은 코드를 분석할 뿐, 제품 QA나 테스트를 직접 실행하지
+않습니다. 시나리오나 E2E 초안이 만들어져도 통과한 테스트로 표시하지
+않습니다. 화면이나 저장 상태처럼 사용자가 확인할 수 있는 결과를 코드에서
+찾지 못하면 임의의 검증 조건을 만들지 않고 근거가 부족하다고 표시합니다.
 
-지원하는 실행 전제조건에서는 변경된 진입점부터 로컬 import와 필수
-provider까지 추적합니다. 그 전제조건을 mock으로 우회한 테스트는 충분한
-증명으로 보지 않고 불완전한 근거로 표시합니다.
+지원하는 저장소 구조에서는 변경된 화면이나 진입점부터 실제로 필요한
+모듈과 실행 조건까지 따라갑니다. 테스트가 그 조건을 모의 처리로
+우회했다면 완전한 검증 근거로 보지 않습니다.
 
 ## 실제 실행 예시
 
-아래 녹화는 공개 fixture를 사용합니다. QAMap은 중복 요청 위험과 변경
-근거를 찾고, 실제 실행 상태는 `not run`으로 유지합니다.
+아래 녹화는 공개 예제 저장소를 사용합니다. QAMap은 중복 요청 위험과
+관련 코드 위치를 찾고, 실제 실행 상태는 `not run`으로 남깁니다.
 
-![QAMap이 브랜치 diff를 읽고 근거가 연결된 QA 요약을 만드는 화면](docs/assets/qamap-quickstart.gif)
+![QAMap이 브랜치의 코드 변경을 읽고 근거가 연결된 QA 요약을 만드는 화면](docs/assets/qamap-quickstart.gif)
+
+아래 코드 블록은 설명을 위해 번역한 문장이 아니라 현재 CLI가 실제로
+출력하는 내용입니다.
 
 ```txt
 QAMap QA
@@ -142,8 +144,8 @@ Next
 
 ### 짧은 스크립트 추가
 
-`init --scripts`는 `qa`, `qa:local`, `qa:run`, `qa:e2e`를 추가합니다. 저장소가
-사용하는 방식에 맞춰 같은 스크립트를 실행하세요.
+`init --scripts`를 실행하면 `qa`, `qa:local`, `qa:run`, `qa:e2e` 스크립트가
+추가됩니다. 프로젝트가 사용하는 패키지 매니저에 맞춰 실행하세요.
 
 ```sh
 npm run qa       # npm
@@ -152,15 +154,13 @@ yarn qa          # Yarn
 bun run qa       # Bun
 ```
 
-아직 커밋하지 않은 변경을 포함하려면 `qa:local`, 선택된 기존 검증을
-실행하려면 `qa:run`, 선택적 E2E 초안을 미리 보려면 `qa:e2e`로 `qa`를
-바꾸면 됩니다. 다른 언어의 저장소는 범용 `npx` 명령을 그대로 사용할 수
-있습니다.
+아직 커밋하지 않은 변경을 포함하려면 `qa:local`, QAMap이 고른 기존 검증을
+실행하려면 `qa:run`, E2E 초안을 미리 보려면 `qa:e2e`를 사용합니다. 다른
+언어로 만든 저장소에서도 앞에서 본 `npx` 명령을 그대로 사용할 수 있습니다.
 
-<details>
-<summary>패키지 매니저별 일회성 실행 명령</summary>
+### 패키지 매니저별 일회성 실행
 
-프로젝트 의존성에 QAMap을 추가하지 않고 다음 명령도 사용할 수 있습니다.
+프로젝트에 QAMap을 설치하지 않고도 다음 명령을 사용할 수 있습니다.
 
 ```sh
 pnpm dlx @ivorycanvas/qamap@latest qa
@@ -168,42 +168,37 @@ yarn dlx @ivorycanvas/qamap@latest qa  # Yarn 2+
 bunx @ivorycanvas/qamap@latest qa
 ```
 
-Yarn Classic은 범용 `npx` 명령을 사용하거나 프로젝트에 QAMap을 설치하세요.
-Corepack으로 관리되는 패키지 매니저는 저장소의 `packageManager` 정보를
-추가하거나 갱신할 수 있습니다. 파일을 전혀 바꾸지 않는 첫 확인이 필요하면
-`npx` 명령을 사용하세요.
+Yarn Classic은 `npx` 명령을 사용하거나 프로젝트에 QAMap을 설치하세요.
+Corepack으로 관리되는 패키지 매니저는 저장소의 `packageManager` 값을
+추가하거나 바꿀 수 있습니다. 파일을 건드리지 않고 처음 확인할 때는
+`npx` 명령이 가장 단순합니다.
 
-</details>
+### 확인한 Node.js 버전
 
-<details>
-<summary>검증한 Node.js 버전</summary>
+공개된 `0.4.13` 패키지는 2026-08-11에 다음 Node.js 버전에서 설치와 `qa`
+실행을 확인했습니다. 설치 명령은 모두 같습니다.
 
-공개된 `0.4.13` 패키지는 2026-08-11에 다음 버전에서 설치와 실제 `qa`
-smoke를 완료했습니다. 모든 버전에서 설치 명령은 같습니다.
-
-| Node.js | smoke | 안내 |
+| Node.js | 설치 및 실행 확인 | 안내 |
 | --- | --- | --- |
-| 20 | 통과 | 패키지는 호환되지만 공식 지원 종료 상태이므로 보안 업데이트를 위해 업그레이드 권장 |
-| 22 | 통과 | 검증 시점에 지원 중인 LTS |
-| 24 | 통과 | 검증 시점에 지원 중인 LTS |
-| 26 | 통과 | 검증 시점의 Current 버전이며 운영 환경은 LTS 권장 |
+| 20 | 통과 | 패키지는 호환되지만 공식 지원 종료 상태이므로 업그레이드 권장 |
+| 22 | 통과 | 검증 당시 지원 중인 LTS |
+| 24 | 통과 | 검증 당시 지원 중인 LTS |
+| 26 | 통과 | 검증 당시 Current 버전이며 운영 환경은 LTS 권장 |
 
 정확한 버전과 패키지 매니저 범위는
-[release validation 기록](docs/release-validation.md#unreleased---2026-08-11)에서
+[릴리스 검증 기록](docs/release-validation.md#unreleased---2026-08-11)에서
 확인할 수 있습니다.
-
-</details>
 
 ### 자주 쓰는 CLI 옵션
 
-일반적인 저장소에서는 base branch를 자동으로 찾습니다. 필요한 경우에만
-직접 지정하세요.
+일반적인 저장소에서는 기준 브랜치를 자동으로 찾습니다. 자동으로 찾은
+브랜치가 맞지 않을 때만 직접 지정하세요.
 
 ```sh
 npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD
 ```
 
-전체 판단 근거가 필요한 경우 Markdown 형식을 사용합니다.
+판단에 사용한 전체 근거를 보려면 Markdown 형식으로 출력합니다.
 
 ```sh
 npx --yes @ivorycanvas/qamap@latest qa --format markdown
@@ -211,45 +206,46 @@ npx --yes @ivorycanvas/qamap@latest qa --format markdown
 
 ## 분석, 실행, E2E의 차이
 
-| 명령 | 동작 | 프로젝트 코드를 실행하거나 쓰는가? |
+| 명령 | 하는 일 | 프로젝트 코드를 실행하거나 파일을 만드는가? |
 | --- | --- | --- |
-| `qamap qa` | diff를 동작, 위험, 근거, QA 시나리오에 연결 | 아니요 |
-| `qamap qa run` | QAMap이 선택한 기존 저장소 검증 하나를 명시적으로 실행 | 예 |
-| `qamap e2e draft . --dry-run` | 선택적 Playwright, Maestro, CLI, API, manual 자동화 초안 미리보기 | 아니요 |
+| `qamap qa` | 코드 변경을 동작, 위험, 근거, QA 항목에 연결 | 아니요 |
+| `qamap qa run` | QAMap이 고른 기존 검증 명령 하나를 명시적으로 실행 | 예 |
+| `qamap e2e draft . --dry-run` | Playwright, Maestro, CLI, API, 수동 점검표 초안을 미리 보기 | 아니요 |
 
-selector, fixture, Playwright, Maestro, 테스트 runner가 없다는 이유로 중요한
-QA 시나리오를 숨기지 않습니다. 이 항목들은 자동화 수단이며, 무엇을
-검증해야 하는가보다 먼저 오지 않습니다.
+화면 요소 식별자, 테스트 데이터, Playwright, Maestro, 테스트 실행 환경이
+없어도 중요한 QA 항목을 숨기지 않습니다. 먼저 무엇을 확인해야 하는지
+정리하고, 실제로 자동화할 근거가 있을 때만 도구나 초안에 연결합니다.
 
 ## 동작 방식
 
 ```txt
-commit + diff
-    -> 변경된 동작과 흐름
-    -> 위험과 QA 시나리오 선택
-    -> 파일과 줄 단위 판단 근거
-    -> 기존 검증 또는 선택적 E2E 초안
+커밋 + 코드 변경
+    -> 달라진 동작과 영향받는 흐름
+    -> 확인할 위험과 QA 항목
+    -> 파일과 코드 위치로 연결된 판단 근거
+    -> 기존 검증 또는 E2E 초안
 ```
 
-QAMap은 넓은 저장소 추측보다 직접 변경된 동작을 우선합니다. 공유
-컴포넌트 변경은 reverse-import 맥락을 통해 소비 화면으로 연결할 수 있지만,
-관련 없는 화면은 범위에서 제외하도록 보수적으로 판단합니다.
+QAMap은 저장소 전체를 막연히 추측하기보다 직접 바뀐 동작을 먼저 봅니다.
+공유 컴포넌트가 바뀌면 그 컴포넌트를 실제로 가져다 쓰는 화면까지 따라가되,
+관련 없는 화면은 분석 범위에서 제외하도록 보수적으로 판단합니다.
 
 ## 에이전트와 팀 맥락
 
-에이전트는 같은 판단을 압축된 버전 계약으로 읽을 수 있습니다.
+에이전트는 같은 결과를 간결한 JSON 형식으로 읽을 수 있습니다.
 
 ```sh
 npx --yes @ivorycanvas/qamap@latest qa --format agent
 ```
 
-OpenAI Plugin Directory, portable project skill, `qamap init --agent` 모두 같은
-로컬 CLI를 호출합니다. 에이전트가 QAMap을 호출하고 해석하는 데 사용하는
-호스트 모델 토큰과 QAMap 자체의 추가 LLM 호출이 없다는 사실은 구분해야
-합니다.
+OpenAI 플러그인, 프로젝트용 스킬, `qamap init --agent`는 모두 같은
+로컬 CLI를 호출합니다. QAMap 자체는 추가 LLM을 호출하지 않지만, 에이전트가
+QAMap을 호출하고 결과를 해석하는 데에는 해당 에이전트의 모델 토큰이
+사용됩니다.
 
-첫 실행에는 설정이 필요하지 않습니다. 반복적으로 같은 팀 흐름을 잘못
-해석할 때만 repo-local QA 맥락을 만들고 사람이 검토하세요.
+처음 실행할 때 별도 설정은 필요하지 않습니다. QAMap이 같은 흐름을
+반복해서 잘못 이해할 때만 저장소별 QA 기준 파일을 만들고 팀에서
+검토하세요.
 
 ```sh
 npx --yes @ivorycanvas/qamap@latest manifest init
@@ -261,27 +257,28 @@ npx --yes @ivorycanvas/qamap@latest manifest init
 | --- | --- |
 | 한 번 실행하고 결과 이해하기 | [한국어 빠른 시작](docs/ko/quickstart.md) |
 | 에이전트 또는 OpenAI 플러그인에서 사용하기 | [한국어 에이전트 연동](docs/ko/agent-integration.md) |
-| 반복되는 오해를 저장소 맥락으로 보정하기 | [한국어 verification manifest](docs/ko/manifest.md) |
+| 반복되는 오해를 저장소별 QA 기준으로 보정하기 | [한국어 manifest 안내](docs/ko/manifest.md) |
 | 모든 한국어 문서 보기 | [한국어 문서 홈](docs/ko/README.md) |
-| 전체 기술 명세 보기 | [English documentation](docs/en/README.md) |
-| 문제를 제보하거나 기여하기 | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| 전체 기술 명세 보기 | [영문 기술 문서](docs/en/README.md) |
+| 문제를 제보하거나 기여하기 | [기여 안내](CONTRIBUTING.md) |
 
 ## 현재 한계
 
-QAMap은 아직 `1.0` 이전입니다. 정적 분석만으로 모든 제품 판단을 알 수
-없으므로 추론된 시나리오는 검토가 필요합니다. 저장소 명령 하나가
-통과해도 제품 전체 QA가 통과한 것은 아닙니다.
+QAMap은 아직 `1.0` 이전입니다. 정적 분석만으로 제품의 모든 규칙을 알 수
+없으므로 제안된 QA 항목은 사람이 검토해야 합니다. 저장소의 검증 명령
+하나가 통과해도 제품 전체 QA가 통과했다는 뜻은 아닙니다.
 
-공개 release gate는 여러 프레임워크, API, CLI, monorepo, testless 저장소,
-false positive 대조군, diff trace, 생성된 브라우저 테스트, 패키지, coverage,
-private fixture 차단 계약을 포함합니다. 자세한 근거는 영문
-[Benchmarking](docs/benchmarking.md) 문서에서 확인할 수 있습니다.
+릴리스 전 공개 벤치마크에서는 여러 웹·모바일 프레임워크, API·CLI,
+모노레포, 테스트가 없는 저장소와 오탐 대조 사례를 함께 확인합니다.
+자세한 범위와 결과는 영문 [벤치마크 문서](docs/benchmarking.md)에서 볼 수
+있습니다.
 
 ## 기여하기
 
-실제 false positive, 놓친 위험, 사용할 수 없는 초안, 최소화한 실패 저장소가
-특히 유용합니다. [CONTRIBUTING.md](CONTRIBUTING.md)에서 시작해 주세요.
+QAMap이 잘못 짚은 항목, 놓친 위험, 쓸 수 없는 초안, 재현 가능한 작은
+예시가 특히 도움이 됩니다. [기여 안내](CONTRIBUTING.md)에서 시작해 주세요.
 공개 제보에는 비공개 저장소, 고객 정보, 사내 경로를 포함하면 안 됩니다.
 
-QAMap은 사람의 리뷰, 실행 가능한 테스트, 보안 도구를 대체하지 않습니다.
-변경을 받은 뒤 무엇을 증명해야 하는지 결정하는 반복 작업을 줄입니다.
+QAMap은 사람의 리뷰나 실행 가능한 테스트, 보안 도구를 대신하지 않습니다.
+PR마다 무엇을 확인할지 처음부터 다시 판단하는 시간을 줄이는 것이
+QAMap의 목표입니다.
