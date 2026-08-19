@@ -284,6 +284,36 @@
       }
     },
     {
+      "name": "long-pr-independent-intents",
+      "fixture": "test/benchmarks/long-pr-independent-intents",
+      "commits": [
+        { "dir": "head-1", "message": "feat(workspace): optimize shared package build concurrency" },
+        { "dir": "head-2", "message": "feat(workspace): remove shared package legacy preview" },
+        { "dir": "head-3", "message": "fix(workspace): break shared package import cycle" },
+        { "dir": "head-4", "message": "feat(workspace): preserve shared package button compatibility" },
+        { "dir": "head-5", "message": "fix(workspace): keep shared package button fallback when an icon is absent" },
+        { "dir": "head-6", "message": "docs: document shared package release changes" }
+      ],
+      "expect": {
+        "minChangeIntents": 4,
+        "mustReachFiles": [
+          "tooling/build-queue.ts",
+          "apps/studio/src/legacy/preview.ts",
+          "packages/core/src/registry.ts",
+          "packages/ui/src/ActionButton.tsx"
+        ],
+        "mustNamePrimaryIntent": ["preserve shared package button compatibility"],
+        "mustNameIntents": [
+          "optimize shared package build concurrency",
+          "remove shared package legacy preview",
+          "break shared package import cycle",
+          "preserve shared package button compatibility"
+        ],
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "web-symbol-annotated-renewal",
       "fixture": "test/benchmarks/web-symbol-annotated-renewal",
       "commitMessage": "fix: prevent duplicate subscription renewal requests",

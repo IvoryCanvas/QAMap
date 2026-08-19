@@ -6255,7 +6255,13 @@ function intentFlowKind(intent: ChangeIntentAnalysis["intents"][number], project
   if (intent.files.some(isTransformationSourcePath)) {
     return "transformation";
   }
-  if (/\b(?:endpoint|request|response|api|contract)\b/.test(searchable) && projectType === "api-service") {
+  const apiSurfaceFile = intent.files.some((file) =>
+    /(?:^|\/)(?:routes?|controllers?|handlers?|resolvers?)(?:\/|\.[^/]+$)/i.test(file)
+  );
+  if (
+    projectType === "api-service" &&
+    (apiSurfaceFile || /\b(?:endpoint|request|response|api|contract)\b/.test(searchable))
+  ) {
     return "api";
   }
   if (/\b(?:state|store|persist|sync|toggle|cache|session|notification|reminder)\b/.test(searchable)) {
