@@ -2688,6 +2688,11 @@ export function formatTextQaDraft(result: QaDraftResult): string {
   lines.push("");
   lines.push("Change");
   if (primaryIntent) {
+    if (result.changeAnalysis.intents.length > 1) {
+      lines.push(
+        `  ${result.changeAnalysis.intents.length} change intents detected; showing the primary intent first.`,
+      );
+    }
     const review = primaryIntent.reviewRequired ? "; review required" : "";
     lines.push(`  ${plainText(primaryIntent.title)} (${primaryIntent.confidence} confidence${review})`);
     const lifecycle = summarizeIntentLifecycle(primaryIntent.lifecycle);
@@ -3397,6 +3402,16 @@ function appendQaChangeIntentMarkdown(lines: string[], result: QaDraftResult): v
     lines.push("");
     return;
   }
+  const displayedIntentCount = Math.min(3, result.changeAnalysis.intents.length);
+  const omittedIntentCount = result.changeAnalysis.intents.length - displayedIntentCount;
+  const intentLabel = result.changeAnalysis.intents.length === 1 ? "intent" : "intents";
+  lines.push(
+    `${result.changeAnalysis.intents.length} change ${intentLabel} detected; ` +
+      `${omittedIntentCount > 0
+        ? `showing ${displayedIntentCount} and omitting ${omittedIntentCount}`
+        : `showing all ${displayedIntentCount}`}.`,
+  );
+  lines.push("");
   for (const intent of result.changeAnalysis.intents.slice(0, 3)) {
     lines.push(`### ${escapeMarkdownInline(intent.title)}`);
     lines.push("");

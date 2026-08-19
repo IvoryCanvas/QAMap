@@ -135,7 +135,6 @@ interface ParsedCommit extends ChangeIntentCommit {
   seed: boolean;
   supporting: boolean;
   keywords: string[];
-  clusteringKeywords: string[];
   tickets: string[];
 }
 
@@ -273,6 +272,10 @@ export async function analyzeChangeIntents(
     ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}, changedSourceRoles),
     ...collectQaSymbolAnnotationRiskEvidence(productAnnotations),
   ]);
+  const diffAnchors = collectChangedDiffAnchors(
+    options.addedDiffEvidence ?? {},
+    changedSourceRoles,
+  );
   const changedFiles = options.changedFiles.map((file) => file.path);
   const commitClusters = clusterBehaviorCommits(parsedCommits);
   const intents = commitClusters
@@ -286,6 +289,7 @@ export async function analyzeChangeIntents(
         codeSignals,
         riskEvidence,
         annotationEvidence,
+        diffAnchors,
       )
     )
     .filter((intent) => intent.files.length > 0);
@@ -573,7 +577,6 @@ function parseCommit(commit: ChangeIntentCommit): ParsedCommit {
     seed,
     supporting: supporting && !seed,
     keywords: extractKeywords(`${scope ?? ""} ${statement} ${commit.body ?? ""}`),
-    clusteringKeywords: extractKeywords(`${scope ?? ""} ${statement}`),
     tickets,
   };
 }
@@ -653,6 +656,13 @@ function splitTransitiveIntentComponent(component: ParsedCommit[]): ParsedCommit
 }
 
 function commitsShareIntent(left: ParsedCommit, right: ParsedCommit): boolean {
+  if (isCleanupCommitStatement(left.statement) !== isCleanupCommitStatement(right.statement)) {
+    return false;
+  }
+  const sharedTicket = left.tickets.find((ticket) => right.tickets.includes(ticket));
+  if (sharedTicket) {
+    return true;
+  }
   if (
     left.tickets.length > 0 &&
     right.tickets.length > 0 &&
@@ -660,30 +670,18 @@ function commitsShareIntent(left: ParsedCommit, right: ParsedCommit): boolean {
   ) {
     return false;
   }
-  const rightKeywords = new Set(right.clusteringKeywords);
-  const scopeTokens = new Set(
-    [left.scope, right.scope]
-      .filter((scope): scope is string => Boolean(scope))
-      .flatMap((scope) => [normalizeToken(scope), ...extractKeywords(scope)]),
-  );
-  const sharedKeywords = left.clusteringKeywords.filter((keyword) =>
-    rightKeywords.has(keyword) && keyword.length >= 4 && !scopeTokens.has(keyword)
-  );
-  if (sharedKeywords.length >= 2) {
-    return true;
-  }
-
   const rightFiles = new Set((right.files ?? []).filter(isBehaviorBearingFile));
   const sharesBehaviorFile = (left.files ?? []).some(
     (file) => isBehaviorBearingFile(file) && rightFiles.has(file),
   );
-  if (sharedKeywords.length === 1 && sharesBehaviorFile) {
+  if (sharesBehaviorFile) {
     return true;
   }
 
-  // Conventional scopes often name an entire package (for example `web` or
-  // `app`), not one user intent. A single shared word can also create a
-  // transitive bridge across a long PR, so it needs same-file evidence.
+  // Conventional scopes and repeated structural vocabulary often describe a
+  // package or release theme, not one behavior lifecycle. Keep cross-file
+  // commits separate unless an explicit ticket connects them; exact file
+  // overlap remains the bounded structural relationship available here.
   return false;
 }
 
@@ -702,6 +700,7 @@ function buildCommitIntent(
   codeSignals: CodeBehaviorSignal[],
   riskEvidence: ChangeIntentEvidence[],
   annotationEvidence: ChangeIntentEvidence[],
+  diffAnchors: ChangeIntentEvidence[],
 ): ChangeIntent {
   const keywords = uniqueStrings(commits.flatMap((commit) => commit.keywords));
   const files = selectIntentFiles(
@@ -717,6 +716,7 @@ function buildCommitIntent(
   ).filter((signal) => !isUnalignedGenericCallbackSignal(signal, keywords));
   const relevantRiskEvidence = riskEvidence.filter((item) => item.file && files.includes(item.file));
   const relevantAnnotationEvidence = annotationEvidence.filter((item) => item.file && files.includes(item.file));
+  const relevantDiffAnchors = diffAnchors.filter((item) => item.file && files.includes(item.file));
   const lifecycle = buildLifecycle(commits, relevantSignals, relevantRiskEvidence);
   const confidence = confidenceForIntent(commits, lifecycle, relevantSignals);
   const titleCommit = selectIntentTitleCommit(commits);
@@ -724,7 +724,7 @@ function buildCommitIntent(
   const title = titleTicket
     ? `${sentenceTitle(titleCommit.statement)} [${titleTicket}]`
     : sentenceTitle(titleCommit.statement);
-  const evidence = uniqueEvidence([
+  const scenarioEvidence = uniqueEvidence([
     ...commits.map((commit) => ({
       kind: "commit" as const,
       value: commit.subject,
@@ -737,6 +737,16 @@ function buildCommitIntent(
     ...selectRiskEvidence(relevantRiskEvidence, 12),
     ...relevantAnnotationEvidence,
   ]);
+  const fallbackDiffAnchors = hasActionableLocatedDiffEvidence(scenarioEvidence)
+    ? []
+    : selectIntentFallbackDiffAnchor(relevantDiffAnchors, keywords).map((anchor) => ({
+        ...anchor,
+        relation: files.length === 1 ? "direct" as const : "contextual" as const,
+      }));
+  const evidence = uniqueEvidence([
+    ...scenarioEvidence,
+    ...fallbackDiffAnchors,
+  ]);
   const id = stableId("intent", `${index}:${commits.map((commit) => commit.sha).join(":")}:${title}`);
   const summary = commits
     .map((commit) => stripTerminalPunctuation(commit.statement))
@@ -746,7 +756,7 @@ function buildCommitIntent(
   const housekeepingOnly = commits.every((commit) => isCleanupCommitStatement(commit.statement));
   const scenarios = housekeepingOnly
     ? []
-    : buildIntentQaScenarios(id, title, lifecycle, keywords, evidence, confidence);
+    : buildIntentQaScenarios(id, title, lifecycle, keywords, scenarioEvidence, confidence);
   return {
     id,
     title,
@@ -760,6 +770,25 @@ function buildCommitIntent(
     scenarios,
     reviewRequired: confidence !== "high" || lifecycle.some((stage) => stage.confidence === "low"),
   };
+}
+
+function selectIntentFallbackDiffAnchor(
+  anchors: ChangeIntentEvidence[],
+  intentKeywords: string[],
+): ChangeIntentEvidence[] {
+  const keywordSet = new Set(intentKeywords);
+  return anchors
+    .map((anchor, index) => {
+      const fileKeywords = extractKeywords(anchor.file ?? "");
+      return {
+        anchor,
+        index,
+        score: fileKeywords.filter((keyword) => keywordSet.has(keyword)).length,
+      };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, 1)
+    .map(({ anchor }) => anchor);
 }
 
 function buildDiffOnlyIntent(
@@ -2516,6 +2545,41 @@ function collectDiffRiskEvidence(
   return uniqueEvidence(evidence);
 }
 
+function collectChangedDiffAnchors(
+  addedDiffEvidence: AddedDiffEvidence,
+  changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
+): ChangeIntentEvidence[] {
+  const anchors: ChangeIntentEvidence[] = [];
+  for (const [file, hunks] of Object.entries(addedDiffEvidence)) {
+    const sourceRole = changedSourceRoles[file]?.role ??
+      classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
+    if (sourceRole === "test" || sourceRole === "documentation" || sourceRole === "generated") {
+      continue;
+    }
+    for (const hunk of hunks) {
+      const addedLine = hunk.lines.find((line) => meaningfulChangedLine(line.text)) ?? hunk.lines[0];
+      const removedLine = hunk.removedLines?.find((line) => meaningfulChangedLine(line.text)) ??
+        hunk.removedLines?.[0];
+      const selected = addedLine ?? removedLine;
+      if (!selected) continue;
+      anchors.push({
+        kind: "diff",
+        value: `Changed source hunk in ${file}.`,
+        sourceRole,
+        file,
+        previousFile: hunk.previousFile,
+        relation: "contextual",
+        side: addedLine ? "head" : "base",
+        startLine: selected.line,
+        endLine: selected.line,
+        hunkHeader: hunk.hunkHeader,
+      });
+      break;
+    }
+  }
+  return uniqueEvidence(anchors);
+}
+
 function detectFormValidationTimingChange(
   file: string,
   hunk: AddedDiffHunk,
@@ -3190,7 +3254,6 @@ function stripParsedCommitFields(commit: ParsedCommit): ChangeIntentCommit {
     seed: _seed,
     supporting: _supporting,
     keywords: _keywords,
-    clusteringKeywords: _clusteringKeywords,
     tickets: _tickets,
     ...result
   } = commit;

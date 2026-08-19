@@ -1,0 +1,7 @@
+{
+  "name": "benchmark-long-pr-independent-intents",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}

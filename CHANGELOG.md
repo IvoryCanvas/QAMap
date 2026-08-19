@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Long pull requests now keep independent behavior-bearing commit groups separate when they share only broad package vocabulary. Exact changed files or an explicit issue reference can still connect commits into one lifecycle, and human output discloses intent counts when a report is shortened.
+
 ### Changed
 
 - Documented the shared Node.js 20+ runtime contract, the actively supported LTS recommendation, and verified npm, pnpm, Yarn, and Bun installation and repeat-use commands in both READMEs.

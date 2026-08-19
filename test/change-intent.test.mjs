@@ -532,6 +532,89 @@ test("a broad conventional scope does not merge unrelated product intents", asyn
   assert.ok(analysis.intents.some((intent) => /Save account timezone preferences/i.test(intent.title)));
 });
 
+test("long pull requests preserve independent intents across broad shared vocabulary", async (t) => {
+  const root = await makeRepo(t);
+  const buildFile = "tooling/build-queue.ts";
+  const legacyFile = "apps/studio/src/legacy/preview.ts";
+  const boundaryFile = "packages/core/src/registry.ts";
+  const buttonFile = "packages/ui/src/ActionButton.tsx";
+
+  await write(root, buildFile, "export const maxParallelBuilds = 1;\n");
+  await write(root, legacyFile, "export const legacyPreviewState = 'enabled';\n");
+  await write(root, boundaryFile, "export const registryBoundary = 'direct';\n");
+  await write(root, buttonFile, "export const actionButtonLabel = 'Continue';\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/independent-work-groups");
+
+  await write(
+    root,
+    buildFile,
+    "export const maxParallelBuilds = 4;\nexport const scheduleBuild = () => 'queued';\n",
+  );
+  commit(root, "feat(workspace): optimize shared package build concurrency");
+
+  await write(
+    root,
+    legacyFile,
+    "export const legacyPreviewState = 'removed';\nexport const openReplacementPreview = () => 'current';\n",
+  );
+  commit(root, "feat(workspace): remove shared package legacy preview");
+
+  await write(
+    root,
+    boundaryFile,
+    "export const registryBoundary = 'adapter';\nexport const resolveRegistryAdapter = () => 'isolated';\n",
+  );
+  commit(root, "fix(workspace): break shared package import cycle");
+
+  await write(
+    root,
+    buttonFile,
+    "export const actionButtonLabel = (label) => label || 'Continue';\n",
+  );
+  commit(root, "feat(workspace): preserve shared package button compatibility");
+
+  await write(
+    root,
+    buttonFile,
+    "export const actionButtonLabel = (label, iconLabel) => label || iconLabel || 'Continue';\n",
+  );
+  commit(root, "fix(workspace): keep shared package button fallback when an icon is absent");
+
+  const changedFiles = [buildFile, legacyFile, boundaryFile, buttonFile];
+  const analysis = await analyze(root, changedFiles);
+
+  assert.equal(analysis.intents.length, 4);
+  assert.match(analysis.intents[0].title, /preserve shared package button compatibility/i);
+  assert.ok(analysis.intents.some((intent) => /optimize shared package build concurrency/i.test(intent.title)));
+  assert.ok(analysis.intents.some((intent) => /remove shared package legacy preview/i.test(intent.title)));
+  assert.ok(analysis.intents.some((intent) => /break shared package import cycle/i.test(intent.title)));
+  const buttonIntent = analysis.intents.find((intent) =>
+    /preserve shared package button compatibility/i.test(intent.title)
+  );
+  assert.ok(buttonIntent);
+  assert.equal(buttonIntent.commits.length, 2);
+  assert.deepEqual(buttonIntent.files, [buttonFile]);
+  assert.ok(analysis.intents.every((intent) => intent.evidence.some((item) => item.file)));
+  assert.ok(analysis.intents.every((intent) => intent.scenarios.length > 0));
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const text = formatTextQaDraft(qa);
+  const markdown = formatMarkdownQaDraft(qa);
+  const agentOutput = formatAgentQaDraft(qa);
+  const agent = JSON.parse(agentOutput);
+
+  assert.equal(qa.changeAnalysis.intents.length, 4);
+  assert.equal(agent.intentCount, 4);
+  assert.match(qa.changeAnalysis.intents[0].title, /button compatibility/i);
+  assert.match(agent.intents[0].title, /button compatibility/i);
+  assert.match(text, /4 change intents detected; showing the primary intent first/i);
+  assert.match(markdown, /4 change intents detected; showing 3 and omitting 1/i);
+  assert.equal(agent.omittedIntentCount, 4 - agent.intents.length);
+  assert.equal(agent.execution.status, "not-run");
+  assert.ok(Buffer.byteLength(agentOutput) <= 4 * 1024);
+});
+
 test("single-keyword bridges do not collapse a long PR into one change intent", async (t) => {
   const root = await makeRepo(t);
   await write(root, "src/reminder.ts", "export const reminder = 'idle';\n");
