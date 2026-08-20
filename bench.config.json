@@ -2,6 +2,27 @@
   "$comment": "Committed quality contract. Each fixture is materialized as a temporary Git repository with a main baseline and one PR change.",
   "targets": [
     {
+      "name": "web-delivery-integrity-missing-asset",
+      "fixture": "test/benchmarks/web-delivery-integrity-missing-asset",
+      "commitMessage": "feat: show the updated workspace preview",
+      "expect": {
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 1,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": ["src/pages/workspace-preview.tsx"],
+        "mustIncludeQaScenarios": ["Committed artifacts and validation history remain intact"],
+        "mustFindIntentEvidence": ["absent from both the committed head and workspace"],
+        "mustTraceScenarioFiles": ["src/pages/workspace-preview.tsx"],
+        "mustRecommendCommands": ["run build"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "public-calcom-signup-validation",
       "fixture": "test/benchmarks/public-calcom-signup-validation",
       "commitMessage": "fix: defer email validation to after first blur on signup form",

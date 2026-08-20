@@ -1,0 +1,11 @@
+{
+  "name": "benchmark-delivery-integrity",
+  "private": true,
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest"
+  }
+}

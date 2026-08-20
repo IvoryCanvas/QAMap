@@ -228,6 +228,7 @@ export interface QaCurrentDelta {
 type QaVerificationMode =
   | "command-contract"
   | "analysis-rule"
+  | "delivery-integrity"
   | "schema-graph"
   | "transformation-contract"
   | "existing-test-evidence"
@@ -386,7 +387,9 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   );
   const routedCandidateCommands = flows.some((flow) => flow.verificationMode === "schema-graph")
     ? candidateCommandsWithoutInsufficientTests.filter(isMigrationGraphValidationCommand)
-    : candidateCommandsWithoutInsufficientTests;
+    : flows.some((flow) => flow.verificationMode === "delivery-integrity")
+      ? candidateCommandsWithoutInsufficientTests.filter(isDeliveryIntegrityValidationCommand)
+      : candidateCommandsWithoutInsufficientTests;
   const suggestedCommands = await preferLocallyRunnableValidationCommands(root, routedCandidateCommands);
   const missingEvidence = uniqueMissingEvidence([
     ...runtimePrerequisiteTestGaps.map(runtimePrerequisiteMissingEvidence),
@@ -3638,7 +3641,9 @@ function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
   const verificationMode = verificationModeForDraftFile(file);
   const knowledge = qaFlowKnowledge(file, verificationMode);
   return {
-    title: file.flowTitle,
+    title: verificationMode === "delivery-integrity"
+      ? "Delivery integrity verification"
+      : file.flowTitle,
     source: formatDraftSource(file.source),
     draftPath: file.path,
     runnableStatus: file.runnableStatus,
@@ -3894,6 +3899,9 @@ function buildFlowReasons(file: E2eDraftFile): string[] {
   if (verificationMode === "analysis-rule") {
     return ["Analyzer rules changed; verify positive, negative, and neighboring-rule controls instead of inventing a product journey."];
   }
+  if (verificationMode === "delivery-integrity") {
+    return ["The branch may not reproduce safely from committed evidence; resolve missing artifacts or history-rewriting validation before optional product automation."];
+  }
   if (verificationMode === "schema-graph") {
     return ["The changed migration dependency diverges from the target branch graph; restore one leaf and validate the deployment order instead of inventing a product journey."];
   }
@@ -4099,6 +4107,11 @@ function verificationModeForDraftFile(file: E2eDraftFile): QaVerificationMode | 
   if (file.flowKind === "transformation") {
     return "transformation-contract";
   }
+  if (file.qaScenarios?.some((scenario) =>
+    scenario.evidence.some((source) => source.symbol?.startsWith("delivery-integrity:"))
+  )) {
+    return "delivery-integrity";
+  }
   const scenarioSourceRoles = (file.qaScenarios ?? [])
     .flatMap((scenario) => scenario.evidence)
     .map((source) => source.sourceRole)
@@ -4125,6 +4138,9 @@ function formatVerificationMode(mode: QaVerificationMode): string {
   if (mode === "analysis-rule") {
     return "analyzer rule boundary verification";
   }
+  if (mode === "delivery-integrity") {
+    return "clean-checkout artifact and workflow history verification";
+  }
   if (mode === "schema-graph") {
     return "migration graph and deployment-order verification";
   }
@@ -4141,6 +4157,10 @@ function formatVerificationMode(mode: QaVerificationMode): string {
     return "documentation contract verification";
   }
   return "generated artifact verification";
+}
+
+function isDeliveryIntegrityValidationCommand(command: string): boolean {
+  return /\b(?:actionlint|archive|build|bundle|export|pack|package|workflow)\b/i.test(command);
 }
 
 function isMigrationGraphValidationCommand(command: string): boolean {
