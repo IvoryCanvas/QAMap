@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -212,6 +213,14 @@ export async function listFilesAtRef(
   }
 }
 
+// An opaque repository namespace lets local consumers distinguish stable
+// context from unrelated repositories without exposing a remote URL.
+export async function repositoryNamespace(root: string): Promise<string> {
+  const remote = await readOptionalGitValue(root, ["config", "--get", "remote.origin.url"]);
+  const basis = remote ? normalizeRemoteIdentity(remote) : `local:${root}`;
+  return `repo:${createHash("sha256").update(basis).digest("hex")}`;
+}
+
 async function collectBaseCandidates(root: string, remotes: string[]): Promise<string[]> {
   const candidates: string[] = [];
   for (const remote of remotes) {
@@ -358,6 +367,16 @@ function mergeChangedFiles(...groups: GitChangedFile[][]): GitChangedFile[] {
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function normalizeRemoteIdentity(remote: string): string {
+  return remote
+    .trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\/(?:[^/@]+@)?/iu, "")
+    .replace(/^git@([^:]+):/iu, "$1/")
+    .replace(/\.git$/iu, "")
+    .replace(/\/+$/u, "")
+    .toLocaleLowerCase();
 }
 
 async function git(root: string, args: string[]): Promise<{ stdout: string; stderr: string }> {

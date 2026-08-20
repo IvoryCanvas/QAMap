@@ -102,7 +102,11 @@ test("routes a reused context consumer with a bypassed provider to runtime verif
   );
   assert.equal(agent.intents.some((candidate) =>
     candidate.scenarios.some((scenario) => /required workspace provider/i.test(scenario.title))
-  ), true);
+  ), true, JSON.stringify({
+    bytes: Buffer.byteLength(formatAgentQaDraft(qa)),
+    compaction: agent.compaction,
+    intents: agent.intents,
+  }));
   assert.doesNotMatch(text, /Existing validation .*npm test/);
   assert.doesNotMatch(text, /Run selected repository validation/);
   assert.match(text, /Supplemental validation: npm test \(available, not selected for this QA route\)/);
