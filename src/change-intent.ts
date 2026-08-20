@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
@@ -269,7 +269,14 @@ export async function analyzeChangeIntents(
       changedSourceRoles,
     ),
   ]);
+  const deliveryIntegrityEvidence = await collectDeliveryIntegrityEvidence(
+    root,
+    gitRoot,
+    options,
+    changedSourceRoles,
+  );
   const riskEvidence = uniqueEvidence([
+    ...deliveryIntegrityEvidence,
     ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}, changedSourceRoles),
     ...collectRemovalContractEvidence(
       options.changedFiles,
@@ -807,12 +814,14 @@ function buildDiffOnlyIntent(
   const roleEvidence = riskEvidence.filter((item) =>
     item.sourceRole === "analysis-rule" || item.sourceRole === "command"
   );
+  const deliveryIntegrityEvidence = riskEvidence.filter(isDeliveryIntegrityEvidence);
   const lifecycle = limitLifecycleStages([
     ...lifecycleFromCodeSignals(codeSignals),
     ...lifecycleFromSourceRoles(roleEvidence),
+    ...lifecycleFromDeliveryIntegrityEvidence(deliveryIntegrityEvidence),
   ]);
   const stageKinds = new Set(lifecycle.map((stage) => stage.kind));
-  const hasRecognizedSourceRole = roleEvidence.length > 0;
+  const hasRecognizedSourceRole = roleEvidence.length > 0 || deliveryIntegrityEvidence.length > 0;
   const hasSymbolAnnotation = annotationEvidence.length > 0;
   if (
     (!hasRecognizedSourceRole && !hasSymbolAnnotation && (lifecycle.length < 3 || stageKinds.size < 3)) ||
@@ -823,9 +832,12 @@ function buildDiffOnlyIntent(
   const files = uniqueStrings([
     ...codeSignals.map((signal) => signal.file),
     ...roleEvidence.map((item) => item.file ?? "").filter(Boolean),
+    ...deliveryIntegrityEvidence.map((item) => item.file ?? "").filter(Boolean),
   ]).slice(0, maxIntentFiles);
   const annotatedFlow = firstQaAnnotationFlow(annotationEvidence);
-  const titleSubject = annotatedFlow
+  const titleSubject = deliveryIntegrityEvidence.length > 0
+    ? "Delivery integrity"
+    : annotatedFlow
     ? humanizeIdentifier(annotatedFlow)
     : diffIntentSubject(files[0], roleEvidence[0]?.sourceRole, roleEvidence);
   const analysisRuleChange = roleEvidence.some((item) => item.sourceRole === "analysis-rule");
@@ -976,6 +988,7 @@ function buildLifecycle(
 
   stages.push(...lifecycleFromDetectedRiskEvidence(roleEvidence));
   stages.push(...lifecycleFromSourceRoles(roleEvidence));
+  stages.push(...lifecycleFromDeliveryIntegrityEvidence(roleEvidence.filter(isDeliveryIntegrityEvidence)));
 
   return limitLifecycleStages(removeRedundantOutcomeTimingTriggers(stages));
 }
@@ -1246,6 +1259,58 @@ function buildIntentQaScenarios(
   );
   const searchable = `${hasProductDiffEvidence ? title : ""} ${productLifecycle.map((stage) => stage.label).join(" ")}`
     .toLowerCase();
+
+  const deliveryIntegrityEvidence = evidence.filter(isDeliveryIntegrityEvidence);
+  if (deliveryIntegrityEvidence.length > 0) {
+    const missingAssetEvidence = deliveryIntegrityEvidence.filter((item) =>
+      item.symbol === "delivery-integrity:missing-asset" ||
+      item.symbol === "delivery-integrity:uncommitted-asset"
+    );
+    const historyRewriteEvidence = deliveryIntegrityEvidence.filter((item) =>
+      item.symbol === "delivery-integrity:history-rewrite"
+    );
+    const deliveryIntegrity = makeScenario(
+      intentId,
+      "delivery-integrity",
+      "failure",
+      "critical",
+      "Committed artifacts and validation history remain intact",
+      uniqueStrings([
+        missingAssetEvidence.length > 0
+          ? "Prepare a clean checkout of the changed commit without untracked workspace files."
+          : "Inspect the changed validation or release workflow from a clean branch checkout.",
+        historyRewriteEvidence.length > 0
+          ? "Preserve the branch tip and commit graph before evaluating the changed workflow."
+          : "Use the repository's normal build, bundle, or export contract.",
+      ]),
+      uniqueStrings([
+        missingAssetEvidence.length > 0
+          ? "Resolve every changed literal local asset reference against the committed head, then run the repository build, bundle, or export command."
+          : "Run the repository-owned validation path without allowing it to replace branch commits.",
+        historyRewriteEvidence.length > 0
+          ? "Inspect the exact workflow commands that reset, commit, restore, or force-push the checked-out branch."
+          : "Inspect the produced artifact from a clean checkout rather than the current workspace alone.",
+      ]),
+      uniqueStrings([
+        missingAssetEvidence.length > 0
+          ? "Verify every referenced local asset exists in the committed head and is included in the produced artifact."
+          : "Verify the produced artifact contains every changed runtime dependency.",
+        historyRewriteEvidence.length > 0
+          ? "Verify validation and release jobs leave the pull request branch tip and commit history unchanged."
+          : "Verify the clean-checkout artifact matches the branch being reviewed.",
+      ]),
+      uniqueStrings([
+        missingAssetEvidence.some((item) => item.symbol === "delivery-integrity:uncommitted-asset")
+          ? "Asset present only in the local workspace"
+          : "Asset absent from a clean checkout",
+        historyRewriteEvidence.length > 0 ? "Validation job rewrites branch history" : "Bundle omits a referenced asset",
+      ]),
+      deliveryIntegrityEvidence,
+    );
+    deliveryIntegrity.rationale =
+      "The changed source or workflow can produce a branch that works locally but cannot be reproduced safely from the committed review evidence; resolve this delivery blocker before optional product automation.";
+    scenarios.push(deliveryIntegrity);
+  }
 
   const retiredSurfaceEvidence = productEvidence.filter((item) =>
     item.kind === "diff" &&
@@ -2617,6 +2682,244 @@ function collectDiffRiskEvidence(
     }
   }
   return uniqueEvidence(evidence);
+}
+
+async function collectDeliveryIntegrityEvidence(
+  root: string,
+  gitRoot: string,
+  options: ChangeIntentAnalysisOptions,
+  changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
+): Promise<ChangeIntentEvidence[]> {
+  const relativeRoot = toPosixPath(path.relative(gitRoot, root)).replace(/^\.\/+|\/+$/g, "");
+  const evidence: ChangeIntentEvidence[] = [];
+  const assetChecks: Array<Promise<ChangeIntentEvidence | undefined>> = [];
+
+  for (const [file, hunks] of Object.entries(options.addedDiffEvidence ?? {})) {
+    const sourceRole = changedSourceRoles[file]?.role ??
+      classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
+    if (sourceRole === "product" || sourceRole === "configuration") {
+      for (const hunk of hunks) {
+        for (const line of hunk.lines) {
+          for (const reference of literalLocalAssetReferences(line.text)) {
+            const resolved = resolveLocalAssetReference(file, reference);
+            if (!resolved) continue;
+            const repositoryPath = relativeRoot ? `${relativeRoot}/${resolved}` : resolved;
+            assetChecks.push((async () => {
+              if (await gitPathExistsAtRef(gitRoot, options.head, repositoryPath)) {
+                return undefined;
+              }
+              if (await hasDeclaredGeneratedAssetContract(root, gitRoot, repositoryPath)) {
+                return undefined;
+              }
+              const presentInWorkspace = await filePathExists(path.join(root, resolved));
+              return diffRiskEvidence(
+                file,
+                hunk,
+                line.line,
+                presentInWorkspace
+                  ? "delivery-integrity:uncommitted-asset"
+                  : "delivery-integrity:missing-asset",
+                presentInWorkspace
+                  ? `Changed local asset reference ${reference} resolves in the workspace but is absent from the committed head at ${resolved}.`
+                  : `Changed local asset reference ${reference} is absent from both the committed head and workspace at ${resolved}.`,
+                "head",
+                sourceRole,
+              );
+            })());
+          }
+        }
+      }
+    }
+    if (isCiValidationWorkflowPath(file)) {
+      evidence.push(...collectDestructiveWorkflowEvidence(file, hunks));
+    }
+  }
+
+  evidence.push(...(await Promise.all(assetChecks)).filter(
+    (item): item is ChangeIntentEvidence => Boolean(item),
+  ));
+  return uniqueEvidence(evidence);
+}
+
+function literalLocalAssetReferences(text: string): string[] {
+  const trimmed = text.trim();
+  if (/^(?:\/\/|#|\*|<!--)/.test(trimmed)) {
+    return [];
+  }
+  const references: string[] = [];
+  const quotedPatterns = [
+    /\b(?:from|import)\s*["'`]([^"'`]+)["'`]/gi,
+    /\b(?:require|url|URL)\s*\(\s*["'`]([^"'`]+)["'`]/gi,
+    /\b(?:src|href|poster)\s*=\s*(?:\{\s*)?["'`]([^"'`]+)["'`]/gi,
+  ];
+  for (const pattern of quotedPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      references.push(match[1]);
+    }
+  }
+  for (const match of text.matchAll(/\burl\(\s*([^"'`\s)][^)]*?)\s*\)/gi)) {
+    references.push(match[1]);
+  }
+  return uniqueStrings(references.filter(isLiteralLocalAssetReference));
+}
+
+function isLiteralLocalAssetReference(value: string): boolean {
+  const reference = value.trim();
+  if (
+    !reference ||
+    reference.includes("${") ||
+    /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(reference) ||
+    !(reference.startsWith("./") || reference.startsWith("../") || reference.startsWith("/"))
+  ) {
+    return false;
+  }
+  return /\.(?:avif|bmp|gif|ico|jpe?g|png|webp|svg|mp3|m4a|ogg|wav|mp4|webm|woff2?|ttf|otf|eot)(?:[?#].*)?$/i.test(
+    reference,
+  );
+}
+
+function resolveLocalAssetReference(sourceFile: string, referenceInput: string): string | undefined {
+  const reference = referenceInput.trim().replace(/[?#].*$/, "");
+  const resolved = reference.startsWith("/")
+    ? path.posix.join("public", reference.slice(1))
+    : path.posix.normalize(path.posix.join(path.posix.dirname(toPosixPath(sourceFile)), reference));
+  if (!resolved || resolved === ".." || resolved.startsWith("../") || path.posix.isAbsolute(resolved)) {
+    return undefined;
+  }
+  return resolved;
+}
+
+async function gitPathExistsAtRef(root: string, ref: string, file: string): Promise<boolean> {
+  try {
+    await execFileAsync("git", ["cat-file", "-e", `${ref}:${file}`], { cwd: root });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function hasDeclaredGeneratedAssetContract(
+  root: string,
+  gitRoot: string,
+  repositoryPath: string,
+): Promise<boolean> {
+  try {
+    await execFileAsync("git", ["check-ignore", "-q", "--", repositoryPath], { cwd: gitRoot });
+  } catch {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as {
+      scripts?: Record<string, unknown>;
+    };
+    return Object.entries(parsed.scripts ?? {}).some(([name, command]) =>
+      typeof command === "string" &&
+      /^(?:generate|codegen|prepare|prebuild|postinstall)(?::|$)/i.test(name) &&
+      /\b(?:asset|codegen|copy|generate|public|static)\b/i.test(command)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isCiValidationWorkflowPath(fileInput: string): boolean {
+  const file = toPosixPath(fileInput);
+  return /(?:^|\/)\.github\/workflows\/[^/]+\.ya?ml$/i.test(file) ||
+    /(?:^|\/)\.circleci\/config\.ya?ml$/i.test(file) ||
+    /(?:^|\/)(?:\.gitlab-ci|bitbucket-pipelines|azure-pipelines)\.ya?ml$/i.test(file);
+}
+
+function collectDestructiveWorkflowEvidence(
+  file: string,
+  hunks: AddedDiffHunk[],
+): ChangeIntentEvidence[] {
+  const candidates = hunks.flatMap((hunk) => hunk.lines.flatMap((line) => {
+    const description = destructiveWorkflowCommandDescription(line.text);
+    return description ? [{ hunk, line, description }] : [];
+  }));
+  if (!candidates.some((candidate) => candidate.description.startsWith("force-pushes"))) {
+    return [];
+  }
+  return candidates.map(({ hunk, line, description }) => diffRiskEvidence(
+    file,
+    hunk,
+    line.line,
+    "delivery-integrity:history-rewrite",
+    `Changed validation workflow ${description}.`,
+    "head",
+    "configuration",
+  ));
+}
+
+function destructiveWorkflowCommandDescription(text: string): string | undefined {
+  const trimmed = text.trim();
+  if (/^(?:#|\/\/)/.test(trimmed) || /\b(?:echo|printf)\b[^\n]*\bgit\s+/i.test(trimmed)) {
+    return undefined;
+  }
+  if (/\bgit\s+push\b[^\n]*(?:--force(?:-with-lease)?|(?:^|\s)-f(?:\s|$))/i.test(trimmed)) {
+    return "force-pushes Git history";
+  }
+  if (/\bgit\s+reset\s+--hard\b/i.test(trimmed)) {
+    return "hard-resets the checked-out branch before a force-push";
+  }
+  if (/\bgit\s+checkout\b[^\n]*(?:--force|\s--\s+\.?\/?\*?|\s--\s+\.)/i.test(trimmed)) {
+    return "replaces checked-out files before a force-push";
+  }
+  if (/\bgit\s+restore\b[^\n]*--source(?:=|\s)/i.test(trimmed)) {
+    return "restores files from another revision before a force-push";
+  }
+  if (/\bgit\s+commit\b/i.test(trimmed)) {
+    return "creates a commit before a force-push";
+  }
+  return undefined;
+}
+
+function isDeliveryIntegrityEvidence(evidence: ChangeIntentEvidence): boolean {
+  return evidence.symbol?.startsWith("delivery-integrity:") ?? false;
+}
+
+function lifecycleFromDeliveryIntegrityEvidence(
+  evidence: ChangeIntentEvidence[],
+): BehaviorLifecycleStage[] {
+  if (evidence.length === 0) {
+    return [];
+  }
+  const files = uniqueStrings(evidence.map((item) => item.file ?? "").filter(Boolean));
+  return [
+    createLifecycleStage(
+      "condition",
+      "A changed delivery path depends on committed artifacts and preserved branch history.",
+      "high",
+      evidence,
+      files,
+      "delivery-integrity:precondition",
+    ),
+    createLifecycleStage(
+      "action",
+      "Validate the clean-checkout artifact and workflow history.",
+      "high",
+      evidence,
+      files,
+      "delivery-integrity:validation",
+    ),
+    createLifecycleStage(
+      "observable-outcome",
+      "Observe a reproducible artifact without rewriting the review branch.",
+      "high",
+      evidence,
+      files,
+      "delivery-integrity:result",
+    ),
+  ];
+}
+
+async function filePathExists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function collectRemovalContractEvidence(

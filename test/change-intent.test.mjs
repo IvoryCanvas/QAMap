@@ -5097,6 +5097,181 @@ test("diff evidence keeps merged target-branch changes outside the QA evidence b
   assert.equal(qa.execution.status, "not-run");
 });
 
+test("QA routes a local-only referenced asset to delivery integrity before optional E2E", async (t) => {
+  const root = await makeRepo(t);
+  const sourceFile = "src/profile/ProfileCard.tsx";
+  const assetFile = "src/profile/assets/profile-card.webp";
+  await write(root, "package.json", JSON.stringify({
+    scripts: {
+      build: "node -e \"process.exit(0)\"",
+    },
+  }, null, 2) + "\n");
+  await write(root, sourceFile, "export function ProfileCard() { return <section>Profile</section>; }\n");
+  commit(root, "chore: baseline");
+  branch(root, "feat/profile-card-image");
+
+  await write(
+    root,
+    sourceFile,
+    "export function ProfileCard() { return <img src=\"./assets/profile-card.webp\" alt=\"Profile\" />; }\n",
+  );
+  git(root, "add", sourceFile);
+  git(root, "commit", "-m", "feat: show the profile card image");
+  await write(root, assetFile, "local-only-image\n");
+
+  const analysis = await analyze(root, [sourceFile]);
+  const integrityEvidence = analysis.intents.flatMap((intent) => intent.evidence).filter((item) =>
+    item.symbol === "delivery-integrity:uncommitted-asset"
+  );
+  assert.equal(integrityEvidence.length, 1);
+  assert.equal(integrityEvidence[0].file, sourceFile);
+  assert.equal(integrityEvidence[0].startLine, 1);
+  assert.match(integrityEvidence[0].value, /workspace but is absent from the committed head/i);
+  assert.ok(analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+    scenario.title === "Committed artifacts and validation history remain intact" &&
+    scenario.priority === "critical"
+  ));
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.ok(qa.flows.some((flow) => flow.verificationMode === "delivery-integrity"));
+  assert.equal(qa.readiness.basis, "repository-validation");
+  assert.equal(qa.readiness.automationApplicable, false);
+  assert.match(qa.route.command ?? "", /run build$/);
+  assert.equal(qa.execution.status, "not-run");
+});
+
+test("delivery integrity reports when a referenced asset is absent from both Git and workspace", async (t) => {
+  const root = await makeRepo(t);
+  const sourceFile = "src/catalog/CatalogBanner.tsx";
+  await write(root, sourceFile, "export function CatalogBanner() { return <section>Catalog</section>; }\n");
+  commit(root, "chore: baseline");
+  branch(root, "feat/catalog-banner");
+  await write(
+    root,
+    sourceFile,
+    "export function CatalogBanner() { return <img src=\"/media/catalog-banner.png\" alt=\"Catalog\" />; }\n",
+  );
+  commit(root, "feat: show the catalog banner");
+
+  const analysis = await analyze(root, [sourceFile]);
+  const evidence = analysis.intents.flatMap((intent) => intent.evidence).find((item) =>
+    item.symbol === "delivery-integrity:missing-asset"
+  );
+  assert.ok(evidence);
+  assert.match(evidence.value, /absent from both the committed head and workspace at public\/media\/catalog-banner\.png/i);
+});
+
+test("delivery integrity accepts committed, remote, and declared generated assets", async (t) => {
+  const root = await makeRepo(t);
+  const sourceFile = "src/landing/LandingHero.tsx";
+  await write(root, "package.json", JSON.stringify({
+    scripts: {
+      "generate:assets": "node scripts/generate-assets.js --output public/generated",
+    },
+  }, null, 2) + "\n");
+  await write(root, ".gitignore", "public/generated/\n");
+  await write(root, sourceFile, "export function LandingHero() { return <main>Landing</main>; }\n");
+  commit(root, "chore: baseline");
+  branch(root, "feat/landing-assets");
+  await write(root, "src/landing/assets/hero.svg", "<svg></svg>\n");
+  await write(
+    root,
+    sourceFile,
+    [
+      "import hero from './assets/hero.svg';",
+      "export function LandingHero() {",
+      "  return <main><img src={hero} alt=\"Landing\" /><img src=\"https://cdn.example.test/remote.webp\" alt=\"Remote\" /><img src=\"/generated/card.png\" alt=\"Generated\" /></main>;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: show landing assets");
+
+  const analysis = await analyze(root, [sourceFile]);
+  assert.equal(
+    analysis.intents.flatMap((intent) => intent.evidence).some((item) =>
+      item.symbol?.startsWith("delivery-integrity:")
+    ),
+    false,
+  );
+});
+
+test("delivery integrity traces history-rewriting validation commands to exact workflow lines", async (t) => {
+  const root = await makeRepo(t);
+  const workflowFile = ".github/workflows/validate.yml";
+  await write(root, workflowFile, [
+    "name: Validate",
+    "jobs:",
+    "  verify:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - uses: actions/checkout@v4",
+    "      - run: npm test",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "ci/rewrite-validation");
+  await write(root, workflowFile, [
+    "name: Validate",
+    "jobs:",
+    "  verify:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - uses: actions/checkout@v4",
+    "      - run: |",
+    "          git reset --hard origin/main",
+    "          git commit --allow-empty -m 'validated'",
+    "          git push --force-with-lease origin HEAD:${GITHUB_REF_NAME}",
+    "",
+  ].join("\n"));
+  commit(root, "ci: rewrite validation branch");
+
+  const analysis = await analyze(root, [workflowFile]);
+  const integrityEvidence = analysis.intents.flatMap((intent) => intent.evidence).filter((item) =>
+    item.symbol === "delivery-integrity:history-rewrite"
+  );
+  assert.equal(integrityEvidence.length, 3);
+  assert.deepEqual(integrityEvidence.map((item) => item.startLine), [8, 9, 10]);
+  assert.ok(analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+    scenario.title === "Committed artifacts and validation history remain intact"
+  ));
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.ok(qa.flows.some((flow) => flow.verificationMode === "delivery-integrity"));
+  assert.equal(qa.readiness.basis, "repository-validation");
+  assert.equal(qa.route.nextAction, "define-repository-command");
+  assert.equal(qa.execution.status, "not-run");
+});
+
+test("delivery integrity leaves read-only checkout and non-pushing commit workflows quiet", async (t) => {
+  const root = await makeRepo(t);
+  const workflowFile = ".github/workflows/validate.yml";
+  await write(root, workflowFile, "name: Validate\n");
+  commit(root, "chore: baseline");
+  branch(root, "ci/safe-validation");
+  await write(root, workflowFile, [
+    "name: Validate",
+    "jobs:",
+    "  verify:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - uses: actions/checkout@v4",
+    "      - uses: actions/cache@v4",
+    "      - run: git diff --exit-code",
+    "      - run: git commit --allow-empty -m 'local artifact'",
+    "",
+  ].join("\n"));
+  commit(root, "ci: validate without rewriting the branch");
+
+  const analysis = await analyze(root, [workflowFile]);
+  assert.equal(
+    analysis.intents.flatMap((intent) => intent.evidence).some((item) =>
+      item.symbol === "delivery-integrity:history-rewrite"
+    ),
+    false,
+  );
+});
+
 async function analyze(root, files) {
   const addedDiffEvidence = await collectAddedDiffEvidence(root, { base: "main", head: "HEAD" });
   const addedDiffText = addedDiffTextFromEvidence(addedDiffEvidence);
