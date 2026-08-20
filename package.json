@@ -44,9 +44,10 @@
     "plugin:check": "node scripts/validate-plugin-submission.mjs",
     "plugin:smoke": "pnpm build && node scripts/plugin-smoke.mjs",
     "report": "pnpm build && node dist/cli.js report . --output QAMAP_REPORT.md",
-    "release:check": "pnpm test && pnpm scan && pnpm plugin:check && pnpm plugin:smoke && pnpm bench:ci && pnpm bench:execution && git diff --check && pnpm run coverage && pnpm pack --dry-run",
+    "release:check": "pnpm test && pnpm scan && pnpm plugin:check && pnpm plugin:smoke && pnpm bench:ci && pnpm bench:context && pnpm bench:execution && git diff --check && pnpm run coverage && pnpm pack --dry-run",
     "bench": "pnpm build && node scripts/bench.mjs",
     "bench:ci": "pnpm build && node scripts/bench.mjs --config bench.config.json --assert",
+    "bench:context": "pnpm build && node scripts/context-bench.mjs --assert",
     "bench:execution": "pnpm build && node scripts/execution-bench.mjs --config execution-bench.config.json"
   },
   "keywords": [

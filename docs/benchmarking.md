@@ -37,6 +37,29 @@ The command fails when any target violates its declared expectations. The corpus
 - a calendar-named view toggle that must remain presentation behavior instead of fabricating scheduling, timezone, or duplicate-job QA;
 - an instrumentation change that must verify event timing, payload, and duplicate emission at the changed success boundary.
 
+## Run the context reuse contract
+
+The context benchmark measures whether an agent can keep unchanged repository QA
+facts between pull requests without confusing reuse with correctness:
+
+```sh
+pnpm bench:context
+```
+
+It reports UTF-8 bytes and structural block counts for raw changed evidence,
+stable repository context, the current pull request delta, and compact agent
+output. Fixed scenarios cover identical reruns, related pull requests, reviewed
+manifest corrections, validation-command changes, behavior-structure changes,
+volatile run metadata, and unrelated repositories. Each invalidated block carries
+the reason it changed, and CI fails on unstable fingerprints or unexpected block
+reuse.
+
+These measurements do not estimate QA accuracy, model tokens, provider cache-hit
+rates, or money saved. QAMap itself makes no LLM request, while an agent that
+invokes and interprets QAMap still uses that agent's own model tokens. The
+semantic and execution benchmarks remain the correctness gates for QA selection
+and generated automation.
+
 ## Run the execution contract
 
 The static benchmark proves that QAMap selected and mapped the expected QA. The execution benchmark asks the harder question: can the generated test distinguish the fixed behavior from a known regression?
