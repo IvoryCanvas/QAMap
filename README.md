@@ -21,6 +21,10 @@ existing tests, and diff evidence to answer:
 QAMap itself makes no cloud analysis, source upload, or additional LLM call. A
 manifest and test runner are optional.
 
+For agent integrations, QAMap keeps reusable repository QA facts separate from
+the current pull request delta. Stable identifiers make repeated context visible
+without claiming that the calling agent uses no model tokens.
+
 ## Install And Run
 
 Choose the local CLI for any repository, or
@@ -68,7 +72,7 @@ test planning.
 </a>
 
 [Install the QAMap plugin](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
-· [OpenAI's official plugin installation steps](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
+| [OpenAI's official plugin installation steps](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
 
 1. Open the QAMap listing.
 2. Select **+**.
@@ -93,6 +97,11 @@ draft is never reported as a passing test.
 For supported runtime contracts, QAMap can trace a changed entry point through
 local imports to a required provider. A test that mocks away that prerequisite
 is disclosed as incomplete evidence instead of being promoted as proof.
+
+Delivery checks run before optional E2E work when the diff references a missing
+asset or a validation workflow can rewrite shared history. Supported activation
+changes also retain the guard, configuration source, runtime side effect, and
+restart or reload boundary that must be verified.
 
 Cleanup-only commits remain visible as provenance but do not become standalone
 QA requirements. Unrelated issue tags and lifecycle stages stay separate. When
@@ -198,7 +207,7 @@ lines on 2026-08-11. The install command is the same for every line.
 | 24 | Passed | Supported LTS at the time of validation |
 | 26 | Passed | Current release at the time of validation; prefer LTS for production |
 
-See the [release validation receipt](docs/release-validation.md#unreleased---2026-08-11)
+See the [package-manager compatibility receipt](docs/release-validation.md#package-manager-compatibility---2026-08-11)
 for exact versions and package-manager coverage.
 
 </details>

@@ -1,16 +1,25 @@
 # Changelog
 
-## Unreleased
+## 0.4.14 - 2026-08-20
+
+### Added
+
+- Added delivery-integrity evidence for local-only or missing referenced assets and history-rewriting validation commands. These risks now route through repository validation before optional E2E work.
+- Added runtime-activation evidence that joins supported guards, configuration sources, runtime side effects, and startup, reload, restart, and deployment boundaries.
+- Added a versioned `qamap.context` contract that separates stable repository QA facts from the current pull request delta, with deterministic block identities and a recoverable full report.
+- Added a provider-neutral context reuse benchmark for identical reruns, related pull requests, reviewed manifest corrections, validation changes, behavior changes, volatile run metadata, and unrelated repositories.
 
 ### Fixed
 
 - Long pull requests now keep independent behavior-bearing commit groups separate when they share only broad package vocabulary. Exact changed files or an explicit issue reference can still connect commits into one lifecycle, and human output discloses intent counts when a report is shortened.
+- Removed UI is now treated as an absence contract instead of an executable entry point, while formatting-only UI hunks stay contextual and real React or Vue state transitions remain eligible for QA.
 
 ### Changed
 
 - Documented the shared Node.js 20+ runtime contract, the actively supported LTS recommendation, and verified npm, pnpm, Yarn, and Bun installation and repeat-use commands in both READMEs.
 - Linked the English and Korean plugin guidance directly to OpenAI's official installation steps instead of the general Plugins overview.
 - Reorganized both READMEs so the local CLI and package installation form the primary setup path, while the ChatGPT and Codex plugin has a separate, explicit installation entry point.
+- Added the context reuse benchmark to CI and the release gate while keeping context reuse separate from QA correctness, provider token accounting, or fixed cost-reduction claims.
 
 ## 0.4.13 - 2026-08-11
 

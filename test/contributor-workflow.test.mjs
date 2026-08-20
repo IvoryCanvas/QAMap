@@ -174,7 +174,7 @@ test("public READMEs present local setup before the optional plugin path", async
       install: "## 설치하고 실행하기",
       local: "### 로컬 CLI (권장)",
       package: "#### 반복 사용을 위해 프로젝트에 설치",
-      plugin: "### ChatGPT·Codex 플러그인",
+      plugin: "### ChatGPT와 Codex 플러그인",
       result: "## 결과 읽는 방법",
       demo: "## 실제 실행 예시",
       daily: "## 반복해서 CLI 사용하기",
