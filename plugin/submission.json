@@ -73,5 +73,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "QAMap 0.4.13 improves evidence-to-validation routing, keeps target-branch merge history out of feature intent, detects migration graph conflicts, and traces supported runtime prerequisites without treating mocked consumers as sufficient proof."
+  "releaseNotes": "QAMap 0.4.14 separates stable repository QA context from each pull request delta, traces delivery and runtime activation risks, preserves independent intents, and adds a deterministic context reuse benchmark."
 }

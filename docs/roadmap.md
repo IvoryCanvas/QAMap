@@ -36,48 +36,42 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 There is no fixed end date or patch count for `0.4.x`. QAMap will remain on compatible patch releases while real repositories still expose material gaps in change intent, affected-flow selection, scenario evidence, or automation-draft quality. `0.5.x` is not the next scheduled milestone; it is a release bar that must be earned by a stable, explicitly approved execution contract and evidence from repeated use outside the maintainer's repositories.
 
-### Current Focus After 0.4.13
+### Current Focus After 0.4.14
 
-The OpenAI Plugin Directory is now a real first-run surface, so the next patches
-prioritize recommendation quality over adding another distribution channel or
-runner name. The current generalized work queue is:
+The OpenAI Plugin Directory is a real first-run surface, so the next patches
+continue to prioritize recommendation quality over another distribution channel
+or runner name. The current generalized work queue is:
 
-1. Keep long-lived and recently synchronized branches inside the real PR
-   evidence boundary. The first merge-aware implementation now selects the
-   branch's latest first-parent non-merge work commit instead of target-only
-   hunks imported by a baseline sync; broader multi-remote histories remain a
-   continuing regression surface.
-2. Trace runtime prerequisites across reused code. The first adapter now joins
-   a changed React or Next.js entry point, a bounded local import chain, an
-   explicit fail-fast context hook, and a provider-bypass wrapper branch. It
-   rejects component-mocked tests as sufficient proof. Broader dependency
-   injection, initialization, router, and non-React wrapper contracts remain
-   future adapters rather than inferred claims.
-3. Treat changed repository tests as behavior contracts. Preserve explicit
-   normalization boundaries, negative assertions, state transitions, retry
-   prohibitions, and cross-file value continuity instead of reducing them to a
-   generic request to run the suite.
-4. Extract framework-neutral presentation contracts from changed UI code. An
-   overlay becoming inline content, scroll-lock removal, responsive overflow,
-   replaced-element sizing, and inherited icon color should produce concrete
-   interaction or visual checks only when the diff carries the required
-   evidence.
-5. Keep repository workflow metadata in its own behavior class. Documentation,
-   issue forms, pull-request templates, and their contract tests must route to
-   link, schema, field, label, and template validation rather than fabricated
-   endpoint or application-launch scenarios.
-6. Prefer repository-owned validation commands from package scripts, CI
-   workflows, and adjacent test harnesses over blocked optional automation.
-   Vocabulary in a property or filename must not create a domain risk without
-   matching behavior evidence.
+1. Select every repository-owned validation contract changed by a pull request.
+   Analyzer benchmarks, public schemas and their consumers, package metadata,
+   and Changesets must not be reduced to one convenient focused test or an
+   unrelated language suite.
+2. Treat changed repository tests as behavior contracts. Preserve explicit
+   positive, negative, boundary, state-transition, retry, and invariance
+   assertions instead of reducing them to a generic request to run the suite.
+3. Trace shared semantic producers to every affected consumer. A change to a
+   mapper, copy builder, aggregate, or service rule should retain the screens,
+   history views, notifications, and exports that reuse its result when import
+   and data-flow evidence connect them.
+4. Expand runtime lifecycle modeling beyond one guard and one process. Changes
+   that control workers, webhooks, deploy reconciliation, drains, or restarts
+   should expose each execution plane and the fail-closed transition between
+   disabled and enabled states.
+5. Extract framework-neutral presentation contracts from changed UI code only
+   when the diff carries observable interaction or visual evidence. Formatting
+   and resource vocabulary must remain contextual.
+6. Keep repository workflow metadata in its own behavior class. Documentation,
+   issue forms, pull-request templates, package releases, and deployment
+   transports should route to their exact repository contract instead of a
+   fabricated product journey.
 7. Turn each real miss into a domain-neutral public fixture with a positive
-   contract and an unrelated negative control. A new shared heuristic is not
-   complete until both sides pass the static benchmark and the existing
-   execution contract remains honest.
+   contract and an unrelated negative control. A shared heuristic is incomplete
+   until both sides pass the static benchmark and existing execution contracts
+   remain honest.
 8. Re-run the published skill against unrelated repositories and compare its
-   deterministic result with independent human or agent review. Preserve
-   `not-run`, `passed`, `failed`, and `blocked` exactly; plugin availability is
-   not evidence that product QA ran.
+   deterministic result with independent review. Preserve `not-run`, `passed`,
+   `failed`, and `blocked` exactly; plugin availability is not evidence that
+   product QA ran.
 
 - Stabilize commit-range Change Intent analysis: related behavior commits, diff symbols, confidence, review requirements, lifecycle stages, and runner-independent QA scenarios.
 - Preserve a conservative diff-only intent when commit messages are not descriptive, while keeping low-confidence scenarios recommended and review-required until stronger evidence exists.

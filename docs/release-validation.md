@@ -4,7 +4,7 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
-## Unreleased - 2026-08-11
+## Package Manager Compatibility - 2026-08-11
 
 The public `@ivorycanvas/qamap@0.4.13` package was installed and exercised in
 isolated temporary projects before expanding the README installation guidance.
@@ -25,6 +25,44 @@ These results establish package installation and CLI smoke compatibility, not
 a new runtime guarantee beyond the declared Node.js `>=20` engine contract.
 Node.js 20 is upstream EOL, so the README recommends an actively supported LTS
 release even though the compatibility smoke still passes.
+
+## 0.4.14 - 2026-08-20
+
+QAMap 0.4.14 strengthens the path from a pull request diff to the evidence a
+reviewer or coding agent should trust before optional E2E work. Independent
+behavior-bearing commits remain separate, retired UI becomes an absence
+contract, and formatting-only UI changes stay contextual instead of creating a
+product risk.
+
+The release also adds two pre-automation boundaries. Delivery-integrity checks
+surface local-only or missing assets and validation commands that can rewrite
+shared history. Runtime-activation checks join supported guards, configuration
+sources, side effects, and startup, reload, restart, or deployment requirements.
+Both routes retain exact source evidence and keep product execution `not-run`.
+
+Agent handoffs now separate stable repository QA facts from the current pull
+request delta through the versioned `qamap.context` contract. A deterministic,
+provider-neutral benchmark records UTF-8 bytes, block reuse, invalidation
+reasons, and compact payload size. It does not equate context reuse with QA
+correctness, model-token usage, or a fixed cost reduction.
+
+| Gate | Candidate result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 382/382 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 33/33 committed static recommendation contracts passing |
+| `pnpm bench:context` | 10/10 context identity and reuse checks passing |
+| `pnpm bench:execution` | 3/3 execution contracts passing; all three seeded regressions caught |
+| Coverage | Lines 90.30%, branches 87.06%, functions 95.80% |
+| Plugin package smoke | Packed 195 files, installed the current 0.4.14 artifact in isolation, and produced one intent with one exact evidence trace |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.14`; 195 files packed |
+
+The release gate proves deterministic selection, packaging, and known seeded
+regressions in public fixtures. It does not prove the correctness of an
+arbitrary user repository, and it does not turn a generated scenario or draft
+into executed QA. npm publication, the Git tag, the GitHub Release, and any new
+OpenAI directory version remain separate post-merge actions.
 
 ## 0.4.13 - 2026-08-11
 

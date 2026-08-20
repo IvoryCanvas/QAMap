@@ -21,6 +21,10 @@ QAMap은 현재 브랜치의 커밋과 코드 변경, 저장소 구조, 기존 �
 분석 과정에서 소스 코드를 외부로 보내거나 별도의 LLM을 호출하지 않습니다.
 처음 사용할 때 설정 파일이나 테스트 실행 환경이 없어도 됩니다.
 
+에이전트가 사용할 때는 여러 PR에서 반복되는 저장소 QA 정보와 이번 PR의
+변경 내용을 따로 전달합니다. 같은 정보가 유지되는지는 식별자로 확인할 수
+있지만, QAMap을 호출한 에이전트의 모델 사용량까지 0이 되는 것은 아닙니다.
+
 ## 설치하고 실행하기
 
 터미널에서 직접 사용하려면 로컬 CLI를 실행하세요. ChatGPT나 Codex에서
@@ -59,7 +63,7 @@ npx --yes @ivorycanvas/qamap@latest qa
 짧은 스크립트와 다른 실행 방법은
 [반복해서 CLI 사용하기](#반복해서-cli-사용하기)에서 확인할 수 있습니다.
 
-### ChatGPT·Codex 플러그인
+### ChatGPT와 Codex 플러그인
 
 에이전트가 PR 검토나 테스트 계획 중에 QAMap을 호출하도록 하려면
 플러그인을 설치하세요.
@@ -67,7 +71,7 @@ npx --yes @ivorycanvas/qamap@latest qa
 [![OpenAI 플러그인 디렉터리에서 QAMap 설치](docs/assets/openai-plugin-directory-badge.svg)](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
 
 [QAMap 플러그인 페이지](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
-· [OpenAI 공식 설치 안내](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
+| [OpenAI 공식 설치 안내](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
 
 1. QAMap 플러그인 페이지를 엽니다.
 2. **+**를 눌러 설치합니다.
@@ -83,7 +87,7 @@ npx --yes @ivorycanvas/qamap@latest qa
 | 출력 영역 | 확인할 내용 |
 | --- | --- |
 | **Change** | 이번 변경에서 달라졌을 가능성이 높은 동작 |
-| **Verify before merge** | 병합 전에 확인할 정상·실패·경계값·상태 변화 |
+| **Verify before merge** | 병합 전에 확인할 정상, 실패, 경계값, 상태 변화 |
 | **Evidence** | 판단에 사용한 커밋, 파일, 코드 위치 |
 | **Next** | 지금 실행할 검증 또는 검토할 자동화 초안 |
 
@@ -95,6 +99,11 @@ npx --yes @ivorycanvas/qamap@latest qa
 지원하는 저장소 구조에서는 변경된 화면이나 진입점부터 실제로 필요한
 모듈과 실행 조건까지 따라갑니다. 테스트가 그 조건을 모의 처리로
 우회했다면 완전한 검증 근거로 보지 않습니다.
+
+변경 파일이 없는 이미지를 참조하거나 검증 작업이 공유 이력을 바꿀 수
+있다면 E2E보다 먼저 배포 무결성 문제로 알려줍니다. 지원하는 활성화 설정은
+조건문과 설정 출처, 실제 실행 동작, 재시작 또는 새로고침 필요 여부를 함께
+근거로 남깁니다.
 
 ## 실제 실행 예시
 
@@ -186,7 +195,7 @@ Corepack으로 관리되는 패키지 매니저는 저장소의 `packageManager`
 | 26 | 통과 | 검증 당시 Current 버전이며 운영 환경은 LTS 권장 |
 
 정확한 버전과 패키지 매니저 범위는
-[릴리스 검증 기록](docs/release-validation.md#unreleased---2026-08-11)에서
+[패키지 매니저 호환성 기록](docs/release-validation.md#package-manager-compatibility---2026-08-11)에서
 확인할 수 있습니다.
 
 ### 자주 쓰는 CLI 옵션
@@ -273,7 +282,7 @@ QAMap은 아직 `1.0` 이전입니다. 정적 분석만으로 제품의 모든 �
 없으므로 제안된 QA 항목은 사람이 검토해야 합니다. 저장소의 검증 명령
 하나가 통과해도 제품 전체 QA가 통과했다는 뜻은 아닙니다.
 
-릴리스 전 공개 벤치마크에서는 여러 웹·모바일 프레임워크, API·CLI,
+릴리스 전 공개 벤치마크에서는 여러 웹 및 모바일 프레임워크와 API, CLI,
 모노레포, 테스트가 없는 저장소와 오탐 대조 사례를 함께 확인합니다.
 자세한 범위와 결과는 영문 [벤치마크 문서](docs/benchmarking.md)에서 볼 수
 있습니다.
