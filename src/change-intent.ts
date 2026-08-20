@@ -13,6 +13,7 @@ import {
   collectChangedQaSymbolAnnotations,
   formatQaSymbolAnnotationDiagnostic,
 } from "./symbol-annotations.js";
+import { isInstructionLikeRepositoryText } from "./qa-contract.js";
 import type {
   ChangedQaSymbolAnnotation,
 } from "./symbol-annotations.js";
@@ -270,6 +271,11 @@ export async function analyzeChangeIntents(
   ]);
   const riskEvidence = uniqueEvidence([
     ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}, changedSourceRoles),
+    ...collectRemovalContractEvidence(
+      options.changedFiles,
+      options.addedDiffEvidence ?? {},
+      changedSourceRoles,
+    ),
     ...collectQaSymbolAnnotationRiskEvidence(productAnnotations),
   ]);
   const diffAnchors = collectChangedDiffAnchors(
@@ -953,7 +959,7 @@ function buildLifecycle(
       continue;
     }
     const representedIndex = stages.findIndex((stage) =>
-      stage.label.toLowerCase().includes(signal.symbol.toLowerCase()) ||
+      (signal.kind !== "condition" && stage.label.toLowerCase().includes(signal.symbol.toLowerCase())) ||
       (stage.kind === signal.kind && lifecycleLabelsOverlap(stage.label, signal.label)),
     );
     if (representedIndex >= 0) {
@@ -1241,6 +1247,43 @@ function buildIntentQaScenarios(
   const searchable = `${hasProductDiffEvidence ? title : ""} ${productLifecycle.map((stage) => stage.label).join(" ")}`
     .toLowerCase();
 
+  const retiredSurfaceEvidence = productEvidence.filter((item) =>
+    item.kind === "diff" &&
+    item.side === "base" &&
+    item.relation === "direct" &&
+    /removed user-facing surface/i.test(item.value)
+  );
+  if (retiredSurfaceEvidence.length > 0) {
+    const replacementOutcomeStages = productLifecycle
+      .filter((stage) => stage.kind === "observable-outcome")
+      .filter((stage) => hasActionableLocatedDiffEvidence(stage.evidence))
+      .filter(isMateriallyObservableOutcomeStage);
+    const replacementEvidence = replacementOutcomeStages.flatMap((stage) => stage.evidence);
+    const retirement = makeScenario(
+      intentId,
+      "retired-surface-contract",
+      "boundary",
+      "critical",
+      "Retired behavior remains absent while replacement stays available",
+      [
+        "Prepare the retired direct entry and the supported replacement entry.",
+      ],
+      [
+        "Attempt to open the retired entry through a direct path and any remaining navigation reference.",
+        "Enter the supported replacement through its normal user-facing path.",
+      ],
+      uniqueStrings([
+        "Verify the obsolete entry or surface remains unavailable and no stale navigation exposes it.",
+        ...replacementOutcomeStages.map(assertionForStage),
+      ]),
+      ["Direct access to the retired entry", "Stale bookmark or navigation reference", "Supported replacement entry"],
+      uniqueEvidence([...retiredSurfaceEvidence, ...replacementEvidence]),
+    );
+    retirement.rationale =
+      "The diff removes a user-facing surface and exposes replacement UI evidence, so QA should prove intentional absence without resurrecting the deleted route as a regression target.";
+    scenarios.push(retirement);
+  }
+
   const analysisRuleEvidence = evidence.filter((item) => item.sourceRole === "analysis-rule");
   if (analysisRuleEvidence.length > 0) {
     scenarios.push(makeScenario(
@@ -1345,14 +1388,29 @@ function buildIntentQaScenarios(
     ], ["Public asset request", "Expired session", "Direct protected deep link"], changedAccessEvidence));
   }
 
-  const changedConditionEvidence = scenarioEvidenceFor(
-    productLifecycle,
-    productEvidence,
-    /\b(?:is|has|can|should|show|hide)[A-Z_\w]*|eligible|available|loaded|loading|empty|ready|selected/i,
-    /color|theme|style|class|layout|size|width|height|dark|light/i,
+  const productConditionLifecycle = productLifecycle.filter((stage) => stage.kind === "condition");
+  const presentationConditionPattern = /color|theme|style|class|layout|size|width|height|dark|light/i;
+  const matchedConditionEvidence = uniqueEvidence(
+    productConditionLifecycle
+      .filter((stage) => hasActionableLocatedDiffEvidence(stage.evidence))
+      .filter((stage) => {
+        const searchable = `${stage.label} ${stage.evidence.map((item) => item.symbol ?? item.value).join(" ")}`;
+        return !presentationConditionPattern.test(searchable);
+      })
+      .flatMap((stage) => stage.evidence),
+  ).slice(0, 6);
+  const changedConditionFiles = new Set(
+    matchedConditionEvidence.map((item) => item.file).filter((file): file is string => Boolean(file)),
   );
+  const changedConditionEvidence = uniqueEvidence([
+    ...matchedConditionEvidence,
+    ...productLifecycle
+      .filter((stage) => stage.kind === "observable-outcome")
+      .flatMap((stage) => stage.evidence)
+      .filter((item) => Boolean(item.file && changedConditionFiles.has(item.file))),
+  ]);
   const hasUiProductEvidence = productEvidence.some(isUiBehaviorEvidence);
-  if (changedConditionEvidence.length > 0 && hasUiProductEvidence &&
+  if (matchedConditionEvidence.length > 0 && hasUiProductEvidence &&
     !/toggle|enable|disable|permission|authoriz|auth|guard/.test(searchable)) {
     scenarios.push(makeScenario(intentId, "conditional-fallback", "state-transition", "recommended", "Changed conditional state and fallback", [
       "Prepare the changed condition as true and false, including loading, unknown, or empty state when the diff exposes one.",
@@ -1747,6 +1805,9 @@ function buildIntentQaScenarios(
 function isMateriallyObservableOutcomeStage(stage: BehaviorLifecycleStage): boolean {
   const label = stripTerminalPunctuation(stage.label);
   if (/^Show\s+.+/i.test(label)) {
+    return true;
+  }
+  if (/^Expose accessibility label\s+.+/i.test(label)) {
     return true;
   }
   if (/^Observe\s+(?!the result of\b).+/i.test(label)) {
@@ -2181,6 +2242,9 @@ function collectCodeBehaviorSignals(
     }
     locatedFiles.add(file);
     for (const hunk of hunks) {
+      if (isFormattingOnlyHunk(hunk)) {
+        continue;
+      }
       collectTransformationContractSignals(signals, file, hunk);
       for (const line of hunk.lines) {
         collectCodeBehaviorSignalsFromText(signals, file, line.text, hunk, line.line);
@@ -2363,6 +2427,9 @@ function collectDiffRiskEvidence(
       continue;
     }
     for (const hunk of hunks) {
+      if (isFormattingOnlyHunk(hunk)) {
+        continue;
+      }
       const validationTimingChange = detectFormValidationTimingChange(file, hunk);
       if (validationTimingChange) {
         evidence.push(diffRiskEvidence(
@@ -2379,7 +2446,7 @@ function collectDiffRiskEvidence(
           if (isStaticVocabularyOrMetadataLine(line.text)) {
             continue;
           }
-          const calendarMatch = line.text.match(
+          const calendarMatch = sourceOutsideStringLiterals(line.text).match(
             /(timezone|scheduledAt|\bschedule\w*\b|\breminder\w*\b|\btomorrow\b|\brecurr\w*\b|\bcron\w*\b|\bdeadline\w*\b|\bdueAt\b|\bdueDate\b|\bstarts?At\b|\bends?At\b)/i,
           );
           const recordsCurrentTimestamp = /^timezone$/i.test(calendarMatch?.[1] ?? "") &&
@@ -2388,7 +2455,14 @@ function collectDiffRiskEvidence(
             line.text,
             calendarMatch?.[1],
           );
-          if (calendarMatch && !recordsCurrentTimestamp && !schedulerInfrastructure) {
+          const unchangedRewrappedCalendarSignal = calendarMatch &&
+            isUnchangedRewrappedSymbol(hunk, calendarMatch[1]);
+          if (
+            calendarMatch &&
+            !recordsCurrentTimestamp &&
+            !schedulerInfrastructure &&
+            !unchangedRewrappedCalendarSignal
+          ) {
             evidence.push(diffRiskEvidence(
               file,
               hunk,
@@ -2545,6 +2619,45 @@ function collectDiffRiskEvidence(
   return uniqueEvidence(evidence);
 }
 
+function collectRemovalContractEvidence(
+  changedFiles: TestPlanChangedFile[],
+  addedDiffEvidence: AddedDiffEvidence,
+  changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
+): ChangeIntentEvidence[] {
+  const evidence: ChangeIntentEvidence[] = [];
+  for (const changedFile of changedFiles) {
+    if (changedFile.status !== "D" || !isUserFacingSurfacePath(changedFile.path)) {
+      continue;
+    }
+    const hunks = addedDiffEvidence[changedFile.path] ?? [];
+    const sourceRole = changedSourceRoles[changedFile.path]?.role ??
+      classifyChangeSourceRole(changedFile.path, diffTextForRoleClassification(hunks)).role;
+    if (sourceRole !== "product") {
+      continue;
+    }
+    const hunk = hunks.find((candidate) => (candidate.removedLines?.length ?? 0) > 0);
+    const removedLine = hunk?.removedLines?.find((line) => meaningfulChangedLine(line.text)) ??
+      hunk?.removedLines?.[0];
+    if (!hunk || !removedLine) {
+      continue;
+    }
+    evidence.push({
+      kind: "diff",
+      value: `Removed user-facing surface ${changedFile.path}; verify the retired entry remains unavailable.`,
+      sourceRole: "product",
+      file: changedFile.path,
+      previousFile: hunk.previousFile,
+      symbol: `retired-surface:${changedFile.path}`,
+      relation: "direct",
+      side: "base",
+      startLine: removedLine.line,
+      endLine: removedLine.line,
+      hunkHeader: hunk.hunkHeader,
+    });
+  }
+  return uniqueEvidence(evidence);
+}
+
 function collectChangedDiffAnchors(
   addedDiffEvidence: AddedDiffEvidence,
   changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
@@ -2613,6 +2726,111 @@ function isStaticVocabularyOrMetadataLine(text: string): boolean {
   }
   return /\/(?:\\.|[^/\n]){3,}\/[dgimsuvy]*\.test\s*\(/i.test(trimmed) ||
     /\b(?:vocabulary|pattern|matcher|regex)\w*\s*=\s*\/(?:\\.|[^/\n]){3,}\/[dgimsuvy]*/i.test(trimmed);
+}
+
+function isFormattingOnlyHunk(hunk: AddedDiffHunk): boolean {
+  const removed = hunk.removedLines ?? [];
+  if (hunk.lines.length === 0 || removed.length === 0) {
+    return false;
+  }
+  const before = normalizeFormattingComparableSource(removed.map((line) => line.text));
+  const after = normalizeFormattingComparableSource(hunk.lines.map((line) => line.text));
+  return before.length > 0 && before === after;
+}
+
+function normalizeFormattingComparableSource(lines: string[]): string {
+  const source = lines.join("\n");
+  let normalized = "";
+  let quote: "'" | '"' | "`" | undefined;
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      normalized += character;
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === "'" || character === '"' || character === "`") {
+      quote = character;
+      normalized += character;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      continue;
+    }
+    if (character === ",") {
+      const next = source.slice(index + 1).match(/\S/)?.[0];
+      if (next && /[\])}]/.test(next)) {
+        continue;
+      }
+    }
+    normalized += character;
+  }
+  return normalized;
+}
+
+function sourceOutsideStringLiterals(text: string): string {
+  let result = "";
+  let quote: "'" | '"' | "`" | undefined;
+  let escaped = false;
+  for (const character of text) {
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === quote) {
+        quote = undefined;
+      }
+      result += " ";
+      continue;
+    }
+    if (character === "'" || character === '"' || character === "`") {
+      quote = character;
+      result += " ";
+      continue;
+    }
+    result += character;
+  }
+  return result;
+}
+
+function isUnchangedRewrappedSymbol(hunk: AddedDiffHunk, symbol: string): boolean {
+  const before = statementContainingSymbol(hunk.removedLines ?? [], symbol);
+  const after = statementContainingSymbol(hunk.lines, symbol);
+  return before !== undefined && after !== undefined && before === after;
+}
+
+function statementContainingSymbol(
+  lines: Array<{ text: string }>,
+  symbol: string,
+): string | undefined {
+  const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`\\b${escapedSymbol}\\b`, "i");
+  const start = lines.findIndex((line) => pattern.test(sourceOutsideStringLiterals(line.text)));
+  if (start < 0) {
+    return undefined;
+  }
+  const statement: string[] = [];
+  for (const line of lines.slice(start, start + 12)) {
+    statement.push(line.text);
+    if (/;\s*$/.test(sourceOutsideStringLiterals(line.text))) {
+      break;
+    }
+  }
+  return normalizeFormattingComparableSource(statement);
+}
+
+function isUserFacingSurfacePath(file: string): boolean {
+  const normalized = file.replaceAll("\\", "/");
+  return /\.(?:tsx|jsx|vue|svelte)$/i.test(normalized) &&
+    /(?:^|\/)(?:app|pages?|routes?|screens?|views?)(?:\/|$)/i.test(normalized);
 }
 
 function isBackgroundDispatchSchedulingLine(text: string, calendarSymbol: string | undefined): boolean {
@@ -2900,6 +3118,7 @@ function collectCodeBehaviorSignalsFromText(
   hunk?: AddedDiffHunk,
   line?: number,
 ): void {
+  collectStaticUiOutcomeSignals(signals, file, text, hunk, line);
   for (const match of text.matchAll(/(?:@click(?:\.\w+)*|v-on:click(?:\.\w+)*|onClick)\s*=\s*(?:["']|\{)\s*(?:this\.)?([A-Za-z_$][\w$]*)/g)) {
     const symbol = match[1];
     const label = `Trigger ${humanizeEventHandler(symbol)}.`;
@@ -2928,8 +3147,15 @@ function collectCodeBehaviorSignalsFromText(
       evidence: codeSignalEvidence(label, file, symbol, hunk, line),
     });
   }
+  const vueConditionExpressions = [
+    ...text.matchAll(/v-(?:if|else-if)\s*=\s*["']([^"']+)["']/g),
+  ].map((match) => match[1]);
+  const reactUiConditionExpressions = [
+    ...text.matchAll(/\{\s*(!?\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*(?:&&|\?)\s*</g),
+  ].map((match) => match[1]);
   const conditionExpressions = [
-    ...[...text.matchAll(/v-(?:if|else-if)\s*=\s*["']([^"']+)["']/g)].map((match) => match[1]),
+    ...vueConditionExpressions,
+    ...reactUiConditionExpressions,
     ...[...text.matchAll(/\bif\s*\(([^)]{1,240})\)/g)].map((match) => match[1]),
     ...[...text.matchAll(/\{\s*((?:is|has|can|should|show|hide)[A-Z_][A-Za-z0-9_$]*(?:\.[A-Za-z0-9_$]+)?)\s*(?:&&|\?)/g)]
       .map((match) => match[1]),
@@ -2949,6 +3175,20 @@ function collectCodeBehaviorSignalsFromText(
         evidence: codeSignalEvidence(label, file, symbol, hunk, line),
       });
     }
+  }
+  for (const expression of [...vueConditionExpressions, ...reactUiConditionExpressions]) {
+    const symbol = expression.match(/^\s*!?\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*$/)?.[1];
+    if (!symbol || /^(?:is|has|can|should|show|hide)[A-Z_]/.test(symbol)) {
+      continue;
+    }
+    const label = `Check ${humanizeIdentifier(symbol)}.`;
+    signals.push({
+      kind: "condition",
+      label,
+      file,
+      symbol,
+      evidence: codeSignalEvidence(label, file, symbol, hunk, line),
+    });
   }
   const conditionalCopyMatches = [
     ...text.matchAll(/v-(?:if|show)\s*=\s*["'][^"']+["'][^>]*>\s*([^<>{}\n]{2,120})\s*</g),
@@ -3005,6 +3245,83 @@ function collectCodeBehaviorSignalsFromText(
       evidence: codeSignalEvidence(label, file, symbol, hunk, line),
     });
   }
+}
+
+function collectStaticUiOutcomeSignals(
+  signals: CodeBehaviorSignal[],
+  file: string,
+  text: string,
+  hunk?: AddedDiffHunk,
+  line?: number,
+): void {
+  if (!isUserFacingUiSourcePath(file) || !hunk) {
+    return;
+  }
+  const removedText = (hunk.removedLines ?? []).map((candidate) => candidate.text).join("\n");
+  const removedAccessibilityLabels = new Set(
+    [...removedText.matchAll(/\b(?:aria-label|accessibilityLabel)\s*=\s*(?:\{\s*)?["'`]([^"'`{}\n]{2,120})["'`](?:\s*\})?/g)]
+      .map((match) => match[1].replace(/\s+/g, " ").trim()),
+  );
+  for (const match of text.matchAll(/\b(?:aria-label|accessibilityLabel)\s*=\s*(?:\{\s*)?["'`]([^"'`{}\n]{2,120})["'`](?:\s*\})?/g)) {
+    const accessibleLabel = match[1].replace(/\s+/g, " ").trim();
+    if (
+      removedAccessibilityLabels.size === 0 ||
+      removedAccessibilityLabels.has(accessibleLabel) ||
+      isInstructionLikeRepositoryText(accessibleLabel)
+    ) {
+      continue;
+    }
+    const label = `Expose accessibility label "${accessibleLabel}".`;
+    signals.push({
+      kind: "observable-outcome",
+      label,
+      file,
+      symbol: `accessibility-label:${accessibleLabel}`,
+      evidence: {
+        ...codeSignalEvidence(label, file, `accessibility-label:${accessibleLabel}`, hunk, line),
+        relation: "direct",
+      },
+    });
+  }
+  const visibleTextMatcher =
+    /<(h[1-6]|p|span|label|button|a|output|strong|em|li|option|legend|caption|td|th)\b([^>]*)>\s*([^<>{}\n]{2,120})\s*<\//g;
+  const removedVisibleTextByTag = new Map<string, Set<string>>();
+  for (const match of removedText.matchAll(visibleTextMatcher)) {
+    const values = removedVisibleTextByTag.get(match[1].toLowerCase()) ?? new Set<string>();
+    values.add(match[3].replace(/\s+/g, " ").trim());
+    removedVisibleTextByTag.set(match[1].toLowerCase(), values);
+  }
+  for (const match of text.matchAll(visibleTextMatcher)) {
+    const tag = match[1].toLowerCase();
+    const attributes = match[2];
+    const prefix = text.slice(0, match.index ?? 0);
+    if (/\bv-(?:if|show)\b/.test(attributes) || /(?:&&|\?)\s*$/.test(prefix)) {
+      continue;
+    }
+    const visibleText = match[3].replace(/\s+/g, " ").trim();
+    const removedValues = removedVisibleTextByTag.get(tag);
+    if (!removedValues || removedValues.has(visibleText) || isInstructionLikeRepositoryText(visibleText)) {
+      continue;
+    }
+    const label = `Show "${visibleText}".`;
+    signals.push({
+      kind: "observable-outcome",
+      label,
+      file,
+      symbol: `visible-copy:${visibleText}`,
+      evidence: {
+        ...codeSignalEvidence(label, file, `visible-copy:${visibleText}`, hunk, line),
+        relation: "direct",
+      },
+    });
+  }
+}
+
+function isUserFacingUiSourcePath(file: string): boolean {
+  const normalized = file.replaceAll("\\", "/");
+  return /\.(?:tsx|jsx|vue|svelte)$/i.test(normalized) ||
+    /(?:^|\/)(?:components?|pages?|screens?|views?|ui)(?:\/|$)/i.test(normalized) ||
+    /\.component\.ts$/i.test(normalized);
 }
 
 function isInsideRegexLiteral(text: string, index: number): boolean {
@@ -3368,6 +3685,10 @@ function stripTerminalPunctuation(value: string): string {
 
 function assertionForStage(stage: BehaviorLifecycleStage): string {
   const label = stripTerminalPunctuation(stage.label);
+  const accessibleLabel = label.match(/^Expose accessibility label\s+"(.+)"$/i)?.[1];
+  if (accessibleLabel) {
+    return `Verify the accessibility label equals "${accessibleLabel}".`;
+  }
   const visible = label.match(/^Show\s+(.+)$/i)?.[1];
   if (visible) {
     return `Verify ${lowercaseFirst(visible)} is visible.`;

@@ -76,9 +76,10 @@
       "regressionOverlay": "regression",
       "fixedOverlay": "head",
       "minimumGeneratedFiles": 1,
-      "minimumCompiledScenarios": 1,
+      "minimumCompiledScenarios": 2,
       "mustCompileScenarios": [
-        "Persist workspace density"
+        "Persist workspace density",
+        "Changed conditional state and fallback"
       ],
       "mustGenerateFiles": [
         "tests/e2e/persist-workspace-density.spec.ts"
@@ -88,7 +89,7 @@
         "Received: null"
       ],
       "fixedOutputIncludes": [
-        "1 passed"
+        "2 passed"
       ]
     },
     {

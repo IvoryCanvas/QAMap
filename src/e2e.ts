@@ -5377,11 +5377,24 @@ async function buildFlows(
   changeAnalysis?: ChangeIntentAnalysis,
 ): Promise<E2eFlow[]> {
   const files = changedFiles.map((file) => file.path);
+  const activeChangedFiles = new Set(
+    changedFiles.filter((file) => file.status !== "D").map((file) => file.path),
+  );
   const importImpacts = await collectImportImpacts(root, files);
   const fixtureContext = await collectFixtureReadinessContext(root, files, analysisRevision);
   const flowResults = await Promise.all(
     buildFlowCandidates(files, runner, projectType, domainLanguage, importImpacts, changeAnalysis, addedDiffText).map((candidate) =>
-      buildFlow(root, runner, candidate, testSuiteInventory, fixtureContext, addedDiffText, files, analysisRevision),
+      buildFlow(
+        root,
+        runner,
+        candidate,
+        testSuiteInventory,
+        fixtureContext,
+        addedDiffText,
+        files,
+        analysisRevision,
+        activeChangedFiles,
+      ),
     ),
   );
   const flows = flowResults.filter((flow): flow is E2eFlow => Boolean(flow));
@@ -6169,6 +6182,10 @@ function intentFlowDisplayTitle(
       (stage.kind === "trigger" || stage.kind === "side-effect") &&
       stage.evidence.some((evidence) => evidence.kind === "diff" && evidence.file),
   );
+  const accessibleOutcomeTitle = broadAccessibilityOutcomeFlowTitle(intent, domainLanguage, actionStages);
+  if (accessibleOutcomeTitle) {
+    return accessibleOutcomeTitle;
+  }
   const actions = uniqueStrings(
     actionStages
       .map((stage) => conciseLifecycleAction(stage.label))
@@ -6186,6 +6203,31 @@ function intentFlowDisplayTitle(
   }
   const subject = summarizeFlowSubject(intent.files, "Changed behavior", domainLanguage);
   return `${subject}: ${actions.map(titleCase).join(" / ")}`;
+}
+
+function broadAccessibilityOutcomeFlowTitle(
+  intent: ChangeIntentAnalysis["intents"][number],
+  domainLanguage: DomainLanguageSummary | undefined,
+  actionStages: BehaviorLifecycleStage[],
+): string | undefined {
+  if (!isBroadIntentDisplayTitle(intent.title) || actionStages.length > 0) {
+    return undefined;
+  }
+  const labels = uniqueStrings(intent.lifecycle.flatMap((stage) => {
+    if (
+      stage.kind !== "observable-outcome" ||
+      !stage.evidence.some((evidence) => evidence.kind === "diff" && evidence.file)
+    ) {
+      return [];
+    }
+    const label = stage.label.match(/^Expose accessibility label "(.+)"\.$/)?.[1];
+    return label ? [label] : [];
+  }));
+  if (labels.length !== 1) {
+    return undefined;
+  }
+  const subject = summarizeFlowSubject(intent.files, "Changed behavior", domainLanguage);
+  return `${subject} ${titleCase(labels[0])}`;
 }
 
 function isSpecificIntentDisplayTitle(title: string): boolean {
@@ -6362,19 +6404,22 @@ async function buildFlow(
   addedDiffText: Record<string, string> = {},
   changedFiles: string[] = [],
   analysisRevision: AnalysisRevision = { head: "HEAD", includeWorkingTree: false },
+  activeChangedFiles = new Set(changedFiles),
 ): Promise<E2eFlow | undefined> {
   const files = uniqueStrings(candidate.files).slice(0, 20);
   if (files.length === 0) {
     return undefined;
   }
   const analysisRuleFocused = hasAnalysisRuleFocusedDiffEvidence(candidate.intentEvidence);
+  const changedFileSet = new Set(changedFiles);
+  const activeFiles = files.filter((file) => !changedFileSet.has(file) || activeChangedFiles.has(file));
   const coverage = candidate.coverage ?? buildCoverageTargets(candidate.kind, files, runner);
   const setupHints = analysisRuleFocused
     ? []
-    : await inferFlowSetupHints(root, files, candidate.kind, addedDiffText, analysisRevision);
+    : await inferFlowSetupHints(root, activeFiles, candidate.kind, addedDiffText, analysisRevision);
   const interactionEvidenceApplies = !analysisRuleFocused && !isVerificationOnlyKind(candidate.kind);
   const selectors = interactionEvidenceApplies
-    ? await inferFlowSelectors(root, files, runner, addedDiffText, analysisRevision)
+    ? await inferFlowSelectors(root, activeFiles, runner, addedDiffText, analysisRevision)
     : [];
   const groundedScenario = groundSingleDiffActionInPrimaryScenario(
     candidate.steps,
@@ -6392,11 +6437,11 @@ async function buildFlow(
       { title: candidate.title, files, coverage, changedFiles },
       testSuiteInventory,
     ),
-    entrypoints: interactionEvidenceApplies ? await inferFlowEntrypoints(root, files, runner, analysisRevision) : [],
+    entrypoints: interactionEvidenceApplies ? await inferFlowEntrypoints(root, activeFiles, runner, analysisRevision) : [],
     setupHints,
     fixtureReadiness: await inferFlowFixtureReadiness(
       root,
-      files,
+      activeFiles,
       candidate.kind,
       setupHints,
       fixtureContext,
@@ -6406,7 +6451,7 @@ async function buildFlow(
     ),
     selectors,
     missingTestability: interactionEvidenceApplies
-      ? await findFlowTestabilityGaps(root, files, runner, selectors, analysisRevision)
+      ? await findFlowTestabilityGaps(root, activeFiles, runner, selectors, analysisRevision)
       : [],
     intentId: candidate.intentId,
     intentConfidence: candidate.intentConfidence,

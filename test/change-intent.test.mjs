@@ -2319,7 +2319,11 @@ test("React storage evidence compiles reload persistence into the primary Playwr
   assert.match(spec, /await persistedField\.fill\(persistedValue\)/);
   assert.match(spec, /await page\.reload\(\)/);
   assert.match(spec, /await expect\(persistedField\)\.toHaveValue\(persistedValue\)/);
-  assert.equal(spec.match(/getByTestId\("density-save"\)\.click\(\)/g)?.length, 1);
+  assert.equal(
+    spec.match(/getByTestId\("density-save"\)\.click\(\)/g)?.length,
+    2,
+    "The persistence proof and transient completion-state proof each exercise the save action.",
+  );
   assert.match(file.languageBrief.trigger, /save density/i);
   assert.doesNotMatch(file.languageBrief.trigger, /re-entry/i);
   assert.equal(
@@ -3707,6 +3711,83 @@ test("presentation-only conditions do not become lifecycle QA scenarios", async 
     analysis.intents[0].scenarios.some((scenario) => /conditional state and fallback/i.test(scenario.title)),
     false,
   );
+});
+
+test("retired UI routes become absence contracts while formatting-only hunks stay contextual", async (t) => {
+  const root = await makeRepo(t);
+  const catalogFile = "src/pages/catalog.tsx";
+  const previewFile = "src/pages/catalog-preview.tsx";
+  await write(
+    root,
+    catalogFile,
+    [
+      "export function Catalog({ previewEnabled }) {",
+      "  const scheduleCopy = formatCopy(\"Calendar schedule is available\");",
+      "  return previewEnabled ? (",
+      "    <main><h1>Catalog preview</h1><button aria-label=\"Open preview filters\">Filters</button></main>",
+      "  ) : (",
+      "    <main><h1>Browse projects</h1><p>{scheduleCopy}</p></main>",
+      "  );",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    previewFile,
+    "export function CatalogPreview() { return <main><h1>Catalog preview</h1></main>; }\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/current-catalog-default");
+
+  await write(
+    root,
+    catalogFile,
+    [
+      "export function Catalog() {",
+      "  const scheduleCopy = formatCopy(",
+      "    \"Calendar schedule is available\",",
+      "  );",
+      "  return (",
+      "    <main>",
+      "      <h1>Explore current projects</h1>",
+      "      <button aria-label=\"Open current project filters\">Filters</button>",
+      "      <p>{scheduleCopy}</p>",
+      "    </main>",
+      "  );",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await rm(path.join(root, previewFile));
+  commit(root, "feat: make the current catalog default and remove the experiment preview");
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const scenarios = qa.changeAnalysis.intents.flatMap((intent) => intent.scenarios);
+  const retirement = scenarios.find((scenario) => /retired behavior.*replacement/i.test(scenario.title));
+
+  assert.ok(retirement);
+  assert.ok(retirement.evidence.some((item) => item.file === previewFile && item.side === "base"));
+  assert.ok(retirement.assertions.some((assertion) => /obsolete.*unavailable/i.test(assertion)));
+  assert.ok(retirement.assertions.some((assertion) => /Explore current projects/i.test(assertion)));
+  assert.ok(
+    qa.changeAnalysis.intents
+      .flatMap((intent) => intent.lifecycle)
+      .some((stage) =>
+        stage.kind === "observable-outcome" &&
+        /Open current project filters/i.test(stage.label) &&
+        stage.evidence.some((item) => item.file === catalogFile && item.side === "head")
+      ),
+  );
+  assert.equal(
+    scenarios.some((scenario) => /scheduling, calendar, and duplicate boundary/i.test(scenario.title)),
+    false,
+  );
+  assert.equal(
+    qa.flows.flatMap((flow) => flow.entrypointHints).some((entrypoint) => /catalog-preview/i.test(entrypoint)),
+    false,
+  );
+  assert.equal(qa.execution.status, "not-run");
 });
 
 test("form validation mode changes produce edit-trigger-correction QA across unrelated forms", async (t) => {
