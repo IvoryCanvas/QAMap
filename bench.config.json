@@ -2,6 +2,29 @@
   "$comment": "Committed quality contract. Each fixture is materialized as a temporary Git repository with a main baseline and one PR change.",
   "targets": [
     {
+      "name": "service-runtime-activation-startup",
+      "fixture": "test/benchmarks/service-runtime-activation-startup",
+      "commitMessage": "feat: configure digest worker activation",
+      "expect": {
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 1,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": ["src/workers/digest-worker.ts"],
+        "mustNameFlows": ["runtime activation"],
+        "mustIncludeLifecycle": ["startup environment value", "guarded side effect"],
+        "mustIncludeQaScenarios": ["Startup configuration reaches the guarded side effect only after restart"],
+        "mustFindIntentEvidence": ["DIGEST_WORKER_ENABLED", "queue.enqueue"],
+        "mustTraceScenarioFiles": ["src/workers/digest-worker.ts"],
+        "mustRecommendCommands": ["validate:config"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "web-delivery-integrity-missing-asset",
       "fixture": "test/benchmarks/web-delivery-integrity-missing-asset",
       "commitMessage": "feat: show the updated workspace preview",

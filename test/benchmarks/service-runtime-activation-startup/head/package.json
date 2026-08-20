@@ -1,0 +1,7 @@
+{
+  "name": "runtime-activation-fixture",
+  "private": true,
+  "scripts": {
+    "validate:config": "node scripts/validate-config.js"
+  }
+}

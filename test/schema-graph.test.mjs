@@ -188,6 +188,8 @@ test("agent schema lists every repository verification mode emitted by QAMap", a
   const schema = JSON.parse(await readFile(new URL("../schema/qamap-agent.schema.json", import.meta.url), "utf8"));
   const modes = schema.properties.flows.items.properties.verificationMode.enum;
 
+  assert.ok(modes.includes("delivery-integrity"));
+  assert.ok(modes.includes("runtime-activation"));
   assert.ok(modes.includes("schema-graph"));
   assert.ok(modes.includes("transformation-contract"));
 });
