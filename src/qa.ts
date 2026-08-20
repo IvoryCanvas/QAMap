@@ -229,6 +229,7 @@ type QaVerificationMode =
   | "command-contract"
   | "analysis-rule"
   | "delivery-integrity"
+  | "runtime-activation"
   | "schema-graph"
   | "transformation-contract"
   | "existing-test-evidence"
@@ -385,10 +386,20 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   const candidateCommandsWithoutInsufficientTests = candidateCommands.filter((command) =>
     ![...runtimeGapTestFiles].some((testFile) => focusedCommandTargetsFile(command, testFile))
   );
+  const runtimeActivationValidationCommands = flows.some((flow) =>
+    flow.verificationMode === "runtime-activation"
+  )
+    ? await discoverRuntimeActivationValidationCommands(root)
+    : [];
   const routedCandidateCommands = flows.some((flow) => flow.verificationMode === "schema-graph")
     ? candidateCommandsWithoutInsufficientTests.filter(isMigrationGraphValidationCommand)
     : flows.some((flow) => flow.verificationMode === "delivery-integrity")
       ? candidateCommandsWithoutInsufficientTests.filter(isDeliveryIntegrityValidationCommand)
+      : flows.some((flow) => flow.verificationMode === "runtime-activation")
+        ? uniqueStrings([
+            ...runtimeActivationValidationCommands,
+            ...candidateCommandsWithoutInsufficientTests.filter(isRuntimeActivationValidationCommand),
+          ])
       : candidateCommandsWithoutInsufficientTests;
   const suggestedCommands = await preferLocallyRunnableValidationCommands(root, routedCandidateCommands);
   const missingEvidence = uniqueMissingEvidence([
@@ -3643,6 +3654,8 @@ function qaFlowFromDraftFile(file: E2eDraftFile): QaDraftFlow {
   return {
     title: verificationMode === "delivery-integrity"
       ? "Delivery integrity verification"
+      : verificationMode === "runtime-activation"
+      ? "Runtime activation boundary verification"
       : file.flowTitle,
     source: formatDraftSource(file.source),
     draftPath: file.path,
@@ -3902,6 +3915,9 @@ function buildFlowReasons(file: E2eDraftFile): string[] {
   if (verificationMode === "delivery-integrity") {
     return ["The branch may not reproduce safely from committed evidence; resolve missing artifacts or history-rewriting validation before optional product automation."];
   }
+  if (verificationMode === "runtime-activation") {
+    return ["A located activation source controls a guarded side effect; verify disabled and enabled states at the repository-backed restart, delivery, or runtime-fetch boundary before optional product automation."];
+  }
   if (verificationMode === "schema-graph") {
     return ["The changed migration dependency diverges from the target branch graph; restore one leaf and validate the deployment order instead of inventing a product journey."];
   }
@@ -4112,6 +4128,11 @@ function verificationModeForDraftFile(file: E2eDraftFile): QaVerificationMode | 
   )) {
     return "delivery-integrity";
   }
+  if (file.qaScenarios?.some((scenario) =>
+    scenario.evidence.some((source) => source.symbol?.startsWith("runtime-activation:"))
+  )) {
+    return "runtime-activation";
+  }
   const scenarioSourceRoles = (file.qaScenarios ?? [])
     .flatMap((scenario) => scenario.evidence)
     .map((source) => source.sourceRole)
@@ -4141,6 +4162,9 @@ function formatVerificationMode(mode: QaVerificationMode): string {
   if (mode === "delivery-integrity") {
     return "clean-checkout artifact and workflow history verification";
   }
+  if (mode === "runtime-activation") {
+    return "runtime activation boundary verification";
+  }
   if (mode === "schema-graph") {
     return "migration graph and deployment-order verification";
   }
@@ -4161,6 +4185,59 @@ function formatVerificationMode(mode: QaVerificationMode): string {
 
 function isDeliveryIntegrityValidationCommand(command: string): boolean {
   return /\b(?:actionlint|archive|build|bundle|export|pack|package|workflow)\b/i.test(command);
+}
+
+function isRuntimeActivationValidationCommand(command: string): boolean {
+  return /\b(?:activation|config|configuration|deploy|environment|feature[-_:]?flags?|integration|job|runtime|scheduler|startup|worker)\b/i.test(
+    command,
+  );
+}
+
+async function discoverRuntimeActivationValidationCommands(root: string): Promise<string[]> {
+  try {
+    const parsed = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as {
+      packageManager?: unknown;
+      scripts?: Record<string, unknown>;
+    };
+    const scripts = Object.entries(parsed.scripts ?? {})
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)
+      .filter(([name, command]) => isRuntimeActivationValidationScript(name, command))
+      .sort(([leftName], [rightName]) =>
+        runtimeActivationValidationScriptRank(leftName) - runtimeActivationValidationScriptRank(rightName) ||
+        leftName.localeCompare(rightName)
+      )
+      .slice(0, 3);
+    const packageManager = await runtimeActivationPackageManager(root, parsed.packageManager);
+    return scripts.map(([name]) =>
+      name === "test" ? `${packageManager} test` : `${packageManager} run ${name}`
+    );
+  } catch {
+    return [];
+  }
+}
+
+function isRuntimeActivationValidationScript(name: string, command: string): boolean {
+  const boundary = "(?:activation|config|configuration|deploy|environment|feature[-_:]?flags?|integration|job|runtime|scheduler|startup|worker)";
+  const validation = "(?:check|dry|lint|plan|smoke|test|validate|verify)";
+  return new RegExp(`(?:${boundary}.*${validation}|${validation}.*${boundary})`, "i").test(`${name} ${command}`) &&
+    !/^(?:deploy|release|publish|start)(?:$|:)/i.test(name);
+}
+
+function runtimeActivationValidationScriptRank(name: string): number {
+  if (/(?:^|:)(?:check|validate|verify|plan)(?:$|:)/i.test(name)) return 0;
+  if (/(?:^|:)(?:test|smoke|lint)(?:$|:)/i.test(name)) return 1;
+  return 2;
+}
+
+async function runtimeActivationPackageManager(root: string, declared: unknown): Promise<string> {
+  if (typeof declared === "string") {
+    const manager = declared.split("@")[0];
+    if (["npm", "pnpm", "yarn", "bun"].includes(manager)) return manager;
+  }
+  if (await pathExists(path.join(root, "pnpm-lock.yaml"))) return "pnpm";
+  if (await pathExists(path.join(root, "yarn.lock"))) return "yarn";
+  if (await pathExists(path.join(root, "bun.lock")) || await pathExists(path.join(root, "bun.lockb"))) return "bun";
+  return "npm";
 }
 
 function isMigrationGraphValidationCommand(command: string): boolean {

@@ -275,8 +275,15 @@ export async function analyzeChangeIntents(
     options,
     changedSourceRoles,
   );
+  const runtimeActivationEvidence = await collectRuntimeActivationEvidence(
+    root,
+    gitRoot,
+    options,
+    changedSourceRoles,
+  );
   const riskEvidence = uniqueEvidence([
     ...deliveryIntegrityEvidence,
+    ...runtimeActivationEvidence,
     ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}, changedSourceRoles),
     ...collectRemovalContractEvidence(
       options.changedFiles,
@@ -815,13 +822,17 @@ function buildDiffOnlyIntent(
     item.sourceRole === "analysis-rule" || item.sourceRole === "command"
   );
   const deliveryIntegrityEvidence = riskEvidence.filter(isDeliveryIntegrityEvidence);
+  const runtimeActivationEvidence = riskEvidence.filter(isRuntimeActivationEvidence);
   const lifecycle = limitLifecycleStages([
     ...lifecycleFromCodeSignals(codeSignals),
     ...lifecycleFromSourceRoles(roleEvidence),
     ...lifecycleFromDeliveryIntegrityEvidence(deliveryIntegrityEvidence),
+    ...lifecycleFromRuntimeActivationEvidence(runtimeActivationEvidence),
   ]);
   const stageKinds = new Set(lifecycle.map((stage) => stage.kind));
-  const hasRecognizedSourceRole = roleEvidence.length > 0 || deliveryIntegrityEvidence.length > 0;
+  const hasRecognizedSourceRole = roleEvidence.length > 0 ||
+    deliveryIntegrityEvidence.length > 0 ||
+    runtimeActivationEvidence.length > 0;
   const hasSymbolAnnotation = annotationEvidence.length > 0;
   if (
     (!hasRecognizedSourceRole && !hasSymbolAnnotation && (lifecycle.length < 3 || stageKinds.size < 3)) ||
@@ -833,10 +844,13 @@ function buildDiffOnlyIntent(
     ...codeSignals.map((signal) => signal.file),
     ...roleEvidence.map((item) => item.file ?? "").filter(Boolean),
     ...deliveryIntegrityEvidence.map((item) => item.file ?? "").filter(Boolean),
+    ...runtimeActivationEvidence.map((item) => item.file ?? "").filter(Boolean),
   ]).slice(0, maxIntentFiles);
   const annotatedFlow = firstQaAnnotationFlow(annotationEvidence);
   const titleSubject = deliveryIntegrityEvidence.length > 0
     ? "Delivery integrity"
+    : runtimeActivationEvidence.length > 0
+    ? "Runtime activation"
     : annotatedFlow
     ? humanizeIdentifier(annotatedFlow)
     : diffIntentSubject(files[0], roleEvidence[0]?.sourceRole, roleEvidence);
@@ -989,6 +1003,7 @@ function buildLifecycle(
   stages.push(...lifecycleFromDetectedRiskEvidence(roleEvidence));
   stages.push(...lifecycleFromSourceRoles(roleEvidence));
   stages.push(...lifecycleFromDeliveryIntegrityEvidence(roleEvidence.filter(isDeliveryIntegrityEvidence)));
+  stages.push(...lifecycleFromRuntimeActivationEvidence(roleEvidence.filter(isRuntimeActivationEvidence)));
 
   return limitLifecycleStages(removeRedundantOutcomeTimingTriggers(stages));
 }
@@ -1310,6 +1325,73 @@ function buildIntentQaScenarios(
     deliveryIntegrity.rationale =
       "The changed source or workflow can produce a branch that works locally but cannot be reproduced safely from the committed review evidence; resolve this delivery blocker before optional product automation.";
     scenarios.push(deliveryIntegrity);
+  }
+
+  const runtimeActivationEvidence = evidence.filter(isRuntimeActivationEvidence);
+  for (const mechanism of ["code-defined", "startup-environment", "runtime-fetched"] as const) {
+    const mechanismEvidence = runtimeActivationEvidence.filter((item) =>
+      item.symbol?.startsWith(`runtime-activation:${mechanism}:`)
+    );
+    if (mechanismEvidence.length === 0) continue;
+    const sourceEvidence = mechanismEvidence.filter((item) => item.symbol?.endsWith(":source"));
+    const guardEvidence = mechanismEvidence.filter((item) => item.symbol?.endsWith(":guard"));
+    const sideEffectEvidence = mechanismEvidence.filter((item) => item.symbol?.endsWith(":side-effect"));
+    const mechanismTitle = mechanism === "code-defined"
+      ? "Code-defined activation reaches the guarded side effect only after delivery"
+      : mechanism === "startup-environment"
+      ? "Startup configuration reaches the guarded side effect only after restart"
+      : "Runtime-fetched activation changes the guarded side effect without restart";
+    const activation = makeScenario(
+      intentId,
+      `runtime-activation:${mechanism}`,
+      "state-transition",
+      "critical",
+      mechanismTitle,
+      mechanism === "code-defined"
+        ? ["Prepare the previous and changed code-defined activation values in clean checkouts."]
+        : mechanism === "startup-environment"
+        ? ["Prepare disabled and enabled environment values before process startup."]
+        : ["Prepare runtime flag responses for disabled, enabled, unavailable, and stale states."],
+      mechanism === "code-defined"
+        ? [
+            "Run the guarded entry with the previous code-defined value and the changed value.",
+            "Use the repository's normal build or deployment validation to prove which revision can become active.",
+          ]
+        : mechanism === "startup-environment"
+        ? [
+            "Start the process with activation disabled and exercise the guarded entry.",
+            "Change the value, restart through the repository's normal runtime path, and exercise the same entry again.",
+          ]
+        : [
+            "Exercise the guarded entry while the runtime flag is disabled.",
+            "Change the fetched flag response without restarting and exercise the same entry again.",
+          ],
+      mechanism === "code-defined"
+        ? [
+            "Verify the disabled revision produces no guarded side effect.",
+            "Verify the changed revision produces the intended side effect exactly once after the normal delivery boundary.",
+          ]
+        : mechanism === "startup-environment"
+        ? [
+            "Verify the disabled startup state produces no guarded side effect.",
+            "Verify changing configuration without a restart does not misrepresent the already running process state.",
+            "Verify the restarted enabled state produces the intended side effect exactly once.",
+          ]
+        : [
+            "Verify the disabled response produces no guarded side effect.",
+            "Verify the enabled response produces the intended side effect exactly once without a restart.",
+            "Verify unavailable or stale flag responses follow the repository-defined fallback instead of being assumed enabled.",
+          ],
+      mechanism === "runtime-fetched"
+        ? ["Flag provider unavailable", "Stale runtime response", "Repeated enabled evaluation"]
+        : ["Activation still disabled", "Activation changed without required boundary", "Repeated guarded entry"],
+      uniqueEvidence([...sourceEvidence, ...guardEvidence, ...sideEffectEvidence]),
+    );
+    activation.rationale = mechanism === "runtime-fetched"
+      ? "Located source evidence connects a runtime-fetched activation value to a guard and side effect. The repository proves the lookup path, but not the external environment's current value."
+      : "Located source evidence connects the changed activation value to a guard and side effect, so QA must prove both disabled and enabled states at the repository-backed activation boundary.";
+    activation.reviewRequired = mechanism === "runtime-fetched";
+    scenarios.push(activation);
   }
 
   const retiredSurfaceEvidence = productEvidence.filter((item) =>
@@ -2741,6 +2823,233 @@ async function collectDeliveryIntegrityEvidence(
   return uniqueEvidence(evidence);
 }
 
+type RuntimeActivationMechanism = "code-defined" | "startup-environment" | "runtime-fetched";
+
+interface RuntimeActivationSource {
+  mechanism: RuntimeActivationMechanism;
+  variable: string;
+  key: string;
+}
+
+async function collectRuntimeActivationEvidence(
+  root: string,
+  gitRoot: string,
+  options: ChangeIntentAnalysisOptions,
+  changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
+): Promise<ChangeIntentEvidence[]> {
+  const relativeRoot = toPosixPath(path.relative(gitRoot, root)).replace(/^\.\/+|\/+$/g, "");
+  const evidence: ChangeIntentEvidence[] = [];
+
+  for (const [file, hunks] of Object.entries(options.addedDiffEvidence ?? {})) {
+    const sourceRole = changedSourceRoles[file]?.role ??
+      classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
+    if (sourceRole !== "product" && sourceRole !== "configuration") {
+      continue;
+    }
+    const repositoryFile = relativeRoot ? `${relativeRoot}/${file}` : file;
+    const content = await readRuntimeActivationHeadText(root, gitRoot, file, repositoryFile, options);
+    if (!content) continue;
+    const sourceLines = content.split(/\r?\n/);
+
+    for (const hunk of hunks) {
+      for (const line of hunk.lines) {
+        const source = parseRuntimeActivationSource(line.text);
+        if (!source) continue;
+        const guard = findConnectedActivationGuard(sourceLines, source, line.line);
+        if (!guard) continue;
+        const sideEffect = findGuardedActivationSideEffect(sourceLines, guard.line);
+        if (!sideEffect) continue;
+        const prefix = `runtime-activation:${source.mechanism}`;
+        evidence.push(
+          diffRiskEvidence(
+            file,
+            hunk,
+            line.line,
+            `${prefix}:source`,
+            runtimeActivationSourceDescription(source),
+            "head",
+            sourceRole,
+          ),
+          runtimeActivationSourceEvidence(
+            file,
+            guard.line,
+            `${prefix}:guard`,
+            `Guard ${guard.expression} reads activation source ${source.variable || source.key}.`,
+            sourceRole,
+          ),
+          runtimeActivationSourceEvidence(
+            file,
+            sideEffect.line,
+            `${prefix}:side-effect`,
+            `Guarded path invokes side effect ${sideEffect.symbol}.`,
+            sourceRole,
+          ),
+        );
+      }
+    }
+  }
+
+  return uniqueEvidence(evidence);
+}
+
+async function readRuntimeActivationHeadText(
+  root: string,
+  gitRoot: string,
+  file: string,
+  repositoryFile: string,
+  options: ChangeIntentAnalysisOptions,
+): Promise<string | undefined> {
+  try {
+    if (options.includeWorkingTree) {
+      return await readFile(path.join(root, file), "utf8");
+    }
+    return (await execFileAsync(
+      "git",
+      ["show", `${options.head}:${repositoryFile}`],
+      { cwd: gitRoot, maxBuffer: 512 * 1024 },
+    )).stdout;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseRuntimeActivationSource(text: string): RuntimeActivationSource | undefined {
+  const withoutStrings = sourceOutsideStringLiterals(text);
+  if (/^(?:\s*(?:\/\/|#|\*)|.*\b(?:describe|it|test)\s*\()/.test(text)) {
+    return undefined;
+  }
+  const variable = text.match(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/)?.[1] ?? "";
+  const runtimeFetch = text.match(
+    /\b(?:isEnabled|getFlag|getBoolean|variation|evaluate)\s*\(\s*["'`]([^"'`]+)["'`]/i,
+  ) ?? text.match(
+    /\b(?:remoteConfig|featureFlags?|flagClient|featureClient)\b[^\n]*\b(?:get|fetch|read)\s*\(\s*["'`]([^"'`]+)["'`]/i,
+  );
+  if (runtimeFetch && (/\bawait\b/.test(withoutStrings) || /\bremoteConfig|featureFlags?|flagClient|featureClient\b/i.test(withoutStrings))) {
+    return {
+      mechanism: "runtime-fetched",
+      variable: variable || runtimeFetch[1],
+      key: runtimeFetch[1],
+    };
+  }
+  const environment = text.match(/\bprocess\.env\.([A-Z][A-Z0-9_]*)\b/) ??
+    text.match(/\bprocess\.env\[\s*["'`]([A-Z][A-Z0-9_]*)["'`]\s*\]/) ??
+    text.match(/\bimport\.meta\.env\.([A-Z][A-Z0-9_]*)\b/) ??
+    text.match(/\bDeno\.env\.get\(\s*["'`]([A-Z][A-Z0-9_]*)["'`]\s*\)/) ??
+    text.match(/\bgetenv\(\s*["'`]([A-Z][A-Z0-9_]*)["'`]\s*\)/);
+  if (environment && variable) {
+    return {
+      mechanism: "startup-environment",
+      variable,
+      key: environment[1],
+    };
+  }
+  const literal = text.match(
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*(?:enabled|active|flag|feature)[A-Za-z0-9_$]*|(?:ENABLE|FEATURE|ACTIVATE)_[A-Z0-9_]+)\s*=\s*(true|false)\b/i,
+  );
+  if (literal) {
+    return {
+      mechanism: "code-defined",
+      variable: literal[1],
+      key: literal[1],
+    };
+  }
+  return undefined;
+}
+
+function findConnectedActivationGuard(
+  lines: string[],
+  source: RuntimeActivationSource,
+  sourceLine: number,
+): { line: number; expression: string } | undefined {
+  const needles = uniqueStrings([source.variable, source.key]).filter(Boolean);
+  const start = Math.max(0, sourceLine - 1);
+  const end = Math.min(lines.length, start + 80);
+  const sourceDepth = braceDepthBeforeLine(lines, start);
+  for (let index = start; index < end; index += 1) {
+    if (index > start && sourceDepth > 0 && braceDepthBeforeLine(lines, index) < sourceDepth) {
+      break;
+    }
+    const line = lines[index];
+    if (!needles.some((needle) => line.includes(needle))) continue;
+    const guard = line.match(/\bif\s*\((.+)\)/) ??
+      line.match(/\b(?:return|const|let|var)\b[^\n]*(\b[A-Za-z_$][\w$]*\b)\s*(?:&&|\?)/);
+    if (guard) {
+      return { line: index + 1, expression: stripTerminalPunctuation(guard[1].trim()) };
+    }
+  }
+  return undefined;
+}
+
+function findGuardedActivationSideEffect(
+  lines: string[],
+  guardLine: number,
+): { line: number; symbol: string } | undefined {
+  const start = Math.max(0, guardLine - 1);
+  const end = Math.min(lines.length, start + 32);
+  const guardDepth = braceDepthBeforeLine(lines, start);
+  const guardText = sourceOutsideStringLiterals(lines[start]);
+  const guardedBlock = /\bif\s*\([^)]*\)\s*\{/.test(guardText);
+  for (let index = start; index < end; index += 1) {
+    const depthBefore = braceDepthBeforeLine(lines, index);
+    if (
+      index > start &&
+      ((guardedBlock && depthBefore <= guardDepth) || (!guardedBlock && guardDepth > 0 && depthBefore < guardDepth))
+    ) {
+      break;
+    }
+    const line = sourceOutsideStringLiterals(lines[index]);
+    const match = line.match(
+      /\b((?:[A-Za-z_$][\w$]*\.)*(?:enqueue|dispatch|publish|emit|send|schedule|register|spawn|createJob|createTask|createMessage|createNotification))\s*\(/i,
+    ) ?? line.match(
+      /\b([A-Za-z_$][\w$]*\.(?:add|enqueue|dispatch|publish|emit|send|schedule|register))\s*\(/i,
+    );
+    if (match) {
+      return { line: index + 1, symbol: match[1] };
+    }
+  }
+  return undefined;
+}
+
+function braceDepthBeforeLine(lines: string[], targetIndex: number): number {
+  let depth = 0;
+  for (let index = 0; index < targetIndex; index += 1) {
+    const line = sourceOutsideStringLiterals(lines[index]).replace(/\/\/.*$/, "");
+    depth += (line.match(/\{/g) ?? []).length;
+    depth -= (line.match(/\}/g) ?? []).length;
+  }
+  return Math.max(0, depth);
+}
+
+function runtimeActivationSourceDescription(source: RuntimeActivationSource): string {
+  if (source.mechanism === "code-defined") {
+    return `Changed code-defined activation value ${source.variable} guards a located side effect.`;
+  }
+  if (source.mechanism === "startup-environment") {
+    return `Changed startup environment value ${source.key} is captured by ${source.variable} before a guarded side effect.`;
+  }
+  return `Changed runtime-fetched activation key ${source.key} is captured by ${source.variable} before a guarded side effect.`;
+}
+
+function runtimeActivationSourceEvidence(
+  file: string,
+  line: number,
+  symbol: string,
+  value: string,
+  sourceRole: ChangeSourceRole,
+): ChangeIntentEvidence {
+  return {
+    kind: "source",
+    value,
+    sourceRole,
+    file,
+    symbol,
+    relation: "supporting",
+    side: "head",
+    startLine: line,
+    endLine: line,
+  };
+}
+
 function literalLocalAssetReferences(text: string): string[] {
   const trimmed = text.trim();
   if (/^(?:\/\/|#|\*|<!--)/.test(trimmed)) {
@@ -2911,6 +3220,69 @@ function lifecycleFromDeliveryIntegrityEvidence(
       "delivery-integrity:result",
     ),
   ];
+}
+
+function isRuntimeActivationEvidence(evidence: ChangeIntentEvidence): boolean {
+  return evidence.symbol?.startsWith("runtime-activation:") ?? false;
+}
+
+function lifecycleFromRuntimeActivationEvidence(
+  evidence: ChangeIntentEvidence[],
+): BehaviorLifecycleStage[] {
+  const stages: BehaviorLifecycleStage[] = [];
+  for (const mechanism of ["code-defined", "startup-environment", "runtime-fetched"] as const) {
+    const mechanismEvidence = evidence.filter((item) =>
+      item.symbol?.startsWith(`runtime-activation:${mechanism}:`)
+    );
+    if (mechanismEvidence.length === 0) continue;
+    const files = uniqueStrings(mechanismEvidence.map((item) => item.file ?? "").filter(Boolean));
+    const source = mechanismEvidence.filter((item) => item.symbol?.endsWith(":source"));
+    const guard = mechanismEvidence.filter((item) => item.symbol?.endsWith(":guard"));
+    const sideEffect = mechanismEvidence.filter((item) => item.symbol?.endsWith(":side-effect"));
+    stages.push(
+      createLifecycleStage(
+        "condition",
+        mechanism === "code-defined"
+          ? "A code-defined activation value controls the guarded path."
+          : mechanism === "startup-environment"
+          ? "A startup environment value controls the guarded path."
+          : "A runtime-fetched activation value controls the guarded path.",
+        "high",
+        source,
+        files,
+        `runtime-activation:${mechanism}:condition`,
+      ),
+      createLifecycleStage(
+        "action",
+        "Evaluate the connected activation guard.",
+        "high",
+        guard,
+        files,
+        `runtime-activation:${mechanism}:action`,
+      ),
+      createLifecycleStage(
+        "side-effect",
+        "Invoke the guarded side effect only while activation is enabled.",
+        "high",
+        sideEffect,
+        files,
+        `runtime-activation:${mechanism}:effect`,
+      ),
+      createLifecycleStage(
+        "observable-outcome",
+        mechanism === "code-defined"
+          ? "Observe the guarded effect only from the delivered enabled revision."
+          : mechanism === "startup-environment"
+          ? "Observe the guarded effect only after the enabled value is loaded by a restarted process."
+          : "Observe the guarded effect follow the latest fetched value without restarting.",
+        mechanism === "runtime-fetched" ? "medium" : "high",
+        mechanismEvidence,
+        files,
+        `runtime-activation:${mechanism}:result`,
+      ),
+    );
+  }
+  return stages;
 }
 
 async function filePathExists(file: string): Promise<boolean> {

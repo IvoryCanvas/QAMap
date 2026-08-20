@@ -5272,6 +5272,177 @@ test("delivery integrity leaves read-only checkout and non-pushing commit workfl
   );
 });
 
+test("runtime activation routes a code-defined guard through delivery validation", async (t) => {
+  const root = await makeRepo(t);
+  const sourceFile = "src/workers/preview-worker.ts";
+  await write(root, "package.json", JSON.stringify({
+    scripts: {
+      "validate:config": "node scripts/validate-config.js",
+    },
+  }, null, 2) + "\n");
+  await write(root, "scripts/validate-config.js", "process.exit(0);\n");
+  await write(root, sourceFile, [
+    "const previewJobsEnabled = false;",
+    "export function createPreviewJob(queue, payload) {",
+    "  if (!previewJobsEnabled) return;",
+    "  queue.enqueue('preview', payload);",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "feat/preview-job-activation");
+  await write(root, sourceFile, [
+    "const previewJobsEnabled = true;",
+    "export function createPreviewJob(queue, payload) {",
+    "  if (!previewJobsEnabled) return;",
+    "  queue.enqueue('preview', payload);",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "feat: enable preview job creation");
+
+  const analysis = await analyze(root, [sourceFile]);
+  const activationEvidence = analysis.intents.flatMap((intent) => intent.evidence).filter((item) =>
+    item.symbol?.startsWith("runtime-activation:code-defined:")
+  );
+  assert.deepEqual(activationEvidence.map((item) => item.startLine), [1, 3, 4]);
+  assert.ok(analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+    /code-defined activation.*after delivery/i.test(scenario.title) &&
+    scenario.priority === "critical"
+  ));
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.ok(qa.flows.some((flow) => flow.verificationMode === "runtime-activation"));
+  assert.equal(qa.readiness.basis, "repository-validation");
+  assert.equal(qa.readiness.automationApplicable, false);
+  assert.match(qa.route.command ?? "", /validate:config/);
+  assert.equal(qa.execution.status, "not-run");
+});
+
+test("runtime activation distinguishes startup environment state from live configuration", async (t) => {
+  const root = await makeRepo(t);
+  const sourceFile = "src/workers/digest-worker.ts";
+  await write(root, sourceFile, [
+    "const digestWorkerEnabled = false;",
+    "export function createDigest(queue, accountId) {",
+    "  if (!digestWorkerEnabled) return;",
+    "  queue.enqueue('digest', { accountId });",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "feat/digest-worker-config");
+  await write(root, sourceFile, [
+    "const digestWorkerEnabled = process.env.DIGEST_WORKER_ENABLED === '1';",
+    "export function createDigest(queue, accountId) {",
+    "  if (!digestWorkerEnabled) return;",
+    "  queue.enqueue('digest', { accountId });",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "feat: configure digest worker activation");
+
+  const analysis = await analyze(root, [sourceFile]);
+  const scenario = analysis.intents.flatMap((intent) => intent.scenarios).find((candidate) =>
+    /only after restart/i.test(candidate.title)
+  );
+  assert.ok(scenario);
+  assert.ok(scenario.assertions.some((assertion) => /without a restart/i.test(assertion)));
+  assert.ok(scenario.evidence.some((item) =>
+    item.symbol === "runtime-activation:startup-environment:source" &&
+    item.startLine === 1
+  ));
+});
+
+test("runtime activation keeps live flag state external and does not require restart", async (t) => {
+  const root = await makeRepo(t);
+  const sourceFile = "src/indexing/document-indexer.ts";
+  await write(root, sourceFile, [
+    "export async function indexDocument(featureFlags, jobs, documentId) {",
+    "  const indexingEnabled = false;",
+    "  if (!indexingEnabled) return;",
+    "  jobs.enqueue('index-document', { documentId });",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "feat/runtime-indexing-flag");
+  await write(root, sourceFile, [
+    "export async function indexDocument(featureFlags, jobs, documentId) {",
+    "  const indexingEnabled = await featureFlags.isEnabled('document-indexing');",
+    "  if (!indexingEnabled) return;",
+    "  jobs.enqueue('index-document', { documentId });",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "feat: evaluate document indexing at runtime");
+
+  const analysis = await analyze(root, [sourceFile]);
+  const scenario = analysis.intents.flatMap((intent) => intent.scenarios).find((candidate) =>
+    /without restart/i.test(candidate.title)
+  );
+  assert.ok(scenario);
+  assert.equal(scenario.reviewRequired, true);
+  assert.match(scenario.rationale, /not the external environment's current value/i);
+  assert.ok(scenario.assertions.some((assertion) => /unavailable or stale flag responses/i.test(assertion)));
+  assert.ok(scenario.evidence.some((item) =>
+    item.symbol === "runtime-activation:runtime-fetched:side-effect" &&
+    item.startLine === 4
+  ));
+});
+
+test("runtime activation ignores enablement vocabulary in documentation", async (t) => {
+  const root = await makeRepo(t);
+  const file = "docs/worker-rollout.md";
+  await write(root, file, "# Worker rollout\n");
+  commit(root, "chore: baseline");
+  branch(root, "docs/worker-rollout");
+  await write(root, file, [
+    "# Worker rollout",
+    "const workerEnabled = true;",
+    "if (workerEnabled) queue.enqueue('worker');",
+    "Restart or redeploy after enabling the feature flag.",
+    "",
+  ].join("\n"));
+  commit(root, "docs: explain worker rollout");
+
+  const analysis = await analyze(root, [file]);
+  assert.equal(
+    analysis.intents.flatMap((intent) => intent.evidence).some((item) =>
+      item.symbol?.startsWith("runtime-activation:")
+    ),
+    false,
+  );
+});
+
+test("runtime activation does not connect a guard to a side effect in another scope", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/workers/archive-worker.ts";
+  await write(root, file, "export const archiveWorkerEnabled = false;\n");
+  commit(root, "chore: baseline");
+  branch(root, "feat/archive-worker-setting");
+  await write(root, file, [
+    "const archiveWorkerEnabled = true;",
+    "export function canArchive() {",
+    "  if (!archiveWorkerEnabled) return false;",
+    "  return true;",
+    "}",
+    "export function unrelatedDispatch(queue, payload) {",
+    "  queue.enqueue('archive', payload);",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "feat: expose archive worker availability");
+
+  const analysis = await analyze(root, [file]);
+  assert.equal(
+    analysis.intents.flatMap((intent) => intent.evidence).some((item) =>
+      item.symbol?.startsWith("runtime-activation:")
+    ),
+    false,
+  );
+});
+
 async function analyze(root, files) {
   const addedDiffEvidence = await collectAddedDiffEvidence(root, { base: "main", head: "HEAD" });
   const addedDiffText = addedDiffTextFromEvidence(addedDiffEvidence);
