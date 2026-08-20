@@ -118,8 +118,8 @@
         "mustFindSuccessSignals": ["Profile saved"],
         "mustHaveCapabilityReceipts": [
           "change-intent:available",
-          "behavior-impact:limited",
-          "scenario-routing:limited"
+          "behavior-impact:available",
+          "scenario-routing:available"
         ],
         "untrustedEvidenceCanEscalate": false,
         "minNeutralizedInstructionValues": 1,
@@ -541,10 +541,11 @@
         "mustDraftFiles": [".maestro/schedule-a-summary-reminder-after-survey-completion"],
         "mustIncludeLifecycle": ["after survey completion", "resync it when preferences change", "open the linked summary"],
         "mustIncludeQaScenarios": ["Scheduling, calendar, and duplicate boundary", "Entry payload and destination routing"],
+        "mustNotIncludeQaScenarios": ["Changed conditional state and fallback"],
         "mustFindIntentEvidence": ["schedule a summary reminder"],
         "mustTraceScenarioFiles": ["src/services/summaryReminder.ts"],
         "maxUntracedCriticalScenarios": 0,
-        "minReasoningTraces": 5,
+        "minReasoningTraces": 4,
         "maxMissingReasoningTraces": 0,
         "maxUntraceableRequiredScenarios": 0,
         "minScenarioReceipts": 4,
