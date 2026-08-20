@@ -238,6 +238,11 @@ QAMap은 저장소 전체를 막연히 추측하기보다 직접 바뀐 동작�
 npx --yes @ivorycanvas/qamap@latest qa --format agent
 ```
 
+이 JSON은 저장소에서 반복해서 쓰이는 QA 맥락과 이번 PR의 변경 내용을
+분리해 식별합니다. 에이전트는 바뀌지 않은 manifest, 검증 명령, 동작 구조를
+다시 설명받지 않고, 자세한 근거가 필요할 때만 로컬 복구 보고서를 읽을 수
+있습니다.
+
 OpenAI 플러그인, 프로젝트용 스킬, `qamap init --agent`는 모두 같은
 로컬 CLI를 호출합니다. QAMap 자체는 추가 LLM을 호출하지 않지만, 에이전트가
 QAMap을 호출하고 결과를 해석하는 데에는 해당 에이전트의 모델 토큰이

@@ -19,7 +19,11 @@ import type {
   E2eWorkspaceTarget,
 } from "./e2e.js";
 import type { ChangeIntentAnalysis, ChangeIntentEvidence, IntentQaScenario } from "./change-intent.js";
-import { collectChangedFiles, readFileAtRef } from "./git-context.js";
+import { collectChangedFiles, readFileAtRef, repositoryNamespace } from "./git-context.js";
+import { buildAgentContextContract, collectRepositoryValidationFacts } from "./agent-context.js";
+import type { AgentContextContract, AgentContextReference } from "./agent-context.js";
+import { loadVerificationManifest } from "./manifest.js";
+import type { VerificationManifest } from "./manifest.js";
 import {
   evaluateQaCapabilities,
   neutralizeInstructionLikeValues,
@@ -68,6 +72,11 @@ export interface QaDraftResult {
   project: E2eProjectType;
   runner: E2eRunnerName;
   manifestPath?: string;
+  repositoryContext: {
+    id: string;
+    manifest: VerificationManifest;
+    validationFacts: string[];
+  };
   noCloud: true;
   noLlmToken: true;
   analysisScope: QaAnalysisScope;
@@ -300,6 +309,8 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     ...e2eOptions,
     dryRun: true,
   });
+  const manifestRoot = e2eOptions.workspaceRoot ?? root;
+  const manifest = await loadVerificationManifest(manifestRoot, { manifestPath: e2eOptions.manifestPath });
   const addedDiffEvidence = await collectAddedDiffEvidence(root, {
     base: draft.plan.base,
     head: draft.plan.head,
@@ -480,6 +491,11 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     project: draft.plan.project.type,
     runner: draft.runner,
     manifestPath: draft.plan.verificationManifestPath,
+    repositoryContext: {
+      id: await repositoryNamespace(root),
+      manifest,
+      validationFacts: await collectRepositoryValidationFacts(root, manifest),
+    },
     noCloud: true,
     noLlmToken: true,
     analysisScope: detectedScope ?? explicitOrRootAnalysisScope(root, e2eOptions.workspaceRoot),
@@ -1491,16 +1507,21 @@ export interface AgentFormatOptions {
 }
 
 export function formatAgentQaDraft(result: QaDraftResult, options?: AgentFormatOptions): string {
-  return `${serializeAgentSummary(buildAgentQaSummary(result), options)}\n`;
+  return `${serializeAgentSummary(buildAgentQaSummary(result, {
+    recoveryPath: options?.fullReportPath,
+  }), options)}\n`;
 }
 
 // The agent summary before byte-budget compaction, as a single JSON line.
 // This is what `compaction.fullReport` points at.
 export function formatAgentQaFullReport(result: QaDraftResult): string {
-  return `${JSON.stringify(buildAgentQaSummary(result))}\n`;
+  return `${JSON.stringify(buildAgentQaSummary(result, { includeContextDetails: true }))}\n`;
 }
 
-function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
+function buildAgentQaSummary(
+  result: QaDraftResult,
+  options: { includeContextDetails?: boolean; recoveryPath?: string } = {},
+): AgentSummaryShape {
   const scenarioAutomationById = aggregateScenarioAutomationById(result.flows);
   const traceByScenarioId = new Map(result.traces.map((trace) => [trace.scenario.id, trace]));
   const scenariosById = new Map(
@@ -1517,6 +1538,44 @@ function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
   const firstCorrection = result.traces.find(
     (trace) => trace.evidenceAssessment.disposition !== "confirmed",
   )?.manifestCorrection;
+  const context: AgentContextContract = buildAgentContextContract({
+    repository: {
+      id: result.repositoryContext.id,
+      project: result.project,
+      runner: result.runner,
+      analysisScope: {
+        mode: result.analysisScope.mode,
+        selectedPath: result.analysisScope.selectedPath,
+        packageName: result.analysisScope.packageName,
+        candidates: result.analysisScope.candidates.map((candidate) => ({
+          path: candidate.path,
+          packageName: candidate.packageName,
+          project: candidate.project,
+          runner: candidate.runner,
+        })),
+      },
+      testSuite: {
+        present: result.testSuite.hasTestSuite,
+        files: result.testSuite.testFileCount,
+      },
+    },
+    manifest: result.repositoryContext.manifest,
+    validationCommands: result.repositoryContext.validationFacts,
+    delta: {
+      base: result.base,
+      baseSource: result.baseResolution.source,
+      head: result.head,
+      includeWorkingTree: result.includeWorkingTree,
+      changedFiles: uniqueStrings(result.changeAnalysis.intents.flatMap((intent) => intent.files)),
+      intents: result.changeAnalysis.intents,
+      traces: result.traces,
+      flows: result.flows,
+      execution: result.execution,
+    },
+  }, { includeDetails: options.includeContextDetails });
+  if (options.recoveryPath) {
+    context.recovery = { fullReport: options.recoveryPath };
+  }
   const summary = {
     schema: { name: "qamap.qa", version: 1 },
     base: result.base,
@@ -1525,6 +1584,7 @@ function buildAgentQaSummary(result: QaDraftResult): AgentSummaryShape {
     project: result.project,
     runner: result.runner,
     manifest: result.manifestPath ?? null,
+    context,
     currentDelta: result.currentDelta
       ? {
           scope: result.currentDelta.scope,
@@ -1740,6 +1800,7 @@ interface AgentSummaryShape {
   capabilities: AgentCapabilityShape[];
   action: AgentActionShape;
   evidenceBoundary: QaEvidenceBoundary;
+  context: AgentContextContract;
   currentDelta?: {
     scope?: unknown;
     files: string[];
@@ -1875,6 +1936,15 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     return compactPayload;
   }
 
+  const compactReference = {
+    ...compact,
+    context: compactAgentContext(summary.context, { includeBlocks: false }),
+  };
+  const compactReferencePayload = JSON.stringify(compactReference);
+  if (Buffer.byteLength(compactReferencePayload) <= agentPayloadByteLimit) {
+    return compactReferencePayload;
+  }
+
   const minimalIntents = compact.intents.slice(0, 1).map((intent) => ({
     ...intent,
     lifecycle: selectAgentLifecycleStages(intent.lifecycle, 3),
@@ -1890,7 +1960,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
       }
     : secondaryAgentFlow(flow));
   const minimalPayload = JSON.stringify({
-    ...compact,
+    ...compactReference,
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - Math.min(1, compact.traces.length)),
     traces: compact.traces.slice(0, 1),
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - minimalIntents.length),
@@ -2012,6 +2082,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     : secondaryAgentFlow(flow));
   const leanPayload = JSON.stringify({
     schema: summary.schema,
+    context: compactAgentContext(summary.context, { includeBlocks: false }),
     base: agentRefValue(String(summary.base ?? ""), 120),
     head: agentRefValue(String(summary.head ?? ""), 120),
     project: summary.project,
@@ -2021,6 +2092,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     analysisScope: compactAgentAnalysisScope(summary.analysisScope, preserveScopeCandidates),
     execution: summary.execution,
     route: summary.route,
+    automation: summary.automation,
     ...(preserveScopeCandidates
       ? {}
       : { capabilities: compactAgentCapabilities(summary.capabilities) }),
@@ -2034,6 +2106,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - leanTraces.length),
     traces: leanTraces,
     testSuite: summary.testSuite,
+    testContracts: summary.testContracts,
     intentCount: summary.intentCount,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - leanIntents.length),
     intents: leanIntents,
@@ -2112,6 +2185,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
   const emergencyTraces = leanTraces.slice(0, 1);
   const emergencySummary = {
     schema: summary.schema,
+    context: compactAgentContext(summary.context, { includeBlocks: false }),
     base: agentRefValue(String(summary.base ?? ""), 180),
     head: agentRefValue(String(summary.head ?? ""), 180),
     project: summary.project,
@@ -2121,6 +2195,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     analysisScope: compactAgentAnalysisScope(summary.analysisScope, preserveScopeCandidates),
     execution: summary.execution,
     route: summary.route,
+    automation: summary.automation,
     evidenceBoundary: summary.evidenceBoundary,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
@@ -2130,6 +2205,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - emergencyTraces.length),
     traces: emergencyTraces,
     testSuite: summary.testSuite,
+    testContracts: summary.testContracts,
     intentCount: summary.intentCount,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - emergencyIntents.length),
     intents: emergencyIntents,
@@ -2155,7 +2231,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 2),
     scenarios: intent.scenarios.slice(0, 2).map((scenario) => ({
       ...scenario,
-      title: truncateForAgent(String(scenario.title ?? ""), 45),
+      title: truncateForAgent(String(scenario.title ?? ""), 70),
       sources: scenario.sources?.slice(0, 1),
       assertions: [],
     })),
@@ -2181,6 +2257,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     : secondaryAgentFlow(flow, { title: 45, source: 18, draft: 45, file: 45, question: 60, success: 60 }));
   const floorSummary = {
     schema: summary.schema,
+    context: compactAgentContext(summary.context, { includeBlocks: false }),
     base: agentRefValue(String(summary.base ?? ""), 80),
     head: agentRefValue(String(summary.head ?? ""), 80),
     project: summary.project,
@@ -2190,6 +2267,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     analysisScope: compactAgentAnalysisScope(summary.analysisScope, preserveScopeCandidates),
     execution: summary.execution,
     route: summary.route,
+    automation: summary.automation,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     evidenceSummary: summary.evidenceSummary,
@@ -2198,6 +2276,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - emergencyTraces.length),
     traces: emergencyTraces,
     testSuite: summary.testSuite,
+    testContracts: summary.testContracts,
     intentCount: summary.intentCount,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - floorIntents.length),
     intents: floorIntents,
@@ -2216,13 +2295,32 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     return floorPayload;
   }
 
+  const floorPrioritySummary: Record<string, unknown> = { ...floorSummary };
+  for (const key of [
+    "automation",
+    "testContracts",
+    "manifestCorrection",
+    "analysisScope",
+  ]) {
+    delete floorPrioritySummary[key];
+    const candidate = JSON.stringify(floorPrioritySummary);
+    if (Buffer.byteLength(candidate) <= agentPayloadByteLimit) {
+      return candidate;
+    }
+  }
+  floorPrioritySummary.readiness = minimumAgentReadiness(summary.readiness);
+  const readinessReducedFloor = JSON.stringify(floorPrioritySummary);
+  if (Buffer.byteLength(readinessReducedFloor) <= agentPayloadByteLimit) {
+    return readinessReducedFloor;
+  }
+
   const boundedIntents = floorIntents.map((intent) => ({
     ...intent,
     omittedScenarioCount: Math.max(0, (intent.scenarioCount ?? intent.scenarios.length) - 1),
-    scenarios: intent.scenarios.slice(0, 1),
+    scenarios: selectAgentScenariosForTightBudget(intent.scenarios, 1),
   }));
   const boundedSummary = {
-    ...floorSummary,
+    ...floorPrioritySummary,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - boundedIntents.length),
     intents: boundedIntents,
   };
@@ -2252,6 +2350,12 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
           id: trace.scenario.id,
           decision: trace.scenario.decision,
           title: truncateForAgent(String(trace.scenario.title ?? ""), 45),
+        }
+      : undefined,
+    artifact: trace.artifact
+      ? {
+          status: trace.artifact.status,
+          flowCoverage: trace.artifact.flowCoverage,
         }
       : undefined,
     execution: trace.execution,
@@ -2305,6 +2409,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
   }));
   const hardLimitSummary = {
     schema: summary.schema,
+    context: compactAgentContext(summary.context, { includeBlocks: false }),
     base: agentRefValue(String(summary.base ?? ""), 48),
     head: agentRefValue(String(summary.head ?? ""), 48),
     project: summary.project,
@@ -2313,6 +2418,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     currentDelta: compactAgentCurrentDelta(summary.currentDelta, 2),
     execution: summary.execution,
     route: summary.route,
+    automation: summary.automation,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     evidenceSummary: summary.evidenceSummary,
@@ -2321,6 +2427,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - hardLimitTraces.length),
     traces: hardLimitTraces as unknown[],
     testSuite: summary.testSuite,
+    testContracts: summary.testContracts,
     intentCount: summary.intentCount,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - hardLimitIntents.length),
     intents: hardLimitIntents as Array<Record<string, unknown>>,
@@ -2343,7 +2450,18 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
   // as partial strings, so a payload that still exceeds the budget sheds whole
   // optional values instead — each drop stays disclosed through the omitted
   // counts that already accompany the lists.
+  const hardLimitRecord = hardLimitSummary as unknown as Record<string, unknown>;
   const reliefSteps: Array<() => void> = [
+    () => {
+      delete hardLimitRecord.testContracts;
+    },
+    () => {
+      delete hardLimitRecord.automation;
+      hardLimitRecord.readiness = minimumAgentReadiness(summary.readiness);
+    },
+    () => {
+      delete hardLimitRecord.manifestCorrection;
+    },
     () => {
       for (const flow of hardLimitSummary.flows) delete flow.existingEvidence;
     },
@@ -2377,6 +2495,11 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
         delete flow.entry;
       }
     },
+    () => {
+      hardLimitSummary.omittedTraceCount += hardLimitSummary.traces.length;
+      hardLimitSummary.traces = [];
+      delete hardLimitSummary.evidenceSummary;
+    },
   ];
   for (const relieve of reliefSteps) {
     relieve();
@@ -2386,6 +2509,50 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     }
   }
   return hardLimitPayload;
+}
+
+function selectAgentScenariosForTightBudget<
+  T extends {
+    kind?: unknown;
+    priority?: unknown;
+    routing?: { decision?: unknown };
+    sources?: unknown[];
+  },
+>(scenarios: T[], limit: number): T[] {
+  const riskKindScore = new Map<string, number>([
+    ["boundary", 4],
+    ["failure", 3],
+    ["state-transition", 2],
+    ["primary", 1],
+  ]);
+  const priorityScore = new Map<string, number>([
+    ["critical", 30],
+    ["high", 20],
+    ["recommended", 10],
+  ]);
+  return scenarios
+    .map((scenario, index) => ({ scenario, index }))
+    .sort((left, right) => {
+      const score = (candidate: T): number =>
+        (priorityScore.get(String(candidate.priority ?? "")) ?? 0) +
+        (candidate.routing?.decision === "required" ? 8 : 0) +
+        (riskKindScore.get(String(candidate.kind ?? "")) ?? 0) +
+        (candidate.sources?.length ? 1 : 0);
+      return score(right.scenario) - score(left.scenario) || left.index - right.index;
+    })
+    .slice(0, Math.max(0, limit))
+    .map(({ scenario }) => scenario);
+}
+
+function minimumAgentReadiness(value: unknown): unknown {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  const readiness = value as Record<string, unknown>;
+  return {
+    score: readiness.score,
+    level: readiness.level,
+  };
 }
 
 function compactAgentCurrentDelta(
@@ -2407,6 +2574,36 @@ function compactAgentCurrentDelta(
       approvalRequired: contract.approvalRequired,
       testClass: contract.testClass,
     })),
+  };
+}
+
+function compactAgentContext(
+  context: AgentContextContract,
+  options: { includeBlocks?: boolean } = {},
+): AgentContextContract | AgentContextReference {
+  const includeBlocks = options.includeBlocks !== false;
+  if (!includeBlocks) {
+    return {
+      schema: context.schema,
+      stableId: context.stable.id,
+      deltaId: context.delta.id,
+      omittedBlockCount: context.stable.blocks.length,
+      ...(context.recovery ? { recovery: context.recovery } : {}),
+    };
+  }
+  return {
+    schema: context.schema,
+    stable: {
+      id: context.stable.id,
+      bytes: context.stable.bytes,
+      blocks: context.stable.blocks.map(({ kind, id, bytes }) => ({ kind, id, bytes })),
+    },
+    delta: {
+      id: context.delta.id,
+      bytes: context.delta.bytes,
+      changedFiles: context.delta.changedFiles,
+    },
+    ...(context.recovery ? { recovery: context.recovery } : {}),
   };
 }
 

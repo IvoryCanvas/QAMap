@@ -1546,11 +1546,20 @@ test("compacted agent payloads keep identifier values whole and disclose a full 
   assert.deepEqual(partialIdentifiers, [], "identifier values must never be emitted as partial strings");
 
   assert.equal(compactSummary.compaction.fullReport, fullReportPath);
+  assert.equal(compactSummary.context.schema.name, "qamap.context");
+  assert.equal(compactSummary.context.stableId.startsWith("stable:sha256:"), true);
+  assert.equal(compactSummary.context.deltaId.startsWith("delta:sha256:"), true);
+  assert.equal(compactSummary.context.omittedBlockCount, 4);
+  assert.equal(compactSummary.context.recovery.fullReport, fullReportPath);
 
   const qaModule = await import("../dist/qa.js");
   assert.equal(typeof qaModule.formatAgentQaFullReport, "function");
   const fullReport = JSON.parse(qaModule.formatAgentQaFullReport(oversizedQa));
   assert.equal(fullReport.schema.name, "qamap.qa");
+  assert.equal(fullReport.context.stable.id, compactSummary.context.stableId);
+  assert.equal(fullReport.context.delta.id, compactSummary.context.deltaId);
+  assert.equal(fullReport.context.stable.blocks.every((block) => "data" in block), true);
+  assert.equal("data" in fullReport.context.delta, true);
   assert.equal(fullReport.flows.length >= compactSummary.flows.length, true);
   assert.ok(Buffer.byteLength(JSON.stringify(fullReport)) > 4 * 1024 - 1);
 });
@@ -2134,6 +2143,17 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
       bytes: Buffer.byteLength(formatAgentQaDraft(qa)),
       compaction: agentSummary.compaction,
       scenarios: agentSummary.intents[0].scenarios.map((scenario) => scenario.title),
+      fullScenarios: plan.changeAnalysis.intents[0].scenarios.map((scenario) => ({
+        title: scenario.title,
+        kind: scenario.kind,
+        priority: scenario.priority,
+        decision: scenario.routing?.decision,
+        sources: scenario.sources?.map((source) => ({
+          relation: source.relation,
+          symbol: source.symbol,
+          startLine: source.startLine,
+        })),
+      })),
     })}`,
   );
   assert.match(agentCalendarScenario.sources[0].symbol, /timezone/i);
@@ -2608,7 +2628,15 @@ test("one change intent produces separate QA flows for distinct user surfaces", 
   const multiFlowTrace = multiFlowAgentSummary.traces.find(
     (trace) => trace.scenario?.id === primaryTrace.scenario.id,
   );
-  assert.equal(multiFlowTrace?.artifact?.flowCoverage, "2/2");
+  assert.equal(
+    multiFlowTrace?.artifact?.flowCoverage,
+    "2/2",
+    JSON.stringify({
+      bytes: Buffer.byteLength(formatAgentQaDraft(qa)),
+      compaction: multiFlowAgentSummary.compaction,
+      trace: multiFlowTrace,
+    }),
+  );
   assert.match(formatMarkdownQaDraft(qa), /flow coverage 2\/2/);
 
   const draft = await generateE2eDraft(root, {

@@ -1,5 +1,18 @@
 export { buildAgentQaSection, formatAgentInitReport, initAgentSetup } from "./agent-init.js";
 export {
+  agentContextSchemaVersion,
+  buildAgentContextContract,
+  collectRepositoryValidationFacts,
+  compareAgentContextContracts,
+} from "./agent-context.js";
+export type {
+  AgentContextBlock,
+  AgentContextBlockKind,
+  AgentContextContract,
+  AgentContextInput,
+  AgentContextReference,
+} from "./agent-context.js";
+export {
   analyzeBehaviorGraph,
   behaviorEdgeKinds,
   behaviorEvidenceKinds,

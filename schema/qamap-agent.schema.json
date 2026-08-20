@@ -45,6 +45,21 @@
         }
       }
     },
+    "agentContextBlock": {
+      "type": "object",
+      "required": ["kind", "id", "bytes"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["repository", "manifest", "validation", "behavior"]
+        },
+        "id": { "type": "string", "pattern": "^stable:[a-z-]+:sha256:[a-f0-9]{64}$" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "data": {
+          "description": "Complete canonical block data. Present only in the local recovery report."
+        }
+      }
+    },
     "repositoryContract": {
       "type": "object",
       "required": ["title", "file", "line", "framework"],
@@ -187,6 +202,76 @@
     "manifest": {
       "type": ["string", "null"],
       "description": "Path of the verification manifest in use, or null when the run used repo signals and the PR diff only."
+    },
+    "context": {
+      "type": "object",
+      "description": "Provider-neutral split between reusable repository QA facts and the current pull request delta. IDs are derived from canonical content and do not include timestamps or recovery paths.",
+      "required": ["schema"],
+      "anyOf": [
+        { "required": ["stable", "delta"] },
+        { "required": ["stableId", "deltaId", "omittedBlockCount"] }
+      ],
+      "properties": {
+        "schema": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "const": "qamap.context" },
+            "version": { "const": 1 }
+          }
+        },
+        "stable": {
+          "type": "object",
+          "required": ["id", "bytes", "blocks"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^stable:sha256:[a-f0-9]{64}$" },
+            "bytes": { "type": "integer", "minimum": 0 },
+            "blocks": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "items": { "$ref": "#/definitions/agentContextBlock" }
+            }
+          }
+        },
+        "delta": {
+          "type": "object",
+          "required": ["id", "bytes", "changedFiles"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^delta:sha256:[a-f0-9]{64}$" },
+            "bytes": { "type": "integer", "minimum": 0 },
+            "changedFiles": { "type": "integer", "minimum": 0 },
+            "data": {
+              "description": "Complete current-delta data. Present only in the local recovery report."
+            }
+          }
+        },
+        "stableId": {
+          "type": "string",
+          "pattern": "^stable:sha256:[a-f0-9]{64}$",
+          "description": "Aggregate stable context identity retained in the byte-budget reference form."
+        },
+        "deltaId": {
+          "type": "string",
+          "pattern": "^delta:sha256:[a-f0-9]{64}$",
+          "description": "Current pull request delta identity retained in the byte-budget reference form."
+        },
+        "omittedBlockCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Stable block references available from the local recovery report."
+        },
+        "recovery": {
+          "type": "object",
+          "required": ["fullReport"],
+          "properties": {
+            "fullReport": {
+              "type": "string",
+              "description": "Local 0600 report containing complete stable blocks and current-delta evidence."
+            }
+          }
+        }
+      }
     },
     "analysisScope": {
       "type": "object",

@@ -252,6 +252,11 @@ Agents can consume the same decision in a compact, versioned payload:
 npx --yes @ivorycanvas/qamap@latest qa --format agent
 ```
 
+The payload separates stable repository QA context from the current PR delta
+with content-derived IDs. Agents can reuse unchanged manifest, validation, and
+behavior blocks and open the private local recovery report only when detailed
+evidence is needed.
+
 Install the portable project skill with `skills add`, use `qamap init --agent`,
 or install the published
 [OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
