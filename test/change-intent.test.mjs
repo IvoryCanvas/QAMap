@@ -5300,6 +5300,129 @@ test("delivery integrity leaves read-only checkout and non-pushing commit workfl
   );
 });
 
+test("account-scoped storage write without an owner discriminator is flagged", async (t) => {
+  const root = await makeRepo(t);
+  const sourceFile = "src/features/terms/acceptance.ts";
+  await write(root, sourceFile, [
+    "import { useSession } from '../auth/session';",
+    "const ACCEPTED_KEY = 'terms:accepted-at:v1';",
+    "export function readAcceptance() {",
+    "  return localStorage.getItem(ACCEPTED_KEY);",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "feat/persist-terms-acceptance");
+  await write(root, sourceFile, [
+    "import { useSession } from '../auth/session';",
+    "const ACCEPTED_KEY = 'terms:accepted-at:v1';",
+    "export function saveAcceptance() {",
+    "  localStorage.setItem(ACCEPTED_KEY, new Date().toISOString());",
+    "}",
+    "export function readAcceptance() {",
+    "  return localStorage.getItem(ACCEPTED_KEY);",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "feat: persist terms acceptance");
+
+  const analysis = await analyze(root, [sourceFile]);
+  const storageEvidence = analysis.intents.flatMap((intent) => intent.evidence).filter((item) =>
+    item.symbol?.startsWith("account-scoped-storage:")
+  );
+  assert.deepEqual(storageEvidence.map((item) => item.startLine), [4]);
+  assert.match(storageEvidence[0].value, /without an owner discriminator for key terms:accepted-at:v1/);
+  assert.ok(analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+    /account switch inherits storage/i.test(scenario.title)
+  ));
+});
+
+test("account-scoped sessionStorage draft in a second surface is flagged", async (t) => {
+  const root = await makeRepo(t);
+  const sourceFile = "src/pages/checkout/draft.tsx";
+  await write(root, sourceFile, [
+    "import { useUser } from '../../hooks/useUser';",
+    "export function CheckoutDraft() {",
+    "  const user = useUser();",
+    "  return null;",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "feat/persist-checkout-draft");
+  await write(root, sourceFile, [
+    "import { useUser } from '../../hooks/useUser';",
+    "export function CheckoutDraft() {",
+    "  const user = useUser();",
+    "  const persist = (draft) => {",
+    "    sessionStorage.setItem('checkout:draft', JSON.stringify(draft));",
+    "  };",
+    "  return null;",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "feat: persist checkout draft");
+
+  const analysis = await analyze(root, [sourceFile]);
+  const storageEvidence = analysis.intents.flatMap((intent) => intent.evidence).filter((item) =>
+    item.symbol?.startsWith("account-scoped-storage:")
+  );
+  assert.equal(storageEvidence.length, 1);
+  assert.match(storageEvidence[0].value, /sessionStorage without an owner discriminator for key checkout:draft/);
+});
+
+test("owner-scoped and device-scoped storage writes are not flagged", async (t) => {
+  const root = await makeRepo(t);
+  const scopedFile = "src/features/terms/acceptance.ts";
+  const themeFile = "src/features/settings/theme.ts";
+  const anonymousFile = "src/features/visit/counter.ts";
+  await write(root, scopedFile, [
+    "import { useSession } from '../auth/session';",
+    "const ACCEPTED_KEY = 'terms:accepted-at:v1';",
+    "export {};",
+    "",
+  ].join("\n"));
+  await write(root, themeFile, [
+    "import { useSession } from '../auth/session';",
+    "export {};",
+    "",
+  ].join("\n"));
+  await write(root, anonymousFile, "export {};\n");
+  commit(root, "chore: baseline");
+  branch(root, "feat/storage-negative-controls");
+  await write(root, scopedFile, [
+    "import { useSession } from '../auth/session';",
+    "const ACCEPTED_KEY = 'terms:accepted-at:v1';",
+    "export function saveAcceptance(userId) {",
+    "  localStorage.setItem(ACCEPTED_KEY, JSON.stringify({ ownerId: userId, at: Date.now() }));",
+    "}",
+    "",
+  ].join("\n"));
+  await write(root, themeFile, [
+    "import { useSession } from '../auth/session';",
+    "export function saveTheme(theme) {",
+    "  localStorage.setItem('app:theme', theme);",
+    "}",
+    "",
+  ].join("\n"));
+  await write(root, anonymousFile, [
+    "export function saveVisitCount(count) {",
+    "  localStorage.setItem('visit:count', String(count));",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "feat: owner-scoped acceptance, theme, and visit counter");
+
+  const analysis = await analyze(root, [scopedFile, themeFile, anonymousFile]);
+  const storageEvidence = analysis.intents.flatMap((intent) => intent.evidence).filter((item) =>
+    item.symbol?.startsWith("account-scoped-storage:")
+  );
+  assert.deepEqual(storageEvidence, []);
+  assert.ok(!analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+    /account switch inherits storage/i.test(scenario.title)
+  ));
+});
+
 test("runtime activation routes a code-defined guard through delivery validation", async (t) => {
   const root = await makeRepo(t);
   const sourceFile = "src/workers/preview-worker.ts";

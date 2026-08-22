@@ -281,9 +281,16 @@ export async function analyzeChangeIntents(
     options,
     changedSourceRoles,
   );
+  const unscopedAccountStorageEvidence = await collectUnscopedAccountStorageEvidence(
+    root,
+    gitRoot,
+    options,
+    changedSourceRoles,
+  );
   const riskEvidence = uniqueEvidence([
     ...deliveryIntegrityEvidence,
     ...runtimeActivationEvidence,
+    ...unscopedAccountStorageEvidence,
     ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}, changedSourceRoles),
     ...collectRemovalContractEvidence(
       options.changedFiles,
@@ -1929,6 +1936,25 @@ function buildIntentQaScenarios(
     ], ["Mismatched identity", "Malformed storage", "Repeated completion", "Second tab or re-entry"], scopedStorageEvidence));
   }
 
+  const unscopedStorageEvidence = evidence.filter((item) =>
+    item.kind === "diff" &&
+    item.side === "head" &&
+    item.relation === "direct" &&
+    (item.sourceRole === undefined || item.sourceRole === "product") &&
+    /without an owner discriminator/i.test(item.value)
+  );
+  if (unscopedStorageEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "unscoped-account-storage", "state-transition", "recommended", "Account switch inherits storage without an owner discriminator", [
+      "Prepare two accounts on one browser profile with the changed flow reachable for both.",
+    ], [
+      "Complete the changed flow as the first account so the storage write lands.",
+      "Sign out, sign in as the second account, and enter the same flow.",
+    ], [
+      "Verify the second account does not inherit the first account's stored state.",
+      "Verify logout or session expiry leaves no prior-account data readable in the flow.",
+    ], ["Account switch on one device", "Session expiry then re-login", "Same account in a second tab"], unscopedStorageEvidence));
+  }
+
   const stateReentryEvidence = scenarioEvidenceFor(
     productLifecycle,
     productEvidence,
@@ -2764,6 +2790,102 @@ function collectDiffRiskEvidence(
     }
   }
   return uniqueEvidence(evidence);
+}
+
+/** 계정 스코프를 시사하는 모듈 신호 — 세션 훅, 사용자 식별자, 인증 토큰 (issue: 계정 전환 누수) */
+const accountContextPattern =
+  /\b(?:useSession|useAuth|useUser|useAccount|currentUser|session\.user|userId|user_id|accountId|account_id|ownerId|owner_id|memberId|member_id|authToken|auth_token|accessToken|access_token|isAuthenticated|isLoggedIn)\b/;
+
+/** 키 표현식·주변 문장에 실린 소유자 구분자 — 있으면 계정별로 격리된 쓰기다 */
+const ownerDiscriminatorPattern =
+  /\b(?:ownerId|owner_id|userId|user_id|accountId|account_id|memberId|member_id|profileId|profile_id|uid)\b|\$\{[^}]*(?:user|owner|account|member|profile|uid)[^}]*\}/i;
+
+/** 계정 의미가 없는 기기 단위 값 — 소유자 없이 저장해도 안전한 키 이름 */
+const deviceScopedKeyPattern =
+  /\b(?:theme|locale|language|lang|dark|light|contrast|zoom|banner|dismissed?|tooltip|coachmark|onboarding|tour|ab[-_]?test|experiment|debug)\b/i;
+
+/** 웹 스토리지 쓰기 — 값 표현식은 제한하지 않는다 (JSON.stringify(...) 인자도 잡는다) */
+const clientStorageWritePattern =
+  /\b(?:(?:window|globalThis)\s*\.\s*)?(localStorage|sessionStorage)\s*\.\s*setItem\s*\(\s*([^,]+),/;
+
+/**
+ * 계정 스코프 데이터를 소유자 구분자 없이 웹 스토리지에 쓰는 변경 — 한 브라우저에서
+ * 계정을 바꾸면 다음 계정이 이전 계정의 초안·동의 플래그·권한 캐시를 물려받는다.
+ * 단일 계정 QA 는 통과하고 계정 전환에서만 터지는 부류라, diff 가 이런 쓰기를 더할 때
+ * 위험 증거로 승격해 계정 전환 시나리오를 계획에 올린다.
+ *
+ * 판정은 세 겹이다: (1) 추가 라인이 스토리지 쓰기다, (2) 모듈 전문이 인증 사용자를
+ * 참조한다(계정 스코프 정황), (3) 키 표현식과 쓰기 문장 어디에도 소유자 구분자가 없다.
+ * 기기 단위 값(테마·언어·배너 닫힘)은 계정 의미가 없어 키 이름으로 면제한다.
+ */
+async function collectUnscopedAccountStorageEvidence(
+  root: string,
+  gitRoot: string,
+  options: ChangeIntentAnalysisOptions,
+  changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
+): Promise<ChangeIntentEvidence[]> {
+  const relativeRoot = toPosixPath(path.relative(gitRoot, root)).replace(/^\.\/+|\/+$/g, "");
+  const evidence: ChangeIntentEvidence[] = [];
+
+  for (const [file, hunks] of Object.entries(options.addedDiffEvidence ?? {})) {
+    const sourceRole = changedSourceRoles[file]?.role ??
+      classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
+    if (sourceRole !== "product") {
+      continue;
+    }
+    const hasWrite = hunks.some((hunk) => hunk.lines.some((line) => clientStorageWritePattern.test(line.text)));
+    if (!hasWrite) continue;
+
+    const repositoryFile = relativeRoot ? `${relativeRoot}/${file}` : file;
+    const content = await readRuntimeActivationHeadText(root, gitRoot, file, repositoryFile, options);
+    if (!content || !accountContextPattern.test(content)) continue;
+    const sourceLines = content.split(/\r?\n/);
+
+    for (const hunk of hunks) {
+      for (const line of hunk.lines) {
+        if (/^(?:\s*(?:\/\/|#|\*)|.*\b(?:describe|it|test)\s*\()/.test(line.text)) continue;
+        const write = line.text.match(clientStorageWritePattern);
+        if (!write) continue;
+        const keyExpression = write[2].trim();
+        const keyText = resolveStorageKeyText(keyExpression, content);
+        if (deviceScopedKeyPattern.test(keyText) || deviceScopedKeyPattern.test(keyExpression)) continue;
+        // 쓰기 문장 주변까지 본다 — 페이로드의 ownerId 가 다음 줄에 걸치는 경우
+        const statement = sourceLines.slice(Math.max(0, line.line - 1), line.line + 3).join("\n");
+        if (
+          ownerDiscriminatorPattern.test(keyExpression) ||
+          ownerDiscriminatorPattern.test(keyText) ||
+          ownerDiscriminatorPattern.test(statement)
+        ) {
+          continue;
+        }
+        evidence.push(diffRiskEvidence(
+          file,
+          hunk,
+          line.line,
+          `account-scoped-storage:${write[1]}`,
+          `Changed line writes account-scoped data to ${write[1]} without an owner discriminator for key ${keyText}.`,
+          "head",
+          sourceRole,
+        ));
+      }
+    }
+  }
+
+  return uniqueEvidence(evidence);
+}
+
+/** setItem 첫 인자를 사람이 읽을 키로 — 리터럴은 내용물, 식별자는 모듈 내 선언을 따라간다 */
+function resolveStorageKeyText(keyExpression: string, content: string): string {
+  const literal = keyExpression.match(/^["'`]([^"'`]*)["'`]$/);
+  if (literal) return literal[1];
+  const identifier = keyExpression.match(/^[A-Za-z_$][\w$]*$/);
+  if (identifier) {
+    const declaration = content.match(
+      new RegExp(`\\b${identifier[0]}\\s*=\\s*(["'\`])([^"'\`]*)\\1`),
+    );
+    if (declaration) return declaration[2];
+  }
+  return keyExpression;
 }
 
 async function collectDeliveryIntegrityEvidence(
