@@ -557,6 +557,29 @@
       }
     },
     {
+      "name": "web-divergent-surface-copy",
+      "fixture": "test/benchmarks/web-divergent-surface-copy",
+      "commitMessage": "feat: show shipping status on order confirmation",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minDiffAnchoredFlows": 1,
+        "mustReachFiles": [
+          "src/pages/confirmation.tsx"
+        ],
+        "mustNameIntents": [
+          "show shipping status"
+        ],
+        "mustIncludeQaScenarios": [
+          "Divergent copy for the same data across surfaces"
+        ],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 8192
+      }
+    },
+    {
       "name": "web-validation-recovery",
       "fixture": "test/benchmarks/web-validation-recovery",
       "commitMessage": "fix: defer feedback email validation until first field exit and clear stale errors",

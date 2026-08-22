@@ -287,10 +287,17 @@ export async function analyzeChangeIntents(
     options,
     changedSourceRoles,
   );
+  const divergentSurfaceCopyEvidence = await collectDivergentSurfaceCopyEvidence(
+    root,
+    gitRoot,
+    options,
+    changedSourceRoles,
+  );
   const riskEvidence = uniqueEvidence([
     ...deliveryIntegrityEvidence,
     ...runtimeActivationEvidence,
     ...unscopedAccountStorageEvidence,
+    ...divergentSurfaceCopyEvidence,
     ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}, changedSourceRoles),
     ...collectRemovalContractEvidence(
       options.changedFiles,
@@ -1955,6 +1962,25 @@ function buildIntentQaScenarios(
     ], ["Account switch on one device", "Session expiry then re-login", "Same account in a second tab"], unscopedStorageEvidence));
   }
 
+  const divergentCopyEvidence = evidence.filter((item) =>
+    item.kind === "diff" &&
+    item.side === "head" &&
+    item.relation === "direct" &&
+    (item.sourceRole === undefined || item.sourceRole === "product") &&
+    /nearly duplicates/i.test(item.value)
+  );
+  if (divergentCopyEvidence.length > 0) {
+    scenarios.push(makeScenario(intentId, "divergent-surface-copy", "primary", "recommended", "Divergent copy for the same data across surfaces", [
+      "Prepare one record whose state renders on both surfaces named in the evidence.",
+    ], [
+      "Open the changed surface and the existing surface side by side for the same record.",
+      "Read the paired labels together as a user would when moving between the two screens.",
+    ], [
+      "Verify both surfaces describe the same data or policy with the same wording, or that the difference is an intentional state distinction.",
+      "Verify a shared constant or source of truth backs the label when the surfaces are meant to agree.",
+    ], ["Same record in two states", "Copy edited on only one surface later", "Localized variants"], divergentCopyEvidence));
+  }
+
   const stateReentryEvidence = scenarioEvidenceFor(
     productLifecycle,
     productEvidence,
@@ -2886,6 +2912,172 @@ function resolveStorageKeyText(keyExpression: string, content: string): string {
     if (declaration) return declaration[2];
   }
   return keyExpression;
+}
+
+/** 짧은 상태·행동 라벨을 그리는 컴포넌트 — 같은 데이터를 화면마다 다르게 부르는 사고가 나는 자리 */
+const labelLikeCopyPattern =
+  /<((?:[A-Za-z][\w.]*?)?(?:Badge|Tag|Chip|Pill|Label|Status|Caption|Hint|Tooltip|Toast|Button|Cta|Banner|Notice|Alert|Callout))\b[^>]*>\s*(?:\{\s*(["'`])([^"'`{}]+)\2\s*\}|([^<{}][^<{}]*?))\s*<\/\1\s*>/g;
+
+/** 사용자에게 그대로 읽히는 속성 — 속성 이름이 곧 표면 종류다 */
+const labelPropCopyPattern =
+  /\b(label|title|placeholder|aria-label|alt)=(?:"([^"{}]{2,})"|'([^'{}]{2,})'|\{\s*["'`]([^"'`{}]{2,})["'`]\s*\})/g;
+
+const userFacingFilePattern = /\.(?:tsx|jsx|vue|svelte)$/i;
+const nonProductCopyPathPattern =
+  /(?:^|\/)(?:node_modules|dist|build|coverage|__tests__|__mocks__|fixtures?|stories|storybook|e2e)\/|\.(?:test|spec|stories|story)\.[jt]sx?$/i;
+const MAX_COPY_CORPUS_FILES = 400;
+const MAX_COPY_CORPUS_BYTES = 200 * 1024;
+const MAX_COPY_FINDINGS_PER_FILE = 5;
+
+interface SurfaceCopy {
+  component: string;
+  text: string;
+  tokens: string[];
+  normalized: string;
+  file: string;
+  line: number;
+}
+
+/**
+ * 같은 데이터나 정책을 화면마다 다른 문구로 그리는 변경 — 한 화면은 "결제 확인 후 발송",
+ * 다른 화면은 "주문 완료 시 발송". 문자열 하나하나는 멀쩡해 파일 단위 리뷰가 놓치고,
+ * 사용자는 정책이 서로 모순된다고 읽는다. diff 가 라벨성 문구를 더하거나 고칠 때 프로젝트의
+ * 기존 문구와 근사 중복이면 두 위치를 함께 지목해 공유 상수 추출이나 의도 확인을 권한다.
+ *
+ * 보수적으로 잡는다: 한 줄 JSX 안의 라벨성 컴포넌트(배지·칩·버튼 등)와 사용자 노출 속성만,
+ * 같은 컴포넌트 종류끼리, 다른 파일에 있는 것만, 그리고 첫 단어가 같거나 토큰 겹침이 높을
+ * 때만. 말뭉치는 라벨성 문구가 실제로 더해진 diff 에서만 읽어 비용을 묶는다.
+ */
+async function collectDivergentSurfaceCopyEvidence(
+  root: string,
+  gitRoot: string,
+  options: ChangeIntentAnalysisOptions,
+  changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
+): Promise<ChangeIntentEvidence[]> {
+  const candidates: Array<{ copy: SurfaceCopy; hunk: AddedDiffHunk; sourceRole: ChangeSourceRole }> = [];
+
+  for (const [file, hunks] of Object.entries(options.addedDiffEvidence ?? {})) {
+    if (!userFacingFilePattern.test(file) || nonProductCopyPathPattern.test(file)) continue;
+    const sourceRole = changedSourceRoles[file]?.role ??
+      classifyChangeSourceRole(file, diffTextForRoleClassification(hunks)).role;
+    if (sourceRole !== "product") continue;
+    for (const hunk of hunks) {
+      for (const line of hunk.lines) {
+        for (const copy of extractSurfaceCopy(line.text, file, line.line)) {
+          candidates.push({ copy, hunk, sourceRole });
+        }
+      }
+    }
+  }
+  if (candidates.length === 0) return [];
+
+  const changedFiles = new Set(Object.keys(options.addedDiffEvidence ?? {}));
+  const corpus = await readSurfaceCopyCorpus(root, gitRoot, options);
+  const evidence: ChangeIntentEvidence[] = [];
+  const perFile = new Map<string, number>();
+
+  for (const { copy, hunk, sourceRole } of candidates) {
+    const count = perFile.get(copy.file) ?? 0;
+    if (count >= MAX_COPY_FINDINGS_PER_FILE) continue;
+    let best: { other: SurfaceCopy; score: number } | undefined;
+    for (const other of corpus) {
+      if (other.file === copy.file || other.component !== copy.component) continue;
+      // 변경된 다른 파일의 옛 본문은 말뭉치에 남아 있을 수 있다 — diff 가 함께 고친 곳은 제외
+      if (changedFiles.has(other.file)) continue;
+      const score = surfaceCopyDivergence(copy, other);
+      if (score === undefined) continue;
+      if (!best || score > best.score) best = { other, score };
+    }
+    if (!best) continue;
+    perFile.set(copy.file, count + 1);
+    evidence.push(diffRiskEvidence(
+      copy.file,
+      hunk,
+      copy.line,
+      `divergent-copy:${copy.component}`,
+      `Changed line renders ${copy.component} copy "${copy.text}" that nearly duplicates "${best.other.text}" in ${best.other.file}:${best.other.line}; confirm the divergence is intentional or extract a shared constant.`,
+      "head",
+      sourceRole,
+    ));
+  }
+
+  return uniqueEvidence(evidence);
+}
+
+/** 한 줄에서 사용자 노출 문구를 뽑는다 — 컴포넌트 이름(또는 속성 이름)이 표면 종류다 */
+function extractSurfaceCopy(text: string, file: string, line: number): SurfaceCopy[] {
+  if (/^(?:\s*(?:\/\/|#|\*)|.*\b(?:describe|it|test)\s*\()/.test(text)) return [];
+  const found: SurfaceCopy[] = [];
+  for (const match of text.matchAll(labelLikeCopyPattern)) {
+    const raw = (match[3] ?? match[4] ?? "").trim();
+    const component = match[1].split(".").pop() ?? match[1];
+    const copy = toSurfaceCopy(component, raw, file, line);
+    if (copy) found.push(copy);
+  }
+  for (const match of text.matchAll(labelPropCopyPattern)) {
+    const raw = (match[2] ?? match[3] ?? match[4] ?? "").trim();
+    const copy = toSurfaceCopy(match[1], raw, file, line);
+    if (copy) found.push(copy);
+  }
+  return found;
+}
+
+function toSurfaceCopy(component: string, raw: string, file: string, line: number): SurfaceCopy | undefined {
+  const tokens = raw
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  // 한 단어짜리(아이콘 라벨·숫자)와 문단(설명문)은 "같은 데이터의 다른 이름"이 아니다
+  if (tokens.length < 2 || tokens.length > 8) return undefined;
+  return { component, text: raw, tokens, normalized: tokens.join(" "), file, line };
+}
+
+/**
+ * 두 문구가 같은 자리를 다르게 부르는지 — 동일 문구는 공유 상수라 제외. 첫 단어가 같으면
+ * 같은 슬롯으로 보고("Ships after…" / "Ships when…"), 아니면 토큰 겹침 0.6 이상일 때만.
+ */
+function surfaceCopyDivergence(a: SurfaceCopy, b: SurfaceCopy): number | undefined {
+  if (a.normalized === b.normalized) return undefined;
+  const shared = a.tokens.filter((token) => b.tokens.includes(token)).length;
+  const jaccard = shared / new Set([...a.tokens, ...b.tokens]).size;
+  if (a.tokens[0] === b.tokens[0]) return 1 + jaccard;
+  return jaccard >= 0.6 ? jaccard : undefined;
+}
+
+/** 프로젝트의 기존 사용자 노출 문구 — head 리비전(또는 작업트리)의 제품 UI 파일에서 읽는다 */
+async function readSurfaceCopyCorpus(
+  root: string,
+  gitRoot: string,
+  options: ChangeIntentAnalysisOptions,
+): Promise<SurfaceCopy[]> {
+  const relativeRoot = toPosixPath(path.relative(gitRoot, root)).replace(/^\.\/+|\/+$/g, "");
+  const prefix = relativeRoot ? `${relativeRoot}/` : "";
+  let listed: string[] = [];
+  try {
+    const { stdout } = options.includeWorkingTree
+      ? await execFileAsync("git", ["ls-files", "-z"], { cwd: root, maxBuffer: 4 * 1024 * 1024 })
+      : await execFileAsync("git", ["ls-tree", "-r", "--name-only", "-z", options.head], { cwd: gitRoot, maxBuffer: 4 * 1024 * 1024 });
+    listed = stdout.split("\0").filter(Boolean);
+  } catch {
+    return [];
+  }
+  const files = listed
+    .map((entry) => toPosixPath(entry))
+    .filter((entry) => options.includeWorkingTree || entry.startsWith(prefix))
+    .map((entry) => (options.includeWorkingTree ? entry : entry.slice(prefix.length)))
+    .filter((entry) => userFacingFilePattern.test(entry) && !nonProductCopyPathPattern.test(entry))
+    .slice(0, MAX_COPY_CORPUS_FILES);
+
+  const corpus: SurfaceCopy[] = [];
+  for (const file of files) {
+    const content = await readRuntimeActivationHeadText(root, gitRoot, file, `${prefix}${file}`, options);
+    if (!content || content.length > MAX_COPY_CORPUS_BYTES) continue;
+    content.split(/\r?\n/).forEach((text, index) => {
+      corpus.push(...extractSurfaceCopy(text, file, index + 1));
+    });
+  }
+  return corpus;
 }
 
 async function collectDeliveryIntegrityEvidence(
