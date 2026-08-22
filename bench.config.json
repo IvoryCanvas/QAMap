@@ -534,6 +534,29 @@
       }
     },
     {
+      "name": "web-account-scoped-storage",
+      "fixture": "test/benchmarks/web-account-scoped-storage",
+      "commitMessage": "feat: persist terms acceptance after accept",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minDiffAnchoredFlows": 1,
+        "mustReachFiles": [
+          "src/pages/terms.tsx"
+        ],
+        "mustNameIntents": [
+          "persist terms acceptance"
+        ],
+        "mustIncludeQaScenarios": [
+          "Account switch inherits storage without an owner discriminator"
+        ],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 8192
+      }
+    },
+    {
       "name": "web-validation-recovery",
       "fixture": "test/benchmarks/web-validation-recovery",
       "commitMessage": "fix: defer feedback email validation until first field exit and clear stale errors",
