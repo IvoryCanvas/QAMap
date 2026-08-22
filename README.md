@@ -159,6 +159,8 @@ Next
 The generated browser checks are exercised separately by the
 [execution benchmark](docs/benchmarking.md#run-the-execution-contract).
 
+The [agent token benchmark](docs/benchmarking.md#run-the-agent-token-benchmark) reports provider-reported tokens, tool calls, and deterministic task success for the same QA tasks with and without QAMap; it infers no pricing or fixed saving.
+
 ## Daily CLI Use
 
 ### Add Short Scripts
