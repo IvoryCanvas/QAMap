@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "runs": 3,
+  "tasks": [
+    "reproduce-regression",
+    "verify-copy-against-spec",
+    "reverify-after-fix"
+  ],
+  "arms": [
+    "generic",
+    "qamap"
+  ],
+  "provider": {
+    "nameEnv": "QAMAP_BENCH_PROVIDER",
+    "modelEnv": "QAMAP_BENCH_MODEL",
+    "apiKeyEnv": "QAMAP_BENCH_API_KEY"
+  },
+  "maxOutputTokens": 4096,
+  "carryOverPaths": [
+    ".qamap"
+  ],
+  "systemPrompt": "scripts/agent-bench/prompts/system.md"
+}

@@ -60,6 +60,80 @@ invokes and interprets QAMap still uses that agent's own model tokens. The
 semantic and execution benchmarks remain the correctness gates for QA selection
 and generated automation.
 
+## Run the agent token benchmark
+
+The agent benchmark measures what a coding agent spends to finish the same QA
+task with and without QAMap available. It answers one question only: on a
+fixed, public task suite, how many provider-reported tokens, tool calls, and
+seconds does each arm use, and does the task succeed?
+
+```sh
+pnpm bench:agent --dry-run          # no provider call; exercises the whole pipeline
+QAMAP_BENCH_PROVIDER=anthropic QAMAP_BENCH_MODEL=<model> QAMAP_BENCH_API_KEY=<key> pnpm bench:agent
+```
+
+Without `QAMAP_BENCH_API_KEY` the command prints `status: skipped` with the
+reason `provider key not configured` and exits 0, including with `--assert`, so
+CI stays green without a key. `--dry-run` replaces the provider with a scripted
+stand-in that returns a fixed tool-call sequence and **null** token counts; its
+report is deterministic and is never a measurement. Supported providers are
+`anthropic` (Messages API) and `openai` (Chat Completions API), called with the
+Node.js built-in `fetch` and no additional dependency.
+
+The task suite lives in [`test/agent-tasks/`](../test/agent-tasks/README.md).
+Every task reuses a committed fixture from `test/benchmarks/`: reproduce a
+duplicate-request regression, verify surface copy against a specification
+table, and re-verify a persistence fix after a seeded regression. For each
+task, the harness materializes the fixture as a temporary Git repository and
+runs the same system prompt and task prompt through the same model twice:
+
+- **generic**: `bash`, `read_file`, `list_dir`, and `grep` inside the temporary
+  repository;
+- **qamap**: the same tools plus `qamap_qa`, `qamap_qa_run`, and
+  `qamap_e2e_draft_dry_run`, which shell out to the local `dist/cli.js`.
+
+Only the tool list differs. Each run records:
+
+| Field | Source |
+| --- | --- |
+| `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens` | The provider's own usage fields, summed over turns. A missing field makes the provider adapter throw; a field the provider does not report stays `null`. Nothing is estimated. |
+| `toolCalls` | The number of tool-use blocks the provider returned. |
+| `turns` | Provider round trips, capped by the task's `maxTurns`. |
+| `wallClockMs` | Elapsed time of the agent loop. |
+| `success`, `checks` | Deterministic local checks declared in `task.json`: a file exists, a command exits with a code, stdout contains a string, or a JSON path equals a literal. The model's prose is never read. |
+
+Results are reported per task and arm as the median plus range over `runs`
+(three in the committed `agent-bench.config.json`; override with `--runs N`).
+The **first-authoring** column is the first run of a task from a bare
+repository. Later runs of the same task and arm start from a fresh copy of the
+fixture plus any durable QA context the previous run left under `.qamap/`, so
+the steady-state median is reported separately and the report stays honest that
+savings, if any, start on the second run. A task with `firstAuthoring: false`
+instead has a `qamap manifest init` baseline committed on `main` before every
+run and reports all runs as steady state.
+
+The report pins what was run: provider, model, run count, maximum output tokens
+per request, and SHA-256 digests of the system prompt, each arm's tool schema,
+and the task suite, plus the QAMap version. `--format json` prints the
+`qamap.agent-benchmark` v1 contract, `--save` writes it under the gitignored
+`bench-results/`, `--arm generic|qamap` limits the arms, and `--assert` fails
+only when a run errored, never on a skipped run or an unmet task.
+
+What leaves the machine when a key is configured: the committed system prompt,
+the committed task prompts and tool schemas, and tool results produced inside a
+temporary copy of the committed public fixture. Temporary paths are replaced
+with placeholders before tool output is returned to the model, the provider key
+is sent only as a request header and is stripped from the environment of every
+tool process, and no key, temporary directory, or local path appears in the
+report. The benchmark never reads a private repository.
+
+The benchmark makes no pricing claim. It does not convert tokens to money, does
+not infer a cost-reduction multiplier, and does not compare providers with each
+other; QAMap itself makes no model request, so both arms spend the calling
+agent's tokens. Success checks are static, so a passing reproduction test proves
+that the deliverable has the requested shape, not that it was executed; the
+execution benchmark below remains the gate for generated browser tests.
+
 ## Run the execution contract
 
 The static benchmark proves that QAMap selected and mapped the expected QA. The execution benchmark asks the harder question: can the generated test distinguish the fixed behavior from a known regression?
