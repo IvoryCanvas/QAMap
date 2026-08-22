@@ -15,6 +15,7 @@ import {
   generateQaDraft,
   writeVerificationManifestBaseline,
 } from "../dist/index.js";
+import { exists, materializeFixtureRepo } from "./lib/fixture-repo.mjs";
 
 const execFileAsync = promisify(execFile);
 const args = process.argv.slice(2);
@@ -746,48 +747,36 @@ async function validateTargetProvenance(target, configDir) {
 
 async function materializeFixture(target, configDir) {
   const fixtureRoot = path.resolve(configDir, target.fixture);
-  const baseRoot = path.join(fixtureRoot, "base");
-  const headRoot = path.join(fixtureRoot, "head");
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-bench-"));
-  const repositoryRoot = path.join(tempRoot, "repo");
-  await fs.mkdir(repositoryRoot, { recursive: true });
-  await fs.cp(baseRoot, repositoryRoot, { recursive: true });
-  await git(repositoryRoot, ["init", "-b", "main"]);
-  await git(repositoryRoot, ["config", "user.email", "benchmark@qamap.local"]);
-  await git(repositoryRoot, ["config", "user.name", "QAMap Benchmark"]);
-  await git(repositoryRoot, ["add", "."]);
-  await git(repositoryRoot, ["commit", "-m", "benchmark baseline"]);
-  let manifestPath;
-  if (target.manifestBaseline) {
-    manifestPath = path.join(tempRoot, "manifest.yaml");
-    await writeVerificationManifestBaseline(repositoryRoot, {
-      write: manifestPath,
-      force: true,
-    });
-  }
-  await git(repositoryRoot, ["switch", "-c", "benchmark/change"]);
   // A target may declare `commits: [{dir, message}]` to materialize a
   // multi-commit branch (for example a feature commit followed by a cleanup
   // tip commit, the shape real pull-request branches routinely have).
   // Single-head targets keep the original one-commit behavior.
-  const commitPlan = Array.isArray(target.commits) && target.commits.length > 0
+  const commits = Array.isArray(target.commits) && target.commits.length > 0
     ? target.commits.map((step) => ({
-      root: path.join(fixtureRoot, step.dir),
+      dir: step.dir,
       message: step.message ?? "benchmark change",
     }))
-    : [{ root: headRoot, message: target.commitMessage ?? "benchmark change" }];
-  for (const step of commitPlan) {
-    if (await exists(step.root)) {
-      await fs.cp(step.root, repositoryRoot, { recursive: true, force: true });
-    }
-    await git(repositoryRoot, ["add", "-A"]);
-    await git(repositoryRoot, ["commit", "--allow-empty", "-m", step.message]);
-  }
-  const prepared = targetPaths(target, repositoryRoot, "main", "HEAD");
+    : [{ dir: "head", message: target.commitMessage ?? "benchmark change" }];
+  let manifestPath;
+  const materialized = await materializeFixtureRepo({
+    fixtureRoot,
+    tempPrefix: "qamap-bench-",
+    commits,
+    git,
+    afterBaseline: async ({ repositoryRoot, tempRoot }) => {
+      if (!target.manifestBaseline) return;
+      manifestPath = path.join(tempRoot, "manifest.yaml");
+      await writeVerificationManifestBaseline(repositoryRoot, {
+        write: manifestPath,
+        force: true,
+      });
+    },
+  });
+  const prepared = targetPaths(target, materialized.repositoryRoot, "main", "HEAD");
   return {
     ...prepared,
     manifestPath,
-    cleanup: () => fs.rm(tempRoot, { recursive: true, force: true }),
+    cleanup: materialized.cleanup,
   };
 }
 
@@ -808,15 +797,6 @@ async function defaultConfigPath() {
     }
   }
   throw new Error("No benchmark config found. Create bench.config.local.json or use --config <file>.");
-}
-
-async function exists(file) {
-  try {
-    await fs.access(file);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function printTable(rows) {
