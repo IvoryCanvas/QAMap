@@ -1,0 +1,129 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/IvoryCanvas/qamap/main/test/agent-tasks/schema.json",
+  "title": "QAMap agent benchmark task",
+  "description": "One task of the agent token benchmark suite. The prompt and fixture are public; success is judged only by the deterministic local checks listed in successCriteria.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "prompt", "fixture", "successCriteria", "maxTurns", "firstAuthoring"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Task identifier; must equal the task directory name."
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The exact user prompt sent to the provider. It is the same in both arms."
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "baseOverlay", "headOverlay", "commitMessage"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^test/benchmarks/[a-z0-9-]+$",
+          "description": "A committed public benchmark fixture directory."
+        },
+        "baseOverlay": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Overlay applied on top of base/ before the main baseline commit."
+        },
+        "headOverlay": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Overlay committed on the change branch."
+        },
+        "commitMessage": { "type": "string", "minLength": 1 }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "description": "Extra files copied from the task directory into the repository and committed on main before the change.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to"],
+        "properties": {
+          "from": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+          "to": { "$ref": "#/definitions/relativePath" }
+        }
+      }
+    },
+    "successCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/criterion" }
+    },
+    "maxTurns": { "type": "integer", "minimum": 1, "maximum": 64 },
+    "firstAuthoring": {
+      "type": "boolean",
+      "description": "True when the first run starts from a bare repository and is reported as first-authoring cost. False when the harness commits a manifest baseline before every run, so all runs are steady state."
+    }
+  },
+  "definitions": {
+    "relativePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]+$"
+    },
+    "command": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "An argv array executed without a shell from the repository root."
+    },
+    "criterion": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "path"],
+          "properties": {
+            "kind": { "const": "file-exists" },
+            "path": { "$ref": "#/definitions/relativePath" },
+            "description": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "command"],
+          "properties": {
+            "kind": { "const": "command-exit" },
+            "command": { "$ref": "#/definitions/command" },
+            "exitCode": { "type": "integer", "minimum": 0 },
+            "description": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "command", "includes"],
+          "properties": {
+            "kind": { "const": "stdout-includes" },
+            "command": { "$ref": "#/definitions/command" },
+            "includes": { "type": "string", "minLength": 1 },
+            "description": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "path", "jsonPath", "equals"],
+          "properties": {
+            "kind": { "const": "json-path-equals" },
+            "path": { "$ref": "#/definitions/relativePath" },
+            "jsonPath": { "type": "string", "minLength": 1 },
+            "equals": {},
+            "description": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

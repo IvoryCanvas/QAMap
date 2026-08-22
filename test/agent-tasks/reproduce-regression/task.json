@@ -1,0 +1,60 @@
+{
+  "$schema": "../schema.json",
+  "id": "reproduce-regression",
+  "title": "Reproduce a duplicate-request regression",
+  "prompt": "The branch `benchmark/change` contains one commit that fixes a regression present on `main`: a subscription renewal button could send the same request twice. Do the following.\n\n1. Identify the changed source file and explain the regression from the diff between `main` and `HEAD`.\n2. Reproduce it as a Playwright test at `tests/e2e/duplicate-renewal.spec.ts`. The test visits `/renewal`, counts POST requests to the renewal endpoint while clicking the renew button twice in quick succession, and expects exactly one request plus the visible text `Subscription active`. It must fail on `main` and pass on `HEAD`.\n3. Write `qa-result.json` in the repository root with exactly these keys: `changedFile` (repository-relative path of the changed source file), `endpoint` (the request path the test counts), `expectedRequestCount` (number).\n\nDo not modify files under `src/`.",
+  "fixture": {
+    "path": "test/benchmarks/web-symbol-annotated-renewal",
+    "baseOverlay": "base",
+    "headOverlay": "head",
+    "commitMessage": "fix: prevent duplicate subscription renewal requests"
+  },
+  "successCriteria": [
+    {
+      "kind": "file-exists",
+      "path": "tests/e2e/duplicate-renewal.spec.ts",
+      "description": "The reproduction test exists at the requested path."
+    },
+    {
+      "kind": "stdout-includes",
+      "command": ["cat", "tests/e2e/duplicate-renewal.spec.ts"],
+      "includes": "/api/subscriptions/renew",
+      "description": "The reproduction test observes the renewal endpoint."
+    },
+    {
+      "kind": "stdout-includes",
+      "command": ["cat", "tests/e2e/duplicate-renewal.spec.ts"],
+      "includes": "Subscription active",
+      "description": "The reproduction test asserts the visible success text."
+    },
+    {
+      "kind": "command-exit",
+      "command": ["git", "diff", "--quiet", "HEAD", "--", "src"],
+      "exitCode": 0,
+      "description": "Product source under src/ is unchanged."
+    },
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "changedFile",
+      "equals": "src/pages/renewal.tsx",
+      "description": "The structured answer names the changed source file."
+    },
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "endpoint",
+      "equals": "/api/subscriptions/renew",
+      "description": "The structured answer names the counted endpoint."
+    },
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "expectedRequestCount",
+      "equals": 1,
+      "description": "The structured answer expects a single request."
+    }
+  ],
+  "maxTurns": 16,
+  "firstAuthoring": true
+}

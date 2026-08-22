@@ -1,0 +1,60 @@
+{
+  "$schema": "../schema.json",
+  "id": "reverify-after-fix",
+  "title": "Re-verify a persistence fix",
+  "prompt": "A previous verification found that on `main` the workspace density page shows `Density saved` after the save button is clicked, but the value is never written to storage, so it is lost after a reload. The branch `benchmark/change` claims to fix this. Re-verify the fix.\n\n1. Confirm from the diff between `main` and `HEAD` that the save action now writes the value under the same storage key the page reads on load.\n2. Write a Playwright test at `tests/e2e/density-persists-after-reload.spec.ts` that visits `/density`, changes the density input, clicks the save button, reloads the page, and expects the input to show the saved value. It must fail on `main` and pass on `HEAD`.\n3. Write `qa-result.json` in the repository root with exactly these keys: `fixConfirmed` (boolean), `storageKey` (string), `changedFile` (repository-relative path).\n\nDo not modify files under `src/`.",
+  "fixture": {
+    "path": "test/benchmarks/web-persisted-workspace-setting",
+    "baseOverlay": "regression",
+    "headOverlay": "head",
+    "commitMessage": "fix: write the saved workspace density to storage"
+  },
+  "successCriteria": [
+    {
+      "kind": "file-exists",
+      "path": "tests/e2e/density-persists-after-reload.spec.ts",
+      "description": "The re-verification test exists at the requested path."
+    },
+    {
+      "kind": "stdout-includes",
+      "command": ["cat", "tests/e2e/density-persists-after-reload.spec.ts"],
+      "includes": "reload",
+      "description": "The re-verification test reloads the page."
+    },
+    {
+      "kind": "stdout-includes",
+      "command": ["cat", "tests/e2e/density-persists-after-reload.spec.ts"],
+      "includes": "density-save",
+      "description": "The re-verification test uses the save control."
+    },
+    {
+      "kind": "command-exit",
+      "command": ["git", "diff", "--quiet", "HEAD", "--", "src"],
+      "exitCode": 0,
+      "description": "Product source under src/ is unchanged."
+    },
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "fixConfirmed",
+      "equals": true,
+      "description": "The structured answer confirms the fix."
+    },
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "storageKey",
+      "equals": "workspace-density",
+      "description": "The structured answer names the storage key."
+    },
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "changedFile",
+      "equals": "src/pages/density.tsx",
+      "description": "The structured answer names the changed source file."
+    }
+  ],
+  "maxTurns": 12,
+  "firstAuthoring": false
+}

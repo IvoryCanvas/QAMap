@@ -25,6 +25,7 @@ jobs:
       - run: pnpm plugin:check
       - run: pnpm plugin:smoke
       - run: pnpm bench:ci
+      - run: pnpm bench:agent --dry-run --assert
       - run: pnpm bench:context
       - run: pnpm scan
 

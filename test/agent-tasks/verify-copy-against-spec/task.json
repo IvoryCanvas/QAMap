@@ -1,0 +1,60 @@
+{
+  "$schema": "../schema.json",
+  "id": "verify-copy-against-spec",
+  "title": "Verify surface copy against a specification table",
+  "prompt": "The branch `benchmark/change` adds an order confirmation page. The copy specification at `docs/shipping-status-copy.md` lists the expected shipping-status text for each surface. Verify the change against the specification: for each surface in the table, find the copy rendered by the page source and compare it with the expected copy.\n\nWrite `qa-result.json` in the repository root with exactly this shape:\n\n{ \"surfaces\": { \"summary\": { \"actual\": string, \"matchesSpec\": boolean }, \"confirmation\": { \"actual\": string, \"matchesSpec\": boolean } }, \"verdict\": \"pass\" | \"fail\" }\n\n`actual` is the exact rendered text, and `verdict` is `pass` only when every surface matches. Do not modify files under `src/` or `docs/`.",
+  "fixture": {
+    "path": "test/benchmarks/web-divergent-surface-copy",
+    "baseOverlay": "base",
+    "headOverlay": "head",
+    "commitMessage": "feat: show shipping status on order confirmation"
+  },
+  "inputs": [
+    { "from": "spec.md", "to": "docs/shipping-status-copy.md" }
+  ],
+  "successCriteria": [
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "surfaces.summary.actual",
+      "equals": "Ships after payment clears",
+      "description": "The summary surface copy is reported exactly."
+    },
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "surfaces.summary.matchesSpec",
+      "equals": true,
+      "description": "The summary surface matches the specification."
+    },
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "surfaces.confirmation.actual",
+      "equals": "Ships when the order completes",
+      "description": "The confirmation surface copy is reported exactly."
+    },
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "surfaces.confirmation.matchesSpec",
+      "equals": false,
+      "description": "The divergent confirmation copy is flagged."
+    },
+    {
+      "kind": "json-path-equals",
+      "path": "qa-result.json",
+      "jsonPath": "verdict",
+      "equals": "fail",
+      "description": "The overall verdict fails because one surface diverges."
+    },
+    {
+      "kind": "command-exit",
+      "command": ["git", "diff", "--quiet", "HEAD", "--", "src", "docs"],
+      "exitCode": 0,
+      "description": "Source and specification files are unchanged."
+    }
+  ],
+  "maxTurns": 12,
+  "firstAuthoring": true
+}

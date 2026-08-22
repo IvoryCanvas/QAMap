@@ -3,12 +3,12 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { generateE2eDraft, runE2eScenario } from "../dist/index.js";
+import { materializeFixtureRepo } from "./lib/fixture-repo.mjs";
 
 const execFileAsync = promisify(execFile);
 const args = process.argv.slice(2);
@@ -184,26 +184,16 @@ async function materializeContract(contract) {
   await requireDirectory(baseRoot);
   await requireDirectory(headRoot);
 
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-execution-bench-"));
-  const targetRoot = path.join(tempRoot, "repo");
-  await fs.mkdir(targetRoot, { recursive: true });
-  await fs.cp(baseRoot, targetRoot, { recursive: true });
-  await git(targetRoot, ["init", "-b", "main"]);
-  await git(targetRoot, ["config", "user.email", "execution-benchmark@qamap.local"]);
-  await git(targetRoot, ["config", "user.name", "QAMap Execution Benchmark"]);
-  await git(targetRoot, ["add", "."]);
-  await git(targetRoot, ["commit", "-m", "execution benchmark baseline"]);
-  await git(targetRoot, ["switch", "-c", "benchmark/change"]);
-  await fs.cp(headRoot, targetRoot, { recursive: true, force: true });
-  await git(targetRoot, ["add", "-A"]);
-  await git(targetRoot, [
-    "commit",
-    "--allow-empty",
-    "-m",
-    contract.commitMessage ?? "execution benchmark change",
-  ]);
+  const materialized = await materializeFixtureRepo({
+    fixtureRoot,
+    tempPrefix: "qamap-execution-bench-",
+    baselineMessage: "execution benchmark baseline",
+    identity: { name: "QAMap Execution Benchmark", email: "execution-benchmark@qamap.local" },
+    commits: [{ dir: "head", message: contract.commitMessage ?? "execution benchmark change" }],
+    git,
+  });
 
-  return { fixtureRoot, repositoryRoot: targetRoot, tempRoot };
+  return { fixtureRoot, repositoryRoot: materialized.repositoryRoot, tempRoot: materialized.tempRoot };
 }
 
 function assertDraftContract(contract, generatedFiles, compiledScenarios) {

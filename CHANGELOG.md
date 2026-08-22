@@ -8,6 +8,11 @@
 - Added `executors`, `fixtures`, and `scenarioFixtures` configuration, and `qamap qa` now marks which drafted scenarios are executable with the declared executor and fixtures.
 - Added account-scoped storage evidence for client storage writes that carry no owner discriminator, with an account-switch QA scenario.
 - Added divergent-copy evidence that pairs a new label with a near-duplicate label on another surface and plans a side-by-side comparison.
+- Added a provider-neutral agent token benchmark (`pnpm bench:agent`) that runs a fixed public task suite once with generic tools and once with QAMap tools, records provider-reported input, output, and cache tokens, tool calls, wall-clock, and deterministic local task success as median plus range over repeated runs with a separate first-authoring column, and is skipped without a provider key.
+
+### Changed
+
+- Benchmark runners now share one fixture materialization helper under `scripts/lib/`.
 
 ## 0.4.14 - 2026-08-20
 
