@@ -234,6 +234,7 @@ npx --yes @ivorycanvas/qamap@latest qa --format markdown
 | `qamap qa` | Maps the diff to behavior, risk, evidence, and QA scenarios. | No |
 | `qamap qa run` | Runs one existing repository validation selected by QAMap. | Yes, explicitly |
 | `qamap e2e draft . --dry-run` | Previews optional Playwright, Maestro, CLI, API, or manual automation. | No |
+| `qamap e2e run <scenario-id>` | Executes one compiled scenario through the executor and fixtures declared in `qamap.config.json`, then stores and compares the receipt. | Yes, the declared executor and seed hooks |
 
 QAMap does not hide an important QA scenario because a repository lacks a
 selector, fixture, Playwright, Maestro, or test runner. Those are automation

@@ -225,7 +225,14 @@ This keeps first-run setup light while allowing one human correction to improve 
 
 `qamap qa` remains static and read-only. It must not execute scanned project code.
 
-Future execution belongs to an explicit `qamap verify` mode with a visible execution plan. The intended safeguards are:
+Execution happens only through two explicit commands. `qamap qa run` executes one
+existing repository validation command. `qamap e2e run <scenario-id>` executes one
+compiled scenario through an executor the repository declared in `qamap.config.json`,
+after materializing the fixtures declared for that scenario id, and reports pass/fail
+per assertion, timing, and failure-only artifacts. Fixtures and artifacts live under
+`.qamap/tmp`, receipts under `.qamap/runs/e2e`, and a missing executor, missing
+fixture, or uncompiled scenario yields a `blocked` receipt rather than a pass. The
+safeguards both commands share are:
 
 - generated tests live in an operating-system temporary directory by default;
 - target repository files are not modified unless a separate write command is requested;

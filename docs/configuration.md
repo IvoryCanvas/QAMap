@@ -27,6 +27,18 @@ qamap scan . --config ./qamap.config.json
   "ignoreRules": ["QM011"],
   "maxFiles": 2000,
   "validationCommands": ["make test", "make lint"],
+  "executors": {
+    "web": {
+      "runner": "playwright",
+      "command": ["pnpm", "exec", "playwright", "test", "{file}", "--grep", "{grep}", "--reporter=json"]
+    }
+  },
+  "fixtures": {
+    "geo-photo": { "kind": "file", "path": "fixtures/geo-photo.jpg" }
+  },
+  "scenarioFixtures": {
+    "scenario:1a2b3c4d5e6f": ["geo-photo"]
+  },
   "severity": {
     "QM007": "info"
   }
@@ -42,6 +54,9 @@ qamap scan . --config ./qamap.config.json
 | `maxFiles` | `number` | Maximum number of files QAMap inspects. CLI `--max-files` takes precedence. |
 | `severity` | `Record<string, Severity>` | Overrides severity for specific rule ids. |
 | `validationCommands` | `string[]` | Adds project-specific validation commands to `test-plan`, `eval`, `verify`, and GitHub Action reports. |
+| `executors` | `object` | Repository-owned scenario executors for `qamap e2e run`. Each entry has a `runner` (`playwright` parses the JSON reporter, `command` reads only the exit code), an argument-vector `command` run without a shell that must reference `{file}` and may use `{grep}`, `{scenarioId}`, `{fixtureDir}`, `{artifactDir}`, plus optional `cwd`, `timeoutMs`, `artifactDirectory`, and `env`. |
+| `fixtures` | `object` | Declared fixtures keyed by id: `{ "kind": "file", "path": "fixtures/geo-photo.jpg" }` copies a repository file into the run's fixture directory; `{ "kind": "seed", "command": ["node", "scripts/seed.mjs"] }` runs a seed hook without a shell. Paths and working directories must stay inside the repository. |
+| `scenarioFixtures` | `object` | Scenario id to the fixture ids it needs. A compiled scenario with a configured executor and declared fixtures is reported as executable by `qamap qa` and can be run with `qamap e2e run`. |
 
 ## Notes
 

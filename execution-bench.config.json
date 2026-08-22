@@ -44,7 +44,23 @@
       ],
       "fixedOutputIncludes": [
         "2 passed"
-      ]
+      ],
+      "scenarioRun": {
+        "scenarioTitle": "Duplicate renewal request",
+        "executor": {
+          "runner": "playwright",
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "{file}",
+            "--grep",
+            "{grep}",
+            "--reporter=json"
+          ]
+        }
+      }
     },
     {
       "name": "web-persisted-state-restoration",

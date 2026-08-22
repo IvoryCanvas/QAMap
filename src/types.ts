@@ -60,7 +60,30 @@ export interface QAMapConfig {
   maxFiles?: number;
   severity?: Record<string, Severity>;
   validationCommands?: string[];
+  executors?: Record<string, QAMapExecutorConfig>;
+  fixtures?: Record<string, QAMapFixtureDeclaration>;
+  scenarioFixtures?: Record<string, string[]>;
 }
+
+export type QAMapExecutorRunner = "playwright" | "command";
+
+/**
+ * A repository-owned scenario executor. QAMap never bundles a browser; it invokes
+ * the command the repository already uses and reads the result it produces.
+ * Tokens: {file} draft path, {grep} scenario title pattern, {scenarioId}, {fixtureDir}, {artifactDir}.
+ */
+export interface QAMapExecutorConfig {
+  runner: QAMapExecutorRunner;
+  command: string[];
+  cwd?: string;
+  timeoutMs?: number;
+  artifactDirectory?: string;
+  env?: Record<string, string>;
+}
+
+export type QAMapFixtureDeclaration =
+  | { kind: "file"; path: string; target?: string; description?: string }
+  | { kind: "seed"; command: string[]; cwd?: string; timeoutMs?: number; description?: string };
 
 export interface ResolvedQAMapConfig {
   path?: string;

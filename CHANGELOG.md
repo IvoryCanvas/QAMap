@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added `qamap e2e run <scenario-id>`, which executes one compiled scenario through an executor the repository declares in `qamap.config.json`, materializes the fixtures declared for that scenario, and returns a receipt with pass/fail per assertion, timing, and failure-only artifacts. Receipts persist under `.qamap/runs/e2e` and reruns of the same id are compared instead of re-driven.
+- Added `executors`, `fixtures`, and `scenarioFixtures` configuration, and `qamap qa` now marks which drafted scenarios are executable with the declared executor and fixtures.
+- Added account-scoped storage evidence for client storage writes that carry no owner discriminator, with an account-switch QA scenario.
+- Added divergent-copy evidence that pairs a new label with a near-duplicate label on another surface and plans a side-by-side comparison.
+
 ## 0.4.14 - 2026-08-20
 
 ### Added

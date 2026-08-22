@@ -101,6 +101,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap e2e plan . --base origin/main --head HEAD --record-history` | Save a compact local run snapshot under `.qamap/runs/` while keeping JSON/Markdown output usable. |
 | `qamap e2e setup . --runner playwright` | Explicitly apply the accepted runner setup and create the first changed-flow E2E draft without overwriting existing files. |
 | `qamap e2e draft . --base origin/main --head HEAD --dry-run` | Preview generated Maestro, Playwright, or manual E2E drafts without writing files. |
+| `qamap e2e run scenario:1a2b3c4d5e6f . --base origin/main --head HEAD` | Execute one compiled scenario through the executor declared in `qamap.config.json`, after materializing its declared fixtures; prints a receipt with pass/fail per assertion, timing, and failure-only artifacts, and compares it to the previous receipt for the same id. |
 | `qamap e2e draft . --base origin/main --head HEAD` | Write generated Maestro, Playwright, or manual E2E drafts with flow language, readiness summaries, and action items. |
 | `qamap manifest init .` | Create a baseline `.qamap/manifest.yaml` with inferred domains, flows, anchors, checks, source, and confidence. |
 | `qamap manifest validate .` | Check whether `.qamap/manifest.yaml` is present, parseable, anchored to real files, and ready to shape PR evidence. |

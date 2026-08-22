@@ -37,6 +37,7 @@ test("full help preserves advanced and compatibility commands", () => {
 
   assert.match(output, /qamap scan \[path\]/);
   assert.match(output, /qamap verify \[path\]/);
+  assert.match(output, /qamap e2e run <scenario-id> \[path\]/);
   assert.match(output, /qamap flows suggest \[path\]/);
   assert.match(output, /qamap domains suggest \[path\]/);
 });
@@ -47,4 +48,11 @@ test("QA help explains the analysis and execution boundary", () => {
   assert.match(output, /maps diff -> affected behavior -> risk -> scenario -> evidence/);
   assert.match(output, /Product QA and generated drafts remain marked not run/);
   assert.match(output, /executes only the selected existing\s+repository command/);
+});
+
+test("e2e help states the run execution boundary", () => {
+  const output = runCli("e2e", "--help");
+
+  assert.match(output, /qamap e2e run <scenario-id> \[path\]/);
+  assert.match(output, /Without a configured\s+executor or declared fixtures the receipt is blocked and nothing runs/);
 });

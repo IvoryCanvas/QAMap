@@ -220,6 +220,7 @@ npx --yes @ivorycanvas/qamap@latest qa --format markdown
 | `qamap qa` | 코드 변경을 동작, 위험, 근거, QA 항목에 연결 | 아니요 |
 | `qamap qa run` | QAMap이 고른 기존 검증 명령 하나를 명시적으로 실행 | 예 |
 | `qamap e2e draft . --dry-run` | Playwright, Maestro, CLI, API, 수동 점검표 초안을 미리 보기 | 아니요 |
+| `qamap e2e run <scenario-id>` | `qamap.config.json` 에 선언한 실행기와 픽스처로 컴파일된 시나리오 하나를 실행하고, 영수증을 저장해 이전 실행과 비교합니다. | 예, 선언한 실행기와 시드 훅 |
 
 화면 요소 식별자, 테스트 데이터, Playwright, Maestro, 테스트 실행 환경이
 없어도 중요한 QA 항목을 숨기지 않습니다. 먼저 무엇을 확인해야 하는지

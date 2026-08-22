@@ -100,6 +100,14 @@ export {
 } from "./qa.js";
 export { formatMarkdownQaValidation, runQaValidation } from "./qa-execution.js";
 export {
+  assessScenarioExecutability,
+  diffE2eRunReceipts,
+  e2eRunFixtureDirectory,
+  e2eRunReceiptDirectory,
+  formatMarkdownE2eRun,
+  runE2eScenario,
+} from "./e2e-run.js";
+export {
   evaluateQaCapabilities,
   isInstructionLikeRepositoryText,
   neutralizeInstructionLikeValues,
@@ -376,6 +384,17 @@ export type {
   QaVerificationStatus,
 } from "./qa.js";
 export type { RunQaValidationOptions } from "./qa-execution.js";
+export type {
+  E2eAssertionResult,
+  E2eBlockedRunReceipt,
+  E2eCompletedRunReceipt,
+  E2eFixturePreparationReceipt,
+  E2eRunComparison,
+  E2eRunOptions,
+  E2eRunReceipt,
+  E2eRunResult,
+  E2eScenarioExecutability,
+} from "./e2e-run.js";
 export type {
   QaActionApproval,
   QaActionContract,
