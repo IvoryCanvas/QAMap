@@ -313,14 +313,14 @@ async function executeSelectedCommand(
   });
 }
 
-interface GitStateSnapshot {
+export interface GitStateSnapshot {
   fingerprint: string;
   entries: Map<string, string>;
   head: string;
   branch: string;
 }
 
-async function captureGitState(root: string): Promise<GitStateSnapshot | undefined> {
+export async function captureGitState(root: string): Promise<GitStateSnapshot | undefined> {
   try {
     const [statusOutput, headOutput, branchOutput] = await Promise.all([
       runGitForState(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
@@ -353,7 +353,7 @@ async function captureGitState(root: string): Promise<GitStateSnapshot | undefin
   }
 }
 
-function compareGitState(
+export function compareGitState(
   before: GitStateSnapshot | undefined,
   after: GitStateSnapshot | undefined,
 ): QaGitStateReceipt {
@@ -493,7 +493,7 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function terminateProcessTree(
+export function terminateProcessTree(
   pid: number | undefined,
   child: ReturnType<typeof spawn>,
   signal: NodeJS.Signals,

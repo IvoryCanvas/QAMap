@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import type { E2eScenarioExecutability } from "./e2e-run.js";
 import path from "node:path";
 import YAML from "yaml";
 import { analyzeBehaviorGraph, createInferredFlowBehaviorAdapter } from "./behavior.js";
@@ -375,6 +376,8 @@ export type E2eScenarioAutomationStatus = "compiled" | "partial" | "not-compiled
 
 export interface E2eScenarioAutomationReceipt {
   scenarioId: string;
+  /** Present once qamap qa has checked the repository's executor and fixture declarations. */
+  executable?: E2eScenarioExecutability;
   title: string;
   kind: IntentQaScenario["kind"];
   priority: IntentQaScenario["priority"];

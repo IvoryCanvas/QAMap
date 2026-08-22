@@ -43,6 +43,41 @@
         "minLength": 1
       },
       "uniqueItems": true
+    },
+    "executors": {
+      "type": "object",
+      "description": "Repository-owned scenario executors that qamap e2e run may invoke. QAMap never bundles a browser.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/executor"
+      }
+    },
+    "fixtures": {
+      "type": "object",
+      "description": "Declared fixtures that qamap e2e run materializes before invoking an executor.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/fixture"
+      }
+    },
+    "scenarioFixtures": {
+      "type": "object",
+      "description": "Scenario id to the fixture ids it needs. A scenario with an executor and declared fixtures becomes executable.",
+      "propertyNames": {
+        "pattern": "^scenario:[a-f0-9]{6,}$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uniqueItems": true
+      }
     }
   },
   "$defs": {
@@ -52,7 +87,120 @@
     },
     "severity": {
       "type": "string",
-      "enum": ["info", "low", "medium", "high"]
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner",
+        "command"
+      ],
+      "properties": {
+        "runner": {
+          "type": "string",
+          "enum": [
+            "playwright",
+            "command"
+          ],
+          "description": "How QAMap reads the result: playwright parses the JSON reporter, command reads only the exit code."
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Argument vector run without a shell. Tokens: {file}, {grep}, {scenarioId}, {fixtureDir}, {artifactDir}."
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "artifactDirectory": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where failure-only artifacts are collected. Defaults to .qamap/tmp/e2e-run/<scenario>/artifacts."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "fixture": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "path"
+          ],
+          "properties": {
+            "kind": {
+              "const": "file"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Repository-relative file copied into the fixture directory."
+            },
+            "target": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ],
+          "properties": {
+            "kind": {
+              "const": "seed"
+            },
+            "command": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Seed hook run without a shell before the executor."
+            },
+            "cwd": {
+              "type": "string",
+              "minLength": 1
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 1000
+            },
+            "description": {
+              "type": "string"
+            }
+          }
+        }
+      ]
     }
   }
 }

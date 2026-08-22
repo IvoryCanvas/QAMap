@@ -61,6 +61,7 @@ import type { QAMapConfig } from "./types.js";
 import type { Severity } from "./types.js";
 import { VERSION } from "./version.js";
 import type { E2eRunnerName } from "./e2e.js";
+import { formatMarkdownE2eRun, runE2eScenario } from "./e2e-run.js";
 import type { GitHubActionMode } from "./github.js";
 
 type OutputFormat = "text" | "json" | "markdown" | "sarif" | "agent";
@@ -96,6 +97,7 @@ interface ParsedOptions {
   agent?: boolean;
   scripts?: boolean;
   timeoutMs?: number;
+  executor?: string;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -245,10 +247,15 @@ async function main(argv: string[]): Promise<number> {
       printE2eHelp();
       return 0;
     }
-    if (subcommand !== "plan" && subcommand !== "draft" && subcommand !== "setup") {
+    if (subcommand !== "plan" && subcommand !== "draft" && subcommand !== "setup" && subcommand !== "run") {
       throw new Error(`Unknown e2e subcommand: ${subcommand}`);
     }
-    const options = parseOptions(subcommandRest);
+    // e2e run takes the scenario id as its first positional before the optional path
+    const scenarioId = subcommand === "run" ? subcommandRest[0] : undefined;
+    if (subcommand === "run" && (!scenarioId || scenarioId.startsWith("-"))) {
+      throw new Error("e2e run requires a scenario id, for example: qamap e2e run scenario:1a2b3c4d5e6f");
+    }
+    const options = parseOptions(subcommand === "run" ? subcommandRest.slice(1) : subcommandRest);
     const loadedConfig = await loadOptionsConfig(options);
     const e2eOptions = {
       base: options.base,
@@ -267,6 +274,22 @@ async function main(argv: string[]): Promise<number> {
       const output = formatE2ePlanOutput(result, options.format ?? (options.json ? "json" : "markdown"));
       await printOrWrite(output, options.output);
       return 0;
+    }
+    if (subcommand === "run") {
+      const result = await runE2eScenario(options.path, scenarioId as string, {
+        ...e2eOptions,
+        config: loadedConfig.config,
+        executor: options.executor,
+        timeoutMs: options.timeoutMs,
+        output: options.output,
+      });
+      const format = options.format ?? (options.json ? "json" : "markdown");
+      if (format !== "json" && format !== "markdown") {
+        throw new Error(`e2e run supports json or markdown output, not ${format}`);
+      }
+      const output = format === "json" ? `${JSON.stringify(result, null, 2)}\n` : formatMarkdownE2eRun(result);
+      console.log(output.trimEnd());
+      return e2eRunExitCode(result.receipt);
     }
     if (subcommand === "setup") {
       const result = await setupE2eRunner(options.path, {
@@ -304,6 +327,7 @@ async function main(argv: string[]): Promise<number> {
       validationCommands: loadedConfig.config.validationCommands,
       runner: options.e2eRunner,
       manifestPath: options.manifestPath,
+      config: loadedConfig.config,
     };
     const format = options.format ?? (options.json ? "json" : "text");
     const streamCommandOutput = runValidation &&
@@ -739,6 +763,11 @@ function parseOptions(args: string[]): ParsedOptions {
       continue;
     }
 
+    if (arg === "--executor") {
+      options.executor = readValue(args, ++index, arg);
+      continue;
+    }
+
     if (arg === "--timeout-ms") {
       const value = Number.parseInt(readValue(args, ++index, arg), 10);
       if (!Number.isFinite(value) || value < 1_000) {
@@ -902,6 +931,11 @@ function formatQaDraftOutput(result: Awaited<ReturnType<typeof generateQaDraft>>
     throw new Error(`QA draft supports text, json, markdown, or agent output, not ${format}`);
   }
   return format === "markdown" ? formatMarkdownQaDraft(result) : formatTextQaDraft(result);
+}
+
+function e2eRunExitCode(receipt: Awaited<ReturnType<typeof runE2eScenario>>["receipt"]): number {
+  if (receipt.status === "passed") return 0;
+  return receipt.status === "blocked" ? 2 : 1;
 }
 
 function qaValidationExitCode(
@@ -1116,6 +1150,7 @@ Usage:
   qamap e2e plan [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   qamap e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force]
   qamap e2e draft [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
+  qamap e2e run <scenario-id> [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--executor <name>] [--timeout-ms <n>] [--format json|markdown]
   qamap manifest init [path] [--workspace-root <path>] [--write <file>] [--max-files <n>] [--force]
   qamap manifest validate [path] [--workspace-root <path>] [--manifest <file>] [--format <format>]
   qamap manifest explain [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>]
@@ -1203,6 +1238,14 @@ Usage:
   qamap e2e plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>] [--output <file>]
   qamap e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force] [--format <format>] [--output <file>]
   qamap e2e draft [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--output <dir>] [--dry-run] [--force]
+  qamap e2e run <scenario-id> [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--executor <name>] [--timeout-ms <n>] [--output <dir>] [--format json|markdown]
+
+Execution boundary:
+  e2e run executes one compiled scenario through an executor the repository configured in
+  qamap.config.json, after materializing the fixtures declared for that scenario id. It prints
+  a receipt with pass/fail per assertion, timing, and failure-only artifacts, stores it under
+  .qamap/runs/e2e, and compares it to the previous receipt for the same id. Without a configured
+  executor or declared fixtures the receipt is blocked and nothing runs.
 
 Examples:
   qamap e2e plan . --base origin/main --head HEAD
@@ -1210,6 +1253,7 @@ Examples:
   qamap e2e setup . --runner playwright
   qamap e2e setup apps/mobile --workspace-root . --runner maestro
   qamap e2e draft . --base origin/main --head HEAD --dry-run
+  qamap e2e run scenario:1a2b3c4d5e6f . --base origin/main --head HEAD
   qamap e2e plan apps/mobile --workspace-root . --include-working-tree
 `);
 }

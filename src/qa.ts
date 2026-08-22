@@ -1,4 +1,6 @@
 import { constants as fsConstants } from "node:fs";
+import { assessScenarioExecutability } from "./e2e-run.js";
+import type { QAMapConfig } from "./types.js";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -56,6 +58,8 @@ import { TOOL_NAME, VERSION } from "./version.js";
 
 export interface QaDraftOptions extends Omit<E2eDraftOptions, "dryRun" | "output"> {
   automaticWorkspaceScope?: boolean;
+  /** Executor and fixture declarations from qamap.config.json; marks which drafted scenarios qamap e2e run can execute now. */
+  config?: Pick<QAMapConfig, "executors" | "fixtures" | "scenarioFixtures">;
 }
 
 export interface QaDraftResult {
@@ -520,7 +524,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
       neutralizedValues: 0,
     },
     readiness,
-    flows,
+    flows: annotateExecutableScenarios(flows, options.config, draft.runner),
     missingEvidence,
     prChecklist: buildPrChecklist(
       draft,
@@ -1771,6 +1775,7 @@ function buildAgentQaSummary(
               id: receipt.scenarioId,
               decision: receipt.decision,
               status: receipt.status,
+              ...(receipt.executable?.status === "executable" ? { executable: true } : {}),
             })),
         evidence: flow.why.slice(0, 2).map((reason) => truncateForAgent(reason)),
       };
@@ -3427,6 +3432,15 @@ function appendQaDecisionLayers(
   if (nextCommand) {
     lines.push(`- Repository command: \`${escapeMarkdownInline(nextCommand)}\` (selected but not run by QAMap).`);
   }
+  const executableScenarios = [...automationByScenario.values()]
+    .map((entry) => entry.receipt)
+    .filter((receipt) => receipt.executable?.status === "executable")
+    .slice(0, 6);
+  for (const receipt of executableScenarios) {
+    lines.push(
+      `- Executable now: \`qamap e2e run ${receipt.scenarioId}\` for ${escapeMarkdownInline(receipt.title)} (executor ${receipt.executable?.executor}; not run by qamap qa).`,
+    );
+  }
   for (const flow of staticRunnableFlows.slice(0, 4)) {
     lines.push(
       `- Static-runnable draft: \`${escapeMarkdownInline(flow.draftPath)}\` for ${escapeMarkdownInline(flow.title)}; self-checks passed, target application not executed.`,
@@ -3463,6 +3477,9 @@ function appendQaDecisionLayers(
       }
       if (!verificationMode && automation?.blockers[0]) {
         lines.push(`  - Automation gap: ${escapeMarkdownInline(automation.blockers[0])}`);
+      }
+      if (automation?.executable?.status === "executable") {
+        lines.push(`  - Executable now: qamap e2e run ${scenario.id} (executor ${automation.executable.executor})`);
       }
     }
   }
@@ -4529,4 +4546,20 @@ function escapeMarkdownInline(value: string): string {
 
 function plainText(value: string): string {
   return value.replaceAll("`", "'").replace(/\s+/g, " ").trim();
+}
+
+/** Attach the executor and fixture check to each drafted scenario so qa can say which ones run now. */
+function annotateExecutableScenarios(
+  flows: QaDraftFlow[],
+  config: QaDraftOptions["config"],
+  runner: string,
+): QaDraftFlow[] {
+  if (!config?.executors) return flows;
+  return flows.map((flow) => ({
+    ...flow,
+    scenarioAutomation: flow.scenarioAutomation.map((receipt) => ({
+      ...receipt,
+      executable: assessScenarioExecutability(receipt, config, runner),
+    })),
+  }));
 }

@@ -8,7 +8,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { generateE2eDraft } from "../dist/index.js";
+import { generateE2eDraft, runE2eScenario } from "../dist/index.js";
 
 const execFileAsync = promisify(execFile);
 const args = process.argv.slice(2);
@@ -53,12 +53,19 @@ for (const contract of config.contracts) {
     const regression = await runCommand(contract.validateCommand, prepared.repositoryRoot);
     assertExpectedFailure(contract, regression);
     await assertArtifactDigest(prepared.repositoryRoot, generatedFiles, artifactDigest, "regression run");
+    const scenarioRegression = await runScenarioContract(contract, draft, prepared.repositoryRoot, "failed");
 
     await copyLayer(prepared.fixtureRoot, contract.fixedOverlay, prepared.repositoryRoot);
     await assertArtifactDigest(prepared.repositoryRoot, generatedFiles, artifactDigest, "fixed overlay");
     const fixedAfter = await runCommand(contract.validateCommand, prepared.repositoryRoot);
     assertExpectedPass(contract, fixedAfter, "restored fixed head");
     await assertArtifactDigest(prepared.repositoryRoot, generatedFiles, artifactDigest, "fixed run");
+    const scenarioFixed = await runScenarioContract(contract, draft, prepared.repositoryRoot, "passed");
+    if (scenarioRegression && scenarioFixed && scenarioFixed.comparison?.verdict !== "recovered") {
+      throw new Error(
+        `scenario run comparison expected recovered, got ${scenarioFixed.comparison?.verdict ?? "none"}`,
+      );
+    }
 
     results.push({
       name: contract.name,
@@ -69,6 +76,15 @@ for (const contract of config.contracts) {
       regression: contract.regressionName,
       fixedEvidence: firstMatchingLine(fixedAfter.output, contract.fixedOutputIncludes),
       failureEvidence: firstMatchingLine(regression.output, contract.regressionOutputIncludes),
+      scenarioRun: scenarioFixed
+        ? {
+            scenarioId: scenarioFixed.scenarioId,
+            regression: scenarioRegression.receipt.status,
+            fixed: scenarioFixed.receipt.status,
+            verdict: scenarioFixed.comparison?.verdict,
+            assertions: scenarioFixed.receipt.assertions.length,
+          }
+        : undefined,
       tempRoot: keep ? prepared.tempRoot : undefined,
     });
   } catch (error) {
@@ -94,6 +110,12 @@ for (const result of results) {
   console.log(`- PASS ${result.name}`);
   console.log(`  generated: ${result.generatedFiles} file(s), ${result.compiledScenarios} compiled scenario(s)`);
   console.log(`  artifact unchanged: sha256:${result.artifactDigest}`);
+  if (result.scenarioRun) {
+    console.log(
+      `  scenario run: ${result.scenarioRun.regression} on regression, ${result.scenarioRun.fixed} on fix, ` +
+        `${result.scenarioRun.verdict} (${result.scenarioRun.assertions} assertion(s))`,
+    );
+  }
   console.log(`  regression caught: ${result.regression}`);
   if (result.failureEvidence) console.log(`  failure evidence: ${result.failureEvidence}`);
   if (result.fixedEvidence) console.log(`  fixed evidence: ${result.fixedEvidence}`);
@@ -212,6 +234,43 @@ async function runRequiredCommand(command, cwd, label) {
   if (result.code !== 0) {
     throw new Error(`${label} failed (${formatCommand(command)}):\n${tail(result.output)}`);
   }
+}
+
+/**
+ * Optional contract: execute the compiled scenario through qamap e2e run with the
+ * contract's executor declaration and require the receipt status for this phase.
+ * Proves the receipt itself tells the seeded regression from the fix.
+ */
+async function runScenarioContract(contract, draft, repositoryRoot, expectedStatus) {
+  if (!contract.scenarioRun) {
+    return undefined;
+  }
+  const receipt = draft.files
+    .flatMap((file) => file.scenarioAutomation)
+    .find((candidate) => candidate.title === contract.scenarioRun.scenarioTitle && candidate.status === "compiled");
+  if (!receipt) {
+    throw new Error(`scenario run could not find a compiled scenario titled ${contract.scenarioRun.scenarioTitle}`);
+  }
+  // Resolve the scenario from the committed range so its id stays stable while the
+  // overlays change the working tree the executor actually runs against.
+  const result = await runE2eScenario(repositoryRoot, receipt.scenarioId, {
+    base: "main",
+    head: "HEAD",
+    includeWorkingTree: false,
+    output: contract.output ?? "tests/e2e",
+    config: { executors: { benchmark: contract.scenarioRun.executor }, fixtures: {}, scenarioFixtures: {} },
+    executor: "benchmark",
+  });
+  if (result.receipt.status !== expectedStatus) {
+    throw new Error(
+      `scenario run expected ${expectedStatus} but received ${result.receipt.status}` +
+        (result.receipt.status === "blocked" ? `: ${result.receipt.reason}` : ""),
+    );
+  }
+  if (result.receipt.assertions.length === 0) {
+    throw new Error("scenario run produced no assertions");
+  }
+  return result;
 }
 
 async function runCommand(command, cwd) {
