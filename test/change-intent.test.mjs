@@ -5632,3 +5632,129 @@ function branch(root, name) {
 function git(root, ...args) {
   execFileSync("git", args, { cwd: root, stdio: "ignore" });
 }
+
+test("near-duplicate badge copy on a new surface is flagged against the existing surface", async (t) => {
+  const root = await makeRepo(t);
+  const summaryFile = "src/pages/summary.tsx";
+  const confirmationFile = "src/pages/confirmation.tsx";
+  await write(root, summaryFile, [
+    "import { Badge } from '../ui/badge';",
+    "export function SummaryCard() {",
+    "  return <Badge>Ships after payment clears</Badge>;",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "feat/order-confirmation");
+  await write(root, confirmationFile, [
+    "import { Badge } from '../ui/badge';",
+    "export function ConfirmationScreen() {",
+    "  return <Badge>Ships when the order completes</Badge>;",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "feat: add order confirmation screen");
+
+  const analysis = await analyze(root, [confirmationFile]);
+  const copyEvidence = analysis.intents.flatMap((intent) => intent.evidence).filter((item) =>
+    item.symbol === "divergent-copy:Badge"
+  );
+  assert.deepEqual(copyEvidence.map((item) => [item.file, item.startLine]), [[confirmationFile, 3]]);
+  assert.match(
+    copyEvidence[0].value,
+    /"Ships when the order completes" that nearly duplicates "Ships after payment clears" in src\/pages\/summary\.tsx:3/,
+  );
+  assert.ok(analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+    /divergent copy for the same data/i.test(scenario.title)
+  ));
+});
+
+test("near-duplicate action labels across toolbars are flagged", async (t) => {
+  const root = await makeRepo(t);
+  const ordersFile = "src/features/orders/Toolbar.tsx";
+  const historyFile = "src/features/history/Toolbar.tsx";
+  await write(root, ordersFile, [
+    "import { Button } from '../../ui/button';",
+    "export function OrdersToolbar() {",
+    "  return <Button>Search orders</Button>;",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "feat/history-toolbar");
+  await write(root, historyFile, [
+    "import { Button } from '../../ui/button';",
+    "export function HistoryToolbar() {",
+    "  return <Button aria-label=\"Search purchases\">Search purchases</Button>;",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "feat: add purchase history toolbar");
+
+  const analysis = await analyze(root, [historyFile]);
+  const copyEvidence = analysis.intents.flatMap((intent) => intent.evidence).filter((item) =>
+    item.symbol?.startsWith("divergent-copy:")
+  );
+  assert.deepEqual(copyEvidence.map((item) => item.symbol), ["divergent-copy:Button"]);
+  assert.match(copyEvidence[0].value, /"Search purchases" that nearly duplicates "Search orders" in src\/features\/orders\/Toolbar\.tsx:3/);
+});
+
+test("identical, unrelated, same-file, and non-label copy is not flagged", async (t) => {
+  const root = await makeRepo(t);
+  const summaryFile = "src/pages/summary.tsx";
+  const sharedFile = "src/pages/receipt.tsx";
+  const unrelatedFile = "src/pages/returns.tsx";
+  const proseFile = "src/pages/help.tsx";
+  const sameFile = "src/pages/checkout.tsx";
+  await write(root, summaryFile, [
+    "import { Badge } from '../ui/badge';",
+    "export function SummaryCard() {",
+    "  return <Badge>Ships after payment clears</Badge>;",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "feat/more-surfaces");
+  await write(root, sharedFile, [
+    "import { Badge } from '../ui/badge';",
+    "export function Receipt() {",
+    "  return <Badge>Ships after payment clears</Badge>;",
+    "}",
+    "",
+  ].join("\n"));
+  await write(root, unrelatedFile, [
+    "import { Badge } from '../ui/badge';",
+    "export function Returns() {",
+    "  return <Badge>Free returns within thirty days</Badge>;",
+    "}",
+    "",
+  ].join("\n"));
+  await write(root, proseFile, [
+    "export function Help() {",
+    "  return <p>Ships when the order completes and the courier confirms pickup.</p>;",
+    "}",
+    "",
+  ].join("\n"));
+  await write(root, sameFile, [
+    "import { Badge } from '../ui/badge';",
+    "export function Checkout() {",
+    "  return (",
+    "    <>",
+    "      <Badge>Ready for pickup today</Badge>",
+    "      <Badge>Ready for pickup tomorrow</Badge>",
+    "    </>",
+    "  );",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "feat: add receipt, returns, help, and checkout surfaces");
+
+  const analysis = await analyze(root, [sharedFile, unrelatedFile, proseFile, sameFile]);
+  const copyEvidence = analysis.intents.flatMap((intent) => intent.evidence).filter((item) =>
+    item.symbol?.startsWith("divergent-copy:")
+  );
+  assert.deepEqual(copyEvidence, []);
+  assert.ok(!analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+    /divergent copy/i.test(scenario.title)
+  ));
+});
