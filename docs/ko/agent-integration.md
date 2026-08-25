@@ -34,6 +34,11 @@ npx --yes @ivorycanvas/qamap@latest qa --format agent
 4. `intents`와 `flows`: 변경 의도, 확인할 시나리오, 영향받는 흐름
 5. `requiredEvidence`: 판단을 신뢰하기 전에 더 필요한 근거
 
+`route.command`는 `qamap qa run`이 실행할 명령 하나입니다. 이번 변경에서
+다른 테스트나 벤치마크 명령도 꼭 확인해야 한다면
+`route.additionalCommands`에 따로 들어갑니다. 이 명령들은 자동으로
+실행되지 않으며 각각 별도의 승인과 실행 결과가 필요합니다.
+
 ## 모노레포에서 명령을 실행할 위치
 
 먼저 `analysisScope.commandCwd`를 확인합니다.

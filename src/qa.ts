@@ -1,5 +1,6 @@
 import { constants as fsConstants } from "node:fs";
 import { assessScenarioExecutability } from "./e2e-run.js";
+import { isBenchmarkValidationStructurePath } from "./benchmark-paths.js";
 import type { QAMapConfig } from "./types.js";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -106,7 +107,10 @@ export interface QaDraftResult {
 }
 
 export type QaReadinessBasis = "optional-automation" | "repository-validation";
-export type QaVerificationStatus = "ready-to-run" | "command-needed";
+export type QaVerificationStatus =
+  | "ready-to-run"
+  | "additional-commands-required"
+  | "command-needed";
 export type QaRouteStatus =
   | "draft-ready"
   | "draft-near-runnable"
@@ -122,6 +126,7 @@ export interface QaRouteDecision {
   status: QaRouteStatus;
   nextAction: QaRouteNextAction;
   command?: string;
+  additionalCommands?: string[];
 }
 
 export interface QaReadinessSummary extends E2eDraftReadinessSummary {
@@ -417,6 +422,32 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
           ])
       : candidateCommandsWithoutInsufficientTests;
   const suggestedCommands = await preferLocallyRunnableValidationCommands(root, routedCandidateCommands);
+  const selectedValidationCommand = suggestedCommands[0];
+  const routeContracts = currentDelta
+    ? currentDelta.repositoryContracts.filter((contract) => !runtimeGapTestFiles.has(contract.file))
+    : trustworthyChangedTestContracts;
+  const uncoveredContractFiles = uniqueStrings(
+    routeContracts
+      .map((contract) => contract.file)
+      .filter((file) =>
+        !selectedValidationCommand ||
+        !commandCoversChangedTestFile(selectedValidationCommand, file)
+      ),
+  );
+  const uncoveredContractCommands = await buildTestVerificationCommands(
+    root,
+    uncoveredContractFiles,
+    draft.plan.suggestedCommands,
+  );
+  const validationScopeFiles = currentDelta?.files ?? changedFiles;
+  const benchmarkValidationCommands = validationScopeFiles.some(isBenchmarkValidationStructurePath)
+    ? draft.plan.suggestedCommands.filter(isBenchmarkValidationCommand)
+    : [];
+  const requiredValidationCommands = uniqueStrings([
+    ...(selectedValidationCommand ? [selectedValidationCommand] : []),
+    ...uncoveredContractCommands,
+    ...benchmarkValidationCommands,
+  ]);
   const missingEvidence = uniqueMissingEvidence([
     ...runtimePrerequisiteTestGaps.map(runtimePrerequisiteMissingEvidence),
     ...buildMissingEvidence(qaFiles),
@@ -443,8 +474,14 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
       })),
   );
   const evidenceSummary = summarizeQaTraceEvidence(traces);
-  const readiness = buildQaReadiness(draft.readinessSummary, flows, suggestedCommands, changedFiles);
-  const route = buildQaRouteDecision(readiness, suggestedCommands);
+  const readiness = buildQaReadiness(
+    draft.readinessSummary,
+    flows,
+    suggestedCommands,
+    requiredValidationCommands,
+    changedFiles,
+  );
+  const route = buildQaRouteDecision(readiness, suggestedCommands, requiredValidationCommands);
   const capabilities = evaluateQaCapabilities({
     intents: {
       total: draft.plan.changeAnalysis.intents.length,
@@ -887,15 +924,21 @@ function toPosixPath(value: string): string {
 function buildQaRouteDecision(
   readiness: QaReadinessSummary,
   suggestedCommands: string[],
+  requiredCommands: string[],
 ): QaRouteDecision {
   if (readiness.basis === "repository-validation") {
-    const command = suggestedCommands[0];
+    const commands = requiredCommands.length > 0
+      ? requiredCommands
+      : suggestedCommands.slice(0, 1);
+    const command = commands[0];
+    const additionalCommands = commands.slice(1);
     return command
       ? {
           basis: "repository-validation",
           status: "verification-ready-to-run",
           nextAction: "run-repository-command",
           command,
+          ...(additionalCommands.length > 0 ? { additionalCommands } : {}),
         }
       : {
           basis: "repository-validation",
@@ -915,6 +958,7 @@ function buildQaReadiness(
   readiness: E2eDraftReadinessSummary,
   flows: QaDraftFlow[],
   suggestedCommands: string[],
+  requiredCommands: string[],
   changedFiles: string[],
 ): QaReadinessSummary {
   const repositoryValidation = flows.length > 0 && (
@@ -928,19 +972,39 @@ function buildQaReadiness(
       automationApplicable: true,
     };
   }
-  const commandAvailable = suggestedCommands.length > 0;
+  const commands = requiredCommands.length > 0
+    ? requiredCommands
+    : suggestedCommands.slice(0, 1);
+  const commandAvailable = commands.length > 0;
+  const additionalCommandCount = Math.max(0, commands.length - 1);
   return {
     ...readiness,
-    score: commandAvailable ? 100 : 50,
-    level: commandAvailable ? "ready" : "needs-work",
+    score: commandAvailable ? (additionalCommandCount > 0 ? 75 : 100) : 50,
+    level: commandAvailable ? (additionalCommandCount > 0 ? "near-runnable" : "ready") : "needs-work",
     recommendation: commandAvailable
-      ? `Run the selected repository validation command: ${suggestedCommands[0]}.`
+      ? additionalCommandCount > 0
+        ? "Run the selected repository validation command, then run the " +
+          additionalCommandCount + " additional required command" +
+          (additionalCommandCount === 1 ? "" : "s") + " explicitly."
+        : "Run the selected repository validation command: " + commands[0] + "."
       : "Define a repository-owned validation command for this change before merge.",
     requiredScenarioGaps: 0,
-    topBlockers: commandAvailable ? [] : ["A repository-owned validation command is not declared."],
+    topBlockers: commandAvailable
+      ? additionalCommandCount > 0
+        ? [
+            additionalCommandCount + " additional repository validation command" +
+              (additionalCommandCount === 1 ? " remains" : "s remain") +
+              " outside the single-command qa run boundary.",
+          ]
+        : []
+      : ["A repository-owned validation command is not declared."],
     basis: "repository-validation",
     automationApplicable: false,
-    verificationStatus: commandAvailable ? "ready-to-run" : "command-needed",
+    verificationStatus: commandAvailable
+      ? additionalCommandCount > 0
+        ? "additional-commands-required"
+        : "ready-to-run"
+      : "command-needed",
   };
 }
 
@@ -1087,11 +1151,11 @@ async function buildTestVerificationCommands(
   const pytest = suggestedCommands.find((command) => /^pytest(?:\s|$)/i.test(command));
   const pythonTests = changedEvidence.filter((file) => /(?:^|\/)test_[^/]+\.py$|(?:^|\/)[^/]+_test\.py$/i.test(file));
   if (pytest && pythonTests.length > 0) {
-    return [`pytest ${pythonTests.slice(0, 4).map(shellCommandArgument).join(" ")}`];
+    return [`pytest ${pythonTests.map(shellCommandArgument).join(" ")}`];
   }
   const packageTest = suggestedCommands.find((command) => /^(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+test(?:\s|$)/i.test(command));
   if (packageTest && pythonTests.length > 0) {
-    return [`${packageTest} -- ${pythonTests.slice(0, 4).map(shellCommandArgument).join(" ")}`];
+    return [`${packageTest} -- ${pythonTests.map(shellCommandArgument).join(" ")}`];
   }
   const directPackageTest = suggestedCommands.find((command) =>
     /^(?:npm|pnpm|yarn)(?:\s+run)?\s+test$/i.test(command)
@@ -1108,7 +1172,7 @@ async function buildTestVerificationCommands(
     const focused = buildFocusedJavaScriptTestCommand(
       directPackageTest,
       testScript,
-      javascriptTests.slice(0, 4),
+      javascriptTests,
     );
     return focused ? [focused] : [];
   }
@@ -1122,6 +1186,10 @@ async function buildTestVerificationCommands(
 
 function isFocusedValidationCommand(command: string): boolean {
   return /--runTestsByPath\b|(?:^|\s)[^\s]+(?:test|spec)\.(?:[cm]?[jt]sx?|py)(?:\s|$)/i.test(command);
+}
+
+function isBenchmarkValidationCommand(command: string): boolean {
+  return /\b(?:bench|benchmark)(?::[A-Za-z0-9_-]+)?\b/i.test(command);
 }
 
 interface ChangedWorkspaceTestGroup {
@@ -3005,6 +3073,7 @@ export function formatTextQaDraft(result: QaDraftResult): string {
   }
   const validationCommand = nextStepCommand(result);
   const supplementalCommand = supplementalValidationCommand(result);
+  const additionalCommands = additionalValidationCommands(result);
   if (validationCommand) {
     const commandLocation = result.analysisScope.commandCwd === "selected-package" &&
         result.analysisScope.selectedPath
@@ -3018,11 +3087,20 @@ export function formatTextQaDraft(result: QaDraftResult): string {
       `  Supplemental validation: ${plainText(supplementalCommand)} (available, not selected for this QA route)`,
     );
   }
+  for (const command of additionalCommands) {
+    lines.push(`  Additional required validation: ${plainText(command)} (not run)`);
+  }
+  if (additionalCommands.length > 0) {
+    lines.push("  qa run executes only the selected command; run each additional command explicitly.");
+  }
 
   lines.push("");
   lines.push("Next");
   if (validationCommand) {
     lines.push("  Run selected repository validation: qamap qa run");
+    if (additionalCommands.length > 0) {
+      lines.push("  Run every additional required validation command shown above and record each result.");
+    }
   } else {
     lines.push("  Review the selected scenarios before choosing an execution step.");
   }
@@ -3115,6 +3193,7 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   }
   const nextCommand = nextStepCommand(result);
   const supplementalCommand = supplementalValidationCommand(result);
+  const additionalCommands = additionalValidationCommands(result);
   if (nextCommand) {
     const commandLocation = result.analysisScope.commandCwd === "selected-package" &&
         result.analysisScope.selectedPath
@@ -3128,7 +3207,14 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
       : " from the workspace root";
     lines.push(
       `- Supplemental repository validation${commandLocation}: ` +
-        `\`${escapeMarkdownInline(supplementalCommand)}\` is available but was not selected for this QA route.`,
+      `\`${escapeMarkdownInline(supplementalCommand)}\` is available but was not selected for this QA route.`,
+    );
+  }
+  if (additionalCommands.length > 0) {
+    lines.push(
+      `- Additional required validation: ${additionalCommands.map((command) =>
+        `\`${escapeMarkdownInline(command)}\``).join(", ")}. ` +
+        "`qamap qa run` executes only the selected command; run these commands explicitly.",
     );
   }
   const verificationOnly = result.readiness.basis === "repository-validation";
@@ -3843,7 +3929,16 @@ function supplementalValidationCommand(result: QaDraftResult): string | undefine
   return result.suggestedCommands[0];
 }
 
+function additionalValidationCommands(result: QaDraftResult): string[] {
+  return result.route.additionalCommands ?? [];
+}
+
 function formatRepositoryVerificationStage(result: QaDraftResult, command?: string): string {
+  if (result.readiness.verificationStatus === "additional-commands-required" && command) {
+    const additionalCount = additionalValidationCommands(result).length;
+    return `selected \`${escapeMarkdownInline(command)}\`; ${additionalCount} additional required command` +
+      `${additionalCount === 1 ? "" : "s"} remain outside the single-command \`qa run\` boundary`;
+  }
   if (result.readiness.verificationStatus === "ready-to-run" && command) {
     return `ready to run \`${escapeMarkdownInline(command)}\`; QAMap has not executed it`;
   }
@@ -4002,6 +4097,17 @@ function focusedCommandTargetsFile(command: string, file: string): boolean {
     return false;
   }
   return /--runTestsByPath\b|(?:^|\s)[^\s]+(?:test|spec)\.[cm]?[jt]sx?(?:\s|$)/i.test(command);
+}
+
+function commandCoversChangedTestFile(command: string, file: string): boolean {
+  if (focusedCommandTargetsFile(command, file)) {
+    return true;
+  }
+  if (isFocusedValidationCommand(command)) {
+    return false;
+  }
+  return /^(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+test(?:\s|$)/i.test(command) ||
+    /^pytest(?:\s|$)|^go\s+test(?:\s|$)|^cargo\s+test(?:\s|$)/i.test(command);
 }
 
 function changedTestContractScore(flow: QaDraftFlow, contract: ChangedTestContract): number {

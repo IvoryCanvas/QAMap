@@ -491,13 +491,74 @@ function discoverBenchmarkValidationScripts(
   if (!changedFiles.some(isBenchmarkValidationStructurePath)) {
     return [];
   }
-  const selected = Object.entries(scripts)
-    .filter(([name, command]) => isUsableScript(command) && isRepositoryBenchmarkScript(name, command))
-    .sort(([leftName, leftCommand], [rightName, rightCommand]) =>
-      benchmarkScriptRank(leftName, leftCommand) - benchmarkScriptRank(rightName, rightCommand) ||
-      leftName.localeCompare(rightName)
-    )[0];
-  return selected ? [selected[0]] : [];
+  const candidates = Object.entries(scripts)
+    .filter(([name, command]) => isUsableScript(command) && isRepositoryBenchmarkScript(name, command));
+  if (candidates.length === 0) {
+    return [];
+  }
+  const ranked = candidates
+    .map(([name, command]) => ({
+      name,
+      command,
+      affinity: benchmarkScriptAffinity(name, command, changedFiles),
+    }))
+    .sort((left, right) =>
+      benchmarkScriptRank(left.name, left.command) - benchmarkScriptRank(right.name, right.command) ||
+      left.name.localeCompare(right.name)
+    );
+  const selected = ranked.filter((candidate) => candidate.affinity > 0);
+  if (changedFiles.some(isGenericBenchmarkValidationPath)) {
+    selected.push(ranked[0]);
+  }
+  const result = selected.length > 0 ? selected : [ranked[0]];
+  const selectedNames = new Set(result.map((candidate) => candidate.name));
+  return ranked
+    .filter((candidate) => selectedNames.has(candidate.name))
+    .map((candidate) => candidate.name);
+}
+
+const benchmarkVariantStopWords = new Set([
+  "assert",
+  "bench",
+  "benchmark",
+  "ci",
+  "config",
+  "json",
+  "mjs",
+  "node",
+  "script",
+  "scripts",
+  "test",
+  "tests",
+]);
+
+function benchmarkScriptAffinity(
+  name: string,
+  command: string,
+  changedFiles: string[],
+): number {
+  const scriptTokens = new Set(benchmarkVariantTokens(name + " " + command));
+  const changedTokens = new Set(changedFiles.flatMap(benchmarkVariantTokens));
+  return [...scriptTokens].filter((token) => changedTokens.has(token)).length;
+}
+
+function benchmarkVariantTokens(value: string): string[] {
+  return uniqueCommands(
+    value
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length >= 3 && !benchmarkVariantStopWords.has(token)),
+  );
+}
+
+function isGenericBenchmarkValidationPath(file: string): boolean {
+  const normalized = file.replaceAll("\\", "/");
+  if (isBenchmarkRevisionFixturePath(normalized)) {
+    return true;
+  }
+  return /(?:^|\/)(?:bench|benchmark)(?:\.config)?\.(?:json|json5|ya?ml|toml)$/i.test(normalized) ||
+    /(?:^|\/)scripts\/(?:bench|benchmark)\.[cm]?[jt]s$/i.test(normalized);
 }
 
 function benchmarkScriptRank(name: string, command: string): number {

@@ -42,10 +42,11 @@ The OpenAI Plugin Directory is a real first-run surface, so the next patches
 continue to prioritize recommendation quality over another distribution channel
 or runner name. The current generalized work queue is:
 
-1. Select every repository-owned validation contract changed by a pull request.
-   Analyzer benchmarks, public schemas and their consumers, package metadata,
-   and Changesets must not be reduced to one convenient focused test or an
-   unrelated language suite.
+1. Preserve every repository-owned validation contract changed by a pull
+   request. QAMap now keeps matching test and benchmark commands visible while
+   retaining a single-command `qa run` boundary. The next step is extending the
+   same coverage to public schemas and their consumers, package metadata, and
+   release manifests without reducing them to one convenient focused test.
 2. Treat changed repository tests as behavior contracts. Preserve explicit
    positive, negative, boundary, state-transition, retry, and invariance
    assertions instead of reducing them to a generic request to run the suite.

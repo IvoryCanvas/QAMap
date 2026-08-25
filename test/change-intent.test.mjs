@@ -513,6 +513,47 @@ test("change intent keeps unrelated feature commits separate", async (t) => {
   assert.ok(analysis.intents.every((intent) => intent.files.length === 1));
 });
 
+test("shared analyzer files do not merge independent feature commits", async (t) => {
+  const root = await makeRepo(t);
+  await write(
+    root,
+    "src/analyzer.ts",
+    "export const analyzerRules = [];\n",
+  );
+  commit(root, "benchmark baseline");
+  branch(root, "feat/independent-analyzer-rules");
+
+  await write(
+    root,
+    "src/analyzer.ts",
+    [
+      "export const analyzerRules = [];",
+      "export function detectUnscopedCacheWrite(source) { return source.includes('cache.set'); }",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: detect unscoped cache writes");
+
+  await write(
+    root,
+    "src/analyzer.ts",
+    [
+      "export const analyzerRules = [];",
+      "export function detectUnscopedCacheWrite(source) { return source.includes('cache.set'); }",
+      "export function flagDivergentLabels(labels) { return new Set(labels).size > 1; }",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: flag divergent labels across surfaces");
+
+  const analysis = await analyze(root, ["src/analyzer.ts"]);
+
+  assert.equal(analysis.intents.length, 2);
+  assert.ok(analysis.intents.some((intent) => /detect unscoped cache writes/i.test(intent.title)));
+  assert.ok(analysis.intents.some((intent) => /flag divergent labels across surfaces/i.test(intent.title)));
+  assert.ok(analysis.intents.every((intent) => intent.commits.length === 1));
+});
+
 test("a broad conventional scope does not merge unrelated product intents", async (t) => {
   const root = await makeRepo(t);
   await write(root, "src/share.ts", "export const shareState = 'idle';\n");
@@ -3582,6 +3623,63 @@ test("URL-backed UI modes become restoration QA with representative controls", a
   assert.ok(selectors.includes("Preview"));
   assert.ok(selectors.includes("Compare"));
   assert.ok(selectors.includes("Usage"));
+});
+
+test("routing evidence respects identifier boundaries without losing real redirect symbols", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/directory.ts", "export const directory = 'idle';\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/directory-policy");
+
+  await write(
+    root,
+    "src/directory.ts",
+    [
+      "export function requireDirectory(entries) {",
+      "  return entries.filter((entry) => entry.required);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: require a directory before indexing entries");
+
+  const directoryAnalysis = await analyze(root, ["src/directory.ts"]);
+  const directoryTitles = directoryAnalysis.intents.flatMap((intent) =>
+    intent.scenarios.map((scenario) => scenario.title)
+  );
+  const directoryLifecycle = directoryAnalysis.intents.flatMap((intent) => intent.lifecycle);
+  assert.equal(
+    directoryTitles.some((title) => /Entry payload and destination routing|Destination path and query parameters/i.test(title)),
+    false,
+  );
+  assert.equal(
+    directoryLifecycle.some((stage) =>
+      stage.kind === "observable-outcome" && /requireDirectory/i.test(`${stage.symbol ?? ""} ${stage.label}`)
+    ),
+    false,
+  );
+
+  await write(
+    root,
+    "src/directory.ts",
+    [
+      "export function requireDirectory(entries) {",
+      "  return entries.filter((entry) => entry.required);",
+      "}",
+      "export function handleRedirect(router, destination) {",
+      "  return router.push(destination);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: redirect indexed entries to their destination");
+
+  const redirectAnalysis = await analyze(root, ["src/directory.ts"]);
+  assert.ok(
+    redirectAnalysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+      /Entry payload and destination routing|Destination path and query parameters/i.test(scenario.title)
+    ),
+  );
 });
 
 test("QA keeps assets and fixture evidence with the owning workspace flow", async (t) => {

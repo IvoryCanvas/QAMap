@@ -226,6 +226,17 @@ const implementationPredicateCalls = new Set([
   "number.issafeinteger",
   "object.hasown",
 ]);
+const intentRelationStopWords = new Set([
+  "across",
+  "after",
+  "before",
+  "from",
+  "into",
+  "through",
+  "using",
+  "with",
+  "without",
+]);
 
 export async function analyzeChangeIntents(
   rootInput: string,
@@ -708,14 +719,21 @@ function commitsShareIntent(left: ParsedCommit, right: ParsedCommit): boolean {
   const sharesBehaviorFile = (left.files ?? []).some(
     (file) => isBehaviorBearingFile(file) && rightFiles.has(file),
   );
-  if (sharesBehaviorFile) {
+  const rightKeywords = new Set(
+    right.keywords.filter((keyword) => !intentRelationStopWords.has(keyword)),
+  );
+  const sharesBehaviorKeyword = left.keywords.some(
+    (keyword) => !intentRelationStopWords.has(keyword) && rightKeywords.has(keyword),
+  );
+  if (sharesBehaviorFile && sharesBehaviorKeyword) {
     return true;
   }
 
   // Conventional scopes and repeated structural vocabulary often describe a
-  // package or release theme, not one behavior lifecycle. Keep cross-file
-  // commits separate unless an explicit ticket connects them; exact file
-  // overlap remains the bounded structural relationship available here.
+  // package or release theme, not one behavior lifecycle. A shared file can
+  // also be a central analyzer, registry, or test harness. Require behavior
+  // vocabulary as well as structural overlap unless an explicit ticket joins
+  // the commits.
   return false;
 }
 
@@ -1620,7 +1638,10 @@ function buildIntentQaScenarios(
     (item.sourceRole === undefined || item.sourceRole === "product") &&
     item.file &&
     item.startLine !== undefined &&
-    /urlsearchparams|searchparams|query|location\.href|window\.location|destination|redirect/i.test(`${item.symbol ?? ""} ${item.value}`)
+    (
+      Boolean(matchRoutingSignal(`${item.symbol ?? ""} ${item.value}`)) ||
+      /\bquery(?:\s+parameter)?\b/i.test(`${item.symbol ?? ""} ${item.value}`)
+    )
   );
   const queryEvidenceByKey = new Map<string, ChangeIntentEvidence[]>();
   for (const item of destinationParameterEvidence) {
@@ -1828,22 +1849,27 @@ function buildIntentQaScenarios(
 
   // navigation.setOptions configures the current screen's header, it does not
   // route anywhere — exclude both its raw form and its behavioral label.
-  const entryRoutingSearchable = searchable
-    .replaceAll("navigation.setoptions", "")
-    .replaceAll("update the navigation options state", "");
-  const explicitOpenDestination = /\bopen\b[^.;]{0,80}\b(?:linked|destination|route|screen|page|detail|summary)\b/.test(
-    entryRoutingSearchable,
-  );
-  if (/navigat|redirect|route|deep.?link|payload|destination/.test(entryRoutingSearchable) || explicitOpenDestination) {
-    const routingEvidencePattern = explicitOpenDestination
-      ? /open|navigat|redirect|route|deep.?link|payload|destination/i
-      : /navigat|redirect|route|deep.?link|payload|destination/i;
-    const routingEvidence = scenarioEvidenceFor(
-      productLifecycle,
-      productEvidence,
-      routingEvidencePattern,
-      /navigation\.setoptions/i,
-    );
+  const routingEvidence = uniqueEvidence([
+    ...productLifecycle
+      .filter((stage) => {
+        const stageSearchable = `${stage.label} ${stage.evidence.map((item) => `${item.symbol ?? ""} ${item.value}`).join(" ")}`
+          .replaceAll("navigation.setoptions", "")
+          .replaceAll("update the navigation options state", "");
+        return Boolean(matchRoutingSignal(stageSearchable)) ||
+          /\bopen\b[^.;]{0,80}\b(?:linked|destination|route|screen|page|detail|summary)\b/i.test(stageSearchable);
+      })
+      .flatMap((stage) => stage.evidence),
+    ...productEvidence.filter((item) => {
+      const evidenceSearchable = `${item.symbol ?? ""} ${item.value}`;
+      return item.kind === "diff" &&
+        !/navigation\.setoptions/i.test(evidenceSearchable) &&
+        (
+          Boolean(matchRoutingSignal(evidenceSearchable)) ||
+          /\bopen\b[^.;]{0,80}\b(?:linked|destination|route|screen|page|detail|summary)\b/i.test(evidenceSearchable)
+        );
+    }),
+  ]).slice(0, 6);
+  if (routingEvidence.length > 0) {
     scenarios.push(makeScenario(intentId, "entry-routing", "failure", "critical", "Entry payload and destination routing", [
       "Prepare valid, missing, and stale entry payloads.",
     ], [
@@ -2697,24 +2723,22 @@ function collectDiffRiskEvidence(
               side,
             ));
           }
-          const routingMatch = line.text.match(
-            /(payload|deep.?link|destination|redirect|router\.push|navigate\w*|URLSearchParams|searchParams|location\.href|window\.location)/i,
-          );
+          const routingSignal = matchRoutingSignal(line.text);
           const queryOperation = line.text.match(
             /\b((?:params|queryParams|searchParams)|[A-Za-z_$][\w$]*\.searchParams)\.(get|set|delete)\(\s*["'`]([^"'`]+)["'`]/i,
           );
-          const metadataOnlyRoutingMatch = routingMatch &&
-            /^(?:payload|destination)$/i.test(routingMatch[1]) &&
+          const metadataOnlyRoutingMatch = routingSignal &&
+            /^(?:payload|destination)$/i.test(routingSignal) &&
             isStructuredDataFile(file);
-          if ((queryOperation || (routingMatch && !metadataOnlyRoutingMatch)) && !/navigation\.setoptions/i.test(line.text)) {
+          if ((queryOperation || (routingSignal && !metadataOnlyRoutingMatch)) && !/navigation\.setoptions/i.test(line.text)) {
             const queryDescription = queryOperation
               ? `${side === "base" ? "Removed" : "Changed"} line ${queryOperation[2] === "get" ? "reads" : queryOperation[2] === "set" ? "writes" : "removes"} query parameter "${queryOperation[3]}".`
-              : `${side === "base" ? "Removed" : "Changed"} line contains entry or routing evidence for ${routingMatch![1]}.`;
+              : `${side === "base" ? "Removed" : "Changed"} line contains entry or routing evidence for ${routingSignal}.`;
             evidence.push(diffRiskEvidence(
               file,
               hunk,
               line.line,
-              queryOperation ? `${queryOperation[1]}.${queryOperation[2]}(${queryOperation[3]})` : routingMatch![1],
+              queryOperation ? `${queryOperation[1]}.${queryOperation[2]}(${queryOperation[3]})` : routingSignal!,
               queryDescription,
               side,
             ));
@@ -2816,6 +2840,18 @@ function collectDiffRiskEvidence(
     }
   }
   return uniqueEvidence(evidence);
+}
+
+function matchRoutingSignal(line: string): string | undefined {
+  const direct = line.match(
+    /\b(payload|deep.?link|destination|redirect\w*|router\.(?:push|replace)|navigate\w*|openurl|openlink|URLSearchParams|searchParams|location\.href|window\.location)\b/i,
+  )?.[1];
+  if (direct) {
+    return direct;
+  }
+  return line.match(
+    /[a-z0-9](Redirect\w*|Navigate\w*|Destination\w*|Payload\w*|DeepLink\w*|SearchParams\w*)\b/,
+  )?.[1];
 }
 
 /** 계정 스코프를 시사하는 모듈 신호 — 세션 훅, 사용자 식별자, 인증 토큰 (issue: 계정 전환 누수) */
@@ -4350,7 +4386,7 @@ function lifecycleKindForIdentifier(identifier: string): BehaviorLifecycleStageK
   if (/^(?:on|handle)(?:press|click|submit|change|complete|open|response|message|select|toggle)/.test(leafValue)) {
     return "trigger";
   }
-  if (/(?:navigate|redirect|router\.(?:push|replace)|openurl|openlink)/.test(value) || /(?:show|display|preview|render)/.test(leafValue)) {
+  if (matchRoutingSignal(identifier) || /(?:show|display|preview|render)/.test(leafValue)) {
     return "observable-outcome";
   }
   if (/(?:sessionstorage|localstorage|asyncstorage)/.test(value) ||
