@@ -198,6 +198,99 @@ test("qa routes benchmark changes through the repository harness", async () => {
   );
 });
 
+test("qa preserves every changed test and benchmark validation contract", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "scripts"), { recursive: true });
+  await mkdir(path.join(root, "src/rules"), { recursive: true });
+  await mkdir(path.join(root, "test"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "validation-contract-fixture",
+      private: true,
+      packageManager: "pnpm@10.0.0",
+      scripts: {
+        test: "node --test test/*.test.mjs",
+        "bench:ci": "node scripts/bench.mjs --config bench.config.json --assert",
+        "bench:agent": "node scripts/agent-bench.mjs --config agent-bench.config.json",
+        "bench:execution": "node scripts/execution-bench.mjs --config execution-bench.config.json",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "scripts/bench.mjs"), "console.log('quality benchmark');\n");
+  await writeFile(path.join(root, "scripts/agent-bench.mjs"), "console.log('agent benchmark');\n");
+  await writeFile(path.join(root, "scripts/execution-bench.mjs"), "console.log('execution benchmark');\n");
+  await writeFile(
+    path.join(root, "src/rules/contract.ts"),
+    "export function routeQaScenario(source) { return /version:1/.test(source); }\n",
+  );
+  await writeFile(path.join(root, "bench.config.json"), '{"targets":[]}\n');
+  await writeFile(path.join(root, "agent-bench.config.json"), '{"tasks":[]}\n');
+  await writeFile(path.join(root, "execution-bench.config.json"), '{"targets":[]}\n');
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+  await git(root, ["switch", "-c", "feature/validation-contracts"]);
+
+  await writeFile(
+    path.join(root, "src/rules/contract.ts"),
+    "export function routeQaScenario(source) { return /version:2/.test(source); }\n",
+  );
+  await writeFile(path.join(root, "bench.config.json"), '{"targets":["quality"]}\n');
+  await writeFile(path.join(root, "agent-bench.config.json"), '{"tasks":["review"]}\n');
+  await writeFile(path.join(root, "execution-bench.config.json"), '{"targets":["runtime"]}\n');
+  for (let index = 1; index <= 6; index += 1) {
+    await writeFile(
+      path.join(root, "test/contract-" + index + ".test.mjs"),
+      [
+        'import test from "node:test";',
+        'test("validation contract ' + index + '", () => {});',
+        "",
+      ].join("\n"),
+    );
+  }
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: add independent validation contracts"]);
+
+  const plan = await generateTestPlan(root, { base: "main", head: "HEAD" });
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const text = formatTextQaDraft(qa);
+  const agent = JSON.parse(formatAgentQaDraft(qa));
+
+  assert.deepEqual(
+    plan.suggestedCommands.slice(0, 3),
+    ["pnpm run bench:ci", "pnpm run bench:agent", "pnpm run bench:execution"],
+  );
+  assert.equal(
+    qa.route.basis,
+    "repository-validation",
+    JSON.stringify({
+      route: qa.route,
+      readiness: qa.readiness,
+      flows: qa.flows.map(({ title, verificationMode, existingEvidencePaths }) => ({
+        title,
+        verificationMode,
+        existingEvidencePaths,
+      })),
+      commands: qa.suggestedCommands,
+    }),
+  );
+  for (let index = 1; index <= 6; index += 1) {
+    assert.match(qa.route.command ?? "", new RegExp("test/contract-" + index + "\\.test\\.mjs"));
+    assert.match(agent.route.command ?? "", new RegExp("test/contract-" + index + "\\.test\\.mjs"));
+  }
+  assert.deepEqual(
+    qa.route.additionalCommands,
+    ["pnpm run bench:ci", "pnpm run bench:agent", "pnpm run bench:execution"],
+  );
+  assert.deepEqual(agent.route.additionalCommands, qa.route.additionalCommands);
+  assert.equal(qa.readiness.verificationStatus, "additional-commands-required");
+  assert.equal(qa.readiness.score < 100, true);
+  assert.match(text, /Additional required validation: pnpm run bench:ci/);
+  assert.match(text, /qa run executes only the selected command/);
+});
+
 test("scanProject reports common AI agent repository risks", async () => {
   const root = await makeTempRepo();
   await mkdir(path.join(root, ".cursor"), { recursive: true });
@@ -1698,6 +1791,9 @@ test("generateQaDraft prefers changed repository test contracts over broad histo
     status: "verification-ready-to-run",
     nextAction: "run-repository-command",
     command: "npm run build && node --test test/report-command.test.mjs",
+    additionalCommands: [
+      "npm run build && node --test src/features/revenue/components/__tests__/RevenueScreen.test.tsx test/cache-policy.test.mjs",
+    ],
   });
   assert.equal(
     qa.suggestedCommands[0],
@@ -2172,6 +2268,9 @@ test("generateQaDraft scopes changed test evidence across workspace packages", a
     status: "verification-ready-to-run",
     nextAction: "run-repository-command",
     command: "pnpm --filter @fixture/store test -- test/cart.test.ts",
+    additionalCommands: [
+      "pnpm --filter @fixture/admin test -- test/access.test.mjs",
+    ],
   });
 });
 

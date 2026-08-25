@@ -94,6 +94,13 @@ no additional LLM call, but the host agent uses its own model and permissions.
 QAMap keeps static reasoning and executed QA separate. A proposed scenario or E2E
 draft is never reported as a passing test.
 
+When one change modifies several independent test or benchmark contracts,
+QAMap keeps every applicable command visible. `qamap qa run` remains bounded to
+one selected command; the others appear as **Additional required validation**
+and remain `not run` until they are executed explicitly. **Supplemental
+validation** means a repository command exists but was not selected as proof for
+this QA route.
+
 For supported runtime contracts, QAMap can trace a changed entry point through
 local imports to a required provider. A test that mocks away that prerequisite
 is disclosed as incomplete evidence instead of being promoted as proof.
@@ -234,7 +241,7 @@ npx --yes @ivorycanvas/qamap@latest qa --format markdown
 | Command | What it does | Writes or runs project code? |
 | --- | --- | --- |
 | `qamap qa` | Maps the diff to behavior, risk, evidence, and QA scenarios. | No |
-| `qamap qa run` | Runs one existing repository validation selected by QAMap. | Yes, explicitly |
+| `qamap qa run` | Runs one selected repository validation. Other required commands stay listed and `not run`. | Yes, explicitly |
 | `qamap e2e draft . --dry-run` | Previews optional Playwright, Maestro, CLI, API, or manual automation. | No |
 | `qamap e2e run <scenario-id>` | Executes one compiled scenario through the executor and fixtures declared in `qamap.config.json`, then stores and compares the receipt. | Yes, the declared executor and seed hooks |
 

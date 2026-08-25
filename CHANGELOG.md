@@ -13,6 +13,13 @@
 ### Changed
 
 - Benchmark runners now share one fixture materialization helper under `scripts/lib/`.
+- Repository-validation routes now preserve every applicable changed test and benchmark command. `qamap qa run` still executes only one selected command, while additional required commands remain visible and explicitly `not run`.
+- Benchmark command discovery now keeps matching specialized benchmark scripts instead of reducing a multi-contract change to one generic benchmark.
+
+### Fixed
+
+- Independent feature commits no longer collapse into one change intent merely because they edit the same analyzer file; they now require shared behavior vocabulary or an explicit issue reference.
+- Routing analysis now respects identifier boundaries, so names such as `requireDirectory` do not become redirect scenarios or observable navigation outcomes.
 
 ## 0.4.14 - 2026-08-20
 

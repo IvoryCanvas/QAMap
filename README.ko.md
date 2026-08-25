@@ -96,6 +96,13 @@ npx --yes @ivorycanvas/qamap@latest qa
 않습니다. 화면이나 저장 상태처럼 사용자가 확인할 수 있는 결과를 코드에서
 찾지 못하면 임의의 검증 조건을 만들지 않고 근거가 부족하다고 표시합니다.
 
+한 PR에서 서로 다른 테스트나 벤치마크가 함께 바뀌면 확인할 명령도 여러
+개일 수 있습니다. `qamap qa run`은 안전 범위를 넓히지 않고 QAMap이 고른
+명령 하나만 실행합니다. 나머지는 **Additional required validation**으로
+보여주며, 직접 실행하기 전까지 `not run` 상태로 남습니다.
+**Supplemental validation**은 저장소에 실행할 수 있는 명령이 있지만 이번
+변경의 필수 검증으로 선택되지는 않았다는 뜻입니다.
+
 지원하는 저장소 구조에서는 변경된 화면이나 진입점부터 실제로 필요한
 모듈과 실행 조건까지 따라갑니다. 테스트가 그 조건을 모의 처리로
 우회했다면 완전한 검증 근거로 보지 않습니다.
@@ -218,7 +225,7 @@ npx --yes @ivorycanvas/qamap@latest qa --format markdown
 | 명령 | 하는 일 | 프로젝트 코드를 실행하거나 파일을 만드는가? |
 | --- | --- | --- |
 | `qamap qa` | 코드 변경을 동작, 위험, 근거, QA 항목에 연결 | 아니요 |
-| `qamap qa run` | QAMap이 고른 기존 검증 명령 하나를 명시적으로 실행 | 예 |
+| `qamap qa run` | QAMap이 고른 검증 명령 하나만 실행하며, 나머지 필수 명령은 `not run`으로 표시 | 예 |
 | `qamap e2e draft . --dry-run` | Playwright, Maestro, CLI, API, 수동 점검표 초안을 미리 보기 | 아니요 |
 | `qamap e2e run <scenario-id>` | `qamap.config.json` 에 선언한 실행기와 픽스처로 컴파일된 시나리오 하나를 실행하고, 영수증을 저장해 이전 실행과 비교합니다. | 예, 선언한 실행기와 시드 훅 |
 

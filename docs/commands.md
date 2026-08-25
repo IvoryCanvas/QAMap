@@ -46,7 +46,7 @@ Scenario routing and draft mapping answer different questions. Routing explains 
 Human QA output makes that boundary visible in three layers:
 
 1. **Important QA And Risk Map** keeps every evidence-backed scenario, including cases that require human review.
-2. **Executable Evidence Available Now** lists existing validation commands and structurally self-checked drafts without claiming they ran. An explicit `qa run` invocation may attach a separate repository-command execution receipt.
+2. **Executable Evidence Available Now** lists existing validation commands and structurally self-checked drafts without claiming they ran. When several changed validation contracts require different commands, one appears as the selected command and the rest appear as `Additional required validation`. An explicit `qa run` invocation may attach a receipt only for the selected command; every additional command remains `not run` until it is executed separately.
 3. **Manual Or Agent QA Contracts** preserves the exact setup, action, outcome, and missing evidence for scenarios that cannot yet compile deterministically.
 
 `static-runnable` means the generated artifact has an entrypoint, observable assertion, no skipped placeholder, and passing QAMap self-checks. It does not mean the target application or command was executed.
@@ -60,7 +60,7 @@ Draft readiness is reported as a **stage on a fixed four-step journey**, for exa
 | `almost runnable (3 of 4)` | `near-runnable` | Run the drafts locally and clear the remaining review items. |
 | `ready to run (4 of 4)` | `ready` | Drafts are ready to try as local regression evidence. |
 
-Machine consumers should read `route` first. It exposes the applicable basis, an unambiguous `draft-*` or `verification-*` status, the next action, and an exact existing command when one is available. `readiness.level` remains for v1 compatibility and describes optional automation only; it is not a PR verdict and is irrelevant when `route.basis` is `repository-validation`.
+Machine consumers should read `route` first. It exposes the applicable basis, an unambiguous `draft-*` or `verification-*` status, the next action, and an exact existing command when one is available. `route.additionalCommands` preserves other changed validation contracts that do not fit inside the single-command `qa run` boundary. `readiness.level` remains for v1 compatibility and describes optional automation only; it is not a PR verdict and is irrelevant when `route.basis` is `repository-validation`.
 
 
 ## What QAMap Produces
@@ -95,7 +95,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `qamap test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
 | `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. A single supported changed package is selected automatically, including an independent nested package. |
-| `qamap qa run . --base origin/main --head HEAD` | Re-analyze the change and execute only the exact existing repository validation command selected by the canonical route. Returns pass, fail, timeout, or blocked evidence; it never installs a runner or runs a proposed product E2E draft. |
+| `qamap qa run . --base origin/main --head HEAD` | Re-analyze the change and execute only the exact existing repository validation command selected by the canonical route. Additional required commands are reported but not executed. Returns pass, fail, timeout, or blocked evidence; it never installs a runner or runs a proposed product E2E draft. |
 | `qamap qa . --base origin/main --head HEAD --format agent` | The same decision content as one compact JSON line for coding agents — a versioned contract documented in [docs/agent-format.md](agent-format.md). |
 | `qamap e2e plan . --base origin/main --head HEAD` | Derive change intent and QA scenarios, then map them to coverage, test evidence, testability gaps, and an automation adapter. |
 | `qamap e2e plan . --base origin/main --head HEAD --record-history` | Save a compact local run snapshot under `.qamap/runs/` while keeping JSON/Markdown output usable. |

@@ -395,6 +395,11 @@
         "command": {
           "type": "string",
           "description": "Exact existing repository command when nextAction is run-repository-command. Check execution before deciding whether it still needs to run."
+        },
+        "additionalCommands": {
+          "type": "array",
+          "description": "Additional changed validation contracts that remain outside the single-command qa run boundary.",
+          "items": { "type": "string" }
         }
       }
     },
@@ -480,7 +485,7 @@
         },
         "verificationStatus": {
           "type": "string",
-          "enum": ["ready-to-run", "command-needed"],
+          "enum": ["ready-to-run", "additional-commands-required", "command-needed"],
           "description": "Repository-validation preparation state. This never means the command was executed or passed."
         }
       }
