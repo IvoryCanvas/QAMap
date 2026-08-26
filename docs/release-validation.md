@@ -26,6 +26,44 @@ a new runtime guarantee beyond the declared Node.js `>=20` engine contract.
 Node.js 20 is upstream EOL, so the README recommends an actively supported LTS
 release even though the compatibility smoke still passes.
 
+## 0.4.15 - 2026-08-26
+
+QAMap 0.4.15 adds a bounded path from a compiled QA scenario to local execution
+without making execution implicit. A repository can declare one executor, its
+fixtures, and scenario-to-fixture mapping in `qamap.config.json`; the explicit
+`qamap e2e run` command then records assertion results, timing, failure-only
+artifacts, and rerun comparison under an owner-controlled local directory.
+
+The release also improves static QA selection. Account-scoped client storage
+without an owner discriminator and divergent user-facing copy across related
+surfaces become evidence-backed review scenarios. Independent feature commits
+remain separate, identifier matching respects symbol boundaries, and every
+applicable changed test or benchmark command remains visible even though
+`qamap qa run` retains its single-command execution limit.
+
+A provider-neutral agent benchmark is included for opt-in measurement. The
+release gate uses only its deterministic dry-run assertion, so the receipt below
+does not claim a model-token saving or call an external model provider.
+
+| Gate | Candidate result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 412/412 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 35/35 committed static recommendation contracts passing |
+| `pnpm bench:agent --dry-run --assert` | Offline harness and result-shape contract passed; no provider invoked |
+| `pnpm bench:context` | 10/10 context identity and reuse checks passing |
+| `pnpm bench:execution` | 3/3 execution contracts passing; all three seeded regressions caught |
+| Coverage | Lines 90.70%, branches 87.15%, functions 95.99% |
+| Plugin package smoke | Packed 198 files, installed the 0.4.15 artifact in isolation, and produced evidence-backed agent output |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.15`; 198 files packed |
+
+These gates prove deterministic selection, package integrity, and known seeded
+regressions in committed public fixtures. They do not prove arbitrary product
+behavior, turn a generated draft into passing QA, or establish a universal
+token-reduction ratio. npm publication, Git tagging, the GitHub Release, and an
+OpenAI directory update remain separate post-merge actions.
+
 ## 0.4.14 - 2026-08-20
 
 QAMap 0.4.14 strengthens the path from a pull request diff to the evidence a
