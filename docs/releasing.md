@@ -25,7 +25,7 @@ Before publishing, confirm:
 - `CHANGELOG.md` has a dated section for the version being published.
 - `README.md`, [adoption](adoption.md), [E2E examples](e2e-output-examples.md), and [release validation](release-validation.md) describe the current CLI behavior.
 - npm, GitHub Releases, and the OpenAI Plugin Directory are described as independent release channels; no document hard-codes an older directory version as current.
-- If public branding changed, the README covers, skill icon, dedicated plugin upload images, and `docs/assets/qamap-social-card.png` have been reviewed at their intended sizes.
+- If public branding changed, the README covers, skill icon, dedicated plugin upload images, GitHub social preview, and general social card have been reviewed at their intended sizes. Use the [brand asset guide](../brand/README.md) as the inventory.
 - `pnpm run release:check` passes from a clean checkout.
 - Representative repository smoke notes in [release validation](release-validation.md) do not hit any stop condition.
 - npm login is available for a maintainer with publish permission for the `@ivorycanvas/qamap` package.
@@ -108,8 +108,10 @@ Use a fresh shell or temporary directory for the smoke check when possible.
 If the release is the version pinned by the OpenAI skill package, also run the published-package form of the smoke before submitting the plugin. The directory submission must refer to a package version that already resolves from the public registry. Follow [the plugin submission runbook](plugin-submission.md); npm publication does not imply directory approval.
 
 GitHub does not read a social preview image from Markdown automatically. After a
-brand update, upload `docs/assets/qamap-social-card.png` under the repository's
-social preview setting and verify the resulting card separately.
+brand update, upload
+`docs/assets/qamap-github-social-preview-1280x640.png` under the repository's
+social preview setting and verify the resulting card separately. Keep
+`docs/assets/qamap-social-card.png` for general Open Graph and social sharing.
 
 ## GitHub Release
 

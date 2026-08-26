@@ -55,6 +55,7 @@ required for a first run.
 | Task | Read |
 | --- | --- |
 | Open and maintain public issues | [Issue conventions](issues.md) |
+| Reuse or update public brand assets | [Brand assets](../brand/README.md) |
 | Prepare an npm and GitHub release | [Release runbook](releasing.md) |
 | Review current and historical release evidence | [Release validation](release-validation.md) |
 
