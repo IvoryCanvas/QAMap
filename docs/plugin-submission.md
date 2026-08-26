@@ -2,12 +2,18 @@
 
 QAMap packages one `skills-only` plugin for the shared OpenAI Plugins Directory. It reuses the same local CLI and `qamap.qa` contract as every other QAMap integration. It does not add an MCP server, hosted service, background hook, or second QA engine.
 
-QAMap `0.4.12` is currently approved and [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629). npm and GitHub releases can move ahead independently; a newer directory version requires a fresh upload and review. This repository remains the source of truth for the reviewed skill package and future listing updates.
+QAMap is [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629). npm, GitHub, and directory releases move independently. The public listing is the source of truth for the currently approved directory version; a newer npm or GitHub release requires a fresh upload and review before it appears there.
 
 Publishing a newer npm package or repository release does not update the
 directory listing automatically. Keep the approved version available, upload
 the replacement package as a new plugin version, and publish it only after the
 replacement passes review.
+
+| Channel | Current version source | How it updates |
+| --- | --- | --- |
+| npm | [npm package](https://www.npmjs.com/package/@ivorycanvas/qamap) | Maintainer publication |
+| GitHub | [GitHub Releases](https://github.com/IvoryCanvas/QAMap/releases) | Tagged repository release |
+| OpenAI Plugin Directory | [Public QAMap listing](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629) | Separate upload, review, and publication |
 
 ## Product Boundary
 
@@ -26,6 +32,7 @@ replacement passes review.
 | `skills/qamap-pr-qa/SKILL.md` | The single agent workflow |
 | `skills/qamap-pr-qa/agents/openai.yaml` | Skill presentation and invocation metadata |
 | `plugin/submission.json` | Listing copy, starter prompts, and evaluation cases |
+| `plugin/assets/` | Dedicated light and dark plugin and composer icons |
 | `PRIVACY.md` | Local data and network boundaries |
 | `TERMS.md` | Usage terms and warranty boundary |
 | `SUPPORT.md` | Public support and security routes |
@@ -47,6 +54,21 @@ pnpm plugin:smoke
 
 The repository CI and `release:check` run both gates.
 
+## Listing Images
+
+Use the dedicated image for each upload slot instead of resizing or cropping a
+README cover:
+
+| Upload slot | Repository asset |
+| --- | --- |
+| Plugin icon, light mode | `plugin/assets/qamap-plugin-light-256.png` |
+| Plugin icon, dark mode | `plugin/assets/qamap-plugin-dark-256.png` |
+| Composer icon, light mode | `plugin/assets/qamap-composer-light-48.png` |
+| Composer icon, dark mode | `plugin/assets/qamap-composer-dark-48.png` |
+
+The portable skill continues to use the canonical 512px icon at
+`skills/qamap-pr-qa/assets/qamap-logo.png`.
+
 ## Maintainer Submission And Update Sequence
 
 1. Complete the normal QAMap release gate and publish the exact package version referenced by the skill.
@@ -54,7 +76,7 @@ The repository CI and `release:check` run both gates.
 3. Confirm the submitting OpenAI account has completed identity verification and has Apps Management write permission.
 4. Open the [OpenAI plugin submission portal](https://platform.openai.com/plugins) and create a skills-only submission.
 5. Use `plugin/submission.json` as the source of truth for listing copy, starter prompts, and the five positive and three negative evaluations.
-6. Upload the canonical logo from `skills/qamap-pr-qa/assets/qamap-logo.png`.
+6. Upload all four dedicated images listed in **Listing Images**.
 7. Review every requested permission and test receipt before submitting.
 8. For a new plugin version, keep the currently published listing available until the replacement has been reviewed and is visible.
 

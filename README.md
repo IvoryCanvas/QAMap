@@ -6,7 +6,7 @@
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/qamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-![QAMap: find what a change needs to prove](docs/assets/qamap-cover.png)
+![QAMap: know what to test before merge](docs/assets/qamap-cover.png)
 
 **Find what a change needs to prove before merge.**
 

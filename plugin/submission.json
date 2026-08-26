@@ -11,6 +11,12 @@
     "privacyPolicyURL": "https://github.com/IvoryCanvas/QAMap/blob/main/PRIVACY.md",
     "termsOfServiceURL": "https://github.com/IvoryCanvas/QAMap/blob/main/TERMS.md"
   },
+  "listingAssets": {
+    "pluginIconLight": "plugin/assets/qamap-plugin-light-256.png",
+    "pluginIconDark": "plugin/assets/qamap-plugin-dark-256.png",
+    "composerIconLight": "plugin/assets/qamap-composer-light-48.png",
+    "composerIconDark": "plugin/assets/qamap-composer-dark-48.png"
+  },
   "starterPrompts": [
     "Analyze this branch with QAMap and show what must be verified before merge.",
     "Trace this PR's highest-risk QA scenario to its exact diff evidence with QAMap.",
