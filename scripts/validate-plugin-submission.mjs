@@ -24,6 +24,18 @@ async function assertDirectory(relativePath) {
   assert.equal(directory.isDirectory(), true, `${relativePath} must be a directory`);
 }
 
+async function assertPng(relativePath, width, height) {
+  await assertFile(relativePath);
+  const png = await readFile(path.join(repositoryRoot, relativePath));
+  assert.deepEqual(
+    [...png.subarray(0, 8)],
+    [137, 80, 78, 71, 13, 10, 26, 10],
+    `${relativePath} must be a PNG`,
+  );
+  assert.equal(png.readUInt32BE(16), width, `${relativePath} must be ${width}px wide`);
+  assert.equal(png.readUInt32BE(20), height, `${relativePath} must be ${height}px high`);
+}
+
 function pluginAssetPath(value) {
   assert.match(value, /^\.\/.+/, `${value} must be a relative plugin path`);
   return value.slice(2);
@@ -110,17 +122,19 @@ const iconPaths = [
   pluginAssetPath(codexPlugin.interface.logo),
 ];
 for (const iconPath of new Set(iconPaths)) {
-  await assertFile(iconPath);
+  await assertPng(iconPath, 512, 512);
 }
 
-const png = await readFile(path.join(repositoryRoot, iconPaths[0]));
-assert.deepEqual(
-  [...png.subarray(0, 8)],
-  [137, 80, 78, 71, 13, 10, 26, 10],
-  "composer icon must be a PNG",
-);
-assert.equal(png.readUInt32BE(16), 512, "composer icon must be 512px wide");
-assert.equal(png.readUInt32BE(20), 512, "composer icon must be 512px high");
+const listingAssetDimensions = {
+  pluginIconLight: [256, 256],
+  pluginIconDark: [256, 256],
+  composerIconLight: [48, 48],
+  composerIconDark: [48, 48],
+};
+assert.deepEqual(Object.keys(submission.listingAssets), Object.keys(listingAssetDimensions));
+for (const [assetName, dimensions] of Object.entries(listingAssetDimensions)) {
+  await assertPng(submission.listingAssets[assetName], dimensions[0], dimensions[1]);
+}
 
 const openaiMetadata = parseYaml(openaiYaml);
 assert.equal(openaiMetadata.interface.display_name, "QAMap PR QA");

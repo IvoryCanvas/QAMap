@@ -15,6 +15,15 @@ const issueTemplates = [
   "rule_request.yml",
 ];
 
+function pngDimensions(source) {
+  assert.deepEqual(
+    [...source.subarray(0, 8)],
+    [137, 80, 78, 71, 13, 10, 26, 10],
+    "brand asset must be a PNG",
+  );
+  return [source.readUInt32BE(16), source.readUInt32BE(20)];
+}
+
 test("issue forms preserve the public contribution contract", async () => {
   for (const filename of issueTemplates) {
     const source = await readFile(path.join(issueTemplateDirectory, filename), "utf8");
@@ -122,6 +131,41 @@ test("public plugin guidance links directly to the official installation steps",
   }
 });
 
+test("public brand images keep their intended production dimensions", async () => {
+  const assets = new Map([
+    ["docs/assets/qamap-cover.png", [1600, 800]],
+    ["docs/assets/qamap-cover-ko.png", [1600, 800]],
+    ["docs/assets/qamap-social-card.png", [1200, 630]],
+    ["skills/qamap-pr-qa/assets/qamap-logo.png", [512, 512]],
+    ["plugin/assets/qamap-plugin-light-256.png", [256, 256]],
+    ["plugin/assets/qamap-plugin-dark-256.png", [256, 256]],
+    ["plugin/assets/qamap-composer-light-48.png", [48, 48]],
+    ["plugin/assets/qamap-composer-dark-48.png", [48, 48]],
+  ]);
+
+  for (const [relativePath, expected] of assets) {
+    const source = await readFile(path.join(repositoryRoot, relativePath));
+    assert.deepEqual(pngDimensions(source), expected, `${relativePath} has the wrong dimensions`);
+  }
+});
+
+test("directory guidance does not hard-code a stale approved version", async () => {
+  const documents = ["docs/plugin-submission.md", "docs/agent-skill.md"];
+
+  for (const relativePath of documents) {
+    const source = await readFile(path.join(repositoryRoot, relativePath), "utf8");
+    assert.doesNotMatch(
+      source,
+      /QAMap `\d+\.\d+\.\d+` is currently .*OpenAI Plugin Directory/,
+      `${relativePath} must defer the approved version to the public listing`,
+    );
+    assert.ok(
+      source.includes("https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629"),
+      `${relativePath} must link to the public listing`,
+    );
+  }
+});
+
 test("the Korean entry point uses natural copy and portable Markdown", async () => {
   const readme = await readFile(path.join(repositoryRoot, "README.ko.md"), "utf8");
   const cover = await readFile(
@@ -142,11 +186,11 @@ test("the Korean entry point uses natural copy and portable Markdown", async () 
     );
   }
   assert.ok(
-    readme.includes("이 PR에서 꼭 확인해야 할 부분을 찾아줍니다."),
+    readme.includes("병합 전에 무엇을 테스트할지 확인하세요."),
     "README.ko.md must open with the current Korean product promise",
   );
   assert.ok(
-    cover.includes("이 PR에서 꼭 확인해야 할 부분을 찾아줍니다."),
+    cover.includes("병합 전에 무엇을 테스트할지 확인하세요."),
     "the Korean cover must match the README promise",
   );
 });

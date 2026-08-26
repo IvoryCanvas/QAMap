@@ -104,7 +104,7 @@ pnpm plugin:check
 pnpm plugin:smoke
 ```
 
-Public directory availability is not implied by the presence of either manifest alone. QAMap `0.4.11` is currently [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629). `qamap init --agent` and the portable skill install remain vendor-neutral onboarding paths. The full skills-only boundary and submission sequence are documented in [plugin-submission.md](plugin-submission.md).
+Public directory availability is not implied by the presence of either manifest alone. QAMap is currently [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629), whose public listing is the source of truth for the approved directory version. `qamap init --agent` and the portable skill install remain vendor-neutral onboarding paths. The full skills-only boundary and submission sequence are documented in [plugin-submission.md](plugin-submission.md).
 
 ## What The Agent Should Do With The Output
 

@@ -6,9 +6,9 @@
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/qamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-![QAMap: 이 PR에서 꼭 확인해야 할 부분을 찾아줍니다](docs/assets/qamap-cover-ko.svg)
+![QAMap: 병합 전에 무엇을 테스트할지 확인하세요](docs/assets/qamap-cover-ko.png)
 
-**이 PR에서 꼭 확인해야 할 부분을 찾아줍니다.**
+**병합 전에 무엇을 테스트할지 확인하세요.**
 
 QAMap은 현재 브랜치의 커밋과 코드 변경, 저장소 구조, 기존 테스트를
 로컬에서 살펴보고 병합 전에 확인할 내용을 정리하는 CLI입니다.
