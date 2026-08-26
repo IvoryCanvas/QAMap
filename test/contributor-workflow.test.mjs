@@ -81,6 +81,7 @@ test("entry-point documentation links resolve inside the repository", async () =
   for (const relativeDocument of [
     "README.md",
     "README.ko.md",
+    "brand/README.md",
     "CONTRIBUTING.md",
     "docs/README.md",
     "docs/en/README.md",
@@ -135,7 +136,20 @@ test("public brand images keep their intended production dimensions", async () =
   const assets = new Map([
     ["docs/assets/qamap-cover.png", [1600, 800]],
     ["docs/assets/qamap-cover-ko.png", [1600, 800]],
+    ["docs/assets/qamap-github-social-preview-1280x640.png", [1280, 640]],
     ["docs/assets/qamap-social-card.png", [1200, 630]],
+    ["brand/png/qamap-app-icon-1024.png", [1024, 1024]],
+    ["brand/png/qamap-app-icon-512.png", [512, 512]],
+    ["brand/png/qamap-app-icon-256.png", [256, 256]],
+    ["brand/png/qamap-mark-transparent-1024.png", [1024, 1024]],
+    ["brand/png/qamap-mark-transparent-512.png", [512, 512]],
+    ["brand/png/qamap-mark-transparent-256.png", [256, 256]],
+    ["brand/web/apple-touch-icon-180.png", [180, 180]],
+    ["brand/web/favicon-16.png", [16, 16]],
+    ["brand/web/favicon-32.png", [32, 32]],
+    ["brand/web/favicon-48.png", [48, 48]],
+    ["brand/web/qamap-icon-192.png", [192, 192]],
+    ["brand/web/qamap-icon-512.png", [512, 512]],
     ["skills/qamap-pr-qa/assets/qamap-logo.png", [512, 512]],
     ["plugin/assets/qamap-plugin-light-256.png", [256, 256]],
     ["plugin/assets/qamap-plugin-dark-256.png", [256, 256]],
@@ -147,6 +161,21 @@ test("public brand images keep their intended production dimensions", async () =
     const source = await readFile(path.join(repositoryRoot, relativePath));
     assert.deepEqual(pngDimensions(source), expected, `${relativePath} has the wrong dimensions`);
   }
+});
+
+test("editable brand masters stay portable vectors", async () => {
+  for (const relativePath of [
+    "brand/source/qamap-mark.svg",
+    "brand/source/qamap-mark-monochrome.svg",
+    "brand/source/qamap-app-icon.svg",
+  ]) {
+    const source = await readFile(path.join(repositoryRoot, relativePath), "utf8");
+    assert.match(source, /<svg\b/);
+    assert.doesNotMatch(source, /<(?:image|filter|linearGradient|radialGradient|text)\b/);
+  }
+
+  const favicon = await readFile(path.join(repositoryRoot, "brand/web/favicon.ico"));
+  assert.deepEqual([...favicon.subarray(0, 4)], [0, 0, 1, 0]);
 });
 
 test("directory guidance does not hard-code a stale approved version", async () => {

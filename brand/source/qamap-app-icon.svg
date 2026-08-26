@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" shape-rendering="geometricPrecision">
+  <title>QAMap symbol</title>
+  <rect id="app-background" x="56" y="56" width="912" height="912" rx="218" fill="#07111F"/>
+  <g id="qamap-mark">
+    <path id="trace-evidence" d="M 184 354 H 536 C 490 392 438 420 398 458 C 344 508 338 580 382 626 C 408 654 448 670 498 670 H 720" fill="none" stroke="#20BCEB" stroke-width="72" stroke-linecap="butt" stroke-linejoin="round"/>
+    <path id="trace-proof" d="M 720 670 H 850" fill="none" stroke="#FFB31A" stroke-width="72" stroke-linecap="butt" stroke-linejoin="round"/>
+    <g id="evidence-node">
+      <circle cx="184" cy="354" r="84" fill="#20BCEB"/>
+      <circle cx="184" cy="354" r="40" fill="#F4F7FB"/>
+    </g>
+    <g id="risk-checkpoint">
+      <circle cx="536" cy="354" r="84" fill="#20BCEB"/>
+      <circle cx="536" cy="354" r="40" fill="#07111F"/>
+    </g>
+    <g id="verified-proof">
+      <circle cx="850" cy="670" r="70" fill="#FFB31A"/>
+      <path d="M 811 670 L 837 696 L 884 642" fill="none" stroke="#F4F7FB" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>
