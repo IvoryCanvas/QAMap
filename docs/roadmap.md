@@ -36,40 +36,41 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 There is no fixed end date or patch count for `0.4.x`. QAMap will remain on compatible patch releases while real repositories still expose material gaps in change intent, affected-flow selection, scenario evidence, or automation-draft quality. `0.5.x` is not the next scheduled milestone; it is a release bar that must be earned by a stable, explicitly approved execution contract and evidence from repeated use outside the maintainer's repositories.
 
-### Current Focus After 0.4.14
+### Current Focus After 0.4.15
 
 The OpenAI Plugin Directory is a real first-run surface, so the next patches
 continue to prioritize recommendation quality over another distribution channel
 or runner name. The current generalized work queue is:
 
-1. Preserve every repository-owned validation contract changed by a pull
-   request. QAMap now keeps matching test and benchmark commands visible while
-   retaining a single-command `qa run` boundary. The next step is extending the
-   same coverage to public schemas and their consumers, package metadata, and
-   release manifests without reducing them to one convenient focused test.
-2. Treat changed repository tests as behavior contracts. Preserve explicit
+1. Prefer bounded offline validation when a repository exposes both a
+   deterministic contract and a provider-backed measurement command. External
+   model calls and token cost must remain an explicit, separately approved step.
+2. Expand declared executor coverage beyond the current browser fixtures. Add
+   unrelated API, CLI, or mobile controls that prove the same generated artifact
+   fails for its intended seeded regression and passes for the fixed behavior.
+3. Treat changed repository tests as behavior contracts. Preserve explicit
    positive, negative, boundary, state-transition, retry, and invariance
    assertions instead of reducing them to a generic request to run the suite.
-3. Trace shared semantic producers to every affected consumer. A change to a
+4. Trace shared semantic producers to every affected consumer. A change to a
    mapper, copy builder, aggregate, or service rule should retain the screens,
    history views, notifications, and exports that reuse its result when import
    and data-flow evidence connect them.
-4. Expand runtime lifecycle modeling beyond one guard and one process. Changes
+5. Expand runtime lifecycle modeling beyond one guard and one process. Changes
    that control workers, webhooks, deploy reconciliation, drains, or restarts
    should expose each execution plane and the fail-closed transition between
    disabled and enabled states.
-5. Extract framework-neutral presentation contracts from changed UI code only
+6. Extract framework-neutral presentation contracts from changed UI code only
    when the diff carries observable interaction or visual evidence. Formatting
    and resource vocabulary must remain contextual.
-6. Keep repository workflow metadata in its own behavior class. Documentation,
+7. Keep repository workflow metadata in its own behavior class. Documentation,
    issue forms, pull-request templates, package releases, and deployment
    transports should route to their exact repository contract instead of a
    fabricated product journey.
-7. Turn each real miss into a domain-neutral public fixture with a positive
+8. Turn each real miss into a domain-neutral public fixture with a positive
    contract and an unrelated negative control. A shared heuristic is incomplete
    until both sides pass the static benchmark and existing execution contracts
    remain honest.
-8. Re-run the published skill against unrelated repositories and compare its
+9. Re-run the published skill against unrelated repositories and compare its
    deterministic result with independent review. Preserve `not-run`, `passed`,
    `failed`, and `blocked` exactly; plugin availability is not evidence that
    product QA ran.

@@ -73,5 +73,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "QAMap 0.4.14 separates stable repository QA context from each pull request delta, traces delivery and runtime activation risks, preserves independent intents, and adds a deterministic context reuse benchmark."
+  "releaseNotes": "QAMap 0.4.15 adds repository-declared E2E execution receipts, detects account-scoped storage and divergent-copy risks, preserves every applicable validation contract, and adds an opt-in provider-neutral agent benchmark."
 }
