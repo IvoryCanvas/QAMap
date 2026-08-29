@@ -354,6 +354,85 @@ test("qa prefers a repository release gate for release-only metadata changes", a
   assert.equal(qa.execution.status, "not-run");
 });
 
+test("working-tree release validation ignores prior committed test contracts", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, ".codex-plugin"), { recursive: true });
+  await mkdir(path.join(root, "docs"), { recursive: true });
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, "test"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "working-tree-release-gate",
+      version: "1.0.0",
+      packageManager: "pnpm@10.0.0",
+      scripts: {
+        test: "node --test test/*.test.mjs",
+        "release:check": "pnpm test && pnpm pack --dry-run",
+      },
+    }),
+  );
+  await writeFile(path.join(root, ".codex-plugin/plugin.json"), '{"name":"working-tree-release-gate","version":"1.0.0"}\n');
+  await writeFile(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## 1.0.0\n");
+  await writeFile(path.join(root, "docs/release-validation.md"), "# Release validation\n");
+  await writeFile(path.join(root, "src/version.ts"), 'export const VERSION = "1.0.0";\n');
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await writeFile(
+    path.join(root, "test/repository-workflow.test.mjs"),
+    [
+      'import test from "node:test";',
+      'test("keeps the prior repository contract", () => {});',
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "test: cover repository workflow"]);
+
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "working-tree-release-gate",
+      version: "1.0.1",
+      packageManager: "pnpm@10.0.0",
+      scripts: {
+        test: "node --test test/*.test.mjs",
+        "release:check": "pnpm test && pnpm pack --dry-run",
+      },
+    }),
+  );
+  await writeFile(path.join(root, ".codex-plugin/plugin.json"), '{"name":"working-tree-release-gate","version":"1.0.1"}\n');
+  await writeFile(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## 1.0.1\n");
+  await writeFile(
+    path.join(root, "docs/release-validation.md"),
+    "# Release validation\n\nRun the repository release gate.\n",
+  );
+  await writeFile(path.join(root, "src/version.ts"), 'export const VERSION = "1.0.1";\n');
+
+  const plan = await generateTestPlan(root, {
+    base: "HEAD",
+    head: "HEAD",
+    includeWorkingTree: true,
+  });
+  const qa = await generateQaDraft(root, {
+    base: "HEAD",
+    head: "HEAD",
+    includeWorkingTree: true,
+  });
+  const agent = JSON.parse(formatAgentQaDraft(qa));
+
+  assert.deepEqual(qa.currentDelta?.repositoryContracts, []);
+  assert.deepEqual(qa.changedTestContracts, []);
+  assert.equal(plan.suggestedCommands[0], "pnpm run release:check");
+  assert.equal(qa.route.command, "pnpm run release:check");
+  assert.equal(agent.testContracts.declared, 0);
+  assert.equal(agent.execution.status, "not-run");
+  assert.equal(qa.suggestedCommands.some((command) => /repository-workflow\.test\.mjs/.test(command)), false);
+});
+
 test("qa does not treat an unrelated release script as a validation gate", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);

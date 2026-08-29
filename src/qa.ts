@@ -326,16 +326,25 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     workspaceRoot: e2eOptions.workspaceRoot,
     includeWorkingTree: draft.plan.includeWorkingTree,
   });
+  const committedDiffEvidence = draft.plan.includeWorkingTree
+    ? await collectAddedDiffEvidence(root, {
+      base: draft.plan.base,
+      head: draft.plan.head,
+      workspaceRoot: e2eOptions.workspaceRoot,
+    })
+    : addedDiffEvidence;
   const currentDelta = await collectCurrentDelta(root, draft, e2eOptions.workspaceRoot);
-  const latestCommitContracts = await collectLatestCommitContracts(
-    root,
-    draft.plan.head,
-    e2eOptions.workspaceRoot,
-  );
+  const latestCommitContracts = Object.keys(committedDiffEvidence).length > 0
+    ? await collectLatestCommitContracts(
+      root,
+      draft.plan.head,
+      e2eOptions.workspaceRoot,
+    )
+    : [];
   const changedTestContracts = uniqueChangedTestContracts([
     ...(currentDelta?.repositoryContracts ?? []),
     ...latestCommitContracts,
-    ...collectChangedTestContracts(addedDiffEvidence),
+    ...collectChangedTestContracts(committedDiffEvidence),
   ]);
   const runtimePrerequisiteTestGaps = await collectRuntimePrerequisiteTestGaps(
     root,
