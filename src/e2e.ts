@@ -2,6 +2,8 @@ import { promises as fs } from "node:fs";
 import type { E2eScenarioExecutability } from "./e2e-run.js";
 import path from "node:path";
 import YAML from "yaml";
+import { collectApiContractOperations, isOpenApiSourcePath, summarizeApiContractAuthority } from "./api-contract.js";
+import type { ApiContractAuthority, ApiContractOperationEvidence, ApiContractResponseExample } from "./api-contract.js";
 import { analyzeBehaviorGraph, createInferredFlowBehaviorAdapter } from "./behavior.js";
 import { createChangeIntentBehaviorAdapter } from "./behavior-intent.js";
 import { createManifestBehaviorAdapter } from "./behavior-manifest.js";
@@ -236,6 +238,7 @@ export interface E2eFixtureReadiness {
   mockSignals: string[];
   nextActions: string[];
   mockInsights?: FixtureFileInsight[];
+  contractAuthority?: ApiContractAuthority;
 }
 
 export interface E2eValidationMatrixRow {
@@ -6882,6 +6885,7 @@ interface FixtureReadinessContext {
   changedMockFiles: string[];
   projectMockFiles: string[];
   mockFileInsights: Map<string, FixtureFileInsight>;
+  contractOperations: ApiContractOperationEvidence[];
 }
 
 const maxAnalyzedMockFiles = 24;
@@ -6918,10 +6922,13 @@ async function collectFixtureReadinessContext(
   }
 
   return {
-    changedBackendFiles: changedFiles.filter(isBackendImplementationFile).slice(0, maxFilesPerFlow),
+    changedBackendFiles: changedFiles
+      .filter((file) => isBackendImplementationFile(file) && !isOpenApiSourcePath(file))
+      .slice(0, maxFilesPerFlow),
     changedMockFiles,
     projectMockFiles: projectMockEntries.map((file) => file.path).slice(0, maxFilesPerFlow),
     mockFileInsights,
+    contractOperations: collectApiContractOperations(projectFiles),
   };
 }
 
@@ -7033,6 +7040,7 @@ async function inferFlowFixtureReadiness(
       nextActions: [],
     };
   }
+  const contractAuthority = summarizeApiContractAuthority(context.contractOperations, apiEndpoints);
 
   const hasChangedResponseBoundary = changedApiSignals.length > 0 ||
     setupHints.some((hint) => hint.kind === "network" || hint.kind === "payment");
@@ -7044,6 +7052,7 @@ async function inferFlowFixtureReadiness(
       apiEndpoints,
       backendSignals: [],
       mockSignals: [],
+      contractAuthority,
       nextActions: [
         "Use the existing QA environment or fixture only for selected scenarios that actually traverse the unchanged API dependency.",
         "Do not block local state, navigation, media, sharing, or access-boundary QA on unrelated response fixtures.",
@@ -7075,6 +7084,7 @@ async function inferFlowFixtureReadiness(
       apiEndpoints,
       backendSignals,
       mockSignals,
+      contractAuthority,
       nextActions: [
         `Keep changed fixture/mock evidence aligned with this flow: ${describeFixtureEvidence(changedMockSignals, changedInsights)}.`,
         "Keep deterministic success, empty, unauthorized, and failure fixture cases aligned with the changed flow.",
@@ -7092,6 +7102,7 @@ async function inferFlowFixtureReadiness(
       apiEndpoints,
       backendSignals,
       mockSignals,
+      contractAuthority,
       nextActions: [
         reuseFixtureAction(mockSignals, reusableInsights, apiEndpoints),
         "Cover the primary success response and one empty, rejected, or server-error response.",
@@ -7108,6 +7119,7 @@ async function inferFlowFixtureReadiness(
       apiEndpoints,
       backendSignals,
       mockSignals,
+      contractAuthority,
       nextActions: [
         apiEndpoints.length > 0
           ? `Confirm the test environment can serve ${formatEndpointSummary(apiEndpoints)}, or add a mock response for local E2E runs.`
@@ -7117,18 +7129,39 @@ async function inferFlowFixtureReadiness(
     };
   }
 
+  if (contractAuthority.status === "example") {
+    return {
+      status: "ready",
+      reason: "A matching machine-readable API contract provides an exact response example for deterministic local setup.",
+      apiSignals,
+      apiEndpoints,
+      backendSignals,
+      mockSignals,
+      contractAuthority,
+      nextActions: [
+        `Keep the generated response aligned with ${contractAuthority.sources.slice(0, 3).map((file) => `\`${file}\``).join(", ")}.`,
+        "Regenerate or re-check the local handler whenever the authoritative contract changes.",
+      ],
+    };
+  }
+
   return {
     status: "missing",
-    reason: "This flow appears to depend on API or external response data, but no changed backend, mock, or fixture evidence was detected.",
+    reason: contractAuthority.status === "contract-only"
+      ? "This flow depends on API response data, but the matching machine-readable API contract has no safe, unambiguous response example."
+      : "This flow depends on API response data, but no authoritative contract example or repository-owned fixture evidence was detected.",
     apiSignals,
     apiEndpoints,
     backendSignals,
     mockSignals,
+    contractAuthority,
     nextActions: [
-      apiEndpoints.length > 0
-        ? `Add a deterministic mock or fixture response for ${formatEndpointSummary(apiEndpoints)}, such as an MSW handler, Playwright route fulfillment, mock data, or seeded test data.`
-        : "Add a deterministic mock or fixture response, such as MSW handlers, Playwright route fulfillment, mock data, or seeded test data.",
-      "Include success plus one empty, unauthorized, rejected, timeout, or server-error response.",
+      contractAuthority.status === "contract-only"
+        ? `Add an explicit response example to ${contractAuthority.sources.slice(0, 3).map((file) => `\`${file}\``).join(", ")}, or bind an existing repository-owned fixture before generating a handler.`
+        : apiEndpoints.length > 0
+          ? `Add a machine-readable contract example or bind an existing repository-owned fixture for ${formatEndpointSummary(apiEndpoints)} before generating a handler.`
+          : "Add a machine-readable contract example or bind an existing repository-owned fixture before generating a handler.",
+      "Do not infer success or failure payload values from endpoint names, UI copy, or implementation-only schema keys.",
     ],
   };
 }
@@ -10880,12 +10913,12 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
     if (scenario.kind !== "failure") {
       continue;
     }
-    const endpoint = playwrightFailureMockEndpoint(flow);
-    if (!endpoint) {
-      continue;
-    }
     const scenarioText = [scenario.title, ...scenario.steps, ...scenario.edgeCases].join(" ");
     if (!isFailurePathStep(scenarioText)) {
+      continue;
+    }
+    const contractExample = contractFailureExampleForText(flow, scenarioText);
+    if (!contractExample) {
       continue;
     }
     const selectorContext = `${flow.title} ${scenarioText}`;
@@ -10903,8 +10936,7 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
       continue;
     }
     const testName = `${flow.title}: ${scenario.title}`.replaceAll('"', "'");
-    const routePattern = playwrightMockRoutePattern(endpoint);
-    const status = failureResponseStatus([scenario.title, ...scenario.steps].join(" "));
+    const routePattern = playwrightMockRoutePattern(contractExample.endpoint);
     drafts.push({
       scenarioId: scenario.id,
       mappedSteps: Math.min(1, scenario.steps.length),
@@ -10912,10 +10944,11 @@ function playwrightRoutedScenarioDrafts(flow: E2eFlow): PlaywrightRoutedScenario
       lines: [
         `test("${testName}", async ({ page }) => {`,
         `  await page.route("${quoteJs(routePattern)}", async (route) => {`,
+        `    if (route.request().method() !== "${quoteJs(contractExample.method)}") return route.fallback();`,
         "    await route.fulfill({",
-        `      status: ${status},`,
+        `      status: ${contractExample.status},`,
         '      contentType: "application/json",',
-        '      body: JSON.stringify({ error: "QAMap simulated failure" }),',
+        `      body: JSON.stringify(${JSON.stringify(contractExample.body)}),`,
         "    });",
         "  });",
         `  await page.goto(${routeDraft.expression});`,
@@ -10995,7 +11028,8 @@ function playwrightRepeatedActionScenarioDraft(
       selectorCanSupportAssertion(selector) &&
       !isFailureOutcomeText(selector.value),
   );
-  if (!endpoint || !actionSelector || !outcomeSelector) {
+  const contractExample = endpoint ? contractSuccessExampleForEndpoint(flow, endpoint) : undefined;
+  if (!endpoint || !contractExample || !actionSelector || !outcomeSelector) {
     return undefined;
   }
 
@@ -11013,12 +11047,13 @@ function playwrightRepeatedActionScenarioDraft(
       "  const pendingRequest = new Promise<void>((resolve) => { releasePendingRequest = resolve; });",
       "  let requestCount = 0;",
       `  await page.route("${quoteJs(routePattern)}", async (route) => {`,
+      `    if (route.request().method() !== "${quoteJs(contractExample.method)}") return route.fallback();`,
       "    requestCount += 1;",
       "    await pendingRequest;",
       "    await route.fulfill({",
-      "      status: 200,",
+      `      status: ${contractExample.status},`,
       '      contentType: "application/json",',
-      '      body: JSON.stringify({ ok: true, source: "qamap-repeated-action-check" }),',
+      `      body: JSON.stringify(${JSON.stringify(contractExample.body)}),`,
       "    });",
       "  });",
       `  await page.goto(${routeDraft.expression});`,
@@ -11952,46 +11987,30 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
   if (observedEndpoints.length > 0) {
     appendPlaywrightApiObservationScaffold(lines, observedEndpoints);
   }
-  const mockableEndpoints = flow.fixtureReadiness.backendSignals.length > 0
-    ? flow.fixtureReadiness.apiEndpoints.filter((endpoint) => !endpointMatchesAny(endpoint, observedEndpoints))
-    : flow.fixtureReadiness.apiEndpoints;
-  if (mockableEndpoints.length === 0) {
+  const examples = contractSuccessExamplesForFlow(flow).filter(
+    (example) => !endpointMatchesAny(example.endpoint, observedEndpoints),
+  );
+  if (examples.length === 0) {
     return;
   }
-  const insights = flow.fixtureReadiness.mockInsights ?? [];
-  const shapeSources: string[] = [];
+  const sources: string[] = [];
   lines.push("");
   lines.push("  const mockApiResponses = {");
-  for (const endpoint of mockableEndpoints.slice(0, maxFilesPerFlow)) {
-    const insight =
-      insights.find((candidate) => specSafeSampleKeys(candidate).length > 0 && insightCoversEndpoint(candidate, endpoint)) ??
-      insights.find((candidate) => specSafeSampleKeys(candidate).length > 0);
-    lines.push(`    "${quoteJs(playwrightMockRoutePattern(endpoint))}": {`);
-    lines.push("      status: 200,");
-    lines.push("      body: {");
-    if (insight) {
-      if (!shapeSources.includes(insight.file)) {
-        shapeSources.push(insight.file);
-      }
-      for (const key of specSafeSampleKeys(insight)) {
-        const propertyName = isJsIdentifier(key) ? key : JSON.stringify(key);
-        lines.push(`        ${propertyName}: ${JSON.stringify(`qamap-${key}`)},`);
-      }
-    } else {
-      lines.push('        ok: true,');
-      lines.push('        source: "qamap-draft",');
+  for (const example of examples.slice(0, maxFilesPerFlow)) {
+    if (!sources.includes(example.file)) {
+      sources.push(example.file);
     }
-    lines.push("      },");
+    lines.push(`    "${quoteJs(playwrightMockRoutePattern(example.endpoint))}": {`);
+    lines.push(`      method: "${quoteJs(example.method)}",`);
+    lines.push(`      status: ${example.status},`);
+    lines.push(`      body: ${JSON.stringify(example.body)},`);
     lines.push("    },");
   }
   lines.push("  };");
-  if (shapeSources.length > 0) {
-    lines.push(`  // Response shape keys reuse ${formatFileSummary(shapeSources)}; replace the sample values with deterministic fixture data before promoting this draft.`);
-  } else {
-    lines.push("  // Replace sample responses with deterministic fixtures from the target domain before promoting this draft.");
-  }
+  lines.push(`  // Exact response examples come from ${formatFileSummary(sources)}; QAMap did not synthesize payload values.`);
   lines.push("  for (const [urlPattern, response] of Object.entries(mockApiResponses)) {");
   lines.push("    await page.route(urlPattern, async (route) => {");
+  lines.push("      if (route.request().method() !== response.method) return route.fallback();");
   lines.push("      await route.fulfill({");
   lines.push("        status: response.status,");
   lines.push('        contentType: "application/json",');
@@ -11999,12 +12018,6 @@ function appendPlaywrightMockRouteScaffold(lines: string[], flow: E2eFlow): void
   lines.push("      });");
   lines.push("    });");
   lines.push("  }");
-}
-
-// Drafts are pinned to contain no literal TODO marker, so a fixture key that
-// would introduce one disqualifies itself from spec interpolation.
-function specSafeSampleKeys(insight: FixtureFileInsight): string[] {
-  return insight.sampleKeys.filter((key) => !/todo/i.test(key));
 }
 
 function observedEndpointsForFlow(flow: E2eFlow): string[] {
@@ -12102,7 +12115,8 @@ function endpointMatchesAny(endpoint: string, candidates: string[]): boolean {
 }
 
 function playwrightMockRoutePattern(endpoint: string): string {
-  return endpoint.startsWith("/") ? `**${endpoint}` : endpoint;
+  const parameterized = endpoint.replace(/\/(?:\{[^/}]+\}|:[^/]+|\[[^/\]]+\])(?=\/|$)/g, "/*");
+  return parameterized.startsWith("/") ? `**${parameterized}` : parameterized;
 }
 
 function formatFileSummary(files: string[]): string {
@@ -12762,27 +12776,27 @@ function playwrightFailureActionForStep(flow: E2eFlow, step: string): string[] |
   if (!isFailurePathStep(step)) {
     return undefined;
   }
-  const endpoint = playwrightFailureMockEndpoint(flow);
+  const contractExample = contractFailureExampleForText(flow, step);
   const actionSelector = flow.selectors.find(
     (selector) => !isInputSelector(selector) && selectorCanDriveInteraction(selector),
   );
   const outcomeSelector = flow.selectors.find(
     (selector) => selectorCanSupportAssertion(selector) && isFailureOutcomeText(selector.value),
   );
-  if (!endpoint || !actionSelector || !outcomeSelector) {
+  if (!contractExample || !actionSelector || !outcomeSelector) {
     return undefined;
   }
 
-  const routePattern = playwrightMockRoutePattern(endpoint);
-  const status = failureResponseStatus(step);
+  const routePattern = playwrightMockRoutePattern(contractExample.endpoint);
   return [
     `// Step intent: ${step}`,
     `await page.unroute("${quoteJs(routePattern)}");`,
     `await page.route("${quoteJs(routePattern)}", async (route) => {`,
+    `  if (route.request().method() !== "${quoteJs(contractExample.method)}") return route.fallback();`,
     "  await route.fulfill({",
-    `    status: ${status},`,
+    `    status: ${contractExample.status},`,
     '    contentType: "application/json",',
-    '    body: JSON.stringify({ error: "QAMap simulated failure" }),',
+    `    body: JSON.stringify(${JSON.stringify(contractExample.body)}),`,
     "  });",
     "});",
     `await ${playwrightLocator(actionSelector)}.click();`,
@@ -12790,11 +12804,71 @@ function playwrightFailureActionForStep(flow: E2eFlow, step: string): string[] |
   ];
 }
 
-function playwrightFailureMockEndpoint(flow: E2eFlow): string | undefined {
-  const observedEndpoints = observedEndpointsForFlow(flow);
-  return flow.fixtureReadiness.apiEndpoints.find(
-    (endpoint) => !endpointMatchesAny(endpoint, observedEndpoints),
+function contractSuccessExamplesForFlow(flow: E2eFlow): ApiContractResponseExample[] {
+  const examples = flow.fixtureReadiness.contractAuthority?.examples ?? [];
+  const seen = new Set<string>();
+  return examples.filter((example) => {
+    if (example.status < 200 || example.status >= 300) {
+      return false;
+    }
+    const key = `${example.method}\0${example.endpoint}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function contractSuccessExampleForEndpoint(
+  flow: E2eFlow,
+  endpoint: string,
+): ApiContractResponseExample | undefined {
+  return contractSuccessExamplesForFlow(flow).find((example) => endpointMatchesAny(example.endpoint, [endpoint]));
+}
+
+function contractFailureExampleForText(
+  flow: E2eFlow,
+  text: string,
+): ApiContractResponseExample | undefined {
+  const affectedEndpoints = flow.fixtureReadiness.apiEndpoints;
+  const candidates = (flow.fixtureReadiness.contractAuthority?.examples ?? []).filter(
+    (example) => example.status >= 400 && endpointMatchesAny(example.endpoint, affectedEndpoints),
   );
+  const mentionsAuthorization = /\b(?:denied|unauthori[sz]ed)\b/i.test(text) || /권한/.test(text);
+  const mentionsValidation = /\b(?:invalid|validation)\b/i.test(text) || /잘못/.test(text);
+  const mentionsServerFailure = /\bserver\b/i.test(text);
+  const mentionsGenericFailure = /\b(?:declined|error|failed|failure|rejected)\b/i.test(text) ||
+    /(?:오류|실패|거절)/.test(text);
+  if (mentionsAuthorization) {
+    const authorizationExample = candidates.find((example) => example.status === 401 || example.status === 403);
+    if (authorizationExample) {
+      return authorizationExample;
+    }
+    if (!mentionsValidation && !mentionsServerFailure && !mentionsGenericFailure) {
+      return undefined;
+    }
+  }
+  if (mentionsValidation) {
+    const validationExample = candidates.find((example) => example.status === 400 || example.status === 422);
+    if (validationExample) {
+      return validationExample;
+    }
+    if (!mentionsServerFailure && !mentionsGenericFailure) {
+      return undefined;
+    }
+  }
+  if (
+    /\b(?:timeout|offline|network)\b/i.test(text) &&
+    !mentionsServerFailure &&
+    !mentionsGenericFailure
+  ) {
+    return undefined;
+  }
+  if (mentionsServerFailure) {
+    return candidates.find((example) => example.status >= 500);
+  }
+  return candidates.find((example) => example.status >= 500) ?? candidates[0];
 }
 
 function isFailurePathStep(step: string): boolean {
@@ -12805,16 +12879,6 @@ function isFailurePathStep(step: string): boolean {
 function isFailureOutcomeText(value: string): boolean {
   return /\b(?:cannot|could not|declined|denied|error|failed|failure|invalid|rejected|try again|unauthori[sz]ed|unavailable)\b/i.test(value) ||
     /(?:오류|실패|거절|권한|잘못|할 수 없)/.test(value);
-}
-
-function failureResponseStatus(step: string): number {
-  if (/\b(?:denied|unauthori[sz]ed)\b/i.test(step) || /권한/.test(step)) {
-    return 401;
-  }
-  if (/\b(?:invalid|validation)\b/i.test(step) || /잘못/.test(step)) {
-    return 422;
-  }
-  return 500;
 }
 
 interface ManifestSelectorHint {

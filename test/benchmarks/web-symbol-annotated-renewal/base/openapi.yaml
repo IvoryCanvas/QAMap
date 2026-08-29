@@ -1,0 +1,10 @@
+openapi: 3.1.0
+paths:
+  /api/subscriptions/renew:
+    post:
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                status: active

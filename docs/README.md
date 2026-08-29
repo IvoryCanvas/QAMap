@@ -46,7 +46,7 @@ required for a first run.
 | Behavior graph, routing, and safety boundaries | [Architecture](architecture.md) |
 | Public inference and execution fixtures | [Benchmarking](benchmarking.md) |
 | Scanner behavior and rule IDs | [Rules](rules.md) and [Guardrails](guardrails.md) |
-| Public API surface | [API contracts](api-contracts.md) |
+| API contract authority and mock boundaries | [API contracts](api-contracts.md) |
 | Evaluation scoring | [Evaluation](eval.md) |
 | Current direction | [Roadmap](roadmap.md) |
 

@@ -24,6 +24,39 @@ AI coding agents can edit frontend clients, backend handlers, tests, and docs in
 
 Prefer one source of truth that can generate docs, validation, mock servers, or client types. This keeps API design review close to the code and reduces drift between documentation and implementation.
 
+## QA Routing And Mock Generation Are Separate
+
+Repository evidence can still tell QAMap that a changed screen calls an endpoint,
+that a visible failure state exists, and that the behavior needs success or
+failure QA. Those facts are enough to route a QA scenario. They are not enough
+to invent a response body.
+
+QAMap generates a local JSON response only when all of these facts join:
+
+- a matching OpenAPI or Swagger operation exists;
+- one HTTP method is unambiguous for the detected endpoint;
+- the relevant status has a concrete JSON response example;
+- the example is bounded and does not contain credential-shaped fields.
+
+The generated body is copied from that exact example. QAMap does not derive
+values from endpoint names, UI copy, TypeScript response types, schema property
+names, or nearby fixture keys.
+
+An operation that defines only status codes and a response schema remains useful
+contract evidence, but it does not authorize a payload. QAMap reports the missing
+example and leaves the scenario unmapped until the repository supplies an exact
+example or binds a repository-owned fixture. Existing MSW, Mirage, Playwright,
+seed, and fixture files may guide the maintainer to the right integration point;
+their filenames and object keys alone do not become a new network contract.
+
+If the pull request changes the endpoint implementation itself, QAMap observes
+the real response instead of intercepting it with a synthetic success response.
+This prevents an optional draft from hiding the contract under review.
+
+The response-generation path currently reads OpenAPI and Swagger JSON or YAML.
+Other accepted contract sources still contribute to the broader `QM013` source
+of truth check, but they do not currently authorize generated JSON handlers.
+
 ## References
 
 - [Why frontend developers design APIs](https://blog.gangnamunni.com/post/saas-why-do-frontend-developers-design-api)

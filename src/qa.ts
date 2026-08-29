@@ -353,17 +353,18 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     (contract) => !runtimeGapTestFiles.has(contract.file),
   );
   const qaFiles = draft.plan.changedFiles.length > 0 ? draft.files : [];
+  const changedFiles = draft.plan.changedFiles.map((file) => file.path);
   const inferredFlows = preferChangedTestEvidence(
     qaFiles.map((file) => qaFlowFromDraftFile(file)),
     trustworthyChangedTestContracts,
     runtimeGapTestFiles,
+    new Set(changedFiles),
   );
   const flows = inferredFlows.length > 0
     ? inferredFlows
     : trustworthyChangedTestContracts.length > 0
       ? [qaFlowFromChangedTestContracts(trustworthyChangedTestContracts)]
       : [];
-  const changedFiles = draft.plan.changedFiles.map((file) => file.path);
   const preferredVerificationCommands = await buildChangedTestVerificationCommands(
     root,
     flows,
@@ -373,9 +374,13 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   const currentDeltaCommands = currentDelta
     ? await buildTestVerificationCommands(
         root,
-        currentDelta.repositoryContracts
-          .filter((contract) => !runtimeGapTestFiles.has(contract.file))
-          .map((contract) => contract.file),
+        uniqueStrings([
+          ...currentDelta.repositoryContracts
+            .filter((contract) => !runtimeGapTestFiles.has(contract.file))
+            .map((contract) => contract.file),
+          ...flows.flatMap((flow) => flow.existingEvidencePaths)
+            .filter((file) => currentDelta.files.includes(file) && !runtimeGapTestFiles.has(file)),
+        ]),
         draft.plan.suggestedCommands,
       )
     : [];
@@ -4052,6 +4057,7 @@ function preferChangedTestEvidence(
   flows: QaDraftFlow[],
   changedTestContracts: ChangedTestContract[],
   excludedTestFiles: ReadonlySet<string> = new Set(),
+  changedFiles: ReadonlySet<string> = new Set(),
 ): QaDraftFlow[] {
   if (changedTestContracts.length === 0 && excludedTestFiles.size === 0) {
     return flows;
@@ -4082,11 +4088,12 @@ function preferChangedTestEvidence(
     const unchangedEvidencePaths = flow.existingEvidencePaths.filter(
       (file) => !changedContractFiles.has(file) && !excludedTestFiles.has(file),
     );
+    const changedExistingEvidencePaths = unchangedEvidencePaths.filter((file) => changedFiles.has(file));
     return {
       ...flow,
       // A changed repository-authored contract is stronger evidence than a broad filename or keyword match.
       existingEvidencePaths: evidencePaths.length > 0
-        ? evidencePaths
+        ? uniqueStrings([...evidencePaths, ...changedExistingEvidencePaths])
         : unchangedEvidencePaths,
     };
   });
