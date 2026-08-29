@@ -1,0 +1,8 @@
+{
+  "name": "web-performance-runtime-contracts",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run"
+  }
+}

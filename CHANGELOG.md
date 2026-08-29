@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added exact diff evidence and measurable QA contracts for changed rendering work, image request priority, deferred modules, initial HTML and hydration, font loading, and delivery cache policy.
+- Connected working-tree-only performance mechanisms to a low-confidence, review-required runtime intent instead of returning no change intent.
+
+### Fixed
+
+- Performance-focused changes no longer stop at a generic screen flow when the changed hunk supports a more specific runtime or delivery measurement.
+- Copy and spacing-only UI changes remain outside performance scenario routing.
+
 ## 0.4.15 - 2026-08-26
 
 ### Added

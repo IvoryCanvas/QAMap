@@ -957,6 +957,35 @@
       }
     },
     {
+      "name": "web-performance-runtime-contracts",
+      "fixture": "test/benchmarks/web-performance-runtime-contracts",
+      "commitMessage": "perf: reduce initial render work and defer the inactive detail panel",
+      "expect": {
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 4,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": ["src/pages/overview.vue"],
+        "mustNameIntents": ["reduce initial render work"],
+        "mustIncludeQaScenarios": [
+          "Sustained rendering work and visual stability",
+          "Initial image priority and deferred request boundary",
+          "Initial bundle boundary and deferred module activation",
+          "Initial HTML, hydration, and visible-content continuity"
+        ],
+        "mustFindIntentEvidence": [
+          "rendering work",
+          "image loading priority",
+          "deferred module loading",
+          "initial rendering and hydration"
+        ],
+        "mustTraceScenarioFiles": ["src/pages/overview.vue"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "web-instrumentation-success",
       "fixture": "test/benchmarks/web-instrumentation-success",
       "commitMessage": "fix: restore registration completion instrumentation",

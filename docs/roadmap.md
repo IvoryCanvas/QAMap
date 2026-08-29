@@ -62,15 +62,19 @@ or runner name. The current generalized work queue is:
 6. Extract framework-neutral presentation contracts from changed UI code only
    when the diff carries observable interaction or visual evidence. Formatting
    and resource vocabulary must remain contextual.
-7. Keep repository workflow metadata in its own behavior class. Documentation,
+7. Route performance changes from their mechanism to measurable runtime
+   contracts. Rendering work, image priority, deferred modules, initial HTML,
+   hydration, fonts, and delivery cache policy must retain exact diff evidence
+   and an honest execution boundary.
+8. Keep repository workflow metadata in its own behavior class. Documentation,
    issue forms, pull-request templates, package releases, and deployment
    transports should route to their exact repository contract instead of a
    fabricated product journey.
-8. Turn each real miss into a domain-neutral public fixture with a positive
+9. Turn each real miss into a domain-neutral public fixture with a positive
    contract and an unrelated negative control. A shared heuristic is incomplete
    until both sides pass the static benchmark and existing execution contracts
    remain honest.
-9. Re-run the published skill against unrelated repositories and compare its
+10. Re-run the published skill against unrelated repositories and compare its
    deterministic result with independent review. Preserve `not-run`, `passed`,
    `failed`, and `blocked` exactly; plugin availability is not evidence that
    product QA ran.

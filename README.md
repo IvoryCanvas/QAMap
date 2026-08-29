@@ -110,6 +110,12 @@ asset or a validation workflow can rewrite shared history. Supported activation
 changes also retain the guard, configuration source, runtime side effect, and
 restart or reload boundary that must be verified.
 
+When a diff changes runtime performance mechanics, QAMap keeps the exact source
+line and routes a measurable contract for rendering work, image request
+priority, deferred modules, initial HTML and hydration, font loading, or cache
+version coherence. These are static QA requirements, not claims that a browser
+profile or deployment check already ran.
+
 Cleanup-only commits remain visible as provenance but do not become standalone
 QA requirements. Unrelated issue tags and lifecycle stages stay separate. When
 the changed source does not prove an externally observable result, QAMap reports
