@@ -28,6 +28,7 @@ npx --yes @ivorycanvas/qamap@latest qa --format agent
 | 모든 CLI 옵션 | [명령어 목록](../commands.md) |
 | 에이전트용 JSON 출력 형식 | [Agent format](../agent-format.md) |
 | E2E 초안 예시 | [E2E output examples](../e2e-output-examples.md) |
+| API 계약과 mock 생성 기준 | [API contracts](../api-contracts.md) |
 | 공개 검증 범위와 결과 | [Benchmarking](../benchmarking.md) |
 | 앞으로의 계획 | [Roadmap](../roadmap.md) |
 

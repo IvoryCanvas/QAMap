@@ -106,7 +106,14 @@ such as `release:check` when package metadata is accompanied by release notes,
 plugin metadata, or a synchronized version source. Tests and offline benchmark
 assertions already invoked by that gate are not listed again. A generic
 `release` script or a command that publishes, tags, pushes, or deploys is never
-promoted by this rule.
+promoted by this rule. Working-tree-only release preparation also stays isolated
+from test contracts introduced by an earlier target-branch commit.
+
+Network QA routing and mock generation have separate evidence boundaries.
+Repository code can identify affected behavior, but QAMap emits a JSON response
+scaffold only from an exact OpenAPI or Swagger example for one unambiguous
+operation and status. Without that example, it reports the missing contract
+evidence instead of inventing payload values.
 
 For supported runtime contracts, QAMap can trace a changed entry point through
 local imports to a required provider. A test that mocks away that prerequisite

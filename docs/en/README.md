@@ -21,6 +21,7 @@ without moving those files or breaking external links.
 
 - [Complete documentation map](../README.md)
 - [Architecture](../architecture.md)
+- [API contract authority and mock boundaries](../api-contracts.md)
 - [Benchmarking](../benchmarking.md)
 - [Roadmap](../roadmap.md)
 - [Release validation](../release-validation.md)

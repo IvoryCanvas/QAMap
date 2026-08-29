@@ -26,6 +26,40 @@ a new runtime guarantee beyond the declared Node.js `>=20` engine contract.
 Node.js 20 is upstream EOL, so the README recommends an actively supported LTS
 release even though the compatibility smoke still passes.
 
+## 0.4.16 - 2026-08-29
+
+QAMap 0.4.16 tightens three boundaries between static QA guidance and trusted
+execution evidence. Supported performance changes now route from the exact
+changed mechanism to a measurable runtime contract. Network evidence can still
+identify affected behavior, but only an exact OpenAPI or Swagger response
+example can authorize a generated JSON payload. Release-focused metadata now
+prefers a repository-declared non-publishing gate without selecting publish,
+tag, push, or deployment commands. Working-tree-only release preparation also
+stays isolated from test contracts in an earlier target-branch commit.
+
+The public presentation was refreshed at the same patch boundary. The README,
+portable skill, native plugin package, directory submission metadata, and brand
+asset inventory now share the same release version and production artwork.
+
+| Gate | Candidate result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 429/429 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 37/37 committed static recommendation contracts passing |
+| `pnpm bench:agent --dry-run --assert` | Offline harness and result-shape contract passed; no provider invoked |
+| `pnpm bench:context` | 10/10 context identity and reuse checks passing |
+| `pnpm bench:execution` | 3/3 execution contracts passing; all three seeded regressions caught |
+| Coverage | Thresholds passed; two consecutive runs measured lines 90.69-90.73%, branches 87.13-87.21%, functions 95.97% |
+| Plugin package smoke | Packed 207 files, installed the 0.4.16 artifact in isolation, and produced evidence-backed agent output |
+| Package preview | `pnpm pack --dry-run` passes for `@ivorycanvas/qamap@0.4.16`; 207 files packed |
+
+These gates prove the checked public fixtures, package integrity, and bounded
+execution contracts. They do not prove arbitrary product behavior, authorize a
+mock response without contract evidence, or turn a generated draft into passing
+QA. npm publication, Git tagging, the GitHub Release, and an OpenAI directory
+update remain separate post-merge actions.
+
 ## 0.4.15 - 2026-08-26
 
 QAMap 0.4.15 adds a bounded path from a compiled QA scenario to local execution
