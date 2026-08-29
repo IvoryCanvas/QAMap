@@ -34,6 +34,13 @@ export type BehaviorLifecycleStageKind =
 export type IntentQaScenarioKind = "primary" | "failure" | "boundary" | "state-transition";
 export type IntentQaScenarioPriority = "critical" | "recommended";
 type AsyncLifecycleRole = "dispatch" | "state" | "completion" | "consistency";
+type PerformanceMechanism =
+  | "render-work"
+  | "image-loading"
+  | "code-splitting"
+  | "initial-render"
+  | "font-loading"
+  | "delivery-cache";
 
 export interface ChangeIntentEvidence {
   kind: ChangeIntentEvidenceKind;
@@ -855,16 +862,19 @@ function buildDiffOnlyIntent(
   );
   const deliveryIntegrityEvidence = riskEvidence.filter(isDeliveryIntegrityEvidence);
   const runtimeActivationEvidence = riskEvidence.filter(isRuntimeActivationEvidence);
+  const performanceEvidence = riskEvidence.filter(isPerformanceEvidence);
   const lifecycle = limitLifecycleStages([
     ...lifecycleFromCodeSignals(codeSignals),
     ...lifecycleFromSourceRoles(roleEvidence),
     ...lifecycleFromDeliveryIntegrityEvidence(deliveryIntegrityEvidence),
     ...lifecycleFromRuntimeActivationEvidence(runtimeActivationEvidence),
+    ...lifecycleFromPerformanceEvidence(performanceEvidence),
   ]);
   const stageKinds = new Set(lifecycle.map((stage) => stage.kind));
   const hasRecognizedSourceRole = roleEvidence.length > 0 ||
     deliveryIntegrityEvidence.length > 0 ||
-    runtimeActivationEvidence.length > 0;
+    runtimeActivationEvidence.length > 0 ||
+    performanceEvidence.length > 0;
   const hasSymbolAnnotation = annotationEvidence.length > 0;
   if (
     (!hasRecognizedSourceRole && !hasSymbolAnnotation && (lifecycle.length < 3 || stageKinds.size < 3)) ||
@@ -877,12 +887,15 @@ function buildDiffOnlyIntent(
     ...roleEvidence.map((item) => item.file ?? "").filter(Boolean),
     ...deliveryIntegrityEvidence.map((item) => item.file ?? "").filter(Boolean),
     ...runtimeActivationEvidence.map((item) => item.file ?? "").filter(Boolean),
+    ...performanceEvidence.map((item) => item.file ?? "").filter(Boolean),
   ]).slice(0, maxIntentFiles);
   const annotatedFlow = firstQaAnnotationFlow(annotationEvidence);
   const titleSubject = deliveryIntegrityEvidence.length > 0
     ? "Delivery integrity"
     : runtimeActivationEvidence.length > 0
     ? "Runtime activation"
+    : performanceEvidence.length > 0
+    ? "Runtime performance"
     : annotatedFlow
     ? humanizeIdentifier(annotatedFlow)
     : diffIntentSubject(files[0], roleEvidence[0]?.sourceRole, roleEvidence);
@@ -1036,6 +1049,7 @@ function buildLifecycle(
   stages.push(...lifecycleFromSourceRoles(roleEvidence));
   stages.push(...lifecycleFromDeliveryIntegrityEvidence(roleEvidence.filter(isDeliveryIntegrityEvidence)));
   stages.push(...lifecycleFromRuntimeActivationEvidence(roleEvidence.filter(isRuntimeActivationEvidence)));
+  stages.push(...lifecycleFromPerformanceEvidence(roleEvidence.filter(isPerformanceEvidence)));
 
   return limitLifecycleStages(removeRedundantOutcomeTimingTriggers(stages));
 }
@@ -1090,6 +1104,45 @@ function lifecycleFromDetectedRiskEvidence(
       "Apply the changed form validation timing boundary.",
       "medium",
       validationTimingEvidence,
+      files,
+    ),
+  ];
+}
+
+function lifecycleFromPerformanceEvidence(
+  evidence: ChangeIntentEvidence[],
+): BehaviorLifecycleStage[] {
+  if (evidence.length === 0) {
+    return [];
+  }
+  const files = uniqueStrings(evidence.map((item) => item.file ?? "").filter(Boolean));
+  const mechanismLabels = uniqueStrings(
+    evidence
+      .map(performanceMechanism)
+      .filter((value): value is PerformanceMechanism => value !== undefined)
+      .map(performanceMechanismLabel),
+  );
+  const mechanismLabel = mechanismLabels.join(", ");
+  return [
+    createLifecycleStage(
+      "trigger",
+      "Load the affected surface from a cold runtime boundary.",
+      "medium",
+      evidence,
+      files,
+    ),
+    createLifecycleStage(
+      "action",
+      `Apply the changed ${mechanismLabel || "runtime performance"} behavior.`,
+      "medium",
+      evidence,
+      files,
+    ),
+    createLifecycleStage(
+      "observable-outcome",
+      "Observe stable visible content with bounded runtime work and delivery cost.",
+      "medium",
+      evidence,
       files,
     ),
   ];
@@ -1306,6 +1359,8 @@ function buildIntentQaScenarios(
   );
   const searchable = `${hasProductDiffEvidence ? title : ""} ${productLifecycle.map((stage) => stage.label).join(" ")}`
     .toLowerCase();
+
+  scenarios.push(...buildPerformanceQaScenarios(intentId, evidence));
 
   const deliveryIntegrityEvidence = evidence.filter(isDeliveryIntegrityEvidence);
   if (deliveryIntegrityEvidence.length > 0) {
@@ -2027,6 +2082,154 @@ function buildIntentQaScenarios(
   return rankIntentQaScenarios(uniqueScenarios(scenarios)).slice(0, maxQaScenariosPerIntent);
 }
 
+function buildPerformanceQaScenarios(
+  intentId: string,
+  evidence: ChangeIntentEvidence[],
+): IntentQaScenario[] {
+  const performanceEvidence = evidence.filter(isPerformanceEvidence);
+  const scenarios: IntentQaScenario[] = [];
+  const forMechanism = (mechanism: PerformanceMechanism) =>
+    performanceEvidence.filter((item) => performanceMechanism(item) === mechanism);
+
+  const renderingWorkEvidence = forMechanism("render-work");
+  if (renderingWorkEvidence.length > 0) {
+    scenarios.push(makeScenario(
+      intentId,
+      "runtime-render-work",
+      "boundary",
+      "recommended",
+      "Sustained rendering work and visual stability",
+      ["Use a production-like build and a stable viewport with the affected surface initially idle."],
+      [
+        "Load the affected surface and observe frame, paint, or CPU activity through the changed animation interval.",
+        "Repeat the interaction that starts or ends the changed visual effect.",
+      ],
+      [
+        "Verify the changed effect reaches an idle state without continuous frame or paint work unless continuous motion is intentional.",
+        "Verify the final visual state and interaction remain unchanged after the effect settles.",
+      ],
+      ["Reduced-motion preference", "Background and foreground transition", "Repeated entry"],
+      renderingWorkEvidence,
+    ));
+  }
+
+  const imageLoadingEvidence = forMechanism("image-loading");
+  if (imageLoadingEvidence.length > 0) {
+    scenarios.push(makeScenario(
+      intentId,
+      "image-loading-boundary",
+      "boundary",
+      "recommended",
+      "Initial image priority and deferred request boundary",
+      ["Use a cold page load with the primary viewport and network request log visible."],
+      [
+        "Load the affected surface without scrolling and record which images start before the first visible content settles.",
+        "Cross the deferred-content boundary and observe the remaining image requests and decode behavior.",
+      ],
+      [
+        "Verify the primary visible image is not deferred behind lower-priority content.",
+        "Verify images outside the initial viewport remain deferred until their loading boundary is reached.",
+        "Verify failed or delayed image decoding preserves a stable fallback without layout collapse.",
+      ],
+      ["Cold cache", "Slow network", "Missing image response"],
+      imageLoadingEvidence,
+    ));
+  }
+
+  const codeSplitEvidence = forMechanism("code-splitting");
+  if (codeSplitEvidence.length > 0) {
+    scenarios.push(makeScenario(
+      intentId,
+      "deferred-module-boundary",
+      "failure",
+      "recommended",
+      "Initial bundle boundary and deferred module activation",
+      ["Build the changed entry point with production chunking and start from a cold cache."],
+      [
+        "Inspect the initial route artifact before activating the deferred feature.",
+        "Activate the deferred feature for the first time, then repeat it from a warm cache.",
+      ],
+      [
+        "Verify the deferred module is absent from the initial entry artifact when the changed boundary intends to split it.",
+        "Verify first activation loads the module and preserves the expected user-visible state.",
+        "Verify a chunk load failure has an explicit retry, fallback, or recoverable error path.",
+      ],
+      ["Cold cache", "Chunk request failure", "Rapid repeated activation"],
+      codeSplitEvidence,
+    ));
+  }
+
+  const initialRenderEvidence = forMechanism("initial-render");
+  if (initialRenderEvidence.length > 0) {
+    scenarios.push(makeScenario(
+      intentId,
+      "initial-render-continuity",
+      "state-transition",
+      "critical",
+      "Initial HTML, hydration, and visible-content continuity",
+      ["Use the affected route with the same authenticated or anonymous state expected in production."],
+      [
+        "Inspect the initial HTML before client code runs, then allow hydration and asynchronous state to complete.",
+        "Repeat the route through direct entry, refresh, and client-side navigation when each entry mode exists.",
+      ],
+      [
+        "Verify the initial HTML contains the intended visible content when the route declares server or static rendering.",
+        "Verify hydration does not introduce a blank intermediate state, mismatch warning, or layout collapse.",
+        "Verify the final interactive state preserves the same content and actions exposed by the initial response.",
+      ],
+      ["JavaScript disabled", "Slow hydration", "Cached client state"],
+      initialRenderEvidence,
+    ));
+  }
+
+  const fontLoadingEvidence = forMechanism("font-loading");
+  if (fontLoadingEvidence.length > 0) {
+    scenarios.push(makeScenario(
+      intentId,
+      "font-loading-contract",
+      "boundary",
+      "recommended",
+      "Font transfer, fallback, and text stability",
+      ["Use a cold cache and capture font requests plus the first text rendering state."],
+      [
+        "Load the affected route and record requested font files, transferred bytes, and fallback rendering.",
+        "Repeat the load from a warm cache and with the primary font unavailable.",
+      ],
+      [
+        "Verify the same font asset is not requested through duplicate loading paths.",
+        "Verify fallback text remains readable and does not cause an unexpected layout shift when the font resolves.",
+      ],
+      ["Cold cache", "Font request failure", "Slow font response"],
+      fontLoadingEvidence,
+    ));
+  }
+
+  const cacheEvidence = forMechanism("delivery-cache");
+  if (cacheEvidence.length > 0) {
+    scenarios.push(makeScenario(
+      intentId,
+      "delivery-cache-coherence",
+      "failure",
+      "critical",
+      "Deployed HTML, asset, and cache-version coherence",
+      ["Use a deploy preview or production-like cache layer with the changed cache policy active."],
+      [
+        "Request the changed HTML from a cold cache and again from a warm cache, preserving response headers and referenced asset names.",
+        "Deploy a second revision and repeat the same requests through the existing cache key.",
+      ],
+      [
+        "Verify cached HTML references assets that exist in the same deployed revision.",
+        "Verify a new deployment invalidates or versions HTML according to the declared cache policy.",
+        "Verify cache age and hit status cannot keep the previous application shell active after new assets are published.",
+      ],
+      ["Warm CDN cache", "Hashed asset rollover", "Cookie or content-encoding cache variation"],
+      cacheEvidence,
+    ));
+  }
+
+  return scenarios;
+}
+
 function isMateriallyObservableOutcomeStage(stage: BehaviorLifecycleStage): boolean {
   const label = stripTerminalPunctuation(stage.label);
   if (/^Show\s+.+/i.test(label)) {
@@ -2655,6 +2858,7 @@ function collectDiffRiskEvidence(
       if (isFormattingOnlyHunk(hunk)) {
         continue;
       }
+      evidence.push(...collectPerformanceRiskEvidence(file, hunk, sourceRole));
       const validationTimingChange = detectFormValidationTimingChange(file, hunk);
       if (validationTimingChange) {
         evidence.push(diffRiskEvidence(
@@ -3716,6 +3920,148 @@ function collectChangedDiffAnchors(
     }
   }
   return uniqueEvidence(anchors);
+}
+
+function collectPerformanceRiskEvidence(
+  file: string,
+  hunk: AddedDiffHunk,
+  sourceRole: ChangeSourceRole,
+): ChangeIntentEvidence[] {
+  if (sourceRole !== "product" && sourceRole !== "configuration") {
+    return [];
+  }
+  const evidence: ChangeIntentEvidence[] = [];
+  const hunkContext = [
+    file,
+    hunk.hunkHeader ?? "",
+    ...(hunk.removedLines ?? []).map((line) => line.text),
+    ...hunk.lines.map((line) => line.text),
+  ].join(" ");
+  for (const [side, lines] of [["head", hunk.lines], ["base", hunk.removedLines ?? []]] as const) {
+    for (const line of lines) {
+      const signal = performanceSignal(line.text, hunkContext, file);
+      if (!signal) continue;
+      if (isUnchangedRewrappedSymbol(hunk, signal.rawSymbol)) continue;
+      evidence.push(diffRiskEvidence(
+        file,
+        hunk,
+        line.line,
+        `performance:${signal.mechanism}:${signal.rawSymbol}`,
+        `${side === "base" ? "Removed" : "Changed"} line defines ${performanceMechanismLabel(signal.mechanism)} through ${signal.rawSymbol}.`,
+        side,
+        sourceRole,
+      ));
+    }
+  }
+  return uniqueEvidence(evidence);
+}
+
+function performanceSignal(
+  text: string,
+  hunkContext: string,
+  file: string,
+): { mechanism: PerformanceMechanism; rawSymbol: string } | undefined {
+  const trimmed = text.trim();
+  if (!trimmed || /^(?:\/\/|\/\*|\*|<!--|#\s)/.test(trimmed)) {
+    return undefined;
+  }
+
+  const renderingWork = text.match(
+    /\b(requestAnimationFrame|cancelAnimationFrame|animation(?:-iteration-count|-name|-duration)?|background-position|will-change|content-visibility|contain-intrinsic-size)\b/i,
+  )?.[1];
+  if (renderingWork) {
+    return { mechanism: "render-work", rawSymbol: renderingWork };
+  }
+
+  const imageLoading = text.match(
+    /\b(fetchPriority|fetchpriority|decoding|loading)\s*(?:=|:)\s*["'`]?(eager|lazy|high|low|async|sync|auto)\b/i,
+  );
+  if (imageLoading) {
+    return {
+      mechanism: "image-loading",
+      rawSymbol: `${imageLoading[1]}=${imageLoading[2]}`,
+    };
+  }
+  const imagePreload = text.match(/\brel\s*=\s*["']preload["'][^>\n]*\bas\s*=\s*["']image["']/i);
+  if (imagePreload) {
+    return { mechanism: "image-loading", rawSymbol: "preload:image" };
+  }
+
+  const codeSplit = text.match(
+    /\b(defineAsyncComponent|React\.lazy)\s*\(|\b(lazy|dynamic)\s*\([^\n]*\bimport\s*\(|\b(import)\s*\(/,
+  );
+  if (codeSplit) {
+    return {
+      mechanism: "code-splitting",
+      rawSymbol: codeSplit[1] ?? codeSplit[2] ?? codeSplit[3],
+    };
+  }
+
+  const initialRender = text.match(
+    /\b(hydrateRoot|hydration|serverPrefetch|useAsyncData|asyncData|getServerSideProps|getStaticProps|generateStaticParams)\b/i,
+  )?.[1];
+  if (initialRender) {
+    return { mechanism: "initial-render", rawSymbol: initialRender };
+  }
+  const uiRenderSource = /\.(?:tsx|jsx|vue|svelte)$/i.test(file) ||
+    /(?:^|\/)(?:components?|contexts?|layouts?|pages?|providers?|routes?|screens?|views?)(?:\/|$)/i.test(file);
+  const gateContext = /\b(?:children|hydrated|hydration|initiali[sz]ed|loading|mounted|provider|ready|server|show\w*|ssr|visible)\b/i.test(
+    hunkContext,
+  );
+  const renderGate = uiRenderSource && gateContext
+    ? text.match(/\b(return\s+(?:null|false)|v-if|v-show|setTimeout)\b/i)?.[1]
+    : undefined;
+  if (renderGate) {
+    return { mechanism: "initial-render", rawSymbol: renderGate.replace(/\s+/g, " ") };
+  }
+  const ssrMode = text.match(/\b(ssr)\s*:\s*(?:true|false)\b/i)?.[1];
+  if (ssrMode) {
+    return { mechanism: "initial-render", rawSymbol: ssrMode };
+  }
+
+  const fontLoading = text.match(
+    /(@font-face|font-display|(?:next|nuxt)\/font|\.(?:woff2?|ttf|otf)\b)/i,
+  )?.[1];
+  if (fontLoading) {
+    return { mechanism: "font-loading", rawSymbol: fontLoading };
+  }
+
+  const deliveryCache = text.match(
+    /\b(Cache-Control|s-maxage|stale-while-revalidate|CloudFront|CDN|invalidation|invalidate\w*|immutable)\b/i,
+  )?.[1];
+  if (deliveryCache) {
+    return { mechanism: "delivery-cache", rawSymbol: deliveryCache };
+  }
+
+  return undefined;
+}
+
+function isPerformanceEvidence(evidence: ChangeIntentEvidence): boolean {
+  return evidence.kind === "diff" && evidence.symbol?.startsWith("performance:") === true;
+}
+
+function performanceMechanism(evidence: ChangeIntentEvidence): PerformanceMechanism | undefined {
+  const mechanism = evidence.symbol?.split(":")[1];
+  return mechanism === "render-work" ||
+      mechanism === "image-loading" ||
+      mechanism === "code-splitting" ||
+      mechanism === "initial-render" ||
+      mechanism === "font-loading" ||
+      mechanism === "delivery-cache"
+    ? mechanism
+    : undefined;
+}
+
+function performanceMechanismLabel(mechanism: PerformanceMechanism): string {
+  const labels: Record<PerformanceMechanism, string> = {
+    "render-work": "rendering work",
+    "image-loading": "image loading priority",
+    "code-splitting": "deferred module loading",
+    "initial-render": "initial rendering and hydration",
+    "font-loading": "font loading",
+    "delivery-cache": "delivery cache policy",
+  };
+  return labels[mechanism];
 }
 
 function detectFormValidationTimingChange(

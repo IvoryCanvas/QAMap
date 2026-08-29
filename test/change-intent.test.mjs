@@ -5856,3 +5856,149 @@ test("identical, unrelated, same-file, and non-label copy is not flagged", async
     /divergent copy/i.test(scenario.title)
   ));
 });
+
+test("working-tree performance mechanisms become measurable runtime QA contracts", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/pages/overview.vue";
+  await write(root, "package.json", JSON.stringify({
+    scripts: { build: "vite build", test: "vitest run" },
+  }, null, 2));
+  await write(root, "src/components/DetailPanel.vue", "<template><aside>Details</aside></template>\n");
+  await write(root, "public/hero.webp", "fixture\n");
+  await write(root, "public/history.webp", "fixture\n");
+  await write(root, file, [
+    "<script setup>",
+    "import { onMounted, ref } from 'vue';",
+    "import DetailPanel from '../components/DetailPanel.vue';",
+    "const ready = ref(false);",
+    "onMounted(() => setTimeout(() => { ready.value = true; }, 50));",
+    "</script>",
+    "<template>",
+    "  <main v-if=\"ready\">",
+    "    <img class=\"hero\" src=\"/hero.webp\" loading=\"lazy\" decoding=\"async\" />",
+    "    <DetailPanel />",
+    "  </main>",
+    "</template>",
+    "<style scoped>",
+    ".hero { animation: shimmer 1s linear infinite; background-position: 100% 0; }",
+    "</style>",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+
+  await write(root, file, [
+    "<script setup>",
+    "import { defineAsyncComponent } from 'vue';",
+    "const DetailPanel = defineAsyncComponent(() => import('../components/DetailPanel.vue'));",
+    "</script>",
+    "<template>",
+    "  <main>",
+    "    <img class=\"hero\" src=\"/hero.webp\" loading=\"eager\" fetchpriority=\"high\" decoding=\"async\" />",
+    "    <img src=\"/history.webp\" loading=\"lazy\" decoding=\"async\" />",
+    "    <DetailPanel />",
+    "  </main>",
+    "</template>",
+    "<style scoped>",
+    ".hero { animation: settle 240ms ease-out 1; transform: translateX(0); }",
+    "</style>",
+    "",
+  ].join("\n"));
+
+  const qa = await generateQaDraft(root, {
+    base: "HEAD",
+    head: "HEAD",
+    includeWorkingTree: true,
+  });
+  const intent = qa.changeAnalysis.intents.find((item) => /runtime performance working-tree behavior/i.test(item.title));
+  assert.ok(intent, JSON.stringify(qa.changeAnalysis.intents.map((item) => ({
+    title: item.title,
+    evidence: item.evidence.map((entry) => entry.symbol).filter(Boolean),
+  }))));
+  assert.equal(intent.commits.length, 0);
+  const titles = intent.scenarios.map((scenario) => scenario.title);
+  assert.ok(titles.includes("Sustained rendering work and visual stability"));
+  assert.ok(titles.includes("Initial image priority and deferred request boundary"));
+  assert.ok(titles.includes("Initial bundle boundary and deferred module activation"));
+  assert.ok(titles.includes("Initial HTML, hydration, and visible-content continuity"));
+  const performanceEvidence = intent.evidence.filter((item) => item.symbol?.startsWith("performance:"));
+  assert.ok(performanceEvidence.length >= 4);
+  assert.ok(performanceEvidence.every((item) => item.file === file));
+  assert.ok(performanceEvidence.every((item) => item.startLine !== undefined));
+  assert.ok(performanceEvidence.every((item) => item.relation === "direct"));
+  assert.equal(qa.execution.performed, false);
+  assert.equal(qa.execution.status, "not-run");
+});
+
+test("copy and spacing changes do not fabricate performance QA", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/pages/summary.tsx";
+  await write(root, file, [
+    "export function Summary() {",
+    "  return <main className=\"panel compact\">Summary</main>;",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "style/summary-spacing");
+  await write(root, file, [
+    "export function Summary() {",
+    "  return <main className=\"panel comfortable\">Current summary</main>;",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "style: adjust summary spacing and copy");
+
+  const analysis = await analyze(root, [file]);
+  assert.equal(
+    analysis.intents.flatMap((intent) => intent.evidence).some((item) =>
+      item.symbol?.startsWith("performance:")
+    ),
+    false,
+  );
+  assert.equal(
+    analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+      /rendering work|image priority|bundle boundary|initial html|font transfer|cache-version/i.test(scenario.title)
+    ),
+    false,
+  );
+});
+
+test("ordinary lazy and dynamic helpers do not imply code splitting", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/pages/rules.ts";
+  await write(root, file, [
+    "export function lazy(value) {",
+    "  return value.trim();",
+    "}",
+    "export function dynamic(value) {",
+    "  return lazy(value).toUpperCase();",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "fix/rule-normalization");
+  await write(root, file, [
+    "export function lazy(value) {",
+    "  return value.trim().replaceAll('  ', ' ');",
+    "}",
+    "export function dynamic(value) {",
+    "  return lazy(value).toLocaleUpperCase();",
+    "}",
+    "",
+  ].join("\n"));
+  commit(root, "fix: normalize rule values");
+
+  const analysis = await analyze(root, [file]);
+  assert.equal(
+    analysis.intents.flatMap((intent) => intent.evidence).some((item) =>
+      item.symbol?.startsWith("performance:code-splitting:")
+    ),
+    false,
+  );
+  assert.equal(
+    analysis.intents.flatMap((intent) => intent.scenarios).some((scenario) =>
+      scenario.title === "Initial bundle boundary and deferred module activation"
+    ),
+    false,
+  );
+});
