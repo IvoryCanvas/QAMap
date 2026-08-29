@@ -249,6 +249,13 @@ structure and `package.json` declares a repository-owned benchmark script,
 QAMap prefers the strongest CI or assertion harness while preserving a related
 analyzer unit test as additional validation.
 
+The `repository-release-gate` fixture covers a different boundary. When a
+release-only change synchronizes package, plugin, changelog, benchmark, and
+source-version metadata, a declared non-publishing release gate must outrank a
+generic test command. Package scripts already invoked by that gate are not
+repeated as additional required validation, and a provider-backed measurement
+is not substituted for the gate's offline assertion form.
+
 Set `manifestBaseline: true` on a committed fixture to generate its manifest from the base snapshot into the benchmark temp directory, then pass that external manifest to analysis of the head commit. The fixture repository is never modified by this step. This protects the feedback loop itself: a baseline must affect the next PR, not merely serialize valid YAML.
 
 ## Local repositories

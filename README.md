@@ -101,6 +101,13 @@ and remain `not run` until they are executed explicitly. **Supplemental
 validation** means a repository command exists but was not selected as proof for
 this QA route.
 
+For a release-focused change set, QAMap prefers a declared non-publishing gate
+such as `release:check` when package metadata is accompanied by release notes,
+plugin metadata, or a synchronized version source. Tests and offline benchmark
+assertions already invoked by that gate are not listed again. A generic
+`release` script or a command that publishes, tags, pushes, or deploys is never
+promoted by this rule.
+
 For supported runtime contracts, QAMap can trace a changed entry point through
 local imports to a required provider. A test that mocks away that prerequisite
 is disclosed as incomplete evidence instead of being promoted as proof.

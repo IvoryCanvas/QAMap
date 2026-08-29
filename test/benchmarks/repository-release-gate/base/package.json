@@ -1,0 +1,11 @@
+{
+  "name": "repository-release-gate-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "test": "node --test",
+    "bench:agent": "node scripts/agent-bench.mjs",
+    "release:check": "pnpm test && pnpm bench:agent --dry-run --assert && pnpm pack --dry-run"
+  }
+}
