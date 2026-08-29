@@ -55,6 +55,28 @@ export function classifyChangedSourceRoles(
     }
   }
 
+  for (const [file, text] of Object.entries(changedTextByFile)) {
+    const normalizedFile = toPosixPath(file);
+    if (
+      classifications[normalizedFile]?.role !== "product" ||
+      isLikelyProductSurfacePath(normalizedFile) ||
+      !hasAnalyzerHelperContract(text)
+    ) {
+      continue;
+    }
+    const importingAnalysisFile = [...analysisFiles].find((analysisFile) =>
+      referencesChangedSource(analysisFile, changedTextByFile[analysisFile] ?? "", normalizedFile)
+    );
+    if (!importingAnalysisFile) {
+      continue;
+    }
+    classifications[normalizedFile] = {
+      role: "analysis-rule",
+      reason: `The changed analyzer source ${importingAnalysisFile} imports this changed analyzer contract helper.`,
+    };
+    analysisFiles.add(normalizedFile);
+  }
+
   const analysisIdentifiers = new Set(
     [...analysisFiles].flatMap((file) => contractIdentifiers(changedTextByFile[file] ?? "")),
   );
@@ -210,6 +232,10 @@ function referencesChangedAnalysisSource(
   text: string,
   analysisFiles: Set<string>,
 ): boolean {
+  return [...analysisFiles].some((analysisFile) => referencesChangedSource(file, text, analysisFile));
+}
+
+function referencesChangedSource(file: string, text: string, targetFile: string): boolean {
   const imports = [...text.matchAll(
     /(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*["']([^"']+)["']/g,
   )].map((match) => match[1]);
@@ -218,8 +244,20 @@ function referencesChangedAnalysisSource(
       return false;
     }
     const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
-    return [...analysisFiles].some((analysisFile) => sameModulePath(resolved, analysisFile));
+    return sameModulePath(resolved, targetFile);
   });
+}
+
+function hasAnalyzerHelperContract(text: string): boolean {
+  return /\bexport\s+(?:(?:declare|abstract)\s+)?(?:async\s+)?(?:function|class|interface|type|const)\s+[A-Za-z_$][\w$]*(?:Evidence|Authority|Scenario|Trace)\b/i.test(
+    text,
+  );
+}
+
+function isLikelyProductSurfacePath(file: string): boolean {
+  return /(?:^|\/)(?:app|components?|controllers?|domain|features?|models?|pages?|routes?|services?|views?)(?:\/|$)/i.test(
+    file,
+  );
 }
 
 function sameModulePath(left: string, right: string): boolean {

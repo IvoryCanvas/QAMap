@@ -4586,13 +4586,14 @@ test("generateE2ePlan flags missing mock fixtures for API-dependent UI flows", a
         row.category === "fixture" &&
         row.status === "missing" &&
         row.area.includes("fixture/mock readiness") &&
-        row.nextAction.includes("mock or fixture"),
+        row.nextAction.includes("machine-readable contract example"),
     ),
   );
   assert.match(markdown, /## E2E Validation Matrix/);
   assert.match(markdown, /Fixture\/mock readiness/);
   assert.match(markdown, /1 endpoint hint/);
-  assert.match(markdown, /no changed backend, mock, or fixture evidence was detected/);
+  assert.match(markdown, /no authoritative contract example or repository-owned fixture evidence was detected/);
+  assert.equal(flow.fixtureReadiness.contractAuthority?.status, "missing");
 
   const draft = await generateE2eDraft(root, {
     base: "main",
@@ -4624,13 +4625,170 @@ test("generateE2ePlan flags missing mock fixtures for API-dependent UI flows", a
   assert.match(formatMarkdownE2eDraft(draft), /\[required\] fixture: Add deterministic fixture or mock data/);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
   assert.match(spec, /Fixture\/mock readiness/);
-  assert.match(spec, /Add a deterministic mock or fixture response/);
-  assert.match(spec, /const mockApiResponses/);
-  assert.match(spec, /\*\*\/api\/orders\/fixture-order-id/);
-  assert.match(spec, /page\.route\(urlPattern/);
-  assert.match(spec, /route\.fulfill/);
+  assert.match(spec, /Add a machine-readable contract example or bind an existing repository-owned fixture/);
+  assert.doesNotMatch(spec, /const mockApiResponses/);
+  assert.doesNotMatch(spec, /route\.fulfill/);
+  assert.doesNotMatch(spec, /qamap-draft|QAMap simulated failure/);
   assert.match(spec, /Validation gaps before this draft can be required/);
   assert.match(spec, /\[missing\].*fixture\/mock readiness/);
+});
+
+test("OpenAPI response examples authorize exact generated mock payloads", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/orders"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      scripts: { test: "playwright test" },
+      dependencies: { "@playwright/test": "^1.56.0", react: "^19.0.0", vite: "^7.0.0" },
+    }),
+  );
+  await writeFile(
+    path.join(root, "openapi.yaml"),
+    [
+      "openapi: 3.1.0",
+      "paths:",
+      "  /api/orders/{id}:",
+      "    get:",
+      "      responses:",
+      "        '200':",
+      "          content:",
+      "            application/json:",
+      "              example:",
+      "                id: fixture-order-id",
+      "                status: open",
+      "        '404':",
+      "          content:",
+      "            application/json:",
+      "              example:",
+      "                code: ORDER_NOT_FOUND",
+      "                message: Order not found",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "src/pages/orders/OrderPage.tsx"),
+    'export function OrderPage() { return <button data-testid="load-order">Load order</button>; }\n',
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/order-status"]);
+  await writeFile(
+    path.join(root, "src/pages/orders/OrderPage.tsx"),
+    [
+      "export async function loadOrder() {",
+      "  const response = await fetch('/api/orders/fixture-order-id');",
+      "  return response.json();",
+      "}",
+      'export function OrderPage() { return <button data-testid="load-order">Load order</button>; }',
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "load order status"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const flow = plan.flows.find((item) => item.fixtureReadiness.contractAuthority?.status === "example");
+  assert.ok(flow);
+  assert.equal(flow.fixtureReadiness.status, "ready");
+  assert.deepEqual(flow.fixtureReadiness.contractAuthority?.sources, ["openapi.yaml"]);
+  assert.deepEqual(
+    flow.fixtureReadiness.contractAuthority?.examples.map((example) => [example.status, example.body]),
+    [
+      [200, { id: "fixture-order-id", status: "open" }],
+      [404, { code: "ORDER_NOT_FOUND", message: "Order not found" }],
+    ],
+  );
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const draftFile = draft.files.find((file) => file.fixtureReadinessStatus === "ready");
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+  assert.match(spec, /"\*\*\/api\/orders\/\*"/);
+  assert.match(spec, /method: "GET"/);
+  assert.match(spec, /route\.request\(\)\.method\(\) !== response\.method/);
+  assert.match(spec, /body: \{"id":"fixture-order-id","status":"open"\}/);
+  assert.match(spec, /Exact response examples come from openapi\.yaml/);
+  assert.doesNotMatch(spec, /qamap-draft|QAMap simulated failure/);
+});
+
+test("OpenAPI schemas without response examples stop payload generation", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/pages/reports"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ dependencies: { react: "^19.0.0", vite: "^7.0.0" } }),
+  );
+  await writeFile(
+    path.join(root, "openapi.json"),
+    JSON.stringify({
+      openapi: "3.1.0",
+      paths: {
+        "/api/reports/{id}": {
+          get: {
+            responses: {
+              200: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: { id: { type: "string" }, state: { type: "string" } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+  );
+  await writeFile(
+    path.join(root, "src/pages/reports/ReportPage.tsx"),
+    'export function ReportPage() { return <button data-testid="load-report">Load report</button>; }\n',
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+
+  await git(root, ["switch", "-c", "feature/report-state"]);
+  await writeFile(
+    path.join(root, "src/pages/reports/ReportPage.tsx"),
+    [
+      "export async function loadReport() {",
+      "  const response = await fetch('/api/reports/fixture-report-id');",
+      "  return response.json();",
+      "}",
+      'export function ReportPage() { return <button data-testid="load-report">Load report</button>; }',
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "load report state"]);
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
+  const flow = plan.flows.find((item) => item.fixtureReadiness.contractAuthority?.status === "contract-only");
+  assert.ok(flow);
+  assert.equal(flow.fixtureReadiness.status, "missing");
+  assert.match(flow.fixtureReadiness.nextActions[0], /Add an explicit response example to `openapi\.json`/);
+
+  const draft = await generateE2eDraft(root, {
+    base: "main",
+    head: "HEAD",
+    output: "tests/e2e",
+    runner: "playwright",
+  });
+  const draftFile = draft.files.find((file) => file.fixtureReadinessStatus === "missing");
+  assert.ok(draftFile);
+  const spec = await readFile(path.join(root, draftFile.path), "utf8");
+  assert.match(spec, /matching machine-readable API contract has no safe, unambiguous response example/);
+  assert.doesNotMatch(spec, /const mockApiResponses|route\.fulfill|qamap-draft|QAMap simulated failure/);
 });
 
 test("qa command points API-dependent flows at existing repo mock and seed files", async () => {
@@ -4840,7 +4998,7 @@ test("analyzeFixtureSource extracts exports, handled routes, and sample keys", a
   assert.deepEqual(noisy.sampleKeys, ["retries"]);
 });
 
-test("generated mock bodies quote non-identifier fixture keys from JSON fixtures", async () => {
+test("fixture shape keys do not authorize generated response values", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, "fixtures"), { recursive: true });
@@ -4892,12 +5050,12 @@ test("generated mock bodies quote non-identifier fixture keys from JSON fixtures
   const draftFile = draft.files.find((file) => file.fixtureReadinessStatus === "partial");
   assert.ok(draftFile);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
-  assert.match(spec, /"created-at": "qamap-created-at"/);
-  assert.match(spec, /total: "qamap-total"/);
-  assert.match(spec, /Response shape keys reuse fixtures\/billing-summary\.json/);
+  assert.doesNotMatch(spec, /qamap-created-at|qamap-total/);
+  assert.doesNotMatch(spec, /const mockApiResponses|route\.fulfill/);
+  assert.equal(draftFile.fixtureReadinessStatus, "partial");
 });
 
-test("fixture guidance names the mock handler file to extend and shapes mock payloads", async () => {
+test("fixture guidance names the mock handler file without inventing a new payload", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, "src/mocks"), { recursive: true });
@@ -5005,18 +5163,10 @@ test("fixture guidance names the mock handler file to extend and shapes mock pay
     ),
   );
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
-  assert.match(spec, /invoices: "qamap-invoices"/);
-  assert.match(spec, /total: "qamap-total"/);
-  assert.match(spec, /Response shape keys reuse src\/mocks\/handlers\.ts/);
-  assert.doesNotMatch(spec, /source: "qamap-draft"/);
-  assert.match(spec, /page\.route\("\*\*\/api\/(?:invoices|payments\/summary)"/);
-  assert.match(spec, /status: 500/);
-  assert.match(spec, /expect\(page\.getByText\("Could not load billing"\)\)\.toBeVisible\(\)/);
-  assert.doesNotMatch(spec, /page\.locator\("body"\)/);
-  assert.equal(
-    draftFile.selfCheck?.checks.find((check) => check.name === "Domain assertions")?.status,
-    "pass",
-  );
+  assert.doesNotMatch(spec, /qamap-invoices|qamap-total|source: "qamap-draft"|QAMap simulated failure/);
+  assert.doesNotMatch(spec, /route\.fulfill/);
+  assert.match(spec, /Extend src\/mocks\/handlers\.ts/);
+  assert.equal(plan.flows.find((item) => item === flow)?.fixtureReadiness.contractAuthority?.status, "missing");
 });
 
 test("local service state and permission requests do not require unrelated API fixtures", async () => {
@@ -7134,6 +7284,74 @@ test("qa isolates current working-tree contracts from committed branch history",
   assert.match(markdown, /## Current Local Delta/);
   assert.match(markdown, /shows an unavailable notice instead of opening archived products/);
   assert.match(markdown, /separate from committed branch history/i);
+});
+
+test("working-tree validation keeps a modified existing test beside a newly declared contract", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src/rules"), { recursive: true });
+  await mkdir(path.join(root, "test"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ scripts: { test: "node --test test/*.test.mjs" } }),
+  );
+  await writeFile(
+    path.join(root, "src/rules/contract-authority.ts"),
+    "export function collectContractEvidence(source) { return /example/.test(source); }\n",
+  );
+  await writeFile(
+    path.join(root, "test/contract-authority.test.mjs"),
+    [
+      "import assert from 'node:assert/strict';",
+      "import test from 'node:test';",
+      "test('accepts an exact contract example', () => assert.equal(true, true));",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "test/unrelated.test.mjs"),
+    "import test from 'node:test'; test('keeps an unrelated rule stable', () => {});\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "baseline"]);
+  await git(root, ["branch", "-M", "main"]);
+  await git(root, ["switch", "-c", "fix/contract-authority"]);
+
+  await writeFile(
+    path.join(root, "src/rules/contract-authority.ts"),
+    "export function collectContractEvidence(source) { return /exact response example/.test(source); }\n",
+  );
+  await writeFile(
+    path.join(root, "test/contract-authority.test.mjs"),
+    [
+      "import assert from 'node:assert/strict';",
+      "import test from 'node:test';",
+      "test('accepts an exact contract example', () => {",
+      "  assert.equal(true, true);",
+      "  assert.equal(false, false);",
+      "});",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "test/contract-safety.test.mjs"),
+    [
+      "import assert from 'node:assert/strict';",
+      "import test from 'node:test';",
+      "test('rejects a credential-shaped response example', () => assert.equal(true, true));",
+      "",
+    ].join("\n"),
+  );
+
+  const qa = await generateQaDraft(root, {
+    base: "main",
+    head: "HEAD",
+    includeWorkingTree: true,
+  });
+
+  assert.match(qa.route.command ?? "", /test\/contract-authority\.test\.mjs/);
+  assert.match(qa.route.command ?? "", /test\/contract-safety\.test\.mjs/);
+  assert.doesNotMatch(qa.route.command ?? "", /test\/unrelated\.test\.mjs/);
 });
 
 test("initializeLocalHistory protects local runs with gitignore entries", async () => {

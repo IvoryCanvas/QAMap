@@ -1065,11 +1065,20 @@ test("changed source roles follow analyzer imports without absorbing unrelated p
     ].join("\n"),
     "src/analyzer-execution.ts": [
       "import { analyzeEvidence } from './rules/session-boundary.js';",
+      "import { collectApiContractOperations } from './api-contract.js';",
+      "import { OrderContract as RootOrderContract } from './order-contract.js';",
+      "import { OrderContract } from './features/order-contract.js';",
       "export function runAnalysis(source) {",
-      "  const matched = analyzeEvidence(source);",
+      "  const matched = analyzeEvidence(source) || collectApiContractOperations(source).length > 0;",
       "  return { matched, evidenceKind: matched ? 'session-boundary' : 'none' };",
       "}",
     ].join("\n"),
+    "src/api-contract.ts": [
+      "export interface ApiContractAuthority { status: string }",
+      "export function collectApiContractOperations(source) { return source.paths ?? []; }",
+    ].join("\n"),
+    "src/order-contract.ts": "export interface OrderContract { id: string }",
+    "src/features/order-contract.ts": "export interface OrderContract { id: string }",
     "src/index.ts": "export { runAnalysis } from './analyzer-execution.js';",
     "schema/finding.schema.json": JSON.stringify({
       type: "object",
@@ -1091,6 +1100,9 @@ test("changed source roles follow analyzer imports without absorbing unrelated p
 
   assert.equal(roles["src/rules/session-boundary.ts"].role, "analysis-rule");
   assert.equal(roles["src/analyzer-execution.ts"].role, "analysis-rule");
+  assert.equal(roles["src/api-contract.ts"].role, "analysis-rule");
+  assert.equal(roles["src/order-contract.ts"].role, "product");
+  assert.equal(roles["src/features/order-contract.ts"].role, "product");
   assert.equal(roles["src/index.ts"].role, "analysis-rule");
   assert.equal(roles["schema/finding.schema.json"].role, "analysis-rule");
   assert.equal(roles["schema/account.schema.json"].role, "product");
@@ -2832,6 +2844,23 @@ test("evidence-routed failure QA becomes a separate partial Playwright scenario 
   await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
   await write(
     root,
+    "openapi.json",
+    JSON.stringify({
+      openapi: "3.1.0",
+      paths: {
+        "/api/jobs": {
+          post: {
+            responses: {
+              202: { content: { "application/json": { example: { state: "queued" } } } },
+              500: { content: { "application/json": { example: { code: "QUEUE_UNAVAILABLE" } } } },
+            },
+          },
+        },
+      },
+    }),
+  );
+  await write(
+    root,
     "src/pages/jobs/index.tsx",
     [
       "export function JobsPage() {",
@@ -2881,6 +2910,7 @@ test("evidence-routed failure QA becomes a separate partial Playwright scenario 
   assert.match(spec, /Routed QA scenario:/);
   assert.match(spec, /Failure, timeout, and retry handling/);
   assert.match(spec, /page\.route\("\*\*\/api\/jobs"/);
+  assert.match(spec, /route\.request\(\)\.method\(\) !== "POST"/);
   assert.match(spec, /page\.getByTestId\("job-submit"\)\.click\(\)/);
   assert.match(spec, /page\.getByText\("Could not queue job"\)/);
 });
@@ -4265,6 +4295,22 @@ test("symbol QA outcomes keep repository-visible success assertions executable",
     }),
   );
   await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await write(
+    root,
+    "openapi.json",
+    JSON.stringify({
+      openapi: "3.1.0",
+      paths: {
+        "/api/subscriptions/renew": {
+          post: {
+            responses: {
+              200: { content: { "application/json": { example: { status: "active" } } } },
+            },
+          },
+        },
+      },
+    }),
+  );
   const file = "src/pages/renewal.tsx";
   const source = (guard) => [
     "/**",
@@ -4325,6 +4371,7 @@ test("symbol QA outcomes keep repository-visible success assertions executable",
 
   const spec = await readFile(path.join(root, fileDraft.path), "utf8");
   assert.match(spec, /page\.route\("\*\*\/api\/subscriptions\/renew"/);
+  assert.match(spec, /route\.request\(\)\.method\(\) !== "POST"/);
   assert.match(spec, /await repeatedAction\.click\(\)/);
   assert.match(spec, /element\.click\(\)/);
   assert.match(spec, /expect\(requestCount\)\.toBe\(1\)/);
@@ -4457,6 +4504,22 @@ test("duplicate action QA follows an annotated service into a Vue user flow", as
     }),
   );
   await write(root, "playwright.config.ts", "export default { use: { baseURL: 'http://127.0.0.1:4173' } };\n");
+  await write(
+    root,
+    "openapi.json",
+    JSON.stringify({
+      openapi: "3.1.0",
+      paths: {
+        "/api/documents/save": {
+          post: {
+            responses: {
+              200: { content: { "application/json": { example: { status: "saved" } } } },
+            },
+          },
+        },
+      },
+    }),
+  );
   const serviceFile = "src/services/save-document.ts";
   const serviceSource = (guard) => [
     "let saving = false;",
@@ -4524,6 +4587,7 @@ test("duplicate action QA follows an annotated service into a Vue user flow", as
   const spec = await readFile(path.join(root, fileDraft.path), "utf8");
   assert.match(spec, /page\.goto\("\/documents"\)/);
   assert.match(spec, /page\.route\("\*\*\/api\/documents\/save"/);
+  assert.match(spec, /route\.request\(\)\.method\(\) !== "POST"/);
   assert.match(spec, /page\.getByTestId\("save-document"\)/);
   assert.match(spec, /page\.getByText\("Document saved"\)/);
   assert.match(spec, /expect\(requestCount\)\.toBe\(1\)/);

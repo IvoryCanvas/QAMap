@@ -158,7 +158,7 @@ Verify before merge
 Evidence
   3/3 scenarios connect to 5 unique diff source(s).
   Routing: 1 required, 2 recommended, 0 review-only.
-  Optional E2E mapping: 1 mapped, 1 partial, 1 unmapped; not executed.
+  Optional E2E mapping: 0 mapped, 1 partial, 2 unmapped; not executed.
   Supplemental validation: npm run test:e2e (available, not selected for this QA route)
 
 Next

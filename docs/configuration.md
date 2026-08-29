@@ -295,13 +295,14 @@ High-confidence terms usually come from committed core flows or domain manifests
 
 File-name conventions are matched as whole name tokens (`demoSeedService.ts`, `mock-users.json`), never as substrings, so ordinary source files such as `useSeedlingCatalog.ts` or `errorHandler.ts` are not misread as fixtures.
 
-If a client flow calls an API but the branch does not include backend, mock, or fixture evidence, the E2E plan marks fixture readiness as `missing` and the generated draft includes next actions for deterministic success and failure responses. This lets teams validate UI and flow behavior before the real server implementation is complete.
+If a client flow calls an API but the repository does not provide authoritative response evidence, the E2E plan marks fixture readiness as `missing` and names the endpoint that still needs a contract example or bound repository fixture. QAMap does not create a response body merely to make the draft look runnable.
 
 QAMap also reads the contents of the discovered mock and fixture files (up to 24 per plan, statically, without executing anything) and extracts their exported symbols, the routes their handlers already serve (MSW `rest.*`/`http.*` handlers, Mirage and express-style routes, Playwright `route(...)` patterns), and the response keys they use. That analysis turns generic advice into named instructions:
 
 - when an existing handler file already covers some of the flow's endpoints, the next action says which file to extend and which endpoints are still uncovered (for example `Extend src/mocks/handlers.ts (already handles /api/invoices) to also cover /api/payments/summary`)
 - when a mock or seed module exports reusable data, the next action names the export to reuse for the uncovered endpoint
-- generated Playwright drafts fill `mockApiResponses` bodies with the response keys observed in the matched fixture file instead of a generic placeholder, and note which file the shape came from
+- a matching OpenAPI or Swagger response example may supply an exact Playwright response body when the endpoint and method are unambiguous
+- schema fields, fixture keys, UI copy, and endpoint names never authorize invented response values
 - the fixture action item title carries the affected endpoints, so the compact `--format agent` output keeps the concrete target
 
-The matched insights are exposed as an optional `mockInsights` array (file, exports, handled endpoints, sample keys) on each flow's `fixtureReadiness` in the JSON output.
+The matched fixture insights are exposed as an optional `mockInsights` array (file, exports, handled endpoints, sample keys) on each flow's `fixtureReadiness` in the JSON output. Contract authority is exposed separately as `contractAuthority`, including its status, source files, and any safe exact examples eligible for generation.

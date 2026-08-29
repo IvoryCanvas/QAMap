@@ -418,33 +418,51 @@ Action summary:
 
 ## API-Dependent Client Flow
 
-When a client-side change calls an API path but the branch does not include backend or fixture evidence, QAMap should name that as a readiness gap and still give the tester a concrete mock slot:
+When a client-side change calls an API path, QAMap can route the affected behavior and QA risk from repository evidence. That does not authorize QAMap to invent a network response.
 
-If reusable repo-local evidence already exists, the PR QA output reads its contents (exports, handled routes, response keys) and points at the concrete thing to reuse instead of only saying "add a fixture":
+If reusable repo-local evidence already exists, the PR QA output reads its contents (exports, handled routes, response keys) and points at the concrete thing to review instead of only saying "add a fixture":
 
 ```txt
 Missing evidence before trusting this PR
 - [recommended] fixture: Confirm fixture coverage for /api/sample/status - Reuse src/services/sampleSeed.ts (exports sampleSeed) to build a deterministic response for /api/sample/status.
 ```
 
-When an existing handler file already covers part of the flow, the next action names the file and the still-uncovered endpoints, for example `Extend src/mocks/handlers.ts (already handles /api/invoices) to also cover /api/payments/summary`. The generated Playwright mock bodies then reuse the response keys observed in that file (`invoices: "qamap-invoices"`) instead of the generic placeholder below, with a comment noting the source file.
+When an existing handler file already covers part of the flow, the next action names the file and the still-uncovered endpoints, for example `Extend src/mocks/handlers.ts (already handles /api/invoices) to also cover /api/payments/summary`. The handler file is integration evidence, but its keys do not authorize QAMap to invent values.
 
-When no fixture file contents are available, the draft falls back to the generic placeholder:
+An exact response scaffold is emitted only when a matching OpenAPI or Swagger operation has one unambiguous method and a concrete JSON example. Given this contract:
+
+```yaml
+openapi: 3.1.0
+paths:
+  /api/orders/{id}:
+    get:
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                id: order-1
+                state: ready
+```
+
+QAMap may preserve that response verbatim:
 
 ```ts
 const mockApiResponses = {
-  "**/api/orders/fixture-order-id": {
+  "**/api/orders/*": {
+    method: "GET",
     status: 200,
     body: {
-      ok: true,
-      source: "qamap-draft",
+      id: "order-1",
+      state: "ready",
     },
   },
 };
 
-// Replace sample responses with deterministic fixtures from the target domain before promoting this draft.
+// Exact response examples come from openapi.yaml; QAMap did not synthesize payload values.
 for (const [urlPattern, response] of Object.entries(mockApiResponses)) {
   await page.route(urlPattern, async (route) => {
+    if (route.request().method() !== response.method) return route.fallback();
     await route.fulfill({
       status: response.status,
       contentType: "application/json",
@@ -454,7 +472,7 @@ for (const [urlPattern, response] of Object.entries(mockApiResponses)) {
 }
 ```
 
-This is useful for PRs where the UI can be built against mockdata before the server implementation is available. The generated file should still report fixture readiness as missing or partial until a reviewer replaces the sample response with domain-correct success, empty, unauthorized, timeout, or server-error fixtures.
+An operation with only status codes and schema properties remains `contract-only`. Non-JSON examples, oversized examples, credential-shaped fields, or multiple methods that QAMap cannot disambiguate also stop response generation. The output names the missing authority instead of producing a plausible-looking payload.
 
 When the PR changes the endpoint implementation itself, QAMap should not hide that contract behind a synthetic response. In that case the Playwright draft records the endpoint as an observed API pattern instead of adding a response mock:
 
