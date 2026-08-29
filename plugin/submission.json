@@ -79,5 +79,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "QAMap 0.4.15 adds repository-declared E2E execution receipts, detects account-scoped storage and divergent-copy risks, preserves every applicable validation contract, and adds an opt-in provider-neutral agent benchmark."
+  "releaseNotes": "QAMap 0.4.16 routes supported performance changes to measurable runtime contracts, requires authoritative API examples before generating mock payloads, isolates working-tree release validation from earlier commit tests, and refreshes the public plugin assets."
 }

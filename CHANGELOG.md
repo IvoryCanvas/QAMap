@@ -1,16 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.4.16 - 2026-08-29
 
 ### Added
 
+- Added a complete public brand asset inventory with editable masters, app and web icons, social cards, and dedicated light and dark plugin artwork.
 - Added exact diff evidence and measurable QA contracts for changed rendering work, image request priority, deferred modules, initial HTML and hydration, font loading, and delivery cache policy.
 - Connected working-tree-only performance mechanisms to a low-confidence, review-required runtime intent instead of returning no change intent.
+- Added bounded OpenAPI and Swagger response-example parsing as the authoritative source for generated local JSON response scaffolds.
+
+### Changed
+
+- Release-focused changes now prefer a repository-declared non-publishing validation gate and avoid repeating commands already covered by that gate.
+- Network evidence may still route affected behavior and QA, but repository types, schemas, UI copy, and fixture keys no longer authorize invented response values.
+- Refreshed the README, skill, plugin, GitHub preview, and reusable brand assets around one production-ready visual identity.
 
 ### Fixed
 
 - Performance-focused changes no longer stop at a generic screen flow when the changed hunk supports a more specific runtime or delivery measurement.
 - Copy and spacing-only UI changes remain outside performance scenario routing.
+- Changed endpoint implementations are observed instead of intercepted, while status codes or schemas without a concrete response example remain an explicit evidence gap.
+- Publishing, tagging, pushing, and deployment scripts are never promoted as automatic release validation.
+- Working-tree-only release changes no longer inherit test contracts from the previous target-branch commit when that commit is outside the active comparison.
 
 ## 0.4.15 - 2026-08-26
 
