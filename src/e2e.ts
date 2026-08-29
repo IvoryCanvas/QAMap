@@ -6173,6 +6173,9 @@ function intentFlowDisplayTitle(
   domainLanguage?: DomainLanguageSummary,
 ): string {
   if (intent.keywords.includes("repository-verification")) {
+    if (intent.keywords.includes("release-readiness")) {
+      return "Release metadata configuration verification checklist";
+    }
     return intent.keywords.includes("contribution-workflow")
       ? "Repository workflow documentation verification"
       : "Repository documentation verification";
@@ -6286,7 +6289,7 @@ function intentFlowKind(intent: ChangeIntentAnalysis["intents"][number], project
   const analysisRuleOnly = locatedRoles.includes("analysis-rule") &&
     locatedRoles.every((role) => role === "analysis-rule");
   if (intent.keywords.includes("repository-verification")) {
-    return "documentation";
+    return intent.keywords.includes("release-readiness") ? "config" : "documentation";
   }
   if (analysisRuleOnly) {
     return "domain";

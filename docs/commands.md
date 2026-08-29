@@ -46,7 +46,7 @@ Scenario routing and draft mapping answer different questions. Routing explains 
 Human QA output makes that boundary visible in three layers:
 
 1. **Important QA And Risk Map** keeps every evidence-backed scenario, including cases that require human review.
-2. **Executable Evidence Available Now** lists existing validation commands and structurally self-checked drafts without claiming they ran. When several changed validation contracts require different commands, one appears as the selected command and the rest appear as `Additional required validation`. An explicit `qa run` invocation may attach a receipt only for the selected command; every additional command remains `not run` until it is executed separately.
+2. **Executable Evidence Available Now** lists existing validation commands and structurally self-checked drafts without claiming they ran. When several changed validation contracts require different commands, one appears as the selected command and the rest appear as `Additional required validation`. An explicit `qa run` invocation may attach a receipt only for the selected command; every additional command remains `not run` until it is executed separately. Release-focused metadata changes prefer a declared non-publishing release gate, and commands already invoked by that gate are not repeated as separate requirements. A generic release or publishing script is not eligible.
 3. **Manual Or Agent QA Contracts** preserves the exact setup, action, outcome, and missing evidence for scenarios that cannot yet compile deterministically.
 
 `static-runnable` means the generated artifact has an entrypoint, observable assertion, no skipped placeholder, and passing QAMap self-checks. It does not mean the target application or command was executed.

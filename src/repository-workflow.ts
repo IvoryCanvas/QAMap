@@ -6,7 +6,12 @@ import type {
   IntentQaScenario,
 } from "./change-intent.js";
 import { classifyChangeSourceRole, isRepositoryWorkflowPath } from "./source-role.js";
-import type { AddedDiffEvidence, AddedDiffHunk, TestPlanChangedFile } from "./test-plan.js";
+import {
+  isReleaseValidationChange,
+  type AddedDiffEvidence,
+  type AddedDiffHunk,
+  type TestPlanChangedFile,
+} from "./test-plan.js";
 
 export interface RepositoryWorkflowAnalysisOptions {
   changedFiles: TestPlanChangedFile[];
@@ -34,18 +39,19 @@ export function analyzeRepositoryWorkflowChange(
   const hasDocumentation = classifications.some(({ file, role }) =>
     role === "documentation" && !isReleaseMetadataPath(file)
   );
-  if (!hasRepositoryWorkflow && !hasDocumentation) {
+  const hasReleaseValidation = isReleaseValidationChange(changedFiles);
+  if (!hasRepositoryWorkflow && !hasDocumentation && !hasReleaseValidation) {
     return { diagnostics: [] };
   }
 
-  const allowed = classifications.every(({ file, role }) =>
-    role === "repository-workflow" ||
-    role === "documentation" ||
-    role === "test" ||
-    role === "generated" ||
-    isReleaseMetadataPath(file) ||
-    (isPackageMetadataPath(file) && isDocumentationPackagingDiff(options.addedDiffEvidence[file] ?? []))
-  );
+  const allowed = hasReleaseValidation || classifications.every(({ file, role }) =>
+      role === "repository-workflow" ||
+      role === "documentation" ||
+      role === "test" ||
+      role === "generated" ||
+      isReleaseMetadataPath(file) ||
+      (isPackageMetadataPath(file) && isDocumentationPackagingDiff(options.addedDiffEvidence[file] ?? []))
+    );
   if (!allowed) {
     return { diagnostics: [] };
   }
@@ -59,7 +65,9 @@ export function analyzeRepositoryWorkflowChange(
     buildRepositoryEvidence(file, role, options.addedDiffEvidence[file] ?? [])
   );
   const id = stableId("repository-verification", ...orderedFiles);
-  const title = hasRepositoryWorkflow
+  const title = hasReleaseValidation
+    ? "Repository release readiness"
+    : hasRepositoryWorkflow
     ? hasDocumentation
       ? "Repository documentation and contribution workflow"
       : "Repository contribution workflow"
@@ -71,12 +79,21 @@ export function analyzeRepositoryWorkflowChange(
     evidence,
     hasDocumentation,
     hasRepositoryWorkflow,
+    hasReleaseValidation,
   });
-  const lifecycle = buildRepositoryLifecycle(id, orderedFiles, evidence, hasRepositoryWorkflow);
+  const lifecycle = buildRepositoryLifecycle(
+    id,
+    orderedFiles,
+    evidence,
+    hasRepositoryWorkflow,
+    hasReleaseValidation,
+  );
   const intent: ChangeIntent = {
     id,
     title,
-    summary: hasRepositoryWorkflow
+    summary: hasReleaseValidation
+      ? "Synchronized release metadata and repository validation evidence changed without a product behavior change."
+      : hasRepositoryWorkflow
       ? "Contributor-facing repository contracts changed without executable product behavior changes."
       : "Repository documentation and its validation or packaging contract changed without executable product behavior changes.",
     confidence: "high",
@@ -86,6 +103,7 @@ export function analyzeRepositoryWorkflowChange(
       "repository-verification",
       ...(hasDocumentation ? ["documentation"] : []),
       ...(hasRepositoryWorkflow ? ["contribution-workflow"] : []),
+      ...(hasReleaseValidation ? ["release-readiness"] : []),
     ],
     evidence,
     lifecycle,
@@ -96,7 +114,7 @@ export function analyzeRepositoryWorkflowChange(
   return {
     intent,
     diagnostics: [
-      `Routed ${orderedFiles.length} documentation or repository workflow file${orderedFiles.length === 1 ? "" : "s"} to repository contract verification.`,
+      `Routed ${orderedFiles.length} documentation, release, or repository workflow file${orderedFiles.length === 1 ? "" : "s"} to repository contract verification.`,
     ],
   };
 }
@@ -108,6 +126,7 @@ interface RepositoryScenarioOptions {
   evidence: ChangeIntentEvidence[];
   hasDocumentation: boolean;
   hasRepositoryWorkflow: boolean;
+  hasReleaseValidation: boolean;
 }
 
 function buildRepositoryScenario(options: RepositoryScenarioOptions): IntentQaScenario {
@@ -119,6 +138,9 @@ function buildRepositoryScenario(options: RepositoryScenarioOptions): IntentQaSc
   );
   const localizedDocs = options.files.filter(isLocalizedDocumentationPath);
   const steps = [
+    ...(options.hasReleaseValidation
+      ? ["Run the repository-owned release validation gate from a clean checkout."]
+      : []),
     ...(options.hasDocumentation
       ? ["Resolve every changed local documentation link and verify its target exists in the repository."]
       : []),
@@ -139,6 +161,9 @@ function buildRepositoryScenario(options: RepositoryScenarioOptions): IntentQaSc
       : []),
   ];
   const assertions = [
+    ...(options.hasReleaseValidation
+      ? ["Verify synchronized package, plugin, and source version metadata plus the package preview remain consistent."]
+      : []),
     ...(options.hasDocumentation
       ? ["Verify changed links, commands, and file paths resolve against the current repository."]
       : []),
@@ -167,6 +192,9 @@ function buildRepositoryScenario(options: RepositoryScenarioOptions): IntentQaSc
       ...(options.hasRepositoryWorkflow
         ? ["A syntactically valid template drops a required field, label, assignee, or review section."]
         : []),
+      ...(options.hasReleaseValidation
+        ? ["A release gate passes generic tests while package or plugin version metadata remains out of sync."]
+        : []),
     ],
     evidence: options.evidence,
     confidence: "high",
@@ -179,13 +207,16 @@ function buildRepositoryLifecycle(
   files: string[],
   evidence: ChangeIntentEvidence[],
   hasRepositoryWorkflow: boolean,
+  hasReleaseValidation: boolean,
 ): BehaviorLifecycleStage[] {
   const directEvidence = evidence.filter((item) => item.relation === "direct");
   return [
     {
       id: stableId(id, "trigger"),
       kind: "trigger",
-      label: hasRepositoryWorkflow
+      label: hasReleaseValidation
+        ? "A maintainer prepares synchronized release metadata"
+        : hasRepositoryWorkflow
         ? "A contributor opens the repository issue or pull request workflow"
         : "A maintainer or user follows the changed repository documentation",
       confidence: "high",
@@ -195,7 +226,9 @@ function buildRepositoryLifecycle(
     {
       id: stableId(id, "action"),
       kind: "action",
-      label: hasRepositoryWorkflow
+      label: hasReleaseValidation
+        ? "Run the declared release validation and package integrity contract"
+        : hasRepositoryWorkflow
         ? "Follow the changed fields, labels, assignees, and review sections"
         : "Follow the changed links, commands, and packaged guide paths",
       confidence: "high",

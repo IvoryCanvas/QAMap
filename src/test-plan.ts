@@ -392,13 +392,19 @@ async function discoverJavaScriptCommands(
     });
   }
 
-  const platformBuildScripts = discoverPlatformBuildScripts(parsed.scripts ?? {}, changedFiles.map((file) => file.path));
+  const scripts = parsed.scripts ?? {};
+  const changedPaths = changedFiles.map((file) => file.path);
+  const platformBuildScripts = discoverPlatformBuildScripts(scripts, changedPaths);
+  const offlineBenchmarkCommands = discoverOfflineBenchmarkCommands(scripts, changedPaths);
   return preferredJavaScriptScripts(
-    parsed.scripts ?? {},
+    scripts,
     platformBuildScripts,
-    changedFiles.map((file) => file.path),
+    changedPaths,
   )
-    .map((script) => (script === "test" ? `${packageManager} test` : `${packageManager} run ${script}`));
+    .map((script) =>
+      offlineBenchmarkCommands.get(script) ??
+      (script === "test" ? `${packageManager} test` : `${packageManager} run ${script}`)
+    );
 }
 
 async function isJavaScriptWorkspaceRoot(root: string, workspaces: unknown): Promise<boolean> {
@@ -472,7 +478,9 @@ function preferredJavaScriptScripts(
   platformBuildScripts: string[],
   changedFiles: string[],
 ): string[] {
-  return uniqueCommands([
+  const releaseValidationScripts = discoverReleaseValidationScripts(scripts, changedFiles);
+  const candidates = uniqueCommands([
+    ...releaseValidationScripts,
     ...discoverBenchmarkValidationScripts(scripts, changedFiles),
     ...platformBuildScripts,
     "test",
@@ -482,6 +490,160 @@ function preferredJavaScriptScripts(
     "test:e2e",
     "e2e",
   ]).filter((script) => isUsableScript(scripts[script]));
+  if (releaseValidationScripts.length === 0) {
+    return candidates;
+  }
+  const coveredScripts = collectInvokedPackageScripts(
+    scripts,
+    releaseValidationScripts[0],
+  );
+  return candidates.filter((script) =>
+    script === releaseValidationScripts[0] || !coveredScripts.has(script)
+  );
+}
+
+function discoverReleaseValidationScripts(
+  scripts: Record<string, string>,
+  changedFiles: string[],
+): string[] {
+  if (!isReleaseValidationChange(changedFiles)) {
+    return [];
+  }
+  return Object.entries(scripts)
+    .filter(([name, command]) =>
+      isUsableScript(command) &&
+      isReleaseValidationScriptName(name) &&
+      isNonPublishingReleaseValidationCommand(command)
+    )
+    .sort(([left], [right]) =>
+      releaseValidationScriptRank(left) - releaseValidationScriptRank(right) ||
+      left.localeCompare(right)
+    )
+    .map(([name]) => name);
+}
+
+export function isReleaseValidationChange(changedFiles: string[]): boolean {
+  if (changedFiles.length === 0) {
+    return false;
+  }
+  const normalized = changedFiles.map((file) => file.replaceAll("\\", "/"));
+  const hasPackageMetadata = normalized.some((file) => /(?:^|\/)package\.json$/i.test(file));
+  const hasReleaseCompanion = normalized.some((file) =>
+    isReleaseNotesPath(file) || isPluginManifestPath(file) || isVersionSourcePath(file)
+  );
+  if (!hasPackageMetadata || !hasReleaseCompanion) {
+    return false;
+  }
+  return normalized.every((file) =>
+    /(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?)$/i.test(file) ||
+    /(?:^|\/)package\.json$/i.test(file) ||
+    isReleaseNotesPath(file) ||
+    isPluginManifestPath(file) ||
+    isVersionSourcePath(file) ||
+    isBenchmarkValidationStructurePath(file) ||
+    /(?:^|\/)(?:README(?:\.[^/]+)?\.md|docs?\/.*\.md|skills?\/.*\.md)$/i.test(file)
+  );
+}
+
+function isReleaseNotesPath(file: string): boolean {
+  return /(?:^|\/)(?:CHANGELOG|RELEASES?|release-notes?|\.release-please-manifest)\.(?:md|json)$/i.test(file) ||
+    /(?:^|\/)\.changeset\//i.test(file) ||
+    /(?:release-please|changeset)/i.test(file);
+}
+
+function isPluginManifestPath(file: string): boolean {
+  return /(?:^|\/)(?:\.claude-plugin|\.codex-plugin)\/plugin\.json$/i.test(file) ||
+    /(?:^|\/)plugin\/(?:submission|marketplace|plugin)\.json$/i.test(file);
+}
+
+function isVersionSourcePath(file: string): boolean {
+  return /(?:^|\/)(?:src|lib)\/version\.[cm]?[jt]s$/i.test(file);
+}
+
+function isReleaseValidationScriptName(name: string): boolean {
+  return /^(?:release:(?:check|verify|validate|test)|(?:check|verify|validate|test):release|(?:package|pack):(?:check|verify|validate))$/i.test(
+    name,
+  );
+}
+
+function isNonPublishingReleaseValidationCommand(command: string): boolean {
+  const mutatingRelease = /\b(?:npm|pnpm|yarn|bun)\s+(?:publish|version)\b|\bgit\s+(?:push|tag|commit)\b|\bgh\s+release\s+create\b|\bchangeset\s+publish\b|\bsemantic-release\b|\bdeploy\b/i;
+  if (mutatingRelease.test(command)) {
+    return false;
+  }
+  return /\b(?:test|check|verify|validate|lint|build|typecheck|scan)\b|--(?:dry-run|assert)\b|\bpack\b[^\n]*--dry-run\b/i.test(
+    command,
+  );
+}
+
+function releaseValidationScriptRank(name: string): number {
+  if (/^release:check$/i.test(name)) return 0;
+  if (/^(?:release:(?:verify|validate)|(?:check|verify|validate):release)$/i.test(name)) return 1;
+  return 2;
+}
+
+function collectInvokedPackageScripts(
+  scripts: Record<string, string>,
+  rootScript: string,
+): Set<string> {
+  const invoked = new Set<string>();
+  const pending = [rootScript];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current) continue;
+    const command = scripts[current];
+    if (!command) continue;
+    for (const script of invokedPackageScripts(command)) {
+      if (script === rootScript || invoked.has(script) || !scripts[script]) continue;
+      invoked.add(script);
+      pending.push(script);
+    }
+  }
+  return invoked;
+}
+
+function invokedPackageScripts(command: string): string[] {
+  return packageScriptInvocations(command).map((invocation) => invocation.script);
+}
+
+function packageScriptInvocations(command: string): Array<{ script: string; command: string }> {
+  return command
+    .split(/\s*(?:&&|\|\||;)\s*/)
+    .map((segment) => segment.trim())
+    .flatMap((segment) => {
+      const match = segment.match(
+        /^(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+([A-Za-z0-9:_-]+)(?=\s|$)/,
+      );
+      return match?.[1] ? [{ script: match[1], command: segment }] : [];
+    });
+}
+
+function discoverOfflineBenchmarkCommands(
+  scripts: Record<string, string>,
+  changedFiles: string[],
+): Map<string, string> {
+  if (!changedFiles.some(isBenchmarkValidationStructurePath)) {
+    return new Map();
+  }
+  const result = new Map<string, string>();
+  for (const command of Object.values(scripts)) {
+    for (const invocation of packageScriptInvocations(command)) {
+      const target = scripts[invocation.script];
+      if (
+        !target ||
+        !isRepositoryBenchmarkScript(invocation.script, target) ||
+        !/(?:^|\s)--dry-run(?:\s|$)/i.test(invocation.command) ||
+        !/(?:^|\s)--assert(?:\s|$)/i.test(invocation.command)
+      ) {
+        continue;
+      }
+      const existing = result.get(invocation.script);
+      if (!existing || invocation.command.length < existing.length) {
+        result.set(invocation.script, invocation.command);
+      }
+    }
+  }
+  return result;
 }
 
 function discoverBenchmarkValidationScripts(

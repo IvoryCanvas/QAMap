@@ -291,6 +291,141 @@ test("qa preserves every changed test and benchmark validation contract", async 
   assert.match(text, /qa run executes only the selected command/);
 });
 
+test("qa prefers a repository release gate for release-only metadata changes", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, ".codex-plugin"), { recursive: true });
+  await mkdir(path.join(root, "docs"), { recursive: true });
+  await mkdir(path.join(root, "scripts"), { recursive: true });
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "release-gate-fixture",
+      version: "1.0.0",
+      packageManager: "pnpm@10.0.0",
+      scripts: {
+        test: "node --test",
+        "bench:agent": "node scripts/agent-bench.mjs",
+        "release:check": "pnpm test && pnpm bench:agent --dry-run --assert && pnpm pack --dry-run",
+      },
+    }),
+  );
+  await writeFile(path.join(root, ".codex-plugin/plugin.json"), '{"name":"release-gate-fixture","version":"1.0.0"}\n');
+  await writeFile(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## 1.0.0\n\n- Initial release.\n");
+  await writeFile(path.join(root, "agent-bench.config.json"), '{"tasks":[]}\n');
+  await writeFile(path.join(root, "docs/release-validation.md"), "# Release validation\n\nRun the repository release gate.\n");
+  await writeFile(path.join(root, "scripts/agent-bench.mjs"), "console.log('agent benchmark');\n");
+  await writeFile(path.join(root, "src/version.ts"), 'export const VERSION = "1.0.0";\n');
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+  await git(root, ["switch", "-c", "chore/prepare-release"]);
+
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "release-gate-fixture",
+      version: "1.0.1",
+      packageManager: "pnpm@10.0.0",
+      scripts: {
+        test: "node --test",
+        "bench:agent": "node scripts/agent-bench.mjs",
+        "release:check": "pnpm test && pnpm bench:agent --dry-run --assert && pnpm pack --dry-run",
+      },
+    }),
+  );
+  await writeFile(path.join(root, ".codex-plugin/plugin.json"), '{"name":"release-gate-fixture","version":"1.0.1"}\n');
+  await writeFile(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## 1.0.1\n\n- Validate release metadata.\n");
+  await writeFile(path.join(root, "agent-bench.config.json"), '{"tasks":["release-smoke"]}\n');
+  await writeFile(path.join(root, "docs/release-validation.md"), "# Release validation\n\nRun the repository release gate from a clean checkout.\n");
+  await writeFile(path.join(root, "src/version.ts"), 'export const VERSION = "1.0.1";\n');
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "chore: prepare release"]);
+
+  const plan = await generateTestPlan(root, { base: "main", head: "HEAD" });
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+  assert.equal(plan.suggestedCommands[0], "pnpm run release:check");
+  assert.equal(plan.suggestedCommands.includes("pnpm test"), false);
+  assert.equal(plan.suggestedCommands.includes("pnpm run bench:agent"), false);
+  assert.equal(qa.route.command, "pnpm run release:check");
+  assert.equal(qa.route.additionalCommands, undefined);
+  assert.equal(qa.execution.status, "not-run");
+});
+
+test("qa does not treat an unrelated release script as a validation gate", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "release-script-negative-control",
+      version: "1.0.0",
+      packageManager: "pnpm@10.0.0",
+      scripts: {
+        test: "node --test",
+        release: "npm publish",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "src/checkout.ts"), "export const total = 10;\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+  await git(root, ["switch", "-c", "feature/checkout"]);
+  await writeFile(path.join(root, "src/checkout.ts"), "export const total = 20;\n");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "feat: update checkout total"]);
+
+  const plan = await generateTestPlan(root, { base: "main", head: "HEAD" });
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+  assert.equal(plan.suggestedCommands.includes("pnpm run release"), false);
+  assert.equal(qa.suggestedCommands.includes("pnpm run release"), false);
+  assert.equal(qa.route.command, undefined);
+});
+
+test("qa prefers a declared offline benchmark invocation over a provider-backed measurement", async () => {
+  const root = await makeTempRepo();
+  await initGitRepo(root);
+  await mkdir(path.join(root, "scripts"), { recursive: true });
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "offline-benchmark-fixture",
+      private: true,
+      packageManager: "pnpm@10.0.0",
+      scripts: {
+        test: "node --test",
+        "bench:ci": "node scripts/bench.mjs --config bench.config.json --assert",
+        "bench:agent": "node scripts/agent-bench.mjs --config agent-bench.config.json",
+        "release:check": "pnpm test && pnpm bench:ci && pnpm bench:agent --dry-run --assert",
+      },
+    }),
+  );
+  await writeFile(path.join(root, "scripts/bench.mjs"), "console.log('static benchmark');\n");
+  await writeFile(path.join(root, "scripts/agent-bench.mjs"), "console.log('agent benchmark');\n");
+  await writeFile(path.join(root, "bench.config.json"), '{"targets":[]}\n');
+  await writeFile(path.join(root, "agent-bench.config.json"), '{"tasks":[]}\n');
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+  await git(root, ["switch", "-c", "fix/agent-benchmark-contract"]);
+  await writeFile(path.join(root, "agent-bench.config.json"), '{"tasks":["review"]}\n');
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "fix: update agent benchmark contract"]);
+
+  const plan = await generateTestPlan(root, { base: "main", head: "HEAD" });
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+  assert.equal(plan.suggestedCommands.includes("pnpm run bench:agent"), false);
+  assert.equal(plan.suggestedCommands.includes("pnpm bench:agent --dry-run --assert"), true);
+  assert.equal(qa.suggestedCommands.includes("pnpm run bench:agent"), false);
+  assert.equal(qa.suggestedCommands.includes("pnpm bench:agent --dry-run --assert"), true);
+});
+
 test("scanProject reports common AI agent repository risks", async () => {
   const root = await makeTempRepo();
   await mkdir(path.join(root, ".cursor"), { recursive: true });

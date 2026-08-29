@@ -2,6 +2,34 @@
   "$comment": "Committed quality contract. Each fixture is materialized as a temporary Git repository with a main baseline and one PR change.",
   "targets": [
     {
+      "name": "repository-release-gate",
+      "fixture": "test/benchmarks/repository-release-gate",
+      "commitMessage": "chore: prepare repository release",
+      "expect": {
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 1,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": [
+          "package.json",
+          ".codex-plugin/plugin.json",
+          "agent-bench.config.json",
+          "src/version.ts"
+        ],
+        "mustNameIntents": ["repository release readiness"],
+        "mustNameFlows": ["release metadata configuration verification"],
+        "mustIncludeLifecycle": ["declared release validation", "package integrity contract"],
+        "mustIncludeQaScenarios": ["Repository release readiness contract remains valid"],
+        "mustRecommendCommands": ["release:check"],
+        "mustNotRecommendCommands": ["pnpm test", "bench:agent"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "service-runtime-activation-startup",
       "fixture": "test/benchmarks/service-runtime-activation-startup",
       "commitMessage": "feat: configure digest worker activation",
