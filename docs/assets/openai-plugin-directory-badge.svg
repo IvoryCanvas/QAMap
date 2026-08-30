@@ -2,17 +2,16 @@
   <title id="title">Install QAMap from the OpenAI Plugin Directory</title>
   <desc id="description">Open the published QAMap listing and install the plugin.</desc>
   <rect x="0.5" y="0.5" width="359" height="63" rx="8" fill="#07111f" stroke="#27466e"/>
-  <g transform="translate(10 10)">
-    <rect x="0.5" y="0.5" width="43" height="43" rx="10" fill="#07111f" stroke="#27466e"/>
-    <path d="M12 13V22C12 28 16 32 22 34" fill="none" stroke="#19bef2" stroke-width="2" stroke-linecap="round"/>
-    <path d="M32 13V22C32 28 28 32 22 34" fill="none" stroke="#19bef2" stroke-width="2" stroke-linecap="round"/>
-    <path d="M22 13V34" fill="none" stroke="#19bef2" stroke-width="2" stroke-linecap="round"/>
-    <circle cx="12" cy="10" r="3.5" fill="#07111f" stroke="#19bef2" stroke-width="2"/>
-    <circle cx="22" cy="10" r="3.5" fill="#07111f" stroke="#19bef2" stroke-width="2"/>
-    <circle cx="32" cy="10" r="3.5" fill="#07111f" stroke="#19bef2" stroke-width="2"/>
-    <circle cx="22" cy="34" r="3.5" fill="#07111f" stroke="#19bef2" stroke-width="2"/>
-    <circle cx="22" cy="41" r="6" fill="#07111f" stroke="#ffb414" stroke-width="2"/>
-    <path d="M18.5 41L21 43.5L25.5 38.5" fill="none" stroke="#ffb414" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(10 10) scale(0.04296875)">
+    <rect x="56" y="56" width="912" height="912" rx="218" fill="#07111F"/>
+    <path d="M 184 354 H 536 C 490 392 438 420 398 458 C 344 508 338 580 382 626 C 408 654 448 670 498 670 H 720" fill="none" stroke="#20BCEB" stroke-width="72" stroke-linecap="butt" stroke-linejoin="round"/>
+    <path d="M 720 670 H 850" fill="none" stroke="#FFB31A" stroke-width="72" stroke-linecap="butt" stroke-linejoin="round"/>
+    <circle cx="184" cy="354" r="84" fill="#20BCEB"/>
+    <circle cx="184" cy="354" r="40" fill="#F4F7FB"/>
+    <circle cx="536" cy="354" r="84" fill="#20BCEB"/>
+    <circle cx="536" cy="354" r="40" fill="#07111F"/>
+    <circle cx="850" cy="670" r="70" fill="#FFB31A"/>
+    <path d="M 811 670 L 837 696 L 884 642" fill="none" stroke="#F4F7FB" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
   <text x="68" y="25" fill="#8ea4bc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11" font-weight="600">INSTALL QAMAP FROM</text>
   <text x="68" y="47" fill="#f5f8fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="600">OpenAI Plugin Directory</text>
