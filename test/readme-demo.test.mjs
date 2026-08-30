@@ -9,7 +9,7 @@ import { formatTextQaDraft, generateQaDraft } from "../dist/qa.js";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-test("public README demos are generated from the current QA engine", async (t) => {
+test("the public walkthrough demo is generated from the current QA engine", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "qamap-readme-demo-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   git(root, "init", "-b", "main");
@@ -38,12 +38,22 @@ test("public README demos are generated from the current QA engine", async (t) =
   const result = await generateQaDraft(root, { base: "main", head: "HEAD" });
   const actual = formatTextQaDraft(result).trimEnd();
 
-  for (const [file, heading] of [
-    ["README.md", "## See A Real Run"],
-    ["README.ko.md", "## 실제 실행 예시"],
-  ]) {
+  const walkthrough = await readFile(
+    path.join(repositoryRoot, "docs/quickstart-demo.md"),
+    "utf8",
+  );
+  assert.equal(
+    extractTextBlock(walkthrough, "## 2. Read The Five Sections"),
+    actual,
+    "docs/quickstart-demo.md demo drifted from the QA engine",
+  );
+
+  for (const file of ["README.md", "README.ko.md"]) {
     const source = await readFile(path.join(repositoryRoot, file), "utf8");
-    assert.equal(extractTextBlock(source, heading), actual, `${file} demo drifted from the QA engine`);
+    assert.ok(
+      source.includes("quickstart"),
+      `${file} must route detailed first-run guidance out of the entry point`,
+    );
   }
 });
 

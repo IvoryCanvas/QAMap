@@ -38,19 +38,32 @@ Local static analysis. No cloud or LLM token. Product QA was not run.
 
 Change
   Prevent duplicate subscription renewal requests (medium confidence; review required)
+  Flow:
+    action: Prevent duplicate subscription renewal requests.
+    -> observable-outcome: Subscription status becomes active.
   Affected behavior: Prevent duplicate subscription renewal requests
 
 Verify before merge
   REQUIRED  Prevent duplicate subscription renewal requests
     Proof: Verify visible text "Subscription active" appears.
     Evidence: src/pages/renewal.tsx:11 (RenewalPage)
+  RECOMMENDED  Failure, timeout, and retry handling
+    Proof: Verify each response produces the intended visible or persisted state.
+    Evidence: src/pages/renewal.tsx:11 (RenewalPage)
   RECOMMENDED  Duplicate renewal request
     Proof: Verify duplicate renewal request is prevented or handled explicitly.
+    Evidence: src/pages/renewal.tsx:11 (RenewalPage)
 
 Evidence
-  3/3 scenarios connect to 6 unique diff sources.
-  Optional E2E mapping: 2 mapped, 1 unmapped; not executed.
-  Existing validation: npm run test:e2e (selected, not run)
+  3/3 scenarios connect to 5 unique diff source(s).
+  Routing: 1 required, 2 recommended, 0 review-only.
+  Optional E2E mapping: 0 mapped, 1 partial, 2 unmapped; not executed.
+  Supplemental validation: npm run test:e2e (available, not selected for this QA route)
+
+Next
+  Review the selected scenarios before choosing an execution step.
+  Preview an optional automation or checklist draft: qamap e2e draft . --dry-run
+  Open the full reasoning trace: qamap qa --format markdown
 ```
 
 The wording matters:
