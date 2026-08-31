@@ -1,7 +1,9 @@
 import path from "node:path";
 import YAML from "yaml";
 
-export type ApiContractAuthorityStatus = "example" | "contract-only" | "missing";
+export type ApiContractAuthorityStatus = "example" | "schema" | "contract-only" | "missing";
+
+export type ApiContractResponseProvenance = "explicit-example" | "schema-derived";
 
 export interface ApiContractResponseExample {
   file: string;
@@ -9,7 +11,24 @@ export interface ApiContractResponseExample {
   method: string;
   status: number;
   mediaType?: string;
+  provenance?: "explicit-example";
   body: unknown;
+}
+
+export interface ApiContractResponseSchema {
+  file: string;
+  endpoint: string;
+  method: string;
+  status: number;
+  mediaType: string;
+  provenance: "schema-derived";
+  shape: {
+    type?: string | string[];
+    properties: string[];
+    required: string[];
+    reference?: string;
+    variantCount?: number;
+  };
 }
 
 export interface ApiContractOperationEvidence {
@@ -18,6 +37,7 @@ export interface ApiContractOperationEvidence {
   method: string;
   statuses: number[];
   examples: ApiContractResponseExample[];
+  schemas?: ApiContractResponseSchema[];
 }
 
 export interface ApiContractAuthority {
@@ -25,6 +45,7 @@ export interface ApiContractAuthority {
   reason: string;
   sources: string[];
   examples: ApiContractResponseExample[];
+  schemas?: ApiContractResponseSchema[];
 }
 
 interface ContractSourceFile {
@@ -35,6 +56,8 @@ interface ContractSourceFile {
 const httpMethods = new Set(["get", "post", "put", "patch", "delete", "head", "options", "trace"]);
 const maxExampleBytes = 20_000;
 const maxAuthorityExamples = 8;
+const maxAuthoritySchemas = 12;
+const maxSchemaProperties = 32;
 
 export function collectApiContractOperations(files: ContractSourceFile[]): ApiContractOperationEvidence[] {
   return files.flatMap((file) => {
@@ -58,10 +81,12 @@ export function summarizeApiContractAuthority(
       reason: "No matching OpenAPI or Swagger operation was found for the detected endpoint.",
       sources: [],
       examples: [],
+      schemas: [],
     };
   }
 
   const examples: ApiContractResponseExample[] = [];
+  const schemas: ApiContractResponseSchema[] = [];
   for (const endpoint of endpoints) {
     const endpointOperations = matching.filter((operation) => contractPathsMatch(operation.endpoint, endpoint));
     const methods = new Set(endpointOperations.map((operation) => operation.method));
@@ -70,23 +95,36 @@ export function summarizeApiContractAuthority(
     }
     for (const operation of endpointOperations) {
       examples.push(...operation.examples);
+      schemas.push(...(operation.schemas ?? []));
     }
   }
 
   const sources = unique(matching.map((operation) => operation.file));
+  const uniqueSchemasForAuthority = uniqueSchemas(schemas).slice(0, maxAuthoritySchemas);
   if (examples.length > 0) {
     return {
       status: "example",
       reason: "A matching machine-readable API contract includes an exact response example.",
       sources,
       examples: uniqueExamples(examples).slice(0, maxAuthorityExamples),
+      schemas: uniqueSchemasForAuthority,
+    };
+  }
+  if (uniqueSchemasForAuthority.length > 0) {
+    return {
+      status: "schema",
+      reason: "A matching machine-readable API contract defines JSON response schemas, but no exact response example is available.",
+      sources,
+      examples: [],
+      schemas: uniqueSchemasForAuthority,
     };
   }
   return {
     status: "contract-only",
-    reason: "A matching machine-readable API contract defines the operation, but no safe, unambiguous response example is available.",
+    reason: "A matching machine-readable API contract defines the operation, but no safe, unambiguous JSON response example or schema is available.",
     sources,
     examples: [],
+    schemas: [],
   };
 }
 
@@ -113,6 +151,7 @@ function analyzeOpenApiSource(file: string, text: string): ApiContractOperationE
       }
       const statuses: number[] = [];
       const examples: ApiContractResponseExample[] = [];
+      const schemas: ApiContractResponseSchema[] = [];
       for (const [statusKey, response] of Object.entries(operation.responses)) {
         const status = parseStatus(statusKey);
         if (status === undefined || !isRecord(response)) {
@@ -126,7 +165,19 @@ function analyzeOpenApiSource(file: string, text: string): ApiContractOperationE
             method: normalizedMethod.toUpperCase(),
             status,
             ...(candidate.mediaType ? { mediaType: candidate.mediaType } : {}),
+            provenance: "explicit-example",
             body: candidate.body,
+          });
+        }
+        for (const candidate of responseSchemas(response, document)) {
+          schemas.push({
+            file,
+            endpoint,
+            method: normalizedMethod.toUpperCase(),
+            status,
+            mediaType: candidate.mediaType,
+            provenance: "schema-derived",
+            shape: candidate.shape,
           });
         }
       }
@@ -136,10 +187,117 @@ function analyzeOpenApiSource(file: string, text: string): ApiContractOperationE
         method: normalizedMethod.toUpperCase(),
         statuses: uniqueNumbers(statuses),
         examples,
+        schemas,
       });
     }
   }
   return operations;
+}
+
+function responseSchemas(
+  response: Record<string, unknown>,
+  document: Record<string, unknown>,
+): Array<{ mediaType: string; shape: ApiContractResponseSchema["shape"] }> {
+  const schemas: Array<{ mediaType: string; shape: ApiContractResponseSchema["shape"] }> = [];
+  if (!isRecord(response.content)) {
+    return schemas;
+  }
+  for (const [mediaType, media] of Object.entries(response.content)) {
+    if (!/json/i.test(mediaType) || !isRecord(media) || !isRecord(media.schema)) {
+      continue;
+    }
+    const shape = summarizeSchemaShape(media.schema, document);
+    if (shape) {
+      schemas.push({ mediaType, shape });
+    }
+  }
+  return schemas;
+}
+
+function summarizeSchemaShape(
+  schema: Record<string, unknown>,
+  document: Record<string, unknown>,
+): ApiContractResponseSchema["shape"] | undefined {
+  const reference = typeof schema.$ref === "string" ? schema.$ref : undefined;
+  const resolved = reference ? resolveLocalSchemaReference(document, reference) : schema;
+  if (!resolved || !hasUsableSchemaShape(resolved, document, new Set<string>())) {
+    return undefined;
+  }
+  const properties = isRecord(resolved.properties)
+    ? Object.keys(resolved.properties).slice(0, maxSchemaProperties)
+    : [];
+  const required = Array.isArray(resolved.required)
+    ? resolved.required.filter((value): value is string => typeof value === "string" && properties.includes(value))
+    : [];
+  const variants = [resolved.oneOf, resolved.anyOf, resolved.allOf]
+    .find((value): value is unknown[] => Array.isArray(value) && value.length > 0);
+  return {
+    ...(isSchemaType(resolved.type) ? { type: resolved.type } : {}),
+    properties,
+    required,
+    ...(reference ? { reference } : {}),
+    ...(variants ? { variantCount: variants.length } : {}),
+  };
+}
+
+function hasUsableSchemaShape(
+  schema: Record<string, unknown>,
+  document: Record<string, unknown>,
+  seenReferences: Set<string>,
+): boolean {
+  if (typeof schema.$ref === "string") {
+    if (seenReferences.has(schema.$ref)) {
+      return false;
+    }
+    const resolved = resolveLocalSchemaReference(document, schema.$ref);
+    if (!resolved) {
+      return false;
+    }
+    const nextSeen = new Set(seenReferences);
+    nextSeen.add(schema.$ref);
+    return hasUsableSchemaShape(resolved, document, nextSeen);
+  }
+  if ("const" in schema || Array.isArray(schema.enum) && schema.enum.length > 0 || "default" in schema) {
+    return true;
+  }
+  if (isRecord(schema.properties) && Object.keys(schema.properties).length > 0) {
+    return true;
+  }
+  if (isRecord(schema.items) && hasUsableSchemaShape(schema.items, document, seenReferences)) {
+    return true;
+  }
+  if ([schema.oneOf, schema.anyOf, schema.allOf].some((value) =>
+    Array.isArray(value) && value.some((variant) => isRecord(variant) && hasUsableSchemaShape(variant, document, seenReferences)))) {
+    return true;
+  }
+  if (typeof schema.type === "string") {
+    return !["object", "array"].includes(schema.type);
+  }
+  return Array.isArray(schema.type) && schema.type.some((type) =>
+    typeof type === "string" && !["object", "array", "null"].includes(type));
+}
+
+function isSchemaType(value: unknown): value is string | string[] {
+  return typeof value === "string" ||
+    Array.isArray(value) && value.length > 0 && value.every((type) => typeof type === "string");
+}
+
+function resolveLocalSchemaReference(
+  document: Record<string, unknown>,
+  reference: string,
+): Record<string, unknown> | undefined {
+  if (!reference.startsWith("#/")) {
+    return undefined;
+  }
+  let current: unknown = document;
+  for (const rawSegment of reference.slice(2).split("/")) {
+    const segment = rawSegment.replace(/~1/g, "/").replace(/~0/g, "~");
+    if (!isRecord(current) || !(segment in current)) {
+      return undefined;
+    }
+    current = current[segment];
+  }
+  return isRecord(current) ? current : undefined;
 }
 
 function responseExamples(response: Record<string, unknown>): Array<{ mediaType?: string; body: unknown }> {
@@ -275,6 +433,18 @@ function uniqueExamples(values: ApiContractResponseExample[]): ApiContractRespon
   const seen = new Set<string>();
   return values.filter((value) => {
     const key = `${value.file}\0${value.endpoint}\0${value.method}\0${value.status}\0${JSON.stringify(value.body)}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function uniqueSchemas(values: ApiContractResponseSchema[]): ApiContractResponseSchema[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = `${value.file}\0${value.endpoint}\0${value.method}\0${value.status}\0${value.mediaType}\0${JSON.stringify(value.shape)}`;
     if (seen.has(key)) {
       return false;
     }

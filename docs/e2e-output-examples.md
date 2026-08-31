@@ -472,7 +472,37 @@ for (const [urlPattern, response] of Object.entries(mockApiResponses)) {
 }
 ```
 
-An operation with only status codes and schema properties remains `contract-only`. Non-JSON examples, oversized examples, credential-shaped fields, or multiple methods that QAMap cannot disambiguate also stop response generation. The output names the missing authority instead of producing a plausible-looking payload.
+A usable JSON response schema without an exact example is reported separately:
+
+```json
+{
+  "status": "schema",
+  "schemas": [
+    {
+      "method": "GET",
+      "status": 200,
+      "mediaType": "application/json",
+      "provenance": "schema-derived",
+      "shape": {
+        "type": "object",
+        "properties": ["id", "state"],
+        "required": ["id"]
+      }
+    }
+  ]
+}
+```
+
+This keeps the documented response scenario available to a schema-aware adapter
+without claiming that synthetic values came from the repository. Fixture
+readiness remains `partial`, and the Playwright draft does not emit
+`route.fulfill()` until an adapter or repository-owned fixture materializes a
+concrete payload.
+
+Status-only responses remain `contract-only`. Non-JSON content, oversized or
+credential-shaped examples, unresolved references, and multiple methods that
+QAMap cannot disambiguate also stop response generation. The output names the
+missing authority instead of producing a plausible-looking payload.
 
 When the PR changes the endpoint implementation itself, QAMap should not hide that contract behind a synthetic response. In that case the Playwright draft records the endpoint as an observed API pattern instead of adding a response mock:
 

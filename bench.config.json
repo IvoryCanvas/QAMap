@@ -233,6 +233,29 @@
       }
     },
     {
+      "name": "web-openapi-schema-response",
+      "fixture": "test/benchmarks/web-openapi-schema-response",
+      "commitMessage": "feat: load report state and show unavailable responses",
+      "expect": {
+        "runner": "playwright",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minDiffAnchoredFlows": 1,
+        "mustReachFiles": ["src/pages/reports/index.tsx"],
+        "mustNameFlows": ["report"],
+        "mustFindSelectors": ["report-load"],
+        "mustIncludeContractAuthorityStatuses": ["schema"],
+        "mustIncludeContractResponseProvenance": ["schema-derived"],
+        "mustNotIncludeContractResponseProvenance": ["explicit-example"],
+        "mustIncludeFixtureReadinessStatuses": ["partial"],
+        "minContractSchemaResponses": 2,
+        "maxContractExamples": 0,
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "web-vue-account",
       "fixture": "test/benchmarks/web-vue-account",
       "expect": {

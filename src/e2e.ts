@@ -7148,6 +7148,25 @@ async function inferFlowFixtureReadiness(
     };
   }
 
+  if (contractAuthority.status === "schema") {
+    const schemaScenarios = uniqueStrings((contractAuthority.schemas ?? []).map((schema) =>
+      `${schema.method} ${schema.endpoint} -> ${schema.status}`,
+    ));
+    return {
+      status: "partial",
+      reason: "A matching machine-readable API contract defines schema-backed response scenarios, but no exact payload has been materialized for local execution.",
+      apiSignals,
+      apiEndpoints,
+      backendSignals,
+      mockSignals,
+      contractAuthority,
+      nextActions: [
+        `Materialize ${formatHumanList(schemaScenarios)} from ${contractAuthority.sources.slice(0, 3).map((file) => `\`${file}\``).join(", ")} with a schema-aware adapter, or bind a repository-owned fixture.`,
+        "Keep every generated value labeled as schema-derived; do not present it as an explicit repository example.",
+      ],
+    };
+  }
+
   return {
     status: "missing",
     reason: contractAuthority.status === "contract-only"

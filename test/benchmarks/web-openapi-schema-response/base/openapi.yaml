@@ -1,0 +1,31 @@
+openapi: 3.1.0
+components:
+  schemas:
+    Report:
+      type: object
+      required: [id, state]
+      properties:
+        id:
+          type: string
+        state:
+          type: string
+    Problem:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+paths:
+  /api/reports/{id}:
+    get:
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '404':
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'

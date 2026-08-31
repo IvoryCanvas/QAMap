@@ -44,9 +44,10 @@ or runner name. QAMap 0.4.16 closes the first performance-routing, network
 authority, release-gate, and working-tree isolation gaps. The remaining
 generalized work queue is:
 
-1. Extend authoritative network setup beyond exact OpenAPI examples through
-   explicit repository-owned fixture bindings and additional machine-readable
-   contract sources. Missing payload evidence must remain a stop condition.
+1. Add declared schema-aware materializer adapters and explicit repository-owned
+   fixture bindings for schema-backed response scenarios. Preserve whether each
+   payload came from an exact example, a schema-derived value, or a reviewed
+   fixture; status-only and unresolved evidence must remain stop conditions.
 2. Expand declared executor coverage beyond the current browser fixtures. Add
    unrelated API, CLI, or mobile controls that prove the same generated artifact
    fails for its intended seeded regression and passes for the fixed behavior.
