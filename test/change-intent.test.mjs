@@ -5770,12 +5770,26 @@ async function analyze(root, files) {
 
 async function makeRepo(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "qamap-change-intent-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(root, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 50,
+  }));
   git(root, "init", "-b", "main");
   git(root, "config", "user.email", "qamap@example.test");
   git(root, "config", "user.name", "QAMap Test");
+  git(root, "config", "gc.auto", "0");
+  git(root, "config", "maintenance.auto", "false");
   return root;
 }
+
+test("temporary Git fixtures disable background maintenance", async (t) => {
+  const root = await makeRepo(t);
+
+  assert.equal(readGitConfig(root, "gc.auto"), "0");
+  assert.equal(readGitConfig(root, "maintenance.auto"), "false");
+});
 
 async function write(root, file, content) {
   await mkdir(path.dirname(path.join(root, file)), { recursive: true });
@@ -5793,6 +5807,13 @@ function branch(root, name) {
 
 function git(root, ...args) {
   execFileSync("git", args, { cwd: root, stdio: "ignore" });
+}
+
+function readGitConfig(root, key) {
+  return execFileSync("git", ["config", "--get", key], {
+    cwd: root,
+    encoding: "utf8",
+  }).trim();
 }
 
 test("near-duplicate badge copy on a new surface is flagged against the existing surface", async (t) => {

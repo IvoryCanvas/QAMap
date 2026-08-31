@@ -8,38 +8,59 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
         with:
           version: 10.32.1
-      - uses: actions/setup-node@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test
-      - run: pnpm plugin:check
-      - run: pnpm plugin:smoke
-      - run: pnpm bench:ci
-      - run: pnpm bench:agent --dry-run --assert
-      - run: pnpm bench:context
-      - run: pnpm scan
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run tests
+        run: pnpm test
+      - name: Validate plugin metadata
+        run: pnpm plugin:check
+      - name: Smoke-test the packed plugin
+        run: pnpm plugin:smoke
+      - name: Run deterministic QA benchmarks
+        run: pnpm bench:ci
+      - name: Validate the offline agent benchmark
+        run: pnpm bench:agent --dry-run --assert
+      - name: Validate context reuse
+        run: pnpm bench:context
+      - name: Scan repository policy
+        run: pnpm scan
 
   execution-benchmark:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
         with:
           version: 10.32.1
-      - uses: actions/setup-node@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm bench:execution
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run execution benchmarks
+        run: pnpm bench:execution
