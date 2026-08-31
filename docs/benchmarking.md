@@ -225,6 +225,10 @@ Each target can declare:
 | `mustFindSuccessSignals` | Observable outcome text that must appear in the flow's success criteria. |
 | `mustFindEntrypoints` | Route, screen, or command entrypoints that affected flows must recover. |
 | `mustFindEvidence` | Required evidence or fixture terms that must be reported. |
+| `mustIncludeContractAuthorityStatuses`, `mustNotIncludeContractAuthorityStatuses` | Required or forbidden API authority states such as `example`, `schema`, `contract-only`, and `missing`. |
+| `mustIncludeContractResponseProvenance`, `mustNotIncludeContractResponseProvenance` | Required or forbidden response origins such as `explicit-example` and `schema-derived`. |
+| `mustIncludeFixtureReadinessStatuses` | Fixture readiness states that must remain visible on at least one flow. |
+| `minContractSchemaResponses`, `maxContractExamples` | Bounds for schema-backed response evidence and exact examples in the selected flows. |
 | `mustFindExistingEvidence`, `mustNotFindExistingEvidence` | Existing test paths that must be linked to the affected flow or rejected as insufficient proof. |
 | `mustNotFindEvidence` | Evidence terms that would be false positives for this change. |
 | `mustRecommendCommands`, `mustNotRecommendCommands` | Commands the setup or validation path must expose or must not present as applicable proof. |

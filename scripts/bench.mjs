@@ -138,6 +138,15 @@ function scoreTarget(target, plan, qa, durationMs) {
   const mustName = expect.mustNameFlows ?? [];
   const named = mustName.filter((name) => includesTerm(flowTitles, name));
   const existingEvidencePaths = qa.flows.flatMap((flow) => flow.existingEvidencePaths ?? []);
+  const contractAuthorities = plan.flows
+    .map((flow) => flow.fixtureReadiness.contractAuthority)
+    .filter(Boolean);
+  const contractAuthorityStatuses = contractAuthorities.map((authority) => authority.status);
+  const contractResponseProvenance = contractAuthorities.flatMap((authority) => [
+    ...authority.examples.map((example) => example.provenance ?? "explicit-example"),
+    ...(authority.schemas ?? []).map((schema) => schema.provenance),
+  ]);
+  const fixtureReadinessStatuses = plan.flows.map((flow) => flow.fixtureReadiness.status);
 
   return {
     name: target.name,
@@ -151,6 +160,11 @@ function scoreTarget(target, plan, qa, durationMs) {
     flowTitles,
     successSignals,
     existingEvidencePaths,
+    contractAuthorityStatuses,
+    contractResponseProvenance,
+    contractExamples: contractAuthorities.reduce((sum, authority) => sum + authority.examples.length, 0),
+    contractSchemaResponses: contractAuthorities.reduce((sum, authority) => sum + (authority.schemas?.length ?? 0), 0),
+    fixtureReadinessStatuses,
     entrypoints,
     changeIntents: plan.changeAnalysis.intents.length,
     highConfidenceIntents: plan.changeAnalysis.intents.filter((intent) => intent.confidence === "high").length,
@@ -610,6 +624,36 @@ function evaluateContract(expect, result, plan, qa) {
   appendMissingTerms(failures, "selector", selectors, expect.mustFindSelectors);
   appendMissingTerms(failures, "success signal", result.successSignals, expect.mustFindSuccessSignals);
   appendMissingTerms(failures, "entrypoint", result.entrypoints, expect.mustFindEntrypoints);
+  appendMissingTerms(
+    failures,
+    "contract authority status",
+    result.contractAuthorityStatuses,
+    expect.mustIncludeContractAuthorityStatuses,
+  );
+  appendUnexpectedTerms(
+    failures,
+    "contract authority status",
+    result.contractAuthorityStatuses,
+    expect.mustNotIncludeContractAuthorityStatuses,
+  );
+  appendMissingTerms(
+    failures,
+    "contract response provenance",
+    result.contractResponseProvenance,
+    expect.mustIncludeContractResponseProvenance,
+  );
+  appendUnexpectedTerms(
+    failures,
+    "contract response provenance",
+    result.contractResponseProvenance,
+    expect.mustNotIncludeContractResponseProvenance,
+  );
+  appendMissingTerms(
+    failures,
+    "fixture readiness status",
+    result.fixtureReadinessStatuses,
+    expect.mustIncludeFixtureReadinessStatuses,
+  );
   appendMissingTerms(failures, "evidence", evidence, expect.mustFindEvidence);
   appendUnexpectedTerms(failures, "evidence", evidence, expect.mustNotFindEvidence);
   appendMissingTerms(failures, "command", commands, expect.mustRecommendCommands);
@@ -623,6 +667,19 @@ function evaluateContract(expect, result, plan, qa) {
   }
   if (expect.maxGenericTitles !== undefined && result.genericTitles > expect.maxGenericTitles) {
     failures.push(`generic titles ${result.genericTitles} exceed ${expect.maxGenericTitles}`);
+  }
+  if (
+    expect.minContractSchemaResponses !== undefined &&
+    result.contractSchemaResponses < expect.minContractSchemaResponses
+  ) {
+    failures.push(
+      `expected at least ${expect.minContractSchemaResponses} schema-backed response(s), got ${result.contractSchemaResponses}`,
+    );
+  }
+  if (expect.maxContractExamples !== undefined && result.contractExamples > expect.maxContractExamples) {
+    failures.push(
+      `contract examples ${result.contractExamples} exceed ${expect.maxContractExamples}`,
+    );
   }
   if (expect.maxAgentBytes !== undefined && result.agentBytes > expect.maxAgentBytes) {
     failures.push(`agent payload ${result.agentBytes} bytes exceeds ${expect.maxAgentBytes}`);

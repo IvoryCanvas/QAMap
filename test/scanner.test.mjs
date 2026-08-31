@@ -4932,7 +4932,7 @@ test("OpenAPI response examples authorize exact generated mock payloads", async 
   assert.doesNotMatch(spec, /qamap-draft|QAMap simulated failure/);
 });
 
-test("OpenAPI schemas without response examples stop payload generation", async () => {
+test("OpenAPI schemas preserve response scenarios without fabricating payload values", async () => {
   const root = await makeTempRepo();
   await initGitRepo(root);
   await mkdir(path.join(root, "src/pages/reports"), { recursive: true });
@@ -4987,10 +4987,15 @@ test("OpenAPI schemas without response examples stop payload generation", async 
   await git(root, ["commit", "-m", "load report state"]);
 
   const plan = await generateE2ePlan(root, { base: "main", head: "HEAD", runner: "playwright" });
-  const flow = plan.flows.find((item) => item.fixtureReadiness.contractAuthority?.status === "contract-only");
+  const flow = plan.flows.find((item) => item.fixtureReadiness.contractAuthority?.status === "schema");
   assert.ok(flow);
-  assert.equal(flow.fixtureReadiness.status, "missing");
-  assert.match(flow.fixtureReadiness.nextActions[0], /Add an explicit response example to `openapi\.json`/);
+  assert.equal(flow.fixtureReadiness.status, "partial");
+  assert.deepEqual(
+    flow.fixtureReadiness.contractAuthority?.schemas.map((schema) => [schema.status, schema.provenance]),
+    [[200, "schema-derived"]],
+  );
+  assert.match(flow.fixtureReadiness.nextActions[0], /Materialize GET \/api\/reports\/\{id\} -> 200 from `openapi\.json` with a schema-aware adapter/);
+  assert.match(flow.fixtureReadiness.nextActions[1], /do not present it as an explicit repository example/);
 
   const draft = await generateE2eDraft(root, {
     base: "main",
@@ -4998,10 +5003,11 @@ test("OpenAPI schemas without response examples stop payload generation", async 
     output: "tests/e2e",
     runner: "playwright",
   });
-  const draftFile = draft.files.find((file) => file.fixtureReadinessStatus === "missing");
+  const draftFile = draft.files.find((file) => file.fixtureReadinessStatus === "partial");
   assert.ok(draftFile);
   const spec = await readFile(path.join(root, draftFile.path), "utf8");
-  assert.match(spec, /matching machine-readable API contract has no safe, unambiguous response example/);
+  assert.match(spec, /matching machine-readable API contract defines schema-backed response scenarios/);
+  assert.match(spec, /Materialize GET \/api\/reports\/\{id\} -> 200 from `openapi\.json` with a schema-aware adapter/);
   assert.doesNotMatch(spec, /const mockApiResponses|route\.fulfill|qamap-draft|QAMap simulated failure/);
 });
 
