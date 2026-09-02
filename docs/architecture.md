@@ -66,6 +66,10 @@ All source-derived strings cross an untrusted-data boundary before human or agen
 
 `src/change-intent.ts` reads behavior-bearing commits in the selected base/head range and joins related `feat`, `fix`, `hotfix`, `perf`, and behavior-describing `refactor` commits through normalized scope and subject terms. Commit bodies can enrich later evidence ranking, but they do not join intents by themselves. Distinct issue tags form a hard boundary, and every connected component is checked against one behavior-bearing anchor so a chain of pairwise-similar commits cannot pull an unrelated lifecycle into the primary intent. Added diff symbols provide independent evidence for triggers, conditions, state changes, side effects, and observable outcomes.
 
+Broad action and structure terms such as route, navigation, open, or add do not connect two commits by themselves. When separate intents edit the same source file, QAMap assigns direct diff evidence through intent-specific symbols and literal destinations, then preserves both intent identities in affected-flow planning instead of deduplicating the second flow by file path.
+
+When commit text does not describe usable intent, QAMap partitions changed files using specific vocabulary found in file paths, added code, symbols, and explicit `@qamapFlow` annotations. Common syntax and UI mechanics such as imports, functions, buttons, callbacks, accessibility labels, and clicks cannot connect otherwise unrelated files. A term found only in added source cannot bridge two files by itself; it must be anchored by a matching path or changed symbol in at least one file. Files are joined again only when repository evidence carries that anchored term or a reviewed flow identity, so one related multi-file lifecycle can remain intact without turning every mixed diff into one intent.
+
 Each intent contains:
 
 - the original commit evidence and source scope;

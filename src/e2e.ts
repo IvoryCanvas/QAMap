@@ -8484,18 +8484,18 @@ function dedupeFlows(flows: E2eFlow[]): E2eFlow[] {
   const deduped: E2eFlow[] = [];
   for (const flow of flows) {
     const newFiles = flow.files.filter((file) => !seenFiles.has(file));
-    if (newFiles.length === 0) {
+    const repeatsEarlierIntent = Boolean(
+      flow.intentId && deduped.some((candidate) => candidate.intentId === flow.intentId),
+    );
+    if (newFiles.length === 0 && (!flow.intentId || repeatsEarlierIntent)) {
       continue;
     }
     for (const file of newFiles) {
       seenFiles.add(file);
     }
-    const sharesIntentWithEarlierFlow = Boolean(
-      flow.intentId && deduped.some((candidate) => candidate.intentId === flow.intentId),
-    );
     deduped.push({
       ...flow,
-      files: sharesIntentWithEarlierFlow ? flow.files : newFiles,
+      files: flow.intentId ? flow.files : newFiles,
     });
   }
   return deduped;

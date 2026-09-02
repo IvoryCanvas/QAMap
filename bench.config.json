@@ -409,6 +409,56 @@
       }
     },
     {
+      "name": "web-independent-diff-intents",
+      "fixture": "test/benchmarks/web-independent-diff-intents",
+      "commitMessage": "chore: prepare interface changes",
+      "expect": {
+        "minChangeIntents": 2,
+        "mustReachFiles": [
+          "src/components/PreviewNotice.tsx",
+          "src/components/DocumentationLink.tsx"
+        ],
+        "mustNameIntents": [
+          "preview notice",
+          "documentation link"
+        ],
+        "mustFindIntentEvidence": [
+          "Preview is available",
+          "/docs"
+        ],
+        "maxBlankActions": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
+      "name": "web-independent-route-commits",
+      "fixture": "test/benchmarks/web-independent-route-commits",
+      "commits": [
+        { "dir": "head-1", "message": "feat: add billing history route" },
+        { "dir": "head-2", "message": "feat: add support inbox route" }
+      ],
+      "expect": {
+        "minFlows": 2,
+        "minChangeIntents": 2,
+        "mustReachFiles": ["src/routes.ts"],
+        "mustNameIntents": [
+          "billing history route",
+          "support inbox route"
+        ],
+        "mustNameFlows": [
+          "billing history route",
+          "support inbox route"
+        ],
+        "mustFindIntentEvidence": [
+          "/billing/history",
+          "/support/inbox"
+        ],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "web-symbol-annotated-renewal",
       "fixture": "test/benchmarks/web-symbol-annotated-renewal",
       "commitMessage": "fix: prevent duplicate subscription renewal requests",
