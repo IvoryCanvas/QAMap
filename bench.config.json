@@ -2,6 +2,40 @@
   "$comment": "Committed quality contract. Each fixture is materialized as a temporary Git repository with a main baseline and one PR change.",
   "targets": [
     {
+      "name": "web-diverged-target-hotfix",
+      "fixture": "test/benchmarks/web-diverged-target-hotfix",
+      "baseCommits": [
+        {
+          "dir": "target-1",
+          "message": "fix: preserve the safe header default"
+        }
+      ],
+      "commits": [
+        {
+          "dir": "head-1",
+          "message": "feat: add compact header mode"
+        }
+      ],
+      "expect": {
+        "readinessBasis": "optional-automation",
+        "automationApplicable": true,
+        "minFlows": 1,
+        "minChangeIntents": 2,
+        "minHighConfidenceIntents": 1,
+        "minReasoningTraces": 1,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": ["src/navigation/header.tsx"],
+        "mustNameIntents": ["preserve target-branch behavior"],
+        "mustIncludeLifecycle": ["non-equivalent changes on both sides"],
+        "mustIncludeQaScenarios": ["preserves target-only and proposed behavior"],
+        "mustFindIntentEvidence": ["Target-only commit", "Proposed-branch commit"],
+        "mustTraceScenarioFiles": ["src/navigation/header.tsx"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "repository-release-gate",
       "fixture": "test/benchmarks/repository-release-gate",
       "commitMessage": "chore: prepare repository release",

@@ -7,6 +7,7 @@ import type { ApiContractAuthority, ApiContractOperationEvidence, ApiContractRes
 import { analyzeBehaviorGraph, createInferredFlowBehaviorAdapter } from "./behavior.js";
 import { createChangeIntentBehaviorAdapter } from "./behavior-intent.js";
 import { createManifestBehaviorAdapter } from "./behavior-manifest.js";
+import { analyzeBranchDivergence } from "./branch-divergence.js";
 import {
   analyzeChangeIntents,
   unresolvedPrimaryScenarioAssertion,
@@ -569,6 +570,17 @@ export async function generateE2ePlan(rootInput: string, options: E2ePlanOptions
     addedDiffText,
     addedDiffEvidence,
   });
+  const branchDivergenceAnalysis = await analyzeBranchDivergence({
+    root,
+    workspaceRoot: testPlan.workspaceRoot,
+    base: testPlan.base,
+    head: testPlan.head,
+  });
+  applyBranchDivergenceIntents(
+    changeAnalysis,
+    branchDivergenceAnalysis.intents,
+    branchDivergenceAnalysis.diagnostics,
+  );
   const runtimePrerequisiteAnalysis = await analyzeRuntimePrerequisites({
     root,
     workspaceRoot: testPlan.workspaceRoot,
@@ -766,6 +778,17 @@ function applyRuntimePrerequisiteIntents(
     ...diagnostics,
     `Detected ${runtimeIntents.length} evidence-backed runtime provider prerequisite${runtimeIntents.length === 1 ? "" : "s"}.`,
   );
+}
+
+function applyBranchDivergenceIntents(
+  analysis: ChangeIntentAnalysis,
+  divergenceIntents: ChangeIntent[],
+  diagnostics: string[],
+): void {
+  if (divergenceIntents.length > 0) {
+    analysis.intents = [...divergenceIntents, ...analysis.intents];
+  }
+  analysis.diagnostics.push(...diagnostics);
 }
 
 function applyRepositoryWorkflowIntent(
