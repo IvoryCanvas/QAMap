@@ -554,6 +554,139 @@ test("shared analyzer files do not merge independent feature commits", async (t)
   assert.ok(analysis.intents.every((intent) => intent.commits.length === 1));
 });
 
+test("shared route files do not merge distinct navigation intents through generic vocabulary", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/routes.ts";
+  await write(root, file, "export const homeRoute = '/';\n");
+  commit(root, "benchmark baseline");
+  branch(root, "feat/independent-routes");
+
+  await write(
+    root,
+    file,
+    [
+      "export const homeRoute = '/';",
+      "export function openBillingHistory(router) { return router.push('/billing/history'); }",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: add billing history route");
+
+  await write(
+    root,
+    file,
+    [
+      "export const homeRoute = '/';",
+      "export function openBillingHistory(router) { return router.push('/billing/history'); }",
+      "export function openSupportInbox(router) { return router.push('/support/inbox'); }",
+      "",
+    ].join("\n"),
+  );
+  commit(root, "feat: add support inbox route");
+
+  const analysis = await analyze(root, [file]);
+  const billingIntent = analysis.intents.find((intent) => /billing history/i.test(intent.title));
+  const inboxIntent = analysis.intents.find((intent) => /support inbox/i.test(intent.title));
+
+  assert.equal(analysis.intents.length, 2);
+  assert.ok(billingIntent);
+  assert.ok(inboxIntent);
+  assert.ok(billingIntent.evidence.some((item) => /billing\/history/i.test(`${item.symbol ?? ""} ${item.value}`)));
+  assert.ok(inboxIntent.evidence.some((item) => /support\/inbox/i.test(`${item.symbol ?? ""} ${item.value}`)));
+  assert.equal(
+    billingIntent.evidence.some((item) => /support\/inbox/i.test(`${item.symbol ?? ""} ${item.value}`)),
+    false,
+  );
+  assert.equal(
+    inboxIntent.evidence.some((item) => /billing\/history/i.test(`${item.symbol ?? ""} ${item.value}`)),
+    false,
+  );
+
+  const plan = await generateE2ePlan(root, { base: "main", head: "HEAD" });
+  const intentFlows = plan.flows.filter((flow) => flow.intentId);
+  assert.equal(intentFlows.length, 2);
+  assert.ok(intentFlows.some((flow) => /billing history/i.test(flow.title)));
+  assert.ok(intentFlows.some((flow) => /support inbox/i.test(flow.title)));
+  assert.ok(intentFlows.every((flow) => flow.files.includes(file)));
+});
+
+test("working-tree analysis keeps unrelated behavior files in separate intents", async (t) => {
+  const root = await makeRepo(t);
+  const noticeFile = "src/components/PreviewNotice.tsx";
+  const navigationFile = "src/components/DocumentationLink.tsx";
+  await write(
+    root,
+    noticeFile,
+    "export function PreviewNotice() { return <aside><p>Preview pending</p></aside>; }\n",
+  );
+  await write(root, navigationFile, "export function DocumentationLink() { return null; }\n");
+  commit(root, "benchmark baseline");
+
+  await write(
+    root,
+    noticeFile,
+    [
+      "import React from 'react';",
+      "",
+      "export function PreviewNotice({ hasPreview, onDismiss }) {",
+      "  if (!hasPreview) return null;",
+      "  return <aside>",
+      "    <p>Preview is available</p>",
+      "    <button aria-label='Dismiss preview' onClick={onDismiss}>Dismiss preview</button>",
+      "  </aside>;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  await write(
+    root,
+    navigationFile,
+    [
+      "import React from 'react';",
+      "",
+      "export function DocumentationLink({ router, isInternal }) {",
+      "  function openDocumentation() {",
+      "    if (isInternal) router.push('/docs');",
+      "    else window.location.assign('https://docs.example.test');",
+      "  }",
+      "  return <button aria-label='Open documentation' onClick={openDocumentation}>Documentation</button>;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+
+  const addedDiffEvidence = await collectAddedDiffEvidence(root, {
+    base: "HEAD",
+    head: "HEAD",
+    includeWorkingTree: true,
+  });
+  const analysis = await analyzeChangeIntents(root, {
+    base: "HEAD",
+    head: "HEAD",
+    includeWorkingTree: true,
+    changedFiles: [
+      { status: "M", path: noticeFile },
+      { status: "M", path: navigationFile },
+    ],
+    addedDiffText: addedDiffTextFromEvidence(addedDiffEvidence),
+    addedDiffEvidence,
+  });
+
+  assert.equal(analysis.source, "diff-only");
+  assert.equal(analysis.intents.length, 2, JSON.stringify(analysis.intents.map((intent) => ({
+    title: intent.title,
+    files: intent.files,
+    evidence: intent.evidence.map((item) => `${item.symbol ?? ""}:${item.value}`),
+  }))));
+  assert.deepEqual(
+    analysis.intents.map((intent) => intent.files[0]).sort(),
+    [noticeFile, navigationFile].sort(),
+  );
+  assert.ok(analysis.intents.every((intent) =>
+    intent.evidence.every((item) => !item.file || intent.files.includes(item.file))
+  ));
+});
+
 test("a broad conventional scope does not merge unrelated product intents", async (t) => {
   const root = await makeRepo(t);
   await write(root, "src/share.ts", "export const shareState = 'idle';\n");

@@ -23,6 +23,8 @@ The command fails when any target violates its declared expectations. The corpus
 - a presentation-only React condition that must not create behavioral state-transition QA;
 - a web preferences change that must execute the submit action once, map the immediate visible outcome, and keep unproven persistence, request-failure, and re-entry QA explicit instead of manufacturing passing coverage;
 - a multi-commit branch whose tip is a cleanup commit (`fix: minor refactor`) that must keep the substantive feature intent ranked first in the headline, flow title, and generated draft filename;
+- a mixed diff with an independent notice change and navigation change that must produce two evidence-isolated intents instead of one combined lifecycle;
+- a shared route registry changed by two feature commits that must retain two intent-backed QA flows with the exact destination evidence assigned to each one;
 - a repository-backed web persistence change that must connect one changed storage write to the matching read key, editable field, save action, route, and reload assertion before its primary draft can be fully mapped;
 - a form-validation timing change that must connect the changed trigger mode to one validated input, visible error, submit action, and success outcome before it can compile invalid-input, correction, and successful-submission coverage;
 - a mobile reminder change that must become scheduling, calendar, duplicate, resynchronization, and entry-routing QA;

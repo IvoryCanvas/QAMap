@@ -1,0 +1,10 @@
+{
+  "name": "benchmark-web-independent-diff-intents",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "react": "19.0.0"
+  }
+}

@@ -234,15 +234,82 @@ const implementationPredicateCalls = new Set([
   "object.hasown",
 ]);
 const intentRelationStopWords = new Set([
+  ...stopWords,
+  "add",
   "across",
   "after",
+  "allow",
   "before",
+  "close",
+  "display",
+  "enable",
+  "flow",
   "from",
+  "handle",
   "into",
+  "keep",
+  "navigation",
+  "open",
+  "persist",
+  "preserve",
+  "prevent",
+  "remove",
+  "restore",
+  "show",
+  "submit",
+  "surface",
+  "sync",
   "through",
   "using",
+  "verify",
   "with",
   "without",
+]);
+
+const diffIntentRelationStopWords = new Set([
+  ...intentRelationStopWords,
+  "action",
+  "async",
+  "await",
+  "button",
+  "callback",
+  "check",
+  "click",
+  "component",
+  "const",
+  "direct",
+  "else",
+  "false",
+  "file",
+  "function",
+  "handler",
+  "head",
+  "https",
+  "import",
+  "invoke",
+  "jsx",
+  "null",
+  "observe",
+  "product",
+  "props",
+  "result",
+  "return",
+  "router",
+  "run",
+  "set",
+  "source",
+  "src",
+  "state",
+  "supporting",
+  "test",
+  "trigger",
+  "true",
+  "tsx",
+  "undefined",
+  "value",
+  "visible",
+  "vue",
+  "window",
 ]);
 
 export async function analyzeChangeIntents(
@@ -330,6 +397,7 @@ export async function analyzeChangeIntents(
   );
   const changedFiles = options.changedFiles.map((file) => file.path);
   const commitClusters = clusterBehaviorCommits(parsedCommits);
+  const sharedCommitFiles = filesSharedByCommitClusters(commitClusters);
   const intents = commitClusters
     .map((cluster, index) =>
       buildCommitIntent(
@@ -342,6 +410,7 @@ export async function analyzeChangeIntents(
         riskEvidence,
         annotationEvidence,
         diffAnchors,
+        sharedCommitFiles,
       )
     )
     .filter((intent) => intent.files.length > 0);
@@ -350,8 +419,9 @@ export async function analyzeChangeIntents(
   const residualFiles = changedFiles.filter((file) => isBehaviorBearingFile(file) && !coveredFiles.has(file));
   if (residualFiles.length > 0) {
     const residualFileSet = new Set(residualFiles);
-    const diffIntent = buildDiffOnlyIntent(
+    const diffIntents = buildDiffOnlyIntents(
       residualFiles,
+      options.addedDiffText ?? {},
       codeSignals.filter((signal) => residualFileSet.has(signal.file)),
       riskEvidence.filter((evidence) => {
         const file = evidence.file ?? evidence.previousFile;
@@ -360,9 +430,7 @@ export async function analyzeChangeIntents(
       annotationEvidence.filter((evidence) => evidence.file && residualFileSet.has(evidence.file)),
       options.includeWorkingTree ?? false,
     );
-    if (diffIntent) {
-      intents.push(diffIntent);
-    }
+    intents.push(...diffIntents);
   }
 
   if (intents.length === 0) {
@@ -750,6 +818,26 @@ function selectIntentTitleCommit(commits: ParsedCommit[]): ParsedCommit {
   ) ?? commits.find((commit) => commit.seed) ?? commits[0];
 }
 
+function filesSharedByCommitClusters(clusters: ParsedCommit[][]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const cluster of clusters) {
+    if (cluster.every((commit) => isCleanupCommitStatement(commit.statement))) {
+      continue;
+    }
+    const files = new Set(
+      cluster.flatMap((commit) => commit.files ?? []).filter(isBehaviorBearingFile),
+    );
+    for (const file of files) {
+      counts.set(file, (counts.get(file) ?? 0) + 1);
+    }
+  }
+  return new Set(
+    [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([file]) => file),
+  );
+}
+
 function buildCommitIntent(
   commits: ParsedCommit[],
   index: number,
@@ -760,6 +848,7 @@ function buildCommitIntent(
   riskEvidence: ChangeIntentEvidence[],
   annotationEvidence: ChangeIntentEvidence[],
   diffAnchors: ChangeIntentEvidence[],
+  sharedCommitFiles: Set<string>,
 ): ChangeIntent {
   const keywords = uniqueStrings(commits.flatMap((commit) => commit.keywords));
   const files = selectIntentFiles(
@@ -772,10 +861,32 @@ function buildCommitIntent(
   const relevantSignals = rankCodeSignalsForIntent(
     codeSignals.filter((signal) => files.includes(signal.file)),
     keywords,
-  ).filter((signal) => !isUnalignedGenericCallbackSignal(signal, keywords));
-  const relevantRiskEvidence = riskEvidence.filter((item) => item.file && files.includes(item.file));
-  const relevantAnnotationEvidence = annotationEvidence.filter((item) => item.file && files.includes(item.file));
-  const relevantDiffAnchors = diffAnchors.filter((item) => item.file && files.includes(item.file));
+  ).filter((signal) =>
+    !isUnalignedGenericCallbackSignal(signal, keywords) &&
+    (!sharedCommitFiles.has(signal.file) || changeEvidenceMatchesIntent(
+      `${signal.symbol} ${signal.label}`,
+      keywords,
+    ))
+  );
+  const relevantRiskEvidence = riskEvidence.filter((item) =>
+    item.file &&
+    files.includes(item.file) &&
+    (!sharedCommitFiles.has(item.file) || changeEvidenceMatchesIntent(
+      `${item.symbol ?? ""} ${item.value}`,
+      keywords,
+    ))
+  );
+  const relevantAnnotationEvidence = annotationEvidence.filter((item) =>
+    item.file &&
+    files.includes(item.file) &&
+    (!sharedCommitFiles.has(item.file) || changeEvidenceMatchesIntent(
+      `${item.symbol ?? ""} ${item.value}`,
+      keywords,
+    ))
+  );
+  const relevantDiffAnchors = diffAnchors.filter((item) =>
+    item.file && files.includes(item.file) && !sharedCommitFiles.has(item.file)
+  );
   const lifecycle = buildLifecycle(commits, relevantSignals, relevantRiskEvidence);
   const confidence = confidenceForIntent(commits, lifecycle, relevantSignals);
   const titleCommit = selectIntentTitleCommit(commits);
@@ -850,6 +961,135 @@ function selectIntentFallbackDiffAnchor(
     .map(({ anchor }) => anchor);
 }
 
+interface DiffOnlyIntentEvidenceGroup {
+  files: string[];
+  codeSignals: CodeBehaviorSignal[];
+  riskEvidence: ChangeIntentEvidence[];
+  annotationEvidence: ChangeIntentEvidence[];
+}
+
+function buildDiffOnlyIntents(
+  changedFiles: string[],
+  addedDiffText: Record<string, string>,
+  codeSignals: CodeBehaviorSignal[],
+  riskEvidence: ChangeIntentEvidence[],
+  annotationEvidence: ChangeIntentEvidence[],
+  includesWorkingTree: boolean,
+): ChangeIntent[] {
+  return partitionDiffOnlyIntentEvidence(
+    changedFiles,
+    addedDiffText,
+    codeSignals,
+    riskEvidence,
+    annotationEvidence,
+  )
+    .map((group) => buildDiffOnlyIntent(
+      group.files,
+      group.codeSignals,
+      group.riskEvidence,
+      group.annotationEvidence,
+      includesWorkingTree,
+    ))
+    .filter((intent): intent is ChangeIntent => Boolean(intent));
+}
+
+function partitionDiffOnlyIntentEvidence(
+  changedFiles: string[],
+  addedDiffText: Record<string, string>,
+  codeSignals: CodeBehaviorSignal[],
+  riskEvidence: ChangeIntentEvidence[],
+  annotationEvidence: ChangeIntentEvidence[],
+): DiffOnlyIntentEvidenceGroup[] {
+  const files = uniqueStrings(changedFiles);
+  const parent = files.map((_, index) => index);
+  const find = (index: number): number => {
+    if (parent[index] !== index) {
+      parent[index] = find(parent[index]);
+    }
+    return parent[index];
+  };
+  const join = (left: number, right: number): void => {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+    if (leftRoot !== rightRoot) {
+      parent[rightRoot] = leftRoot;
+    }
+  };
+  const strongRelationKeywords = new Map(files.map((file) => [
+    file,
+    new Set(intentRelationKeywords([
+      file,
+      ...codeSignals
+        .filter((signal) => signal.file === file)
+        .map((signal) => signal.symbol),
+      ...riskEvidence
+        .filter((evidence) => evidenceBelongsToFile(evidence, file))
+        .map((evidence) => evidence.symbol ?? ""),
+      ...annotationEvidence
+        .filter((evidence) => evidenceBelongsToFile(evidence, file))
+        .map((evidence) => `${evidence.symbol ?? ""} ${evidence.value}`),
+    ].join(" "), diffIntentRelationStopWords)),
+  ]));
+  const sourceRelationKeywords = new Map(files.map((file) => [
+    file,
+    new Set(intentRelationKeywords(addedDiffText[file] ?? "", diffIntentRelationStopWords)),
+  ]));
+  const annotationFlows = new Map(files.map((file) => [
+    file,
+    new Set(
+      annotationEvidence
+        .filter((evidence) => evidenceBelongsToFile(evidence, file))
+        .map((evidence) => evidence.value.match(/^@qamapFlow\s+(.+)$/)?.[1]?.trim())
+        .filter((flow): flow is string => Boolean(flow)),
+    ),
+  ]));
+
+  for (let left = 0; left < files.length; left += 1) {
+    for (let right = left + 1; right < files.length; right += 1) {
+      const leftFlows = annotationFlows.get(files[left]) ?? new Set<string>();
+      const rightFlows = annotationFlows.get(files[right]) ?? new Set<string>();
+      const sharesAnnotatedFlow = [...leftFlows].some((flow) => rightFlows.has(flow));
+      const leftStrongKeywords = strongRelationKeywords.get(files[left]) ?? new Set<string>();
+      const rightStrongKeywords = strongRelationKeywords.get(files[right]) ?? new Set<string>();
+      const leftSourceKeywords = sourceRelationKeywords.get(files[left]) ?? new Set<string>();
+      const rightSourceKeywords = sourceRelationKeywords.get(files[right]) ?? new Set<string>();
+      const sharesAnchoredKeyword =
+        [...leftStrongKeywords].some((keyword) =>
+          rightStrongKeywords.has(keyword) || rightSourceKeywords.has(keyword)
+        ) ||
+        [...rightStrongKeywords].some((keyword) => leftSourceKeywords.has(keyword));
+      if (sharesAnnotatedFlow || sharesAnchoredKeyword) {
+        join(left, right);
+      }
+    }
+  }
+
+  const groupedFiles = new Map<number, string[]>();
+  files.forEach((file, index) => {
+    const root = find(index);
+    const group = groupedFiles.get(root) ?? [];
+    group.push(file);
+    groupedFiles.set(root, group);
+  });
+  return [...groupedFiles.values()].map((groupFiles) => {
+    const fileSet = new Set(groupFiles);
+    return {
+      files: groupFiles,
+      codeSignals: codeSignals.filter((signal) => fileSet.has(signal.file)),
+      riskEvidence: riskEvidence.filter((evidence) =>
+        [...fileSet].some((file) => evidenceBelongsToFile(evidence, file))
+      ),
+      annotationEvidence: annotationEvidence.filter((evidence) =>
+        [...fileSet].some((file) => evidenceBelongsToFile(evidence, file))
+      ),
+    };
+  });
+}
+
+function evidenceBelongsToFile(evidence: ChangeIntentEvidence, file: string): boolean {
+  return evidence.file === file || (!evidence.file && evidence.previousFile === file);
+}
+
 function buildDiffOnlyIntent(
   changedFiles: string[],
   codeSignals: CodeBehaviorSignal[],
@@ -888,6 +1128,7 @@ function buildDiffOnlyIntent(
     ...deliveryIntegrityEvidence.map((item) => item.file ?? "").filter(Boolean),
     ...runtimeActivationEvidence.map((item) => item.file ?? "").filter(Boolean),
     ...performanceEvidence.map((item) => item.file ?? "").filter(Boolean),
+    ...annotationEvidence.map((item) => item.file ?? "").filter(Boolean),
   ]).slice(0, maxIntentFiles);
   const annotatedFlow = firstQaAnnotationFlow(annotationEvidence);
   const titleSubject = deliveryIntegrityEvidence.length > 0
@@ -4490,6 +4731,24 @@ function collectCodeBehaviorSignalsFromText(
   line?: number,
 ): void {
   collectStaticUiOutcomeSignals(signals, file, text, hunk, line);
+  for (const match of text.matchAll(
+    /\b(?:router\.(?:push|replace)|navigate|(?:window\.)?location\.(?:assign|replace))\s*\(\s*(["'`])([^"'`\n]+)\1/g,
+  )) {
+    const destination = match[2].trim();
+    if (!destination) continue;
+    const symbol = `navigation:${destination}`;
+    const label = `Navigate to \`${destination}\`.`;
+    signals.push({
+      kind: "observable-outcome",
+      label,
+      file,
+      symbol,
+      evidence: {
+        ...codeSignalEvidence(label, file, symbol, hunk, line),
+        relation: "direct",
+      },
+    });
+  }
   for (const match of text.matchAll(/(?:@click(?:\.\w+)*|v-on:click(?:\.\w+)*|onClick)\s*=\s*(?:["']|\{)\s*(?:this\.)?([A-Za-z_$][\w$]*)/g)) {
     const symbol = match[1];
     const label = `Trigger ${humanizeEventHandler(symbol)}.`;
@@ -4888,6 +5147,20 @@ function extractKeywords(value: string): string[] {
     .map(normalizeToken)
     .filter((word) => word.length >= 3 && !stopWords.has(word));
   return uniqueStrings(words).slice(0, 24);
+}
+
+function intentRelationKeywords(value: string, stopWords = intentRelationStopWords): string[] {
+  const words = normalizedWords(value)
+    .map(normalizeToken)
+    .filter((word) => word.length >= 3 && !stopWords.has(word));
+  return uniqueStrings(words).slice(0, 24);
+}
+
+function changeEvidenceMatchesIntent(value: string, intentKeywords: string[]): boolean {
+  const evidenceKeywords = new Set(intentRelationKeywords(value));
+  return intentKeywords
+    .filter((keyword) => !intentRelationStopWords.has(keyword))
+    .some((keyword) => evidenceKeywords.has(keyword));
 }
 
 function normalizedWords(value: string): string[] {

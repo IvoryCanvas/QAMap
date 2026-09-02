@@ -1,0 +1,7 @@
+{
+  "name": "benchmark-web-independent-route-commits",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
