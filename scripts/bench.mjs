@@ -814,10 +814,17 @@ async function materializeFixture(target, configDir) {
       message: step.message ?? "benchmark change",
     }))
     : [{ dir: "head", message: target.commitMessage ?? "benchmark change" }];
+  const baseCommits = Array.isArray(target.baseCommits)
+    ? target.baseCommits.map((step) => ({
+      dir: step.dir,
+      message: step.message ?? "benchmark target change",
+    }))
+    : [];
   let manifestPath;
   const materialized = await materializeFixtureRepo({
     fixtureRoot,
     tempPrefix: "qamap-bench-",
+    baseCommits,
     commits,
     git,
     afterBaseline: async ({ repositoryRoot, tempRoot }) => {

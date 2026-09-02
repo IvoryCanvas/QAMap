@@ -89,7 +89,9 @@ The analysis is deterministic and local. It does not execute repository code, co
 
 The analysis range is evidence too. QAMap resolves a base from an explicit option, pull-request CI environment, repo-local Git configuration, or the nearest long-lived branch in Git history. The chosen source and explanation are carried through test-plan, review, E2E, QA, and compact agent output. Local history cannot always prove the hosting platform's PR target, so equivalent refs at the same commit are disclosed instead of being treated as distinct answers.
 
-Committed analysis uses the base/head merge-base range. Working-tree analysis compares that merge base directly with the final tracked worktree and then adds untracked files. This avoids preserving a stale intermediate change that was committed earlier in the branch but removed before review.
+Committed analysis uses the base/head merge-base range for the proposed change. When both refs have advanced beyond that merge base, a separate divergence pass inspects both histories. It emits a critical preservation review only when a non-equivalent target-only patch and proposed-branch work touch the same behavior-bearing file and the two ref endpoints still differ. Linear history, disjoint files, identical endpoints, patch-equivalent commits, documentation, tests, and generated files do not create this risk. The result is an integration warning, not a claim that either branch is defective.
+
+Working-tree analysis compares the merge base directly with the final tracked worktree and then adds untracked files. This avoids preserving a stale intermediate change that was committed earlier in the branch but removed before review.
 
 When working-tree analysis is enabled, QAMap also compares `HEAD` with the worktree and emits a separate `currentDelta`. Its files, repository test contracts, and safely focused validation commands are ranked ahead of older branch evidence. The complete branch remains available for impact analysis, but a long-running branch cannot silently hide the task being edited now.
 

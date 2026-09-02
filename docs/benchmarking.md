@@ -2,7 +2,7 @@
 
 QAMap's unit tests prove that the implementation behaves as coded. The benchmark contract checks a different question: does a representative PR receive a useful QA answer?
 
-`bench.config.json` is committed and runs in CI. Each target under `test/benchmarks/` contains a `base/` repository snapshot and a `head/` overlay. The runner materializes them as a temporary Git repository with a `main` baseline and one feature commit. Intent fixtures set a synthetic `commitMessage` so commit-to-lifecycle behavior is part of the contract. A target may instead declare a `commits` array of `{dir, message}` overlays to materialize a multi-commit branch — the shape real pull-request branches have, including a cleanup commit at the tip. QAMap reads those repositories but never installs dependencies or executes their code.
+`bench.config.json` is committed and runs in CI. Each target under `test/benchmarks/` contains a `base/` repository snapshot and a `head/` overlay. The runner materializes them as a temporary Git repository with a `main` baseline and one feature commit. Intent fixtures set a synthetic `commitMessage` so commit-to-lifecycle behavior is part of the contract. A target may instead declare a `commits` array of `{dir, message}` overlays to materialize a multi-commit branch. It may also declare `baseCommits` to advance the target branch independently before the proposed branch is analyzed. QAMap reads those repositories but never installs dependencies or executes their code.
 
 ## Run the public contract
 
@@ -25,6 +25,7 @@ The command fails when any target violates its declared expectations. The corpus
 - a multi-commit branch whose tip is a cleanup commit (`fix: minor refactor`) that must keep the substantive feature intent ranked first in the headline, flow title, and generated draft filename;
 - a mixed diff with an independent notice change and navigation change that must produce two evidence-isolated intents instead of one combined lifecycle;
 - a shared route registry changed by two feature commits that must retain two intent-backed QA flows with the exact destination evidence assigned to each one;
+- diverged target and proposed branches that edit the same behavior file, where QAMap must preserve target-only and proposed commit provenance while requiring an integration review;
 - a repository-backed web persistence change that must connect one changed storage write to the matching read key, editable field, save action, route, and reload assertion before its primary draft can be fully mapped;
 - a form-validation timing change that must connect the changed trigger mode to one validated input, visible error, submit action, and success outcome before it can compile invalid-input, correction, and successful-submission coverage;
 - a mobile reminder change that must become scheduling, calendar, duplicate, resynchronization, and entry-routing QA;
@@ -170,6 +171,7 @@ Each target can declare:
 | --- | --- |
 | `commitMessage` | Commit message used when materializing a fixture. Public PR reductions preserve the behavior-bearing source message; synthetic fixtures use neutral vocabulary. |
 | `commits` | Ordered `{dir, message}` overlays committed sequentially on the change branch instead of the single `head/` overlay. Use this to model multi-commit branches, such as a feature commit followed by a cleanup tip commit. |
+| `baseCommits` | Ordered `{dir, message}` overlays committed to the target branch after the shared baseline. Use this with `commits` to model genuinely diverged refs and target-only patches. |
 | `provenanceKind` | Expected fixture provenance. `public-pull-request` requires a pinned repository, PR URL, base/head commits, license, and matching `PROVENANCE.md`. |
 | `runner` | Expected `playwright`, `maestro`, or `manual` output adapter. Runner correctness alone is not a useful intent benchmark. |
 | `routeStatus`, `routeNextAction` | Expected canonical machine route and next action. Repository-verification fixtures use these instead of treating optional automation readiness as applicable. |
