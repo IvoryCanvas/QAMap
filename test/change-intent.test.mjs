@@ -763,6 +763,12 @@ test("long pull requests preserve independent intents across broad shared vocabu
   assert.ok(analysis.intents.some((intent) => /optimize shared package build concurrency/i.test(intent.title)));
   assert.ok(analysis.intents.some((intent) => /remove shared package legacy preview/i.test(intent.title)));
   assert.ok(analysis.intents.some((intent) => /break shared package import cycle/i.test(intent.title)));
+  assert.equal(
+    analysis.intents
+      .flatMap((intent) => intent.scenarios)
+      .some((scenario) => scenario.title === "Scheduling, calendar, and duplicate boundary"),
+    false,
+  );
   const buttonIntent = analysis.intents.find((intent) =>
     /preserve shared package button compatibility/i.test(intent.title)
   );
@@ -4894,6 +4900,19 @@ test("JavaScript producer and consumer changes expose asynchronous ordering risk
   assert.ok(scenario.evidence.some((item) => /lifecycle completion evidence/i.test(item.value)));
   assert.ok(scenario.evidence.some((item) => /lifecycle consistency evidence/i.test(item.value)));
   assert.ok(scenario.assertions.some((assertion) => /repeated delivery creates one durable effect/i.test(assertion)));
+  assert.equal(
+    analysis.intents
+      .flatMap((intent) => intent.scenarios)
+      .some((candidate) => candidate.title === "Entry payload and destination routing"),
+    false,
+  );
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const trace = qa.traces.find((candidate) => candidate.scenario.id === scenario.id);
+  assert.ok(trace);
+  assert.equal(trace.status, "traceable");
+  assert.equal(trace.evidenceAssessment.disposition, "confirmed");
+  assert.ok(trace.behavior.every((stage) => stage.relation === "evidence-linked"));
 });
 
 test("Python task and callback changes expose the same asynchronous lifecycle contract", async (t) => {
@@ -4944,6 +4963,19 @@ test("Python task and callback changes expose the same asynchronous lifecycle co
   assert.ok(scenario.edgeCases.includes("Stale result"));
   assert.equal(scenario.edgeCases.includes("Repeated delivery"), false);
   assert.ok(scenario.evidence.some((item) => item.file === callbackFile && /consistency evidence/i.test(item.value)));
+  assert.equal(
+    analysis.intents
+      .flatMap((intent) => intent.scenarios)
+      .some((candidate) => candidate.title === "Entry payload and destination routing"),
+    false,
+  );
+
+  const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  const trace = qa.traces.find((candidate) => candidate.scenario.id === scenario.id);
+  assert.ok(trace);
+  assert.equal(trace.status, "traceable");
+  assert.equal(trace.evidenceAssessment.disposition, "confirmed");
+  assert.ok(trace.behavior.every((stage) => stage.relation === "evidence-linked"));
 });
 
 test("status vocabulary and background scheduling names do not fabricate lifecycle or calendar QA", async (t) => {

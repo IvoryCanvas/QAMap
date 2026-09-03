@@ -438,6 +438,10 @@
           "break shared package import cycle",
           "preserve shared package button compatibility"
         ],
+        "mustNotIncludeQaScenarios": [
+          "Scheduling, calendar, and duplicate boundary"
+        ],
+        "maxUntraceableRequiredScenarios": 0,
         "maxGenericTitles": 0,
         "maxAgentBytes": 4096
       }
@@ -1065,12 +1069,14 @@
           "Asynchronous lifecycle ordering and result delivery"
         ],
         "mustNotIncludeQaScenarios": [
-          "Scheduling, calendar, and duplicate boundary"
+          "Scheduling, calendar, and duplicate boundary",
+          "Entry payload and destination routing"
         ],
         "mustTraceScenarioFiles": [
           "jobs/submit.py",
           "jobs/consume.py"
         ],
+        "maxUntraceableRequiredScenarios": 0,
         "maxBlankActions": 0,
         "maxGenericTitles": 0,
         "maxAgentBytes": 4096
