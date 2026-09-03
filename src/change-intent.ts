@@ -1287,6 +1287,7 @@ function buildLifecycle(
   }
 
   stages.push(...lifecycleFromDetectedRiskEvidence(roleEvidence));
+  stages.push(...lifecycleFromAsyncLifecycleEvidence(roleEvidence));
   stages.push(...lifecycleFromSourceRoles(roleEvidence));
   stages.push(...lifecycleFromDeliveryIntegrityEvidence(roleEvidence.filter(isDeliveryIntegrityEvidence)));
   stages.push(...lifecycleFromRuntimeActivationEvidence(roleEvidence.filter(isRuntimeActivationEvidence)));
@@ -1348,6 +1349,46 @@ function lifecycleFromDetectedRiskEvidence(
       files,
     ),
   ];
+}
+
+function lifecycleFromAsyncLifecycleEvidence(
+  evidence: ChangeIntentEvidence[],
+): BehaviorLifecycleStage[] {
+  const groups = groupAsyncLifecycleEvidence(evidence);
+  if (!hasAsyncLifecycleContract(groups)) {
+    return [];
+  }
+  const stageByRole: Record<
+    AsyncLifecycleRole,
+    { kind: BehaviorLifecycleStageKind; label: string }
+  > = {
+    consistency: {
+      kind: "condition",
+      label: "Apply the changed stale or duplicate delivery guard.",
+    },
+    dispatch: {
+      kind: "side-effect",
+      label: "Dispatch the changed asynchronous work.",
+    },
+    state: {
+      kind: "state-change",
+      label: "Persist the changed asynchronous lifecycle state.",
+    },
+    completion: {
+      kind: "observable-outcome",
+      label: "Observe the changed result handling or acknowledgement.",
+    },
+  };
+
+  return (["consistency", "dispatch", "state", "completion"] as const).flatMap((role) => {
+    const roleEvidence = groups.get(role) ?? [];
+    if (roleEvidence.length === 0) {
+      return [];
+    }
+    const stage = stageByRole[role];
+    const files = uniqueStrings(roleEvidence.map((item) => item.file ?? "").filter(Boolean));
+    return [createLifecycleStage(stage.kind, stage.label, "medium", roleEvidence, files)];
+  });
 }
 
 function lifecycleFromPerformanceEvidence(
@@ -2029,12 +2070,7 @@ function buildIntentQaScenarios(
   const hasState = asyncLifecycleRoles.has("state");
   const hasCompletion = asyncLifecycleRoles.has("completion");
   const hasConsistency = asyncLifecycleRoles.has("consistency");
-  const hasAsyncLifecycleContract = (
-    hasCompletion && (hasDispatch || hasState || hasConsistency)
-  ) || (
-    hasConsistency && (hasDispatch || hasState)
-  );
-  if (hasAsyncLifecycleContract) {
+  if (hasAsyncLifecycleContract(asyncLifecycleGroups)) {
     const asyncEvidence = uniqueEvidence(
       [...asyncLifecycleGroups.values()].flatMap((items) => items.slice(0, 2)),
     );
@@ -3289,7 +3325,7 @@ function collectDiffRiskEvidence(
 
 function matchRoutingSignal(line: string): string | undefined {
   const direct = line.match(
-    /\b(payload|deep.?link|destination|redirect\w*|router\.(?:push|replace)|navigate\w*|openurl|openlink|URLSearchParams|searchParams|location\.href|window\.location)\b/i,
+    /\b(deep.?link|destination|redirect\w*|router\.(?:push|replace)|navigate\w*|openurl|openlink|URLSearchParams|searchParams|location\.href|window\.location)\b/i,
   )?.[1];
   if (direct) {
     return direct;
@@ -4449,7 +4485,7 @@ function isBackgroundDispatchSchedulingLine(text: string, calendarSymbol: string
   if (!calendarSymbol || !/^schedul/i.test(calendarSymbol)) {
     return /^scheduler$/i.test(calendarSymbol ?? "");
   }
-  const hasBackgroundWork = /\b(?:job|task|worker|queue|dispatch|enqueue|consumer|scheduler)\b/i.test(
+  const hasBackgroundWork = /\b(?:build|job|task|worker|queue|dispatch|enqueue|consumer|scheduler)\b/i.test(
     text.replace(/([a-z])([A-Z])/g, "$1 $2"),
   );
   const hasTemporalBoundary =
@@ -4534,6 +4570,21 @@ function groupAsyncLifecycleEvidence(
     groups.set(role, items);
   }
   return groups;
+}
+
+function hasAsyncLifecycleContract(
+  groups: Map<AsyncLifecycleRole, ChangeIntentEvidence[]>,
+): boolean {
+  const roles = new Set(groups.keys());
+  const hasDispatch = roles.has("dispatch");
+  const hasState = roles.has("state");
+  const hasCompletion = roles.has("completion");
+  const hasConsistency = roles.has("consistency");
+  return (
+    hasCompletion && (hasDispatch || hasState || hasConsistency)
+  ) || (
+    hasConsistency && (hasDispatch || hasState)
+  );
 }
 
 function isUiBehaviorEvidence(evidence: ChangeIntentEvidence): boolean {
