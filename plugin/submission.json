@@ -79,5 +79,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "QAMap 0.4.16 routes supported performance changes to measurable runtime contracts, requires authoritative API examples before generating mock payloads, isolates working-tree release validation from earlier commit tests, and refreshes the public plugin assets."
+  "releaseNotes": "QAMap 0.4.17 preserves independent and diverged branch intents, adds schema-derived response provenance and Flutter validation evidence, selects runnable repository commands, and keeps changed test assertions visible in compact agent output."
 }

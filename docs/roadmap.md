@@ -36,12 +36,13 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 There is no fixed end date or patch count for `0.4.x`. QAMap will remain on compatible patch releases while real repositories still expose material gaps in change intent, affected-flow selection, scenario evidence, or automation-draft quality. `0.5.x` is not the next scheduled milestone; it is a release bar that must be earned by a stable, explicitly approved execution contract and evidence from repeated use outside the maintainer's repositories.
 
-### Current Focus After 0.4.16
+### Current Focus After 0.4.17
 
 The OpenAI Plugin Directory is a real first-run surface, so the next patches
 continue to prioritize recommendation quality over another distribution channel
-or runner name. QAMap 0.4.16 closes the first performance-routing, network
-authority, release-gate, and working-tree isolation gaps. The remaining
+or runner name. QAMap 0.4.17 preserves schema-derived response provenance,
+independent and diverged branch intent, Flutter validation evidence, runnable
+Python validation, and explicit changed-test assertions. The remaining
 generalized work queue is:
 
 1. Add declared schema-aware materializer adapters and explicit repository-owned
@@ -51,9 +52,10 @@ generalized work queue is:
 2. Expand declared executor coverage beyond the current browser fixtures. Add
    unrelated API, CLI, or mobile controls that prove the same generated artifact
    fails for its intended seeded regression and passes for the fixed behavior.
-3. Treat changed repository tests as behavior contracts. Preserve explicit
-   positive, negative, boundary, state-transition, retry, and invariance
-   assertions instead of reducing them to a generic request to run the suite.
+3. Broaden changed-test contract recovery beyond the currently supported
+   single-line assertion forms. Preserve positive, negative, boundary,
+   state-transition, retry, and invariance meaning without copying arbitrary
+   literals or treating a test title as executed proof.
 4. Trace shared semantic producers to every affected consumer. A change to a
    mapper, copy builder, aggregate, or service rule should retain the screens,
    history views, notifications, and exports that reuse its result when import
@@ -77,6 +79,12 @@ generalized work queue is:
    deterministic result with independent review. Preserve `not-run`, `passed`,
    `failed`, and `blocked` exactly; plugin availability is not evidence that
    product QA ran.
+10. Recover working-tree behavior consistently across supported component and
+    mobile projects without pulling unchanged neighboring flows into the result.
+    Project detection alone must not be presented as affected behavior.
+11. Rank behavior-bearing source and test evidence ahead of supporting schemas,
+    generated metadata, and release files in compact output while keeping every
+    retained judgment traceable.
 
 - Stabilize commit-range Change Intent analysis: related behavior commits, diff symbols, confidence, review requirements, lifecycle stages, and runner-independent QA scenarios.
 - Preserve a conservative diff-only intent when commit messages are not descriptive, while keeping low-confidence scenarios recommended and review-required until stronger evidence exists.
