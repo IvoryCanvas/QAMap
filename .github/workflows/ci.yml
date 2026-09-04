@@ -19,48 +19,54 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-        with:
-          version: 10.32.1
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-          cache: pnpm
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        timeout-minutes: 3
+        with:
+          version: 10.32.1
+          cache: true
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build once
+        run: pnpm build
       - name: Run tests
-        run: pnpm test
+        run: pnpm test:compiled
       - name: Validate plugin metadata
         run: pnpm plugin:check
       - name: Smoke-test the packed plugin
-        run: pnpm plugin:smoke
+        run: pnpm plugin:smoke:compiled
       - name: Run deterministic QA benchmarks
-        run: pnpm bench:ci
+        run: pnpm bench:ci:compiled
       - name: Validate the offline agent benchmark
-        run: pnpm bench:agent --dry-run --assert
+        run: pnpm bench:agent:compiled --dry-run --assert
       - name: Validate context reuse
-        run: pnpm bench:context
+        run: pnpm bench:context:compiled
       - name: Scan repository policy
-        run: pnpm scan
+        run: pnpm scan:compiled
 
   execution-benchmark:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-        with:
-          version: 10.32.1
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-          cache: pnpm
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        timeout-minutes: 3
+        with:
+          version: 10.32.1
+          cache: true
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build once
+        run: pnpm build
       - name: Run execution benchmarks
-        run: pnpm bench:execution
+        run: pnpm bench:execution:compiled

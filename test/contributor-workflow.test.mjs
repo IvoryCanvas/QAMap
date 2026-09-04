@@ -104,6 +104,61 @@ test("pull request workflows stay read-only and pin external actions", async () 
   }
 });
 
+test("CI prepares pnpm after Node.js and reuses one compiled build per job", async () => {
+  const workflow = parseYaml(
+    await readFile(path.join(repositoryRoot, ".github/workflows/ci.yml"), "utf8"),
+  );
+  const packageJson = JSON.parse(
+    await readFile(path.join(repositoryRoot, "package.json"), "utf8"),
+  );
+
+  for (const jobName of ["test", "execution-benchmark"]) {
+    const job = workflow.jobs[jobName];
+    const nodeIndex = job.steps.findIndex((step) => step.name === "Set up Node.js");
+    const pnpmIndex = job.steps.findIndex((step) => step.name === "Set up pnpm");
+    const buildCommands = job.steps.filter((step) => step.run === "pnpm build");
+
+    assert.ok(nodeIndex >= 0 && nodeIndex < pnpmIndex, `${jobName} must prepare Node.js before pnpm`);
+    assert.equal(job.steps[nodeIndex].with?.cache, undefined, `${jobName} must not cache pnpm before it exists`);
+    assert.equal(job.steps[pnpmIndex].with?.cache, true, `${jobName} must let pnpm setup own its store cache`);
+    assert.equal(buildCommands.length, 1, `${jobName} must compile exactly once`);
+  }
+
+  assert.equal(workflow.jobs.test["timeout-minutes"], 15);
+  assert.equal(workflow.jobs["execution-benchmark"]["timeout-minutes"], 15);
+
+  const testCommands = workflow.jobs.test.steps.map((step) => step.run).filter(Boolean);
+  for (const command of [
+    "pnpm test:compiled",
+    "pnpm plugin:smoke:compiled",
+    "pnpm bench:ci:compiled",
+    "pnpm bench:agent:compiled --dry-run --assert",
+    "pnpm bench:context:compiled",
+    "pnpm scan:compiled",
+  ]) {
+    assert.ok(testCommands.includes(command), `CI must run ${command} without rebuilding`);
+  }
+  assert.ok(
+    workflow.jobs["execution-benchmark"].steps.some(
+      (step) => step.run === "pnpm bench:execution:compiled",
+    ),
+    "the execution benchmark must reuse its job build",
+  );
+
+  for (const [publicScript, compiledScript] of [
+    ["test", "test:compiled"],
+    ["scan", "scan:compiled"],
+    ["plugin:smoke", "plugin:smoke:compiled"],
+    ["bench:ci", "bench:ci:compiled"],
+    ["bench:agent", "bench:agent:compiled"],
+    ["bench:context", "bench:context:compiled"],
+    ["bench:execution", "bench:execution:compiled"],
+  ]) {
+    assert.match(packageJson.scripts[publicScript], /^pnpm build && /);
+    assert.ok(packageJson.scripts[compiledScript], `${compiledScript} must expose the no-build command`);
+  }
+});
+
 test("ready pull requests receive policy and dependency review checks", async () => {
   const policy = parseYaml(
     await readFile(path.join(repositoryRoot, ".github/workflows/pr-policy.yml"), "utf8"),
