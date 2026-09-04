@@ -5961,6 +5961,122 @@ test("temporary Git fixtures disable background maintenance", async (t) => {
   assert.equal(readGitConfig(root, "maintenance.auto"), "false");
 });
 
+test("commit-backed intents promote changed test timing and assertions as repository contracts", async (t) => {
+  const root = await makeRepo(t);
+  const sourceFile = "src/recovery/RecoveryStatus.tsx";
+  const testFile = "src/recovery/RecoveryStatus.test.tsx";
+  await write(root, sourceFile, [
+    "export function RecoveryStatus() {",
+    "  return <p>Waiting</p>;",
+    "}",
+    "",
+  ].join("\n"));
+  await write(root, testFile, [
+    "test('shows waiting state', async ({ page }) => {",
+    "  await expect(page.getByText('Waiting')).toBeVisible();",
+    "});",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "fix/recovery-status");
+  await write(root, sourceFile, [
+    "export function RecoveryStatus({ retry }) {",
+    "  return <button onClick={retry}>Recovered</button>;",
+    "}",
+    "",
+  ].join("\n"));
+  await write(root, testFile, [
+    "test('shows waiting state', async ({ page }) => {",
+    "  await expect(page.getByText('Waiting')).toBeVisible();",
+    "});",
+    "test('shows recovery status after retry', async ({ page }) => {",
+    "  await expect(page.getByText('Recovered')).toBeVisible();",
+    "});",
+    "",
+  ].join("\n"));
+  commit(root, "fix: show recovery status after retry");
+
+  const analysis = await analyze(root, [sourceFile, testFile]);
+  const intent = analysis.intents.find((candidate) => candidate.files.includes(sourceFile));
+  assert.ok(intent, JSON.stringify(analysis, null, 2));
+  assert.ok(intent.evidence.some((item) =>
+    item.file === testFile &&
+    item.symbol === "changed-test-assertion" &&
+    /Recovered/.test(item.value)
+  ));
+  assert.ok(intent.lifecycle.some((stage) =>
+    stage.kind === "trigger" &&
+    /after retry/i.test(stage.label) &&
+    stage.evidence.some((item) => item.file === testFile)
+  ));
+  assert.ok(intent.lifecycle.some((stage) =>
+    stage.kind === "observable-outcome" &&
+    /show recovery status/i.test(stage.label) &&
+    stage.confidence === "medium"
+  ));
+  const primary = intent.scenarios.find((scenario) => scenario.kind === "primary");
+  assert.ok(primary?.assertions.some((assertion) =>
+    /repository-authored assertion.*Recovered.*toBeVisible/i.test(assertion)
+  ), JSON.stringify(primary, null, 2));
+});
+
+test("Rails-style Minitest contracts connect to their changed source owner", async (t) => {
+  const root = await makeRepo(t);
+  const sourceFile = "app/services/recovery_status.rb";
+  const testFile = "test/services/recovery_status_test.rb";
+  await write(root, sourceFile, [
+    "class RecoveryStatus",
+    "  def call",
+    '    "waiting"',
+    "  end",
+    "end",
+    "",
+  ].join("\n"));
+  await write(root, testFile, [
+    "class RecoveryStatusTest < Minitest::Test",
+    '  test "returns waiting state" do',
+    '    assert_equal "waiting", result.status',
+    "  end",
+    "end",
+    "",
+  ].join("\n"));
+  commit(root, "chore: baseline");
+  branch(root, "fix/recovery-state");
+  await write(root, sourceFile, [
+    "class RecoveryStatus",
+    "  def call",
+    '    "ready"',
+    "  end",
+    "end",
+    "",
+  ].join("\n"));
+  await write(root, testFile, [
+    "class RecoveryStatusTest < Minitest::Test",
+    '  test "returns waiting state" do',
+    '    assert_equal "waiting", result.status',
+    "  end",
+    '  test "returns ready state after retry" do',
+    '    assert_equal "ready", result.status',
+    "  end",
+    "end",
+    "",
+  ].join("\n"));
+  commit(root, "fix: return ready recovery state after retry");
+
+  const analysis = await analyze(root, [sourceFile, testFile]);
+  const intent = analysis.intents.find((candidate) => candidate.files.includes(sourceFile));
+  assert.ok(intent, JSON.stringify(analysis, null, 2));
+  assert.ok(intent.evidence.some((item) =>
+    item.file === testFile && item.symbol === "changed-test-contract"
+  ));
+  assert.ok(intent.evidence.some((item) =>
+    item.file === testFile && item.symbol === "changed-test-assertion"
+  ));
+  assert.ok(intent.lifecycle.some((stage) =>
+    stage.kind === "trigger" && /after retry/i.test(stage.label)
+  ));
+});
+
 async function write(root, file, content) {
   await mkdir(path.dirname(path.join(root, file)), { recursive: true });
   await writeFile(path.join(root, file), content);

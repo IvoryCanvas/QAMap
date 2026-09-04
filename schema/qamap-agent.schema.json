@@ -67,7 +67,7 @@
         "title": { "type": "string" },
         "file": { "type": "string" },
         "line": { "type": "integer", "minimum": 1 },
-        "framework": { "type": "string", "enum": ["javascript", "pytest", "go", "dart"] },
+        "framework": { "type": "string", "enum": ["javascript", "pytest", "go", "dart", "minitest"] },
         "assertion": {
           "type": "string",
           "description": "A bounded source-level summary extracted only from an explicit assertion added inside this test contract. Omitted when syntax is unsupported or ambiguous."
