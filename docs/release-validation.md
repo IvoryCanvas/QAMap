@@ -26,6 +26,44 @@ a new runtime guarantee beyond the declared Node.js `>=20` engine contract.
 Node.js 20 is upstream EOL, so the README recommends an actively supported LTS
 release even though the compatibility smoke still passes.
 
+## 0.4.17 - 2026-09-04
+
+QAMap 0.4.17 improves the path from an imperfect repository diff to an honest,
+compact QA handoff. Schema-backed network responses now retain their authority
+and provenance without becoming invented payloads. Independent working-tree and
+multi-commit changes stay separate, while genuinely overlapping target and
+proposed branch changes surface as an integration preservation risk with exact
+evidence from both sides.
+
+Repository evidence is also more useful across toolchains. Flutter and Dart
+tests participate in project detection and focused validation, and Python
+Compose commands fall back only when the same repository-declared runner is
+available. Changed tests can recover a review-required working-tree intent and
+retain a bounded explicit assertion. The validation command's selected contract
+survives the 4 KB agent handoff, omitted contracts remain counted, and static
+analysis never reports those tests as executed.
+
+| Gate | Candidate result |
+| --- | --- |
+| `pnpm release:check` | Passed end to end |
+| `pnpm test` | 450/450 passing |
+| `pnpm scan` | 0 findings |
+| `pnpm bench:ci` | 43/43 committed static recommendation contracts passing |
+| `pnpm bench:agent --dry-run --assert` | Offline harness and result-shape contract passed; no provider invoked |
+| `pnpm bench:context` | 10/10 context identity and reuse checks passing |
+| `pnpm bench:execution` | 3/3 execution contracts passing; all three seeded regressions caught |
+| Coverage | Lines 90.94%, branches 87.33%, functions 95.82% |
+| Plugin package smoke | Packed 213 files, installed the 0.4.17 artifact in isolation, and produced evidence-backed agent output |
+| Package preview | `pnpm pack --dry-run` and `npm publish --dry-run --access public` pass for `@ivorycanvas/qamap@0.4.17`; 213 files packed |
+
+QAMap's own working-tree analysis classified this candidate as repository
+release readiness, selected `pnpm run release:check`, retained zero unrelated
+test contracts, and kept execution `not-run`. These gates prove the committed
+public fixtures, package integrity, and bounded execution contracts. They do not
+prove arbitrary product behavior or turn inferred scenarios into passing QA.
+npm publication, Git tagging, the GitHub Release, and an OpenAI directory update
+remain separate post-merge actions.
+
 ## 0.4.16 - 2026-08-29
 
 QAMap 0.4.16 tightens three boundaries between static QA guidance and trusted

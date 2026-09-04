@@ -2,12 +2,26 @@
 
 ## Unreleased
 
+## 0.4.17 - 2026-09-04
+
+### Added
+
+- OpenAPI and Swagger responses with usable schemas now retain method, status, media type, shape, and `schema-derived` provenance without inventing concrete payload values.
+- Diverged target and proposed branches now surface a critical preservation scenario when non-equivalent changes overlap on the same behavior-bearing file.
+- Flutter projects, Dart tests and assertions, `flutter test`, and compatible workspace wrappers now participate in project detection and repository validation.
+
+### Changed
+
+- The English and Korean READMEs are shorter first-run entry points, with detailed output and reference material routed to focused guides.
+- Commitless mixed diffs and multi-commit changes preserve independent intent and flow boundaries unless exact repository evidence connects them.
+- Changed repository tests remain visible as behavior contracts, retain supported explicit source assertions, and keep the selected contract through compact agent output with an omitted-contract count.
+- Repository validation prefers commands that can start in the current execution boundary. Python Compose commands can fall back to the same available local runner, while explicit execution probes only the selected prerequisite and reports blocked honestly.
+
 ### Fixed
 
+- CI cleanup retries only transient removal of temporary fixture repositories, while test commands and assertions remain strict. The README badge now reports `main` push health instead of unrelated pull-request runs.
+- Vocabulary-only scheduling and routing matches no longer create required scenarios, while valid asynchronous lifecycle stages keep exact source evidence.
 - Working-tree changes can recover a low-confidence behavior intent from an exactly related changed test contract without pulling in similarly named neighboring surfaces.
-- Changed repository test contracts remain visible beside more concrete product assertions, and review-only automation now routes to the focused repository test command when one is available.
-- Python validation no longer assumes a detected Compose wrapper exists in the local service image. Static QA falls back when Docker is unavailable, while explicit `qa run` probes only the selected runner prerequisite, uses the same framework command without the missing wrapper when possible, and otherwise returns a blocked receipt without starting project tests.
-- Changed test contracts now include a bounded source-level assertion when QAMap finds supported explicit syntax. Agent output ranks the contract selected by the repository validation command first, keeps at least one contract through 4 KB compaction, and reports how many contracts were omitted without claiming the tests ran.
 
 ## 0.4.16 - 2026-08-29
 
