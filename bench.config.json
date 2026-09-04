@@ -905,6 +905,36 @@
       }
     },
     {
+      "name": "flutter-profile-restoration",
+      "fixture": "test/benchmarks/flutter-profile-restoration",
+      "commitMessage": "fix: restore the saved profile after relaunch",
+      "expect": {
+        "runner": "maestro",
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "verificationStatus": "ready-to-run",
+        "routeStatus": "verification-ready-to-run",
+        "routeNextAction": "run-repository-command",
+        "mustRouteCommands": ["flutter test test/profile_screen_test.dart"],
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 1,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": ["lib/screens/profile_screen.dart"],
+        "mustNameIntents": ["restore the saved profile after relaunch"],
+        "mustFindExistingEvidence": ["test/profile_screen_test.dart"],
+        "mustRecommendCommands": [
+          "flutter test test/profile_screen_test.dart",
+          "flutter test",
+          "flutter analyze"
+        ],
+        "mustNotRecommendCommands": ["dart test", "npm test"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "api-orders-contract",
       "fixture": "test/benchmarks/api-orders-contract",
       "manifestBaseline": true,

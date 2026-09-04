@@ -61,6 +61,7 @@ import { TOOL_NAME, VERSION } from "./version.js";
 export type E2eProjectType =
   | "expo-react-native"
   | "react-native"
+  | "flutter"
   | "web"
   | "api-service"
   | "design-tokens"
@@ -964,7 +965,7 @@ function behaviorSurfaceForProject(projectType: E2eProjectType): BehaviorSurface
   if (projectType === "web") {
     return "web";
   }
-  if (projectType === "expo-react-native" || projectType === "react-native") {
+  if (projectType === "expo-react-native" || projectType === "react-native" || projectType === "flutter") {
     return "mobile";
   }
   if (projectType === "api-service") {
@@ -4114,6 +4115,7 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
   const apiServiceDependency = apiServiceDependencies.find((dependency) => dependency in dependencies);
   const hasExpoConfig = await hasAnyFile(root, ["app.json", "app.config.js", "app.config.ts"]);
   const hasNativeDirs = (await exists(path.join(root, "ios"))) || (await exists(path.join(root, "android")));
+  const hasFlutterProject = await detectFlutterProject(profileRoots);
   const hasWebConfig = await hasAnyFile(root, [
     "angular.json",
     "astro.config.js",
@@ -4173,6 +4175,9 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
   if (hasNativeDirs) {
     evidence.push("ios/ or android/ directory found");
   }
+  if (hasFlutterProject) {
+    evidence.push("pubspec.yaml Flutter SDK contract found");
+  }
   if (apiServiceDependency) {
     evidence.push(`package.json dependency: ${apiServiceDependency}`);
   }
@@ -4201,6 +4206,9 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
   if (hasExpoDependency || (hasExpoConfig && hasReactNativeDependency)) {
     return { type: "expo-react-native", evidence };
   }
+  if (hasFlutterProject) {
+    return { type: "flutter", evidence };
+  }
   if (hasReactNativeDependency || hasNativeDirs) {
     return { type: "react-native", evidence };
   }
@@ -4223,6 +4231,47 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
     type: "unknown",
     evidence,
   };
+}
+
+async function detectFlutterProject(roots: string[]): Promise<boolean> {
+  for (const root of roots) {
+    const text = await readTextIfExists(path.join(root, "pubspec.yaml")) ??
+      await readTextIfExists(path.join(root, "pubspec.yml"));
+    if (!text) {
+      continue;
+    }
+    try {
+      const value = YAML.parse(text);
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        continue;
+      }
+      const pubspec = value as Record<string, unknown>;
+      if (isFlutterPubspecSection(pubspec.flutter)) {
+        return true;
+      }
+      for (const section of [pubspec.dependencies, pubspec.dev_dependencies]) {
+        if (!section || typeof section !== "object" || Array.isArray(section)) {
+          continue;
+        }
+        const flutter = (section as Record<string, unknown>).flutter;
+        if (
+          flutter &&
+          typeof flutter === "object" &&
+          !Array.isArray(flutter) &&
+          (flutter as Record<string, unknown>).sdk === "flutter"
+        ) {
+          return true;
+        }
+      }
+    } catch {
+      // An unreadable pubspec contributes no framework signal.
+    }
+  }
+  return false;
+}
+
+function isFlutterPubspecSection(value: unknown): boolean {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function packageJsonHasCliBin(packageJson: PackageJson | undefined): boolean {
@@ -4276,7 +4325,7 @@ function pythonServiceDependencyName(text: string): string | undefined {
 }
 
 function recommendRunner(project: E2eProjectProfile): E2eRunnerRecommendation {
-  if (project.type === "expo-react-native" || project.type === "react-native") {
+  if (project.type === "expo-react-native" || project.type === "react-native" || project.type === "flutter") {
     return {
       name: "maestro",
       reason:
@@ -5712,7 +5761,7 @@ function buildFlowCandidates(
   if (configFiles.length > 0) {
     const subject = isReleaseMetadataOnlyChange(configFiles)
       ? "Release metadata"
-      : (projectType === "expo-react-native" || projectType === "react-native") && configFiles.some(isMobileNativeConfigFile)
+      : (projectType === "expo-react-native" || projectType === "react-native" || projectType === "flutter") && configFiles.some(isMobileNativeConfigFile)
         ? "Mobile build"
       : summarizeFlowSubject(configFiles, "Changed", domainLanguage);
     candidates.push({
@@ -7894,7 +7943,7 @@ function lastIndexOfAny(values: string[], candidates: string[]): number {
 }
 
 function stripKnownExtension(file: string): string {
-  return file.replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|mdx?)$/i, "");
+  return file.replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|mdx?|dart)$/i, "");
 }
 
 async function findFlowTestabilityGaps(
@@ -7985,7 +8034,7 @@ function isUserFacingFile(file: string): boolean {
     return false;
   }
   return (
-    /(?:^|\/)(app|pages|routes|screens|components|ui|navigation)\//i.test(file) ||
+    /(?:^|\/)(app|pages|routes|screens|components|ui|navigation|presentation)\//i.test(file) ||
     /\.(?:tsx|jsx|vue|svelte)$/i.test(file)
   );
 }
@@ -8068,7 +8117,7 @@ function isCatalogDataFile(file: string): boolean {
 }
 
 function isConfigLikeFile(file: string): boolean {
-  return isReleaseMetadataFile(file) || isMobileNativeConfigFile(file) || /(?:^|\/)(?:settings|config)(?:\/|$).+\.py$/i.test(file) || /(?:(?:^|\/)(?:\.agents?|\.claude|\.cursor|\.dev|\.gemini|\.github|docs?)\/|(?:^|\/)(?:AGENTS|CLAUDE|CODEX|DECISIONS|GEMINI|PLAN|README|SKILL)\.md$|\.gitignore|package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|bun\.lockb|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|release-please|docker|env|feature-?flags?|experiments?)/i.test(
+  return isReleaseMetadataFile(file) || isMobileNativeConfigFile(file) || /(?:^|\/)(?:settings|config)(?:\/|$).+\.py$/i.test(file) || /(?:(?:^|\/)(?:\.agents?|\.claude|\.cursor|\.dev|\.gemini|\.github|docs?)\/|(?:^|\/)(?:AGENTS|CLAUDE|CODEX|DECISIONS|GEMINI|PLAN|README|SKILL)\.md$|\.gitignore|package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|bun\.lockb|pubspec\.ya?ml|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|release-please|docker|env|feature-?flags?|experiments?)/i.test(
     file,
   );
 }
@@ -8117,7 +8166,7 @@ function isTestLikeFile(file: string): boolean {
     /\.(?:snap|snapshot)$/i.test(file) ||
     /(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(file) ||
-    /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(file) ||
+    /(?:^|\/)[^/]+_test\.(?:py|go|dart)$/i.test(file) ||
     /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift)$/i.test(file) ||
     /(?:^|\/)[^/]+_(?:test|spec)\.rs$/i.test(file) ||
     /(?:^|\/)\.maestro\/[^/]+\.ya?ml$/i.test(file)
@@ -8154,7 +8203,10 @@ function isGeneratedOutputFile(file: string): boolean {
 }
 
 function isUiImplementationFile(file: string): boolean {
-  return /\.(?:tsx|jsx|vue|svelte)$/i.test(file);
+  return /\.(?:tsx|jsx|vue|svelte)$/i.test(file) ||
+    (/\.dart$/i.test(file) &&
+      (/(?:^|\/)(?:screens?|pages?|views?|widgets?|presentation|ui|components?)\//i.test(file) ||
+        /(?:screen|page|view|widget)\.dart$/i.test(file)));
 }
 
 function isServiceSourceFile(file: string): boolean {
@@ -13716,6 +13768,9 @@ function formatProjectType(type: E2eProjectType): string {
   }
   if (type === "react-native") {
     return "React Native";
+  }
+  if (type === "flutter") {
+    return "Flutter";
   }
   if (type === "web") {
     return "Web";

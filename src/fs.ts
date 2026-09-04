@@ -14,8 +14,10 @@ const ignoredDirectories = new Set([
   ".nuxt",
   ".turbo",
   ".cache",
+  ".dart_tool",
   ".worktree",
   ".worktrees",
+  ".pub-cache",
   "vendor",
   // Mobile vendor/derived trees: on React Native and Expo repos these hold
   // tens of thousands of files and, because the walk is alphabetical and
@@ -32,6 +34,7 @@ const textExtensions = new Set([
   ".cjs",
   ".conf",
   ".cts",
+  ".dart",
   ".env",
   ".go",
   ".java",
