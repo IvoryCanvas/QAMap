@@ -44,6 +44,7 @@ export interface ChangedTestContract {
   title: string;
   line: number;
   framework: "javascript" | "pytest" | "go" | "dart";
+  assertion?: string;
 }
 
 export interface CoverageEvidence {
@@ -94,9 +95,36 @@ export function collectChangedTestContracts(evidence: AddedDiffEvidence): Change
     if (!isTestLikeFile(file) || isBenchmarkRevisionFixturePath(file)) {
       continue;
     }
+    let active: { contract: ChangedTestContract; indentation: number } | undefined;
     for (const hunk of hunks) {
+      if (active && hunk.startLine - active.contract.line > 6) {
+        active = undefined;
+      }
       for (const line of hunk.lines) {
-        contracts.push(...changedTestContractsFromLine(file, line.line, line.text));
+        const declared = changedTestContractsFromLine(file, line.line, line.text);
+        if (declared.length > 0) {
+          contracts.push(...declared);
+          active = {
+            contract: declared[declared.length - 1],
+            indentation: leadingWhitespaceLength(line.text),
+          };
+          continue;
+        }
+        if (!active || active.contract.assertion || line.text.trim().length === 0) {
+          continue;
+        }
+        if (line.line - active.contract.line > 6) {
+          active = undefined;
+          continue;
+        }
+        if (leadingWhitespaceLength(line.text) <= active.indentation) {
+          active = undefined;
+          continue;
+        }
+        const assertion = changedAssertionSummary(active.contract.framework, line.text);
+        if (assertion) {
+          active.contract.assertion = assertion;
+        }
       }
     }
   }
@@ -109,6 +137,73 @@ export function collectChangedTestContracts(evidence: AddedDiffEvidence): Change
     seen.add(key);
     return true;
   }).slice(0, maxChangedTestContracts);
+}
+
+function changedAssertionSummary(
+  framework: ChangedTestContract["framework"],
+  text: string,
+): string | undefined {
+  const trimmed = text.trim().replace(/;$/, "").trim();
+  const candidate = framework === "javascript"
+    ? trimmed.replace(/^await\s+/, "")
+    : trimmed;
+  if (!candidate || candidate.length > 180 || !hasBalancedAssertionSyntax(candidate)) {
+    return undefined;
+  }
+
+  if (framework === "pytest") {
+    return /^assert\s+\S/.test(candidate) ? normalizeText(candidate) : undefined;
+  }
+  if (framework === "go") {
+    return /^(?:assert|require)\.(?:Equal|EqualValues|Exactly|NotEqual|True|False|Nil|NotNil|NoError|Error|ErrorIs|Contains|NotContains|Len|Empty|NotEmpty)\s*\(.+\)$/.test(candidate)
+      ? normalizeText(candidate)
+      : undefined;
+  }
+  if (framework === "dart") {
+    return /^expect\s*\(.+\)$/.test(candidate) ? normalizeText(candidate) : undefined;
+  }
+
+  const expectAssertion = /^expect\s*\(.+\)(?:\.(?:not|resolves|rejects))*\.(?:toBe|toEqual|toStrictEqual|toContain|toMatch|toHaveText|toHaveTextContent|toHaveValue|toHaveAttribute|toHaveLength|toHaveURL|toHaveCount|toHaveStatus|toBeVisible|toBeHidden|toBeTruthy|toBeFalsy|toBeNull|toBeDefined|toBeEnabled|toBeDisabled|toBeChecked|toThrow)\s*\(.*\)$/;
+  const nodeAssertion = /^assert\.(?:equal|strictEqual|deepEqual|deepStrictEqual|notEqual|notStrictEqual|notDeepEqual|notDeepStrictEqual|ok|match|doesNotMatch|throws|doesNotThrow|rejects|doesNotReject|ifError)\s*\(.+\)$/;
+  return expectAssertion.test(candidate) || nodeAssertion.test(candidate)
+    ? normalizeText(candidate)
+    : undefined;
+}
+
+function hasBalancedAssertionSyntax(value: string): boolean {
+  const stack: string[] = [];
+  const closing = new Map([[")", "("], ["]", "["], ["}", "{"]]);
+  let quote: "\"" | "'" | "`" | undefined;
+  let escaped = false;
+  for (const character of value) {
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === "\"" || character === "'" || character === "`") {
+      quote = character;
+      continue;
+    }
+    if (character === "(" || character === "[" || character === "{") {
+      stack.push(character);
+      continue;
+    }
+    const expected = closing.get(character);
+    if (expected && stack.pop() !== expected) {
+      return false;
+    }
+  }
+  return quote === undefined && stack.length === 0;
+}
+
+function leadingWhitespaceLength(value: string): number {
+  return value.match(/^\s*/)?.[0].length ?? 0;
 }
 
 export function evaluateFlowCoverageEvidence(

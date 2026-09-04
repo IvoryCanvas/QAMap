@@ -91,11 +91,171 @@ test("collectChangedTestContracts preserves non-Latin pytest contracts from diff
       title: "비공개 항목은 목록에서 제외된다",
       line: 120,
       framework: "pytest",
+      assertion: "assert client.get('/items').status_code == 200",
     },
     {
       file: "tests/e2e/visibility.spec.ts",
       title: "unlisted record stays directly accessible",
       line: 8,
+      framework: "javascript",
+    },
+  ]);
+});
+
+test("collectChangedTestContracts keeps only explicit single-line assertions", () => {
+  const contracts = collectChangedTestContracts({
+    "tests/status.test.mjs": [{
+      file: "tests/status.test.mjs",
+      startLine: 10,
+      endLine: 14,
+      hunkHeader: "@@ -9,0 +10,5 @@",
+      lines: [
+        { line: 10, text: 'test("reports the final state", () => {' },
+        { line: 11, text: '  const fixture = { status: "ready" };' },
+        { line: 12, text: '  assert.equal(result.status, "ready");' },
+        { line: 13, text: "});" },
+      ],
+    }],
+    "tests/view.spec.ts": [{
+      file: "tests/view.spec.ts",
+      startLine: 20,
+      endLine: 24,
+      hunkHeader: "@@ -19,0 +20,5 @@",
+      lines: [
+        { line: 20, text: "test('shows the empty state', async ({ page }) => {" },
+        { line: 21, text: "  const copy = 'No records yet';" },
+        { line: 22, text: "  await expect(page.getByText('No records yet')).toBeVisible();" },
+        { line: 23, text: "});" },
+      ],
+    }],
+    "service/state_test.go": [{
+      file: "service/state_test.go",
+      startLine: 30,
+      endLine: 34,
+      hunkHeader: "@@ -29,0 +30,5 @@",
+      lines: [
+        { line: 30, text: "func TestFinalState(t *testing.T) {" },
+        { line: 31, text: '  require.Equal(t, "ready", result.State)' },
+        { line: 32, text: "}" },
+      ],
+    }],
+    "test/widget_test.dart": [{
+      file: "test/widget_test.dart",
+      startLine: 40,
+      endLine: 44,
+      hunkHeader: "@@ -39,0 +40,5 @@",
+      lines: [
+        { line: 40, text: "testWidgets('shows saved state', (tester) async {" },
+        { line: 41, text: "  expect(find.text('Saved'), findsOneWidget);" },
+        { line: 42, text: "});" },
+      ],
+    }],
+  });
+
+  assert.deepEqual(contracts, [
+    {
+      file: "tests/status.test.mjs",
+      title: "reports the final state",
+      line: 10,
+      framework: "javascript",
+      assertion: 'assert.equal(result.status, "ready")',
+    },
+    {
+      file: "tests/view.spec.ts",
+      title: "shows the empty state",
+      line: 20,
+      framework: "javascript",
+      assertion: "expect(page.getByText('No records yet')).toBeVisible()",
+    },
+    {
+      file: "service/state_test.go",
+      title: "FinalState",
+      line: 30,
+      framework: "go",
+      assertion: 'require.Equal(t, "ready", result.State)',
+    },
+    {
+      file: "test/widget_test.dart",
+      title: "shows saved state",
+      line: 40,
+      framework: "dart",
+      assertion: "expect(find.text('Saved'), findsOneWidget)",
+    },
+  ]);
+});
+
+test("collectChangedTestContracts bounds assertion evidence across zero-context hunks", () => {
+  const contracts = collectChangedTestContracts({
+    "tests/nearby.test.ts": [
+      {
+        file: "tests/nearby.test.ts",
+        startLine: 10,
+        endLine: 10,
+        hunkHeader: "@@ -9,0 +10 @@",
+        lines: [
+          { line: 10, text: 'test("keeps nearby evidence", () => {' },
+        ],
+      },
+      {
+        file: "tests/nearby.test.ts",
+        startLine: 12,
+        endLine: 12,
+        hunkHeader: "@@ -11,0 +12 @@",
+        lines: [
+          { line: 12, text: '  expect(result.status).toBe("ready");' },
+        ],
+      },
+    ],
+    "tests/distant.test.ts": [
+      {
+        file: "tests/distant.test.ts",
+        startLine: 20,
+        endLine: 20,
+        hunkHeader: "@@ -19,0 +20 @@",
+        lines: [
+          { line: 20, text: 'test("rejects distant evidence", () => {' },
+        ],
+      },
+      {
+        file: "tests/distant.test.ts",
+        startLine: 28,
+        endLine: 28,
+        hunkHeader: "@@ -27,0 +28 @@",
+        lines: [
+          { line: 28, text: '  expect(result.status).toBe("stale");' },
+        ],
+      },
+    ],
+    "tests/unbalanced.test.ts": [{
+      file: "tests/unbalanced.test.ts",
+      startLine: 30,
+      endLine: 31,
+      hunkHeader: "@@ -29,0 +30,2 @@",
+      lines: [
+        { line: 30, text: 'test("rejects incomplete evidence", () => {' },
+        { line: 31, text: '  expect(result.status).toBe("ready";' },
+      ],
+    }],
+  });
+
+  assert.deepEqual(contracts, [
+    {
+      file: "tests/nearby.test.ts",
+      title: "keeps nearby evidence",
+      line: 10,
+      framework: "javascript",
+      assertion: 'expect(result.status).toBe("ready")',
+    },
+    {
+      file: "tests/distant.test.ts",
+      title: "rejects distant evidence",
+      line: 20,
+      framework: "javascript",
+    },
+    {
+      file: "tests/unbalanced.test.ts",
+      title: "rejects incomplete evidence",
+      line: 30,
       framework: "javascript",
     },
   ]);
@@ -3516,23 +3676,85 @@ test("generateE2ePlan treats test-only changes as evidence verification, not pro
     title: "admin primary journey handles empty state",
     line: 2,
     framework: "javascript",
+    assertion: "expect(page.getByText('No requests yet')).toBeVisible()",
   }]);
   assert.match(qaMarkdown, /## Repository-backed QA Contracts/);
   assert.match(qaMarkdown, /admin primary journey handles empty state/);
   assert.match(qaMarkdown, /not proof that the tests passed/);
   assert.deepEqual(agentSummary.testContracts, {
     declared: 1,
+    omittedItemCount: 0,
     execution: "not-run",
     items: [{
       title: "admin primary journey handles empty state",
       file: "tests/e2e/admin-primary-journey.spec.ts",
       line: 2,
       framework: "javascript",
+      assertion: "expect(page.getByText('No requests yet')).toBeVisible()",
       authority: "repository-contract",
       approvalRequired: true,
       testClass: "regression",
     }],
   });
+
+  const oversizedQa = structuredClone(qa);
+  const selectedContract = {
+    file: "tests/contracts/final-state.test.ts",
+    title: "preserves the final observable state",
+    line: 42,
+    framework: "javascript",
+    assertion: 'expect(result.status).toBe("ready")',
+  };
+  oversizedQa.changedTestContracts = [
+    {
+      file: `tests/${"background/".repeat(30)}secondary.test.ts`,
+      title: "secondary repository contract",
+      line: 12,
+      framework: "javascript",
+      assertion: 'assert.equal(result.kind, "secondary")',
+    },
+    selectedContract,
+    ...Array.from({ length: 6 }, (_, index) => ({
+      file: `tests/${"nested/".repeat(30)}contract-${index}.test.ts`,
+      title: `repository contract ${index} ${"detail ".repeat(20)}`,
+      line: 50 + index,
+      framework: "javascript",
+      assertion: `assert.equal(result.value, ${index})`,
+    })),
+  ];
+  oversizedQa.route = {
+    basis: "repository-validation",
+    status: "verification-ready-to-run",
+    nextAction: "run-repository-command",
+    command: "npm test -- tests/contracts/final-state.test.ts",
+  };
+  oversizedQa.suggestedCommands = [oversizedQa.route.command];
+  oversizedQa.base = `refs/heads/${"base-segment/".repeat(400)}`;
+  oversizedQa.head = `refs/heads/${"head-segment/".repeat(400)}`;
+  oversizedQa.flows = Array.from({ length: 20 }, (_, index) => ({
+    ...structuredClone(qa.flows[0]),
+    title: `Contract flow ${index} ${"detail ".repeat(50)}`,
+    entrypointHints: index === 0
+      ? [`/${"contract-segment/".repeat(220)}final-state`]
+      : qa.flows[0].entrypointHints,
+    changedFiles: Array.from({ length: 10 }, (__, fileIndex) =>
+      `src/${"nested/".repeat(20)}flow-${index}-${fileIndex}.tsx`
+    ),
+  }));
+
+  const compactOutput = formatAgentQaDraft(oversizedQa);
+  const compact = JSON.parse(compactOutput);
+  assert.ok(Buffer.byteLength(compactOutput) <= 4 * 1024);
+  assert.equal(compact.testContracts.declared, 8);
+  assert.equal(compact.testContracts.execution, "not-run");
+  assert.equal(compact.testContracts.items.length, 1);
+  assert.equal(compact.testContracts.items[0].file, selectedContract.file);
+  assert.equal(compact.testContracts.items[0].assertion, selectedContract.assertion);
+  assert.equal(
+    compact.testContracts.omittedItemCount,
+    compact.testContracts.declared - compact.testContracts.items.length,
+  );
+  assert.equal(compact.compaction.hardLimit, true, JSON.stringify(compact.compaction));
 });
 
 test("generateE2ePlan treats Maestro-only changes as test evidence", async () => {

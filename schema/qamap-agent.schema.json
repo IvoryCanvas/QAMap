@@ -67,7 +67,11 @@
         "title": { "type": "string" },
         "file": { "type": "string" },
         "line": { "type": "integer", "minimum": 1 },
-        "framework": { "type": "string", "enum": ["javascript", "pytest", "go"] },
+        "framework": { "type": "string", "enum": ["javascript", "pytest", "go", "dart"] },
+        "assertion": {
+          "type": "string",
+          "description": "A bounded source-level summary extracted only from an explicit assertion added inside this test contract. Omitted when syntax is unsupported or ambiguous."
+        },
         "authority": { "const": "repository-contract" },
         "approvalRequired": {
           "type": "boolean",
@@ -520,6 +524,11 @@
       "required": ["declared", "execution", "items"],
       "properties": {
         "declared": { "type": "integer", "minimum": 0 },
+        "omittedItemCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of lower-ranked changed test contracts available only in the full local recovery report."
+        },
         "execution": { "const": "not-run" },
         "items": {
           "type": "array",
