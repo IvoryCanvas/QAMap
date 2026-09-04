@@ -23,12 +23,29 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-        timeout-minutes: 3
+      - name: Restore pnpm caches
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          version: 10.32.1
-          cache: true
+          path: |
+            ~/.cache/node/corepack
+            ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-10.32.1-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-10.32.1-
+      - name: Set up pnpm
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          corepack enable pnpm
+          for attempt in 1 2 3; do
+            if timeout 30s pnpm --version; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 2))
+            fi
+          done
+          exit 1
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build once
@@ -49,6 +66,7 @@ jobs:
         run: pnpm scan:compiled
 
   execution-benchmark:
+    needs: test
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -58,12 +76,29 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-        timeout-minutes: 3
+      - name: Restore pnpm caches
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          version: 10.32.1
-          cache: true
+          path: |
+            ~/.cache/node/corepack
+            ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-10.32.1-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-10.32.1-
+      - name: Set up pnpm
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          corepack enable pnpm
+          for attempt in 1 2 3; do
+            if timeout 30s pnpm --version; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 2))
+            fi
+          done
+          exit 1
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build once

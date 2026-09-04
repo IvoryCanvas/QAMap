@@ -105,27 +105,44 @@ test("pull request workflows stay read-only and pin external actions", async () 
 });
 
 test("CI prepares pnpm after Node.js and reuses one compiled build per job", async () => {
-  const workflow = parseYaml(
-    await readFile(path.join(repositoryRoot, ".github/workflows/ci.yml"), "utf8"),
+  const workflowSource = await readFile(
+    path.join(repositoryRoot, ".github/workflows/ci.yml"),
+    "utf8",
   );
+  const workflow = parseYaml(workflowSource);
   const packageJson = JSON.parse(
     await readFile(path.join(repositoryRoot, "package.json"), "utf8"),
   );
+  const pnpmVersion = packageJson.packageManager.replace(/^pnpm@/, "");
 
   for (const jobName of ["test", "execution-benchmark"]) {
     const job = workflow.jobs[jobName];
     const nodeIndex = job.steps.findIndex((step) => step.name === "Set up Node.js");
+    const cacheIndex = job.steps.findIndex((step) => step.name === "Restore pnpm caches");
     const pnpmIndex = job.steps.findIndex((step) => step.name === "Set up pnpm");
     const buildCommands = job.steps.filter((step) => step.run === "pnpm build");
+    const cacheStep = job.steps[cacheIndex];
+    const pnpmStep = job.steps[pnpmIndex];
 
-    assert.ok(nodeIndex >= 0 && nodeIndex < pnpmIndex, `${jobName} must prepare Node.js before pnpm`);
+    assert.ok(
+      nodeIndex >= 0 && nodeIndex < cacheIndex && cacheIndex < pnpmIndex,
+      `${jobName} must prepare Node.js, restore caches, then enable pnpm`,
+    );
     assert.equal(job.steps[nodeIndex].with?.cache, undefined, `${jobName} must not cache pnpm before it exists`);
-    assert.equal(job.steps[pnpmIndex].with?.cache, true, `${jobName} must let pnpm setup own its store cache`);
+    assert.match(cacheStep.with.path, /\.cache\/node\/corepack/);
+    assert.match(cacheStep.with.path, /\.local\/share\/pnpm\/store/);
+    assert.ok(cacheStep.with.key.includes(pnpmVersion), `${jobName} cache key must track the pinned pnpm version`);
+    assert.equal(pnpmStep["timeout-minutes"], 2);
+    assert.match(pnpmStep.run, /corepack enable pnpm/);
+    assert.match(pnpmStep.run, /timeout 30s pnpm --version/);
+    assert.match(pnpmStep.run, /for attempt in 1 2 3/);
     assert.equal(buildCommands.length, 1, `${jobName} must compile exactly once`);
   }
 
+  assert.ok(!workflowSource.includes("pnpm/action-setup@"), "CI must avoid the flaky self-installer path");
   assert.equal(workflow.jobs.test["timeout-minutes"], 15);
   assert.equal(workflow.jobs["execution-benchmark"]["timeout-minutes"], 15);
+  assert.equal(workflow.jobs["execution-benchmark"].needs, "test");
 
   const testCommands = workflow.jobs.test.steps.map((step) => step.run).filter(Boolean);
   for (const command of [
