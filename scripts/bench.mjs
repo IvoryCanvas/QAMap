@@ -38,6 +38,7 @@ for (const target of config.targets) {
       head: prepared.head,
       workspaceRoot: prepared.workspaceRoot,
       manifestPath: prepared.manifestPath,
+      includeWorkingTree: prepared.includeWorkingTree,
     };
     const startedAt = Date.now();
     const plan = await generateE2ePlan(prepared.root, options);
@@ -826,6 +827,7 @@ async function materializeFixture(target, configDir) {
     tempPrefix: "qamap-bench-",
     baseCommits,
     commits,
+    workingTreeDirs: target.workingTreeDir ? [target.workingTreeDir] : [],
     git,
     afterBaseline: async ({ repositoryRoot, tempRoot }) => {
       if (!target.manifestBaseline) return;
@@ -840,6 +842,7 @@ async function materializeFixture(target, configDir) {
   return {
     ...prepared,
     manifestPath,
+    includeWorkingTree: Boolean(target.workingTreeDir),
     cleanup: materialized.cleanup,
   };
 }

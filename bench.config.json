@@ -1,6 +1,35 @@
 {
-  "$comment": "Committed quality contract. Each fixture is materialized as a temporary Git repository with a main baseline and one PR change.",
+  "$comment": "Committed quality contract. Each fixture is materialized as a temporary Git repository with a main baseline and either a committed PR change or an explicit working-tree overlay.",
   "targets": [
+    {
+      "name": "web-working-tree-test-contract",
+      "fixture": "test/benchmarks/web-working-tree-test-contract",
+      "workingTreeDir": "working-tree",
+      "commitMessage": "chore: preserve the committed baseline",
+      "expect": {
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "verificationStatus": "ready-to-run",
+        "routeStatus": "verification-ready-to-run",
+        "routeNextAction": "run-repository-command",
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 1,
+        "maxUntraceableRequiredScenarios": 0,
+        "mustReachFiles": ["src/preferences/PreferenceStatus.tsx"],
+        "mustNameIntents": ["preference status working-tree"],
+        "mustNotNameIntents": ["preference history"],
+        "mustIncludeLifecycle": ["shows the saved preference after reload"],
+        "mustIncludeQaScenarios": ["changed test contract: shows the saved preference after reload"],
+        "mustFindIntentEvidence": ["Changed test contract: shows the saved preference after reload"],
+        "mustFindExistingEvidence": ["src/preferences/PreferenceStatus.test.mjs"],
+        "mustRouteCommands": ["src/preferences/PreferenceStatus.test.mjs"],
+        "mustRecommendCommands": ["src/preferences/PreferenceStatus.test.mjs"],
+        "maxBlankActions": 0,
+        "maxGenericTitles": 0,
+        "maxAgentBytes": 4096
+      }
+    },
     {
       "name": "web-diverged-target-hotfix",
       "fixture": "test/benchmarks/web-diverged-target-hotfix",

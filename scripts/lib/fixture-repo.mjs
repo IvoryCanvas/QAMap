@@ -17,6 +17,7 @@ export async function materializeFixtureRepo({
   baseDirs = ["base"],
   baseCommits = [],
   commits = [],
+  workingTreeDirs = [],
   baselineMessage = "benchmark baseline",
   branch = "benchmark/change",
   identity = { name: "QAMap Benchmark", email: "benchmark@qamap.local" },
@@ -60,6 +61,12 @@ export async function materializeFixtureRepo({
     }
     await git(repositoryRoot, ["add", "-A"]);
     await git(repositoryRoot, ["commit", "--allow-empty", "-m", step.message]);
+  }
+  for (const dir of workingTreeDirs) {
+    const overlayRoot = path.join(fixtureRoot, dir);
+    if (await exists(overlayRoot)) {
+      await fs.cp(overlayRoot, repositoryRoot, { recursive: true, force: true });
+    }
   }
   return {
     tempRoot,

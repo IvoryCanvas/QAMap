@@ -14,6 +14,8 @@ import {
   formatQaSymbolAnnotationDiagnostic,
 } from "./symbol-annotations.js";
 import { isInstructionLikeRepositoryText } from "./qa-contract.js";
+import { collectChangedTestContracts } from "./test-evidence.js";
+import type { ChangedTestContract } from "./test-evidence.js";
 import type {
   ChangedQaSymbolAnnotation,
 } from "./symbol-annotations.js";
@@ -395,6 +397,7 @@ export async function analyzeChangeIntents(
     options.addedDiffEvidence ?? {},
     changedSourceRoles,
   );
+  const changedTestContracts = collectChangedTestContracts(options.addedDiffEvidence ?? {});
   const changedFiles = options.changedFiles.map((file) => file.path);
   const commitClusters = clusterBehaviorCommits(parsedCommits);
   const sharedCommitFiles = filesSharedByCommitClusters(commitClusters);
@@ -428,6 +431,7 @@ export async function analyzeChangeIntents(
         return file !== undefined && residualFileSet.has(file);
       }),
       annotationEvidence.filter((evidence) => evidence.file && residualFileSet.has(evidence.file)),
+      changedTestContracts,
       options.includeWorkingTree ?? false,
     );
     intents.push(...diffIntents);
@@ -966,6 +970,7 @@ interface DiffOnlyIntentEvidenceGroup {
   codeSignals: CodeBehaviorSignal[];
   riskEvidence: ChangeIntentEvidence[];
   annotationEvidence: ChangeIntentEvidence[];
+  testContracts: ChangedTestContract[];
 }
 
 function buildDiffOnlyIntents(
@@ -974,6 +979,7 @@ function buildDiffOnlyIntents(
   codeSignals: CodeBehaviorSignal[],
   riskEvidence: ChangeIntentEvidence[],
   annotationEvidence: ChangeIntentEvidence[],
+  testContracts: ChangedTestContract[],
   includesWorkingTree: boolean,
 ): ChangeIntent[] {
   return partitionDiffOnlyIntentEvidence(
@@ -982,12 +988,14 @@ function buildDiffOnlyIntents(
     codeSignals,
     riskEvidence,
     annotationEvidence,
+    testContracts,
   )
     .map((group) => buildDiffOnlyIntent(
       group.files,
       group.codeSignals,
       group.riskEvidence,
       group.annotationEvidence,
+      group.testContracts,
       includesWorkingTree,
     ))
     .filter((intent): intent is ChangeIntent => Boolean(intent));
@@ -999,6 +1007,7 @@ function partitionDiffOnlyIntentEvidence(
   codeSignals: CodeBehaviorSignal[],
   riskEvidence: ChangeIntentEvidence[],
   annotationEvidence: ChangeIntentEvidence[],
+  testContracts: ChangedTestContract[],
 ): DiffOnlyIntentEvidenceGroup[] {
   const files = uniqueStrings(changedFiles);
   const parent = files.map((_, index) => index);
@@ -1082,8 +1091,37 @@ function partitionDiffOnlyIntentEvidence(
       annotationEvidence: annotationEvidence.filter((evidence) =>
         [...fileSet].some((file) => evidenceBelongsToFile(evidence, file))
       ),
+      testContracts: testContracts.filter((contract) =>
+        [...fileSet].some((file) => changedTestContractMatchesSource(contract, file))
+      ),
     };
   });
+}
+
+function changedTestContractMatchesSource(contract: ChangedTestContract, sourceFile: string): boolean {
+  const testOwner = normalizedTestOwnerPath(contract.file);
+  const sourceOwner = normalizedSourceOwnerPath(sourceFile);
+  if (!testOwner || !sourceOwner) {
+    return false;
+  }
+  if (testOwner === sourceOwner) {
+    return true;
+  }
+  return path.posix.basename(testOwner) === path.posix.basename(sourceOwner) &&
+    path.posix.dirname(testOwner).endsWith(path.posix.dirname(sourceOwner));
+}
+
+function normalizedTestOwnerPath(file: string): string {
+  return toPosixPath(file)
+    .replace(/\.(?:[cm]?[jt]sx?|py|go|dart|rs|java|kt|swift|cs)$/i, "")
+    .replace(/(?:[._-](?:test|tests|spec|specs)|(?:Test|Tests|Spec))$/i, "")
+    .toLowerCase();
+}
+
+function normalizedSourceOwnerPath(file: string): string {
+  return toPosixPath(file)
+    .replace(/\.(?:[cm]?[jt]sx?|vue|svelte|py|go|dart|rs|java|kt|swift|cs)$/i, "")
+    .toLowerCase();
 }
 
 function evidenceBelongsToFile(evidence: ChangeIntentEvidence, file: string): boolean {
@@ -1095,6 +1133,7 @@ function buildDiffOnlyIntent(
   codeSignals: CodeBehaviorSignal[],
   riskEvidence: ChangeIntentEvidence[],
   annotationEvidence: ChangeIntentEvidence[],
+  testContracts: ChangedTestContract[],
   includesWorkingTree: boolean,
 ): ChangeIntent | undefined {
   const roleEvidence = riskEvidence.filter((item) =>
@@ -1103,12 +1142,14 @@ function buildDiffOnlyIntent(
   const deliveryIntegrityEvidence = riskEvidence.filter(isDeliveryIntegrityEvidence);
   const runtimeActivationEvidence = riskEvidence.filter(isRuntimeActivationEvidence);
   const performanceEvidence = riskEvidence.filter(isPerformanceEvidence);
+  const testContractEvidence = testContracts.map(changedTestContractEvidence);
   const lifecycle = limitLifecycleStages([
     ...lifecycleFromCodeSignals(codeSignals),
     ...lifecycleFromSourceRoles(roleEvidence),
     ...lifecycleFromDeliveryIntegrityEvidence(deliveryIntegrityEvidence),
     ...lifecycleFromRuntimeActivationEvidence(runtimeActivationEvidence),
     ...lifecycleFromPerformanceEvidence(performanceEvidence),
+    ...lifecycleFromChangedTestContracts(testContracts),
   ]);
   const stageKinds = new Set(lifecycle.map((stage) => stage.kind));
   const hasRecognizedSourceRole = roleEvidence.length > 0 ||
@@ -1116,8 +1157,11 @@ function buildDiffOnlyIntent(
     runtimeActivationEvidence.length > 0 ||
     performanceEvidence.length > 0;
   const hasSymbolAnnotation = annotationEvidence.length > 0;
+  const hasConnectedTestContract = testContracts.length > 0 && codeSignals.length > 0 &&
+    lifecycle.length >= 2 && stageKinds.size >= 2;
   if (
-    (!hasRecognizedSourceRole && !hasSymbolAnnotation && (lifecycle.length < 3 || stageKinds.size < 3)) ||
+    (!hasRecognizedSourceRole && !hasSymbolAnnotation && !hasConnectedTestContract &&
+      (lifecycle.length < 3 || stageKinds.size < 3)) ||
     lifecycle.length < 2
   ) {
     return undefined;
@@ -1129,6 +1173,7 @@ function buildDiffOnlyIntent(
     ...runtimeActivationEvidence.map((item) => item.file ?? "").filter(Boolean),
     ...performanceEvidence.map((item) => item.file ?? "").filter(Boolean),
     ...annotationEvidence.map((item) => item.file ?? "").filter(Boolean),
+    ...testContracts.map((contract) => contract.file),
   ]).slice(0, maxIntentFiles);
   const annotatedFlow = firstQaAnnotationFlow(annotationEvidence);
   const titleSubject = deliveryIntegrityEvidence.length > 0
@@ -1148,12 +1193,14 @@ function buildDiffOnlyIntent(
     ...codeSignals.slice(0, 16).map((signal) => signal.evidence),
     ...selectRiskEvidence(riskEvidence, 24),
     ...annotationEvidence,
+    ...testContractEvidence,
   ]);
   const id = stableId("intent", `${includesWorkingTree ? "working-tree" : "diff"}:${files.join(":")}`);
   const keywords = extractKeywords([
     ...codeSignals.map((signal) => `${signal.symbol} ${signal.label}`),
     ...riskEvidence.map((item) => `${item.symbol ?? ""} ${item.value}`),
     ...annotationEvidence.map((item) => `${item.symbol ?? ""} ${item.value}`),
+    ...testContracts.map((contract) => contract.title),
   ].join(" "));
   return {
     id,
@@ -1170,6 +1217,34 @@ function buildDiffOnlyIntent(
     scenarios: buildIntentQaScenarios(id, title, lifecycle, keywords, evidence, "low"),
     reviewRequired: true,
   };
+}
+
+function changedTestContractEvidence(contract: ChangedTestContract): ChangeIntentEvidence {
+  return {
+    kind: "diff",
+    value: `Changed test contract: ${contract.title}`,
+    sourceRole: "test",
+    file: contract.file,
+    symbol: "changed-test-contract",
+    relation: "supporting",
+    side: "head",
+    startLine: contract.line,
+    endLine: contract.line,
+  };
+}
+
+function lifecycleFromChangedTestContracts(contracts: ChangedTestContract[]): BehaviorLifecycleStage[] {
+  return contracts.slice(0, 3).map((contract) => {
+    const evidence = changedTestContractEvidence(contract);
+    return createLifecycleStage(
+      "observable-outcome",
+      `Changed test contract: ${contract.title}.`,
+      "low",
+      [evidence],
+      [contract.file],
+      "changed-test-contract",
+    );
+  });
 }
 
 function diffIntentSubject(
@@ -2509,6 +2584,9 @@ function buildPerformanceQaScenarios(
 
 function isMateriallyObservableOutcomeStage(stage: BehaviorLifecycleStage): boolean {
   const label = stripTerminalPunctuation(stage.label);
+  if (stage.symbol === "changed-test-contract") {
+    return true;
+  }
   if (/^Show\s+.+/i.test(label)) {
     return true;
   }
@@ -5380,6 +5458,10 @@ function stripTerminalPunctuation(value: string): string {
 
 function assertionForStage(stage: BehaviorLifecycleStage): string {
   const label = stripTerminalPunctuation(stage.label);
+  const changedTestContract = label.match(/^Changed test contract:\s*(.+)$/i)?.[1];
+  if (changedTestContract) {
+    return `Verify the changed test contract: ${changedTestContract}.`;
+  }
   const accessibleLabel = label.match(/^Expose accessibility label\s+"(.+)"$/i)?.[1];
   if (accessibleLabel) {
     return `Verify the accessibility label equals "${accessibleLabel}".`;
