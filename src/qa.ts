@@ -1690,6 +1690,8 @@ function buildAgentQaSummary(
   if (options.recoveryPath) {
     context.recovery = { fullReport: options.recoveryPath };
   }
+  const agentTestContracts = prioritizeChangedTestContractsForAgent(result);
+  const retainedAgentTestContracts = agentTestContracts.slice(0, 3);
   const summary = {
     schema: { name: "qamap.qa", version: 1 },
     base: result.base,
@@ -1783,8 +1785,9 @@ function buildAgentQaSummary(
     testSuite: { present: result.testSuite.hasTestSuite, files: result.testSuite.testFileCount },
     testContracts: {
       declared: result.changedTestContracts.length,
-      execution: "not-run",
-      items: result.changedTestContracts.slice(0, 3).map((contract) => ({
+      omittedItemCount: Math.max(0, result.changedTestContracts.length - retainedAgentTestContracts.length),
+      execution: "not-run" as const,
+      items: retainedAgentTestContracts.map((contract) => ({
         ...formatAgentRepositoryContract(contract),
       })),
     },
@@ -1920,6 +1923,12 @@ interface AgentSummaryShape {
     scope?: unknown;
     files: string[];
     repositoryContracts: Array<Record<string, unknown>>;
+  };
+  testContracts: {
+    declared: number;
+    omittedItemCount: number;
+    execution: "not-run";
+    items: Array<Record<string, unknown>>;
   };
   traces: Array<{
     id?: unknown;
@@ -2221,7 +2230,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - leanTraces.length),
     traces: leanTraces,
     testSuite: summary.testSuite,
-    testContracts: summary.testContracts,
+    testContracts: compactAgentTestContracts(summary.testContracts, 2),
     intentCount: summary.intentCount,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - leanIntents.length),
     intents: leanIntents,
@@ -2320,7 +2329,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - emergencyTraces.length),
     traces: emergencyTraces,
     testSuite: summary.testSuite,
-    testContracts: summary.testContracts,
+    testContracts: compactAgentTestContracts(summary.testContracts, 1),
     intentCount: summary.intentCount,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - emergencyIntents.length),
     intents: emergencyIntents,
@@ -2391,7 +2400,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - emergencyTraces.length),
     traces: emergencyTraces,
     testSuite: summary.testSuite,
-    testContracts: summary.testContracts,
+    testContracts: compactAgentTestContracts(summary.testContracts, 1),
     intentCount: summary.intentCount,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - floorIntents.length),
     intents: floorIntents,
@@ -2413,7 +2422,6 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
   const floorPrioritySummary: Record<string, unknown> = { ...floorSummary };
   for (const key of [
     "automation",
-    "testContracts",
     "manifestCorrection",
     "analysisScope",
   ]) {
@@ -2542,7 +2550,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     omittedTraceCount: Math.max(0, numericCount(summary.traceCount) - hardLimitTraces.length),
     traces: hardLimitTraces as unknown[],
     testSuite: summary.testSuite,
-    testContracts: summary.testContracts,
+    testContracts: compactAgentTestContracts(summary.testContracts, 1, true),
     intentCount: summary.intentCount,
     omittedIntentCount: Math.max(0, numericCount(summary.intentCount) - hardLimitIntents.length),
     intents: hardLimitIntents as Array<Record<string, unknown>>,
@@ -2567,9 +2575,6 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
   // counts that already accompany the lists.
   const hardLimitRecord = hardLimitSummary as unknown as Record<string, unknown>;
   const reliefSteps: Array<() => void> = [
-    () => {
-      delete hardLimitRecord.testContracts;
-    },
     () => {
       delete hardLimitRecord.automation;
       hardLimitRecord.readiness = minimumAgentReadiness(summary.readiness);
@@ -2670,6 +2675,32 @@ function minimumAgentReadiness(value: unknown): unknown {
   };
 }
 
+function compactAgentTestContracts(
+  value: AgentSummaryShape["testContracts"],
+  limit: number,
+  tight = false,
+): AgentSummaryShape["testContracts"] {
+  const retainedLimit = value.declared > 0 ? Math.max(1, limit) : 0;
+  const items = value.items.slice(0, retainedLimit).map((item) => ({
+    title: truncateForAgent(String(item.title ?? ""), tight ? 60 : 80),
+    file: String(item.file ?? ""),
+    line: item.line,
+    framework: item.framework,
+    ...(item.assertion
+      ? { assertion: truncateForAgent(String(item.assertion), tight ? 100 : 120) }
+      : {}),
+    authority: item.authority,
+    approvalRequired: item.approvalRequired,
+    testClass: item.testClass,
+  }));
+  return {
+    declared: value.declared,
+    omittedItemCount: Math.max(0, value.declared - items.length),
+    execution: "not-run",
+    items,
+  };
+}
+
 function compactAgentCurrentDelta(
   value: AgentSummaryShape["currentDelta"],
   limit: number,
@@ -2685,6 +2716,9 @@ function compactAgentCurrentDelta(
       file: String(contract.file ?? ""),
       line: contract.line,
       framework: contract.framework,
+      ...(contract.assertion
+        ? { assertion: truncateForAgent(String(contract.assertion), 120) }
+        : {}),
       authority: contract.authority,
       approvalRequired: contract.approvalRequired,
       testClass: contract.testClass,
@@ -2951,10 +2985,36 @@ function formatAgentRepositoryContract(
     file: contract.file,
     line: contract.line,
     framework: contract.framework,
+    ...(contract.assertion
+      ? { assertion: truncateForAgent(contract.assertion, 140) }
+      : {}),
     authority: "repository-contract",
     approvalRequired: true,
     testClass: "regression",
   };
+}
+
+function prioritizeChangedTestContractsForAgent(
+  result: QaDraftResult,
+): ChangedTestContract[] {
+  const currentDeltaKeys = new Set(
+    (result.currentDelta?.repositoryContracts ?? []).map(changedTestContractKey),
+  );
+  const selectedCommand = result.route.command ?? "";
+  return result.changedTestContracts
+    .map((contract, index) => ({ contract, index }))
+    .sort((left, right) => {
+      const score = (contract: ChangedTestContract): number =>
+        (selectedCommand.includes(contract.file) ? 100 : 0) +
+        (currentDeltaKeys.has(changedTestContractKey(contract)) ? 50 : 0) +
+        (contract.assertion ? 5 : 0);
+      return score(right.contract) - score(left.contract) || left.index - right.index;
+    })
+    .map(({ contract }) => contract);
+}
+
+function changedTestContractKey(contract: ChangedTestContract): string {
+  return `${contract.file}:${contract.line}:${contract.title}`;
 }
 
 function strongestEvidence(evidence: ChangeIntentEvidence[], limit: number): ChangeIntentEvidence[] {
@@ -3375,9 +3435,12 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
       lines.push(`- Changed now: \`${escapeMarkdownInline(file)}\``);
     }
     for (const contract of result.currentDelta.repositoryContracts.slice(0, 6)) {
+      const assertion = contract.assertion
+        ? `; changed assertion: ${escapeMarkdownInline(contract.assertion)}`
+        : "";
       lines.push(
         `- Repository contract awaiting review: ${escapeMarkdownInline(contract.title)} — ` +
-          `\`${escapeMarkdownInline(contract.file)}:${contract.line}\``,
+          `\`${escapeMarkdownInline(contract.file)}:${contract.line}\`${assertion}`,
       );
     }
     if (result.currentDelta.repositoryContracts.length === 0) {
@@ -3394,8 +3457,12 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
     );
     lines.push("");
     for (const contract of result.changedTestContracts.slice(0, 12)) {
+      const assertion = contract.assertion
+        ? `; changed assertion: ${escapeMarkdownInline(contract.assertion)}`
+        : "";
       lines.push(
-        `- ${escapeMarkdownInline(contract.title)} — \`${escapeMarkdownInline(contract.file)}:${contract.line}\` (${contract.framework})`,
+        `- ${escapeMarkdownInline(contract.title)} — \`${escapeMarkdownInline(contract.file)}:${contract.line}\` ` +
+          `(${contract.framework})${assertion}`,
       );
     }
     if (result.changedTestContracts.length > 12) {
