@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import {
   formatAgentQaDraft,
   formatMarkdownQaValidation,
+  generateQaDraft,
   runQaValidation,
 } from "../dist/index.js";
 
@@ -463,6 +464,63 @@ test("qa run treats repository-derived Python test paths as shell arguments", as
   await assert.rejects(readFile(path.join(root, "qamap-injected.txt"), "utf8"), /ENOENT/);
 });
 
+test("qa run replaces a missing container wrapper with the same available test runner", async (context) => {
+  const root = await makePythonComposeValidationFixture();
+  const fake = await makeFakeDockerRuntime(context, 10);
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${fake.bin}:/usr/bin:/bin`;
+  try {
+    const preview = await generateQaDraft(root, {
+      base: "main",
+      head: "HEAD",
+    });
+    assert.match(preview.route.command, /uv run pytest tests\/test_notifications\.py$/);
+    await assert.rejects(readFile(fake.log, "utf8"), { code: "ENOENT" });
+
+    const result = await runQaValidation(root, {
+      base: "main",
+      head: "HEAD",
+      timeoutMs: 15_000,
+    });
+
+    assert.equal(result.execution.status, "passed");
+    assert.equal(result.execution.performed, true);
+    assert.match(result.execution.command, /^docker compose run --rm api pytest tests\/test_notifications\.py$/);
+    assert.equal(result.route.command, result.execution.command);
+    assert.equal(result.suggestedCommands[0], result.execution.command);
+    const invocations = (await readFile(fake.log, "utf8")).trim().split("\n");
+    assert.equal(invocations.length, 2);
+    assert.match(invocations[0], /--no-deps --entrypoint sh api -lc/);
+    assert.doesNotMatch(invocations[1], /uv run/);
+    assert.match(invocations[1], /pytest tests\/test_notifications\.py/);
+  } finally {
+    process.env.PATH = previousPath;
+  }
+});
+
+test("qa run blocks when a container validation runner cannot be established", async (context) => {
+  const root = await makePythonComposeValidationFixture();
+  const fake = await makeFakeDockerRuntime(context, 20);
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${fake.bin}:/usr/bin:/bin`;
+  try {
+    const result = await runQaValidation(root, {
+      base: "main",
+      head: "HEAD",
+      timeoutMs: 15_000,
+    });
+
+    assert.equal(result.execution.status, "blocked");
+    assert.equal(result.execution.performed, false);
+    assert.match(result.execution.reason, /neither uv nor pytest was available/i);
+    const invocations = (await readFile(fake.log, "utf8")).trim().split("\n");
+    assert.equal(invocations.length, 1);
+    assert.match(invocations[0], /--no-deps --entrypoint sh api -lc/);
+  } finally {
+    process.env.PATH = previousPath;
+  }
+});
+
 test("qa run CLI emits the completed receipt as machine-readable JSON", async () => {
   const root = await makeRepositoryTestFixture({
     testBody: `
@@ -685,6 +743,87 @@ export default function Profile() {
   );
   await commitAll(root, "feat: save profile changes");
   return root;
+}
+
+async function makePythonComposeValidationFixture() {
+  const root = await makeGitRepository();
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, "tests"), { recursive: true });
+  await writeFile(
+    path.join(root, "pyproject.toml"),
+    [
+      "[project]",
+      'name = "notification-service"',
+      'version = "0.1.0"',
+      "",
+      "[tool.pytest.ini_options]",
+      'testpaths = ["tests"]',
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "Dockerfile"),
+    [
+      "FROM python:3.12-slim",
+      "RUN pip install uv",
+      'CMD ["uv", "run", "python", "-m", "src"]',
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "compose.yml"),
+    [
+      "services:",
+      "  api:",
+      "    build: .",
+      "    command: uv run python -m src",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, "src/notifications.py"), "def state():\n    return 'queued'\n");
+  await writeFile(
+    path.join(root, "tests/test_notifications.py"),
+    "def test_notification_state():\n    assert True\n",
+  );
+  await commitAll(root, "chore: create Python service fixture");
+  await git(root, "checkout", "-b", "fix/notification-state");
+  await writeFile(path.join(root, "src/notifications.py"), "def state():\n    return 'delivered'\n");
+  await writeFile(
+    path.join(root, "tests/test_notifications.py"),
+    [
+      "def test_notification_state():",
+      "    assert True",
+      "",
+      "def test_notification_delivery_state():",
+      "    assert True",
+      "",
+    ].join("\n"),
+  );
+  await commitAll(root, "fix: preserve delivery state");
+  return root;
+}
+
+async function makeFakeDockerRuntime(context, probeExitCode) {
+  const bin = await mkdtemp(path.join(os.tmpdir(), "qamap-fake-docker-"));
+  const log = path.join(bin, "invocations.log");
+  const executable = path.join(bin, "docker");
+  await writeFile(
+    executable,
+    [
+      "#!/bin/sh",
+      `printf '%s\\n' \"$*\" >> ${JSON.stringify(log)}`,
+      "case \" $* \" in",
+      `  *\" --entrypoint sh \"*) exit ${probeExitCode} ;;`,
+      "  *\" uv run \"*) exit 91 ;;",
+      "  *\" pytest \"*) exit 0 ;;",
+      "  *) exit 92 ;;",
+      "esac",
+      "",
+    ].join("\n"),
+  );
+  await chmod(executable, 0o755);
+  context.after(() => rm(bin, { recursive: true, force: true }));
+  return { bin, log };
 }
 
 async function makeGitRepository() {

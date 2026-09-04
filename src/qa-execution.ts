@@ -17,6 +17,12 @@ import {
   neutralizeInstructionLikeValues,
   neutralizedInstructionText,
 } from "./qa-contract.js";
+import {
+  composeCommandWithoutPythonWrapper,
+  composePythonProbeArgs,
+  parsePythonValidationCommand,
+} from "./validation-command.js";
+import type { ComposePythonValidationCommand } from "./validation-command.js";
 
 const defaultTimeoutMs = 5 * 60 * 1000;
 const maximumTimeoutMs = 30 * 60 * 1000;
@@ -74,21 +80,159 @@ export async function runQaValidation(
 
   const timeoutMs = normalizeTimeout(options.timeoutMs);
   const executionRoot = qaCommandWorkingDirectory(result);
-  const execution = await executeSelectedCommand(command, executionRoot, {
+  const prepared = await prepareSelectedValidationCommand(
+    result,
+    command,
+    executionRoot,
+    timeoutMs,
+  );
+  if (prepared.blockedReason) {
+    return withBlockedExecution(result, prepared.blockedReason, command);
+  }
+  const preparedResult = prepared.result;
+  const preparedCommand = preparedResult.route.command;
+  if (!preparedCommand || !preparedResult.suggestedCommands.includes(preparedCommand)) {
+    return withBlockedExecution(
+      preparedResult,
+      "QAMap could not establish an exact runnable repository validation command.",
+      preparedCommand,
+    );
+  }
+  const execution = await executeSelectedCommand(preparedCommand, executionRoot, {
     timeoutMs,
     onStdout: options.onStdout,
     onStderr: options.onStderr,
   });
   const protectedExecution = neutralizeInstructionLikeValues(execution);
   return {
-    ...result,
+    ...preparedResult,
     execution: protectedExecution.value,
     evidenceBoundary: {
-      ...result.evidenceBoundary,
+      ...preparedResult.evidenceBoundary,
       neutralizedValues:
-        result.evidenceBoundary.neutralizedValues + protectedExecution.neutralizedValues,
+        preparedResult.evidenceBoundary.neutralizedValues + protectedExecution.neutralizedValues,
     },
   };
+}
+
+interface PreparedValidationCommand {
+  result: QaDraftResult;
+  blockedReason?: string;
+}
+
+async function prepareSelectedValidationCommand(
+  result: QaDraftResult,
+  command: string,
+  cwd: string,
+  timeoutMs: number,
+): Promise<PreparedValidationCommand> {
+  const parsed = parsePythonValidationCommand(command);
+  if (!parsed || parsed.boundary !== "compose") {
+    return { result };
+  }
+  const probe = await probeComposePythonCommand(parsed, cwd, Math.min(timeoutMs, 10_000));
+  if (probe === "selected") {
+    return { result };
+  }
+  if (probe === "runner") {
+    return {
+      result: replaceSelectedValidationCommand(
+        result,
+        command,
+        composeCommandWithoutPythonWrapper(parsed),
+      ),
+    };
+  }
+  if (probe === "missing") {
+    const prerequisite = parsed.wrapper
+      ? `neither ${parsed.wrapper} nor ${parsed.runner} was available`
+      : `${parsed.runner} was not available`;
+    return {
+      result,
+      blockedReason:
+        `The selected container validation could not start because ${prerequisite} in the service image.`,
+    };
+  }
+  return {
+    result,
+    blockedReason:
+      "QAMap could not establish the selected container validation prerequisites without running project code.",
+  };
+}
+
+function replaceSelectedValidationCommand(
+  result: QaDraftResult,
+  current: string,
+  replacement: string,
+): QaDraftResult {
+  const replaceText = (value: string): string => value.replaceAll(current, replacement);
+  return {
+    ...result,
+    route: {
+      ...result.route,
+      command: replacement,
+    },
+    readiness: {
+      ...result.readiness,
+      recommendation: replaceText(result.readiness.recommendation),
+    },
+    prChecklist: result.prChecklist.map(replaceText),
+    agentHandoff: result.agentHandoff.map(replaceText),
+    suggestedCommands: [
+      replacement,
+      ...result.suggestedCommands.filter((candidate) => candidate !== current && candidate !== replacement),
+    ],
+  };
+}
+
+type ComposePythonProbeResult = "selected" | "runner" | "missing" | "unknown";
+
+async function probeComposePythonCommand(
+  command: ComposePythonValidationCommand,
+  cwd: string,
+  timeoutMs: number,
+): Promise<ComposePythonProbeResult> {
+  return new Promise((resolve) => {
+    const child = spawn("docker", composePythonProbeArgs(command), {
+      cwd,
+      stdio: ["ignore", "ignore", "ignore"],
+      detached: process.platform !== "win32",
+      env: repositoryCommandEnvironment(),
+    });
+    let spawnError = false;
+    let timedOut = false;
+    child.once("error", () => {
+      spawnError = true;
+    });
+    let forceKillTimeout: ReturnType<typeof setTimeout> | undefined;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      terminateProcessTree(child.pid, child, "SIGTERM");
+      forceKillTimeout = setTimeout(() => {
+        terminateProcessTree(child.pid, child, "SIGKILL");
+      }, 2_000);
+      forceKillTimeout.unref();
+    }, timeoutMs);
+    child.once("close", (exitCode) => {
+      clearTimeout(timeout);
+      if (forceKillTimeout) {
+        clearTimeout(forceKillTimeout);
+      }
+      if (spawnError || timedOut) {
+        resolve("unknown");
+        return;
+      }
+      if (exitCode === 0) {
+        resolve("selected");
+        return;
+      }
+      if (exitCode === 10 && command.wrapper) {
+        resolve("runner");
+        return;
+      }
+      resolve(exitCode === 20 ? "missing" : "unknown");
+    });
+  });
 }
 
 function qaCommandWorkingDirectory(result: QaDraftResult): string {

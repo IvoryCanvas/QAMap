@@ -6,6 +6,7 @@
 
 - Working-tree changes can recover a low-confidence behavior intent from an exactly related changed test contract without pulling in similarly named neighboring surfaces.
 - Changed repository test contracts remain visible beside more concrete product assertions, and review-only automation now routes to the focused repository test command when one is available.
+- Python validation no longer assumes a detected Compose wrapper exists in the local service image. Static QA falls back when Docker is unavailable, while explicit `qa run` probes only the selected runner prerequisite, uses the same framework command without the missing wrapper when possible, and otherwise returns a blocked receipt without starting project tests.
 
 ## 0.4.16 - 2026-08-29
 

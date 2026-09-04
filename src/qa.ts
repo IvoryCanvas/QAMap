@@ -55,6 +55,7 @@ import {
   generateTestPlan,
 } from "./test-plan.js";
 import type { AddedDiffEvidence } from "./test-plan.js";
+import { parsePythonValidationCommand } from "./validation-command.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 
 export interface QaDraftOptions extends Omit<E2eDraftOptions, "dryRun" | "output"> {
@@ -1068,20 +1069,47 @@ async function locallyRunnablePythonValidationCommand(
   root: string,
   command: string,
 ): Promise<string | null | undefined> {
-  const match = command.match(
-    /^(?:(uv|poetry)\s+run\s+)?(pytest|tox|ruff|mypy)(\s.*)?$/i,
-  );
-  if (!match) {
+  const parsed = parsePythonValidationCommand(command);
+  if (!parsed) {
     return undefined;
   }
-  const wrapper = match[1]?.toLowerCase();
-  const moduleName = match[2].toLowerCase();
-  const argumentsSuffix = match[3] ?? "";
-  if (!wrapper) {
+  if (parsed.boundary === "compose") {
+    if (await executableOnPath("docker")) {
+      return command;
+    }
+    return locallyRunnableHostPythonCommand(
+      root,
+      parsed.wrapper,
+      parsed.runner,
+      parsed.argumentsSuffix,
+    );
+  }
+  if (!parsed.wrapper) {
     return undefined;
   }
-  if (wrapper && await executableOnPath(wrapper)) {
+  if (await executableOnPath(parsed.wrapper)) {
     return command;
+  }
+
+  return locallyRunnableHostPythonCommand(
+    root,
+    undefined,
+    parsed.runner,
+    parsed.argumentsSuffix,
+  );
+}
+
+async function locallyRunnableHostPythonCommand(
+  root: string,
+  wrapper: "uv" | "poetry" | undefined,
+  moduleName: "pytest" | "tox" | "ruff" | "mypy",
+  argumentsSuffix: string,
+): Promise<string | null> {
+  if (wrapper && await executableOnPath(wrapper)) {
+    return `${wrapper} run ${moduleName}${argumentsSuffix}`;
+  }
+  if (await executableOnPath(moduleName)) {
+    return `${moduleName}${argumentsSuffix}`;
   }
 
   for (const python of ["python3", "python"]) {

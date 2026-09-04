@@ -2269,6 +2269,115 @@ test("generateQaDraft blocks an unavailable Python wrapper without framework evi
   }
 });
 
+test("generateQaDraft falls back from an unavailable compose runtime to declared Python validation", async (context) => {
+  const root = await makeTempRepo();
+  const fakeBin = await mkdtemp(path.join(tmpdir(), "qamap-compose-path-"));
+  const executionMarker = path.join(fakeBin, "python-was-executed");
+  const gitExecutable = await executablePathForTest("git");
+  context.after(() => rm(fakeBin, { recursive: true, force: true }));
+  await initGitRepo(root);
+  await mkdir(path.join(root, "src"), { recursive: true });
+  await mkdir(path.join(root, "tests"), { recursive: true });
+  await writeFile(
+    path.join(root, "pyproject.toml"),
+    [
+      "[project]",
+      'name = "notification-service"',
+      'version = "0.1.0"',
+      "",
+      "[tool.pytest.ini_options]",
+      'testpaths = ["tests"]',
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "Dockerfile"),
+    [
+      "FROM python:3.12-slim",
+      "RUN pip install uv",
+      'CMD ["uv", "run", "python", "-m", "src"]',
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(root, "compose.yml"),
+    [
+      "services:",
+      "  api:",
+      "    build: .",
+      "    command: uv run python -m src",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(path.join(root, "src/notifications.py"), "def state():\n    return 'queued'\n");
+  await writeFile(
+    path.join(root, "tests/test_notifications.py"),
+    "def test_notification_state():\n    assert True\n",
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "base"]);
+  await git(root, ["branch", "-M", "main"]);
+  await git(root, ["switch", "-c", "fix/notification-state"]);
+  await writeFile(path.join(root, "src/notifications.py"), "def state():\n    return 'delivered'\n");
+  await writeFile(
+    path.join(root, "tests/test_notifications.py"),
+    [
+      "def test_notification_state():",
+      "    assert True",
+      "",
+      "def test_notification_delivery_state():",
+      "    assert True",
+      "",
+    ].join("\n"),
+  );
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-m", "fix: preserve delivery state"]);
+
+  const fakePython = path.join(fakeBin, "python3");
+  await writeFile(
+    fakePython,
+    `#!/bin/sh\nprintf touched > "${executionMarker}"\nexit 0\n`,
+  );
+  const fakeGit = path.join(fakeBin, "git");
+  await writeFile(
+    fakeGit,
+    `#!/bin/sh\nexec ${JSON.stringify(gitExecutable)} "$@"\n`,
+  );
+  await chmod(fakePython, 0o755);
+  await chmod(fakeGit, 0o755);
+  const previousPath = process.env.PATH;
+  process.env.PATH = fakeBin;
+  try {
+    const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+
+    assert.equal(qa.suggestedCommands[0], "python3 -m pytest tests/test_notifications.py");
+    assert.deepEqual(qa.route, {
+      basis: "repository-validation",
+      status: "verification-ready-to-run",
+      nextAction: "run-repository-command",
+      command: "python3 -m pytest tests/test_notifications.py",
+    });
+    assert.equal(qa.suggestedCommands.some((command) => command.startsWith("docker compose ")), false);
+    await assert.rejects(readFile(executionMarker, "utf8"), { code: "ENOENT" });
+  } finally {
+    process.env.PATH = previousPath;
+  }
+});
+
+async function executablePathForTest(command) {
+  for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (!directory) continue;
+    const candidate = path.join(directory, command);
+    try {
+      const candidateStat = await stat(candidate);
+      if (candidateStat.isFile()) return candidate;
+    } catch {
+      // Continue through the current test process PATH.
+    }
+  }
+  throw new Error(`Could not locate ${command} for the isolated PATH fixture.`);
+}
+
 test("generateQaDraft scopes supported JavaScript runners to changed test evidence", async (context) => {
   const cases = [
     {

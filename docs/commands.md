@@ -117,7 +117,10 @@ For Python repositories, a declared `uv` or Poetry command is selected only when
 that wrapper is available on the local `PATH`. If it is absent, QAMap can route an
 interpreter-backed module command when both the interpreter and repository
 framework metadata are present. It inspects these facts without executing the
-interpreter; otherwise the QA route reports that a repository command is needed.
+interpreter. A Compose command also requires the Docker executable to be present;
+when it is missing, QAMap prefers the same repository-declared Python validation
+through an available local wrapper, runner, or interpreter. Otherwise the QA route
+reports that a repository command is needed.
 | `qamap doctor services/listing --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `qamap context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `qamap init .` | Create a starter `qamap.config.json`. |
@@ -130,7 +133,7 @@ Agent output names the working-directory contract as `analysisScope.commandCwd`.
 
 Pass `--workspace-root` when explicitly running another command against a package, or when overriding an ambiguous `qa` result. Package-local checks still use the package directory, while repo-level guardrails such as `AGENTS.md`, `.github/workflows`, `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md` are read from the workspace root.
 
-Suggested validation commands follow the changed ownership boundary where possible. JavaScript workspaces receive package-scoped commands. When changed tests are connected to affected behavior across multiple npm, pnpm, or Yarn packages, QAMap puts one safely narrowed file command per package first and retains each full package suite afterward. The same rule applies to working-tree analysis: an exactly related changed test can recover a low-confidence, review-required behavior contract and becomes the next repository validation when the inferred UI or device draft is not executable. Flutter and Dart repositories receive focused changed-test commands before their full test and analysis commands. Custom shell pipelines stay broad. Python repositories can receive related pytest paths through a detected Compose service and container runner. These are commands to run, never pre-recorded pass results.
+Suggested validation commands follow the changed ownership boundary where possible. JavaScript workspaces receive package-scoped commands. When changed tests are connected to affected behavior across multiple npm, pnpm, or Yarn packages, QAMap puts one safely narrowed file command per package first and retains each full package suite afterward. The same rule applies to working-tree analysis: an exactly related changed test can recover a low-confidence, review-required behavior contract and becomes the next repository validation when the inferred UI or device draft is not executable. Flutter and Dart repositories receive focused changed-test commands before their full test and analysis commands. Custom shell pipelines stay broad. Python repositories can receive related pytest paths through a detected Compose service and container runner. Plain `qa` never starts Docker to verify that recommendation. An explicit `qa run` performs a bounded, non-project-code prerequisite probe inside the selected service. If a declared `uv` or Poetry wrapper is absent but the same test runner is present, QAMap executes the same focused targets without the wrapper; if neither is available, it returns `blocked` instead of starting the tests. These are commands to run, never pre-recorded pass results.
 
 ### Short Package Scripts
 
