@@ -8,7 +8,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { generateE2eDraft, runE2eScenario } from "../dist/index.js";
-import { materializeFixtureRepo } from "./lib/fixture-repo.mjs";
+import { copyFixtureOverlay, materializeFixtureRepo } from "./lib/fixture-repo.mjs";
 
 const execFileAsync = promisify(execFile);
 const args = process.argv.slice(2);
@@ -313,7 +313,7 @@ function assertOutputIncludes(output, expected, phase) {
 async function copyLayer(fixtureRoot, relativeLayer, targetRoot) {
   const layerRoot = resolveInside(fixtureRoot, relativeLayer);
   await requireDirectory(layerRoot);
-  await fs.cp(layerRoot, targetRoot, { recursive: true, force: true });
+  await copyFixtureOverlay(layerRoot, targetRoot);
 }
 
 async function digestFiles(root, files) {

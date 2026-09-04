@@ -10,6 +10,37 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const dependencyFixtureSuffix = ".fixture";
+const dependencyManifestNames = new Set([
+  "bun.lock",
+  "bun.lockb",
+  "build.gradle",
+  "build.gradle.kts",
+  "cargo.lock",
+  "cargo.toml",
+  "composer.json",
+  "composer.lock",
+  "gemfile",
+  "gemfile.lock",
+  "go.mod",
+  "go.sum",
+  "gradle.lockfile",
+  "npm-shrinkwrap.json",
+  "package-lock.json",
+  "package.json",
+  "packages.lock.json",
+  "pipfile",
+  "pipfile.lock",
+  "pnpm-lock.yaml",
+  "poetry.lock",
+  "pom.xml",
+  "pubspec.lock",
+  "pubspec.yaml",
+  "pyproject.toml",
+  "requirements.txt",
+  "uv.lock",
+  "yarn.lock",
+]);
 
 export async function materializeFixtureRepo({
   fixtureRoot,
@@ -28,7 +59,7 @@ export async function materializeFixtureRepo({
   const repositoryRoot = path.join(tempRoot, "repo");
   await fs.mkdir(repositoryRoot, { recursive: true });
   for (const dir of baseDirs) {
-    await fs.cp(path.join(fixtureRoot, dir), repositoryRoot, { recursive: true, force: true });
+    await copyFixtureOverlay(path.join(fixtureRoot, dir), repositoryRoot);
   }
   await git(repositoryRoot, ["init", "-b", "main"]);
   await git(repositoryRoot, ["config", "user.email", identity.email]);
@@ -43,7 +74,7 @@ export async function materializeFixtureRepo({
     for (const step of baseCommits) {
       const overlayRoot = path.join(fixtureRoot, step.dir);
       if (await exists(overlayRoot)) {
-        await fs.cp(overlayRoot, repositoryRoot, { recursive: true, force: true });
+        await copyFixtureOverlay(overlayRoot, repositoryRoot);
       }
       await git(repositoryRoot, ["add", "-A"]);
       await git(repositoryRoot, ["commit", "--allow-empty", "-m", step.message]);
@@ -57,7 +88,7 @@ export async function materializeFixtureRepo({
   for (const step of commits) {
     const overlayRoot = path.join(fixtureRoot, step.dir);
     if (await exists(overlayRoot)) {
-      await fs.cp(overlayRoot, repositoryRoot, { recursive: true, force: true });
+      await copyFixtureOverlay(overlayRoot, repositoryRoot);
     }
     await git(repositoryRoot, ["add", "-A"]);
     await git(repositoryRoot, ["commit", "--allow-empty", "-m", step.message]);
@@ -65,7 +96,7 @@ export async function materializeFixtureRepo({
   for (const dir of workingTreeDirs) {
     const overlayRoot = path.join(fixtureRoot, dir);
     if (await exists(overlayRoot)) {
-      await fs.cp(overlayRoot, repositoryRoot, { recursive: true, force: true });
+      await copyFixtureOverlay(overlayRoot, repositoryRoot);
     }
   }
   return {
@@ -73,6 +104,38 @@ export async function materializeFixtureRepo({
     repositoryRoot,
     cleanup: () => fs.rm(tempRoot, { recursive: true, force: true }),
   };
+}
+
+export function isDependencyManifestName(filename) {
+  const normalized = filename.toLowerCase();
+  return dependencyManifestNames.has(normalized) ||
+    /^requirements(?:[-_.][a-z0-9_-]+)?\.(?:in|txt)$/i.test(filename) ||
+    normalized.endsWith(".csproj");
+}
+
+export async function copyFixtureOverlay(source, destination) {
+  await fs.cp(source, destination, { recursive: true, force: true });
+  await restoreDependencyFixtureManifests(destination);
+}
+
+async function restoreDependencyFixtureManifests(root) {
+  for (const entry of await fs.readdir(root, { withFileTypes: true })) {
+    const source = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      await restoreDependencyFixtureManifests(source);
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith(dependencyFixtureSuffix)) {
+      continue;
+    }
+    const restoredName = entry.name.slice(0, -dependencyFixtureSuffix.length);
+    if (!isDependencyManifestName(restoredName)) {
+      continue;
+    }
+    const target = path.join(root, restoredName);
+    await fs.copyFile(source, target);
+    await fs.unlink(source);
+  }
 }
 
 export async function exists(file) {

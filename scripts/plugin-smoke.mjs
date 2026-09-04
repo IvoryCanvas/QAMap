@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { copyFixtureOverlay } from "./lib/fixture-repo.mjs";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -97,14 +98,14 @@ try {
     repositoryRoot,
     "test/benchmarks/web-symbol-annotated-renewal",
   );
-  await cp(path.join(benchmark, "base"), fixture, { recursive: true });
+  await copyFixtureOverlay(path.join(benchmark, "base"), fixture);
   await run("git", ["init", "-b", "main"], fixture);
   await run("git", ["config", "user.name", "QAMap Smoke"], fixture);
   await run("git", ["config", "user.email", "smoke@qamap.local"], fixture);
   await run("git", ["add", "."], fixture);
   await run("git", ["commit", "-m", "test: baseline renewal behavior"], fixture);
 
-  await cp(path.join(benchmark, "head"), fixture, { recursive: true, force: true });
+  await copyFixtureOverlay(path.join(benchmark, "head"), fixture);
   await run("git", ["add", "."], fixture);
   await run("git", ["commit", "-m", "feat: prevent duplicate renewal requests"], fixture);
 
