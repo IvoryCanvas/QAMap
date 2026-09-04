@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, writeFile, cp, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -14,6 +14,7 @@ import {
   runE2eScenario,
 } from "../dist/index.js";
 import { loadConfig } from "../dist/config.js";
+import { materializeFixtureRepo } from "../scripts/lib/fixture-repo.mjs";
 
 const execFileAsync = promisify(execFile);
 const cliPath = path.resolve("dist/cli.js");
@@ -59,28 +60,30 @@ process.exit(failed ? 1 : 0);
 `;
 
 async function makeRepository(t, configOverrides = {}) {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "qamap-e2e-run-"));
-  const root = path.join(tempRoot, "repo");
-  await mkdir(root, { recursive: true });
-  await cp(path.join(fixtureRoot, "base"), root, { recursive: true });
-  await git(root, ["init", "-b", "main"]);
-  await git(root, ["config", "user.email", "e2e-run-test@qamap.local"]);
-  await git(root, ["config", "user.name", "QAMap E2E Run Test"]);
-  await git(root, ["add", "."]);
-  await git(root, ["commit", "-m", "baseline"]);
-  await git(root, ["switch", "-c", "feature/renewal"]);
-  await cp(path.join(fixtureRoot, "head"), root, { recursive: true, force: true });
-  await mkdir(path.join(root, "fixtures"), { recursive: true });
-  await writeFile(path.join(root, "fixtures", "photo.bin"), "binary-ish fixture bytes");
-  await writeFile(path.join(root, "fake-runner.mjs"), fakeRunnerSource);
-  await writeFile(path.join(root, "seed.mjs"), `
+  const materialized = await materializeFixtureRepo({
+    fixtureRoot,
+    tempPrefix: "qamap-e2e-run-",
+    branch: "feature/renewal",
+    baselineMessage: "baseline",
+    identity: {
+      email: "e2e-run-test@qamap.local",
+      name: "QAMap E2E Run Test",
+    },
+    commits: [{ dir: "head", message: "feat: guard duplicate renewal requests" }],
+    afterBaseline: async ({ repositoryRoot }) => {
+      await mkdir(path.join(repositoryRoot, "fixtures"), { recursive: true });
+      await writeFile(path.join(repositoryRoot, "fixtures", "photo.bin"), "binary-ish fixture bytes");
+      await writeFile(path.join(repositoryRoot, "fake-runner.mjs"), fakeRunnerSource);
+      await writeFile(path.join(repositoryRoot, "seed.mjs"), `
 import { promises as fs } from "node:fs";
 import path from "node:path";
 await fs.writeFile(path.join(process.env.QAMAP_FIXTURE_DIR, "seeded.txt"), "seeded\\n");
 `);
-  await writeFile(path.join(root, "runner-mode.txt"), "pass\n");
-  await git(root, ["add", "-A"]);
-  await git(root, ["commit", "-m", "feat: guard duplicate renewal requests"]);
+      await writeFile(path.join(repositoryRoot, "runner-mode.txt"), "pass\n");
+    },
+  });
+  const root = materialized.repositoryRoot;
+  t.after(materialized.cleanup);
 
   const draft = await generateE2eDraft(root, { base: "main", head: "HEAD", output: "tests/e2e" });
   const compiled = draft.files.flatMap((file) =>
@@ -101,9 +104,6 @@ await fs.writeFile(path.join(process.env.QAMAP_FIXTURE_DIR, "seeded.txt"), "seed
     ...configOverrides,
   };
   await writeFile(path.join(root, "qamap.config.json"), `${JSON.stringify(config, null, 2)}\n`);
-  t.after(async () => {
-    // Leave temp directories for the operating system; nothing else to tear down.
-  });
   return { root, scenarioId: receipt.scenarioId, title: receipt.title };
 }
 
