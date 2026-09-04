@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -75,6 +75,53 @@ test("the pull request template asks for behavior and evidence", async () => {
   ]) {
     assert.match(template, new RegExp(`^${heading}$`, "m"));
   }
+});
+
+test("pull request workflows stay read-only and pin external actions", async () => {
+  const workflowDirectory = path.join(repositoryRoot, ".github/workflows");
+  const workflowFiles = (await readdir(workflowDirectory)).filter((file) => file.endsWith(".yml"));
+
+  for (const filename of workflowFiles) {
+    const source = await readFile(path.join(workflowDirectory, filename), "utf8");
+    const workflow = parseYaml(source);
+
+    assert.ok(!source.includes("pull_request_target"), `${filename} must remain safe for fork PRs`);
+    if (workflow.on?.pull_request !== undefined) {
+      assert.equal(workflow.permissions?.contents, "read", `${filename} needs read-only contents`);
+    }
+
+    for (const match of source.matchAll(/^\s*uses:\s*(\S+)/gm)) {
+      const action = match[1];
+      if (action.startsWith("./")) {
+        continue;
+      }
+      assert.match(
+        action,
+        /^[^@\s]+@[0-9a-f]{40}$/,
+        `${filename} must pin ${action} to a full commit SHA`,
+      );
+    }
+  }
+});
+
+test("ready pull requests receive policy and dependency review checks", async () => {
+  const policy = parseYaml(
+    await readFile(path.join(repositoryRoot, ".github/workflows/pr-policy.yml"), "utf8"),
+  );
+  const dependencyReview = parseYaml(
+    await readFile(path.join(repositoryRoot, ".github/workflows/dependency-review.yml"), "utf8"),
+  );
+
+  assert.equal(policy.jobs["contribution-policy"].name, "Contribution policy");
+  assert.match(
+    policy.jobs["contribution-policy"].steps.at(-1).run,
+    /scripts\/check-pr-policy\.mjs/,
+  );
+  assert.equal(dependencyReview.jobs["dependency-review"].name, "Dependency review");
+  assert.equal(
+    dependencyReview.jobs["dependency-review"].steps.at(-1).with["fail-on-severity"],
+    "high",
+  );
 });
 
 test("entry-point documentation links resolve inside the repository", async () => {

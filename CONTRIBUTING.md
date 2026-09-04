@@ -111,6 +111,16 @@ Every pull request should:
 - complete every applicable template section
 - exclude private repository and local smoke details
 
+The `PR policy` workflow checks these conventions when a pull request is ready
+for review. It validates the title and branch prefix, required template
+sections, completed public-OSS confirmations, exactly one `type:` label, and at
+least one `area:` label. Draft pull requests are intentionally skipped so work
+in progress can remain incomplete.
+
+Dependency changes also receive a read-only vulnerability review. Neither check
+comments on the pull request, changes labels, or executes code from the pull
+request with elevated permissions.
+
 Maintainers assign `@ivory-code`, apply exactly one `type:` label plus relevant
 `area:` labels, and squash-merge after required checks pass. Contributors do not
 need elevated permissions.
