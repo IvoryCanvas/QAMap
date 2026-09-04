@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Working-tree changes can recover a low-confidence behavior intent from an exactly related changed test contract without pulling in similarly named neighboring surfaces.
+- Changed repository test contracts remain visible beside more concrete product assertions, and review-only automation now routes to the focused repository test command when one is available.
+
 ## 0.4.16 - 2026-08-29
 
 ### Added

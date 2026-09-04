@@ -890,7 +890,8 @@ function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flow
     const concreteAssertion = `Verify ${flow.languageBrief.successSignal}.`;
     const originalAssertions = [...assertionSource.assertions];
     const replaceSingleAssertion = originalAssertions.length === 1 &&
-      !isUncompiledPersistenceAssertion(flow, originalAssertions[0]);
+      !isUncompiledPersistenceAssertion(flow, originalAssertions[0]) &&
+      !isChangedTestContractAssertion(originalAssertions[0]);
     let replacedObservableAssertion = false;
     const assertions = originalAssertions.map((assertion) => {
       const replaceAssertion = replaceSingleAssertion ||
@@ -904,12 +905,19 @@ function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flow
     });
     const addedConcreteAssertion =
       !assertions.includes(concreteAssertion) &&
-      originalAssertions.every((assertion) => isUncompiledPersistenceAssertion(flow, assertion));
+      originalAssertions.every((assertion) =>
+        isUncompiledPersistenceAssertion(flow, assertion) ||
+        isChangedTestContractAssertion(assertion)
+      );
     if (addedConcreteAssertion) {
-      assertions.push(concreteAssertion);
+      if (originalAssertions.every(isChangedTestContractAssertion)) {
+        assertions.unshift(concreteAssertion);
+      } else {
+        assertions.push(concreteAssertion);
+      }
     }
     const replacedAssertions = new Set(
-      originalAssertions.filter((assertion, index) => assertion !== assertions[index]),
+      originalAssertions.filter((assertion) => !assertions.includes(assertion)),
     );
     if (replacedAssertions.size > 0 || addedConcreteAssertion) {
       if (!hasMultipleFlows) {
@@ -935,6 +943,10 @@ function refineChangeIntentAssertions(changeAnalysis: ChangeIntentAnalysis, flow
 
 function isBroadObservableIntentAssertion(assertion: string): boolean {
   return /\b(?:is visible|appears|externally observable)\.$/i.test(assertion);
+}
+
+function isChangedTestContractAssertion(assertion: string): boolean {
+  return /^Verify the changed test contract:\s*.+\.$/i.test(assertion.trim());
 }
 
 function hasConcreteAssertionEvidence(flow: E2eFlow, assertion: string): boolean {

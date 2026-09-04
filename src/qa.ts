@@ -1030,7 +1030,7 @@ function shouldRunChangedTestEvidence(flows: QaDraftFlow[], changedFiles: string
   const scenarioReceipts = flows.flatMap((flow) => flow.scenarioAutomation);
   return hasChangedRelatedTest &&
     scenarioReceipts.length > 0 &&
-    scenarioReceipts.every((receipt) => receipt.decision === "review-only");
+    scenarioReceipts.every((receipt) => receipt.status === "review-only");
 }
 
 async function buildChangedTestVerificationCommands(
