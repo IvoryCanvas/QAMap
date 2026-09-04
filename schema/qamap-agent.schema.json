@@ -468,6 +468,22 @@
         "neutralizedValues": { "type": "integer", "minimum": 0 }
       }
     },
+    "inferenceBoundary": {
+      "type": "object",
+      "description": "Authority boundary for repository-derived behavior inference. An inferred model is a reviewable draft, not a product specification.",
+      "required": [
+        "status",
+        "promotion",
+        "divergence",
+        "ambiguity"
+      ],
+      "properties": {
+        "status": { "const": "inferred-draft" },
+        "promotion": { "const": "human-required" },
+        "divergence": { "const": "human-only" },
+        "ambiguity": { "const": "stop-and-report" }
+      }
+    },
     "readiness": {
       "type": "object",
       "required": ["score", "level"],
@@ -568,7 +584,17 @@
                   "type": "string",
                   "enum": ["trigger", "condition", "action", "state-change", "side-effect", "observable-outcome"]
                 },
-                "label": { "type": "string" }
+                "label": { "type": "string" },
+                "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+                "source": {
+                  "type": "object",
+                  "description": "Strongest located repository source for this inferred lifecycle stage, when available.",
+                  "properties": {
+                    "commit": { "type": "string" },
+                    "file": { "type": "string" },
+                    "line": { "type": "integer", "minimum": 0 }
+                  }
+                }
               }
             }
           },

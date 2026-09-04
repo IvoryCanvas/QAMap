@@ -115,6 +115,7 @@ export {
   qaActionIds,
   qaCapabilityIds,
   qaEvidenceBoundary,
+  qaInferenceBoundary,
   validateQaActionRegistry,
   validateQaCapabilityRegistry,
 } from "./qa-contract.js";
@@ -408,6 +409,7 @@ export type {
   QaCapabilityResult,
   QaCapabilityStatus,
   QaEvidenceBoundary,
+  QaInferenceBoundary,
 } from "./qa-contract.js";
 export type {
   QaReasoningTrace,

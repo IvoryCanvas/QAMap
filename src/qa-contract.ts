@@ -376,6 +376,20 @@ export const qaEvidenceBoundary = {
   canEscalateAction: false,
 } as const;
 
+export interface QaInferenceBoundary {
+  status: "inferred-draft";
+  promotion: "human-required";
+  divergence: "human-only";
+  ambiguity: "stop-and-report";
+}
+
+export const qaInferenceBoundary: QaInferenceBoundary = {
+  status: "inferred-draft",
+  promotion: "human-required",
+  divergence: "human-only",
+  ambiguity: "stop-and-report",
+};
+
 const instructionLikePatterns = [
   /\b(?:system|developer|assistant)\s*(?:message|prompt|instructions?)?\s*:/i,
   /\b(?:ignore|disregard|override)\s+(?:all\s+)?(?:previous|prior|above|system|developer)\s+(?:instructions?|messages?|prompts?)\b/i,

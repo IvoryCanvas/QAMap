@@ -8870,12 +8870,20 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
 
   assert.equal(qa.noCloud, true);
   assert.equal(qa.noLlmToken, true);
+  assert.deepEqual(qa.inferenceBoundary, {
+    status: "inferred-draft",
+    promotion: "human-required",
+    divergence: "human-only",
+    ambiguity: "stop-and-report",
+  });
   assert.equal(qa.manifestPath, undefined);
   assert.equal(qa.flows.length > 0, true);
   assert.ok(qa.flows.some((flow) => flow.changedFiles.includes("src/pages/checkout/index.tsx")));
   assert.match(markdown, /QAMap QA Draft/);
   assert.match(markdown, /Local-first PR QA skill output/);
   assert.match(markdown, /## At a Glance/);
+  assert.match(markdown, /evidence-backed draft, not a product specification/);
+  assert.match(markdown, /intended-versus-broken classification requires human judgment/);
   assert.match(markdown, /- Affected behavior: /);
   assert.match(markdown, /- Verify before merge: /);
   assert.match(markdown, /visible text "Order confirmed" appears/);
@@ -8900,6 +8908,8 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.match(markdown, /No cloud\. No LLM token/);
   assert.match(text, /^QAMap QA$/m);
   assert.match(text, /Local static analysis\. No cloud or LLM token\. Product QA was not run\./);
+  assert.match(text, /Inferred behavior is a draft, not a product specification/);
+  assert.match(text, /intended versus broken remains a human decision/);
   assert.match(text, /^Change$/m);
   assert.match(text, /^Verify before merge$/m);
   assert.match(text, /REVIEW\s+.*Checkout Submit.*Order confirmed/);
@@ -8945,6 +8955,7 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   const agentOutput = formatAgentQaDraft(qa);
   const agentSummary = JSON.parse(agentOutput);
   assert.deepEqual(agentSummary.schema, { name: "qamap.qa", version: 1 });
+  assert.deepEqual(agentSummary.inferenceBoundary, qa.inferenceBoundary);
   assert.equal(agentSummary.manifest, null);
   assert.equal(agentSummary.flows.length > 0, true);
   assert.ok(agentSummary.flows[0].changedFiles.includes("src/pages/checkout/index.tsx"));
@@ -8987,6 +8998,7 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.ok(Buffer.byteLength(compactAgentOutput) <= 4 * 1024);
   assert.ok(compactAgentSummary.compaction);
   assert.deepEqual(compactAgentSummary.route, agentSummary.route);
+  assert.deepEqual(compactAgentSummary.inferenceBoundary, qa.inferenceBoundary);
   assert.deepEqual(collectSchemaViolations(agentSchema, compactAgentSummary), []);
 
   const agentCliOutput = await execFileAsync(process.execPath, [
@@ -9414,9 +9426,17 @@ test("diff-added selectors rank first and name the changed behavior", async () =
   const agentOutput = formatAgentQaDraft(qa);
   const agent = JSON.parse(agentOutput);
   const agentPinFlow = agent.flows.find((item) => /pin/i.test(item.title));
+  const inferredLifecycleStages = qa.changeAnalysis.intents.flatMap((intent) => intent.lifecycle);
+  const lifecycleStages = agent.intents.flatMap((intent) => intent.lifecycle);
   assert.match(qaMarkdown, /Behavior lifecycle: action: Pin notes to the top\./);
   assert.match(qaMarkdown, /Expected proof: Verify visible text "📌" appears\./);
   assert.ok(agent.compaction, "expected the 4KB handoff path to be exercised");
+  assert.deepEqual(agent.inferenceBoundary, qa.inferenceBoundary);
+  assert.ok(lifecycleStages.length > 0);
+  assert.ok(inferredLifecycleStages.every((stage) => stage.evidence.some((item) => item.file || item.commit)));
+  assert.ok(lifecycleStages.every((stage) => ["low", "medium", "high"].includes(stage.confidence)));
+  assert.ok(lifecycleStages.every((stage) => stage.source?.file || stage.source?.commit));
+  assert.ok(lifecycleStages.some((stage) => stage.source.file === "app/notes/page.tsx"));
   assert.ok(agentPinFlow);
   assert.match(agentPinFlow.focus.action, /pin notes to the top/i);
   assert.match(agentPinFlow.focus.assertion, /visible text "📌" appears/i);
