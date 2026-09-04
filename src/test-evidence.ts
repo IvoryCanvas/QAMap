@@ -43,7 +43,7 @@ export interface ChangedTestContract {
   file: string;
   title: string;
   line: number;
-  framework: "javascript" | "pytest" | "go" | "dart";
+  framework: "javascript" | "pytest" | "go" | "dart" | "minitest";
   assertion?: string;
 }
 
@@ -161,6 +161,11 @@ function changedAssertionSummary(
   }
   if (framework === "dart") {
     return /^expect\s*\(.+\)$/.test(candidate) ? normalizeText(candidate) : undefined;
+  }
+  if (framework === "minitest") {
+    return /^(?:assert|refute)(?:_[a-z][a-z0-9_]*)?(?:\s|\().+/i.test(candidate)
+      ? normalizeText(candidate)
+      : undefined;
   }
 
   const expectAssertion = /^expect\s*\(.+\)(?:\.(?:not|resolves|rejects))*\.(?:toBe|toEqual|toStrictEqual|toContain|toMatch|toHaveText|toHaveTextContent|toHaveValue|toHaveAttribute|toHaveLength|toHaveURL|toHaveCount|toHaveStatus|toBeVisible|toBeHidden|toBeTruthy|toBeFalsy|toBeNull|toBeDefined|toBeEnabled|toBeDisabled|toBeChecked|toThrow)\s*\(.*\)$/;
@@ -432,6 +437,14 @@ function extractTestNames(text: string): string[] {
   for (const match of text.matchAll(pythonMatcher)) {
     names.push(normalizeText(match[1].replace(/^test_/, "").replaceAll("_", " ")));
   }
+  const minitestMatcher = /^\s*test\s*(?:\(\s*)?(["'])([^"']+)\1\s*\)?\s+do\b/gm;
+  for (const match of text.matchAll(minitestMatcher)) {
+    names.push(normalizeText(match[2]));
+  }
+  const minitestMethodMatcher = /^\s*def\s+(test_[\p{L}\p{N}_]+)\b/gmu;
+  for (const match of text.matchAll(minitestMethodMatcher)) {
+    names.push(normalizeText(match[1].replace(/^test_/, "").replaceAll("_", " ")));
+  }
   return uniqueStrings(names).slice(0, 40);
 }
 
@@ -475,6 +488,28 @@ function changedTestContractsFromLine(
         line,
         framework: "dart",
         title: normalizeText(match[2]),
+      });
+    }
+    return contracts;
+  }
+
+  if (/(?:^|\/)[^/]+_test\.rb$/i.test(file)) {
+    const namedMatcher = /^\s*test\s*(?:\(\s*)?(["'])([^"']+)\1\s*\)?\s+do\b/g;
+    for (const match of text.matchAll(namedMatcher)) {
+      contracts.push({
+        file,
+        line,
+        framework: "minitest",
+        title: normalizeText(match[2]),
+      });
+    }
+    const methodMatch = text.match(/^\s*def\s+(test_[\p{L}\p{N}_]+)\b/u);
+    if (methodMatch) {
+      contracts.push({
+        file,
+        line,
+        framework: "minitest",
+        title: normalizeTestIdentifier(methodMatch[1], /^test_/),
       });
     }
     return contracts;
@@ -644,6 +679,9 @@ function detectFrameworkSignals(projectFiles: ProjectFile[], testFiles: TestSuit
   } else if (/package:test\/test\.dart/.test(text) || testFiles.some((file) => /_test\.dart$/i.test(file.path))) {
     signals.push("dart:test");
   }
+  if (/\bminitest\b/.test(text) || testFiles.some((file) => /_test\.rb$/i.test(file.path))) {
+    signals.push("minitest");
+  }
   return uniqueStrings(signals);
 }
 
@@ -656,6 +694,7 @@ function isTestLikeFile(file: string): boolean {
     /(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(file) ||
     /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(file) ||
+    /(?:^|\/)[^/]+_test\.rb$/i.test(file) ||
     /(?:^|\/)[^/]+_test\.dart$/i.test(file) ||
     /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift)$/i.test(file) ||
     /(?:^|\/)[^/]+_(?:test|spec)\.rs$/i.test(file) ||

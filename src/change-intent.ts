@@ -414,6 +414,7 @@ export async function analyzeChangeIntents(
         annotationEvidence,
         diffAnchors,
         sharedCommitFiles,
+        changedTestContracts,
       )
     )
     .filter((intent) => intent.files.length > 0);
@@ -853,6 +854,7 @@ function buildCommitIntent(
   annotationEvidence: ChangeIntentEvidence[],
   diffAnchors: ChangeIntentEvidence[],
   sharedCommitFiles: Set<string>,
+  changedTestContracts: ChangedTestContract[],
 ): ChangeIntent {
   const keywords = uniqueStrings(commits.flatMap((commit) => commit.keywords));
   const files = selectIntentFiles(
@@ -891,7 +893,15 @@ function buildCommitIntent(
   const relevantDiffAnchors = diffAnchors.filter((item) =>
     item.file && files.includes(item.file) && !sharedCommitFiles.has(item.file)
   );
-  const lifecycle = buildLifecycle(commits, relevantSignals, relevantRiskEvidence);
+  const relevantTestContracts = changedTestContracts.filter((contract) =>
+    files.some((file) => changedTestContractMatchesSource(contract, file))
+  );
+  const lifecycle = buildLifecycle(
+    commits,
+    relevantSignals,
+    relevantRiskEvidence,
+    relevantTestContracts,
+  );
   const confidence = confidenceForIntent(commits, lifecycle, relevantSignals);
   const titleCommit = selectIntentTitleCommit(commits);
   const titleTicket = titleCommit.tickets[0] ?? commits.flatMap((commit) => commit.tickets)[0];
@@ -910,6 +920,7 @@ function buildCommitIntent(
     })),
     ...selectRiskEvidence(relevantRiskEvidence, 12),
     ...relevantAnnotationEvidence,
+    ...relevantTestContracts.flatMap(changedTestContractEvidenceSet),
   ]);
   const fallbackDiffAnchors = hasActionableLocatedDiffEvidence(scenarioEvidence)
     ? []
@@ -1112,16 +1123,20 @@ function changedTestContractMatchesSource(contract: ChangedTestContract, sourceF
 }
 
 function normalizedTestOwnerPath(file: string): string {
-  return toPosixPath(file)
-    .replace(/\.(?:[cm]?[jt]sx?|py|go|dart|rs|java|kt|swift|cs)$/i, "")
+  return stripConventionalOwnerRoot(toPosixPath(file)
+    .replace(/\.(?:[cm]?[jt]sx?|py|go|dart|rb|rs|java|kt|swift|cs)$/i, "")
     .replace(/(?:[._-](?:test|tests|spec|specs)|(?:Test|Tests|Spec))$/i, "")
-    .toLowerCase();
+    .toLowerCase());
 }
 
 function normalizedSourceOwnerPath(file: string): string {
-  return toPosixPath(file)
-    .replace(/\.(?:[cm]?[jt]sx?|vue|svelte|py|go|dart|rs|java|kt|swift|cs)$/i, "")
-    .toLowerCase();
+  return stripConventionalOwnerRoot(toPosixPath(file)
+    .replace(/\.(?:[cm]?[jt]sx?|vue|svelte|py|go|dart|rb|rs|java|kt|swift|cs)$/i, "")
+    .toLowerCase());
+}
+
+function stripConventionalOwnerRoot(file: string): string {
+  return file.replace(/^(?:(?:app|lib|src|spec|test|tests)\/)+/i, "");
 }
 
 function evidenceBelongsToFile(evidence: ChangeIntentEvidence, file: string): boolean {
@@ -1233,18 +1248,145 @@ function changedTestContractEvidence(contract: ChangedTestContract): ChangeInten
   };
 }
 
+function changedTestAssertionEvidence(contract: ChangedTestContract): ChangeIntentEvidence | undefined {
+  if (!contract.assertion) {
+    return undefined;
+  }
+  return {
+    kind: "diff",
+    value: contract.assertion,
+    sourceRole: "test",
+    file: contract.file,
+    symbol: "changed-test-assertion",
+    relation: "supporting",
+    side: "head",
+    startLine: contract.line,
+    endLine: contract.line,
+  };
+}
+
+function changedTestContractEvidenceSet(contract: ChangedTestContract): ChangeIntentEvidence[] {
+  return [changedTestContractEvidence(contract), changedTestAssertionEvidence(contract)]
+    .filter((item): item is ChangeIntentEvidence => item !== undefined);
+}
+
 function lifecycleFromChangedTestContracts(contracts: ChangedTestContract[]): BehaviorLifecycleStage[] {
-  return contracts.slice(0, 3).map((contract) => {
-    const evidence = changedTestContractEvidence(contract);
-    return createLifecycleStage(
-      "observable-outcome",
-      `Changed test contract: ${contract.title}.`,
-      "low",
-      [evidence],
+  return contracts.slice(0, 3).flatMap((contract) => {
+    const contractEvidence = changedTestContractEvidence(contract);
+    const assertionEvidence = changedTestAssertionEvidence(contract);
+    if (!assertionEvidence || !isContractBearingChangedAssertion(assertionEvidence.value)) {
+      return [createLifecycleStage(
+        "observable-outcome",
+        `Changed test contract: ${contract.title}.`,
+        "low",
+        [contractEvidence],
+        [contract.file],
+        "changed-test-contract",
+      )];
+    }
+    const evidence = [contractEvidence, assertionEvidence];
+    const parsed = parseChangedTestLifecycle(contract.title);
+    const stages: BehaviorLifecycleStage[] = [];
+    if (parsed.context) {
+      stages.push(createLifecycleStage(
+        parsed.context.kind,
+        parsed.context.label,
+        "medium",
+        evidence,
+        [contract.file],
+        "changed-test-contract",
+      ));
+    }
+    stages.push(createLifecycleStage(
+      parsed.behavior.kind,
+      parsed.behavior.label,
+      "medium",
+      evidence,
       [contract.file],
       "changed-test-contract",
-    );
+    ));
+    return stages;
   });
+}
+
+function isContractBearingChangedAssertion(assertion: string): boolean {
+  const normalized = assertion.trim();
+  if (
+    /\.(?:toBeVisible|toBeHidden|toHaveText|toHaveTextContent|toHaveValue|toHaveAttribute|toHaveURL|toHaveCount|toHaveStatus|toBeEnabled|toBeDisabled|toBeChecked)\s*\(/.test(normalized) ||
+    /\bfind\.(?:text|byText|byValue|byLabelText|byRole)\s*\(/i.test(normalized) ||
+    /\b(?:assert|refute)_(?:response|redirected_to|select|selector|text|dom|field|button|link|email)\b/i.test(normalized)
+  ) {
+    return true;
+  }
+  return /(?:\.|\b)(?:status|status_code|state|label|message|error|value|count|length)\b/i.test(normalized) &&
+    /^(?:expect\s*\(|assert\b|assert\.|assert_|refute\b|refute_|(?:assert|require)\.)/i.test(normalized);
+}
+
+function parseChangedTestLifecycle(title: string): {
+  behavior: { kind: BehaviorLifecycleStageKind; label: string };
+  context?: { kind: BehaviorLifecycleStageKind; label: string };
+} {
+  const normalized = stripTerminalPunctuation(title.trim());
+  const contextMatch = normalized.match(/^(.*?)(?:\s+)(after|before|when|once|upon|while|with|without)\s+(.+)$/i);
+  const behaviorText = contextMatch?.[1]?.trim() || normalized;
+  const context = contextMatch
+    ? {
+        kind: /^(?:while|with|without)$/i.test(contextMatch[2])
+          ? "condition" as const
+          : "trigger" as const,
+        label: sentenceLabel(`${contextMatch[2]} ${contextMatch[3]}`),
+      }
+    : undefined;
+  const normalizedBehavior = normalizeChangedTestBehavior(behaviorText);
+  return {
+    behavior: normalizedBehavior ?? {
+      kind: "observable-outcome",
+      label: `Changed test contract: ${sentenceLabel(behaviorText)}`,
+    },
+    context,
+  };
+}
+
+function normalizeChangedTestBehavior(
+  value: string,
+): { kind: BehaviorLifecycleStageKind; label: string } | undefined {
+  const patterns: Array<{
+    pattern: RegExp;
+    kind: BehaviorLifecycleStageKind;
+    replacement: string;
+  }> = [
+    { pattern: /^shows?\b/i, kind: "observable-outcome", replacement: "Show" },
+    { pattern: /^displays?\b/i, kind: "observable-outcome", replacement: "Show" },
+    { pattern: /^renders?\b/i, kind: "observable-outcome", replacement: "Show" },
+    { pattern: /^exposes?\b/i, kind: "observable-outcome", replacement: "Expose" },
+    { pattern: /^reports?\b/i, kind: "observable-outcome", replacement: "Observe" },
+    { pattern: /^returns?\b/i, kind: "observable-outcome", replacement: "Observe" },
+    { pattern: /^keeps?\b/i, kind: "observable-outcome", replacement: "Keep" },
+    { pattern: /^preserves?\b/i, kind: "observable-outcome", replacement: "Keep" },
+    { pattern: /^rejects?\b/i, kind: "observable-outcome", replacement: "Reject" },
+    { pattern: /^prevents?\b/i, kind: "observable-outcome", replacement: "Prevent" },
+    { pattern: /^clears?\b/i, kind: "state-change", replacement: "Clear" },
+    { pattern: /^restores?\b/i, kind: "state-change", replacement: "Restore" },
+    { pattern: /^updates?\b/i, kind: "state-change", replacement: "Update" },
+    { pattern: /^persists?\b/i, kind: "state-change", replacement: "Persist" },
+    { pattern: /^saves?\b/i, kind: "state-change", replacement: "Save" },
+    { pattern: /^types?\b/i, kind: "action", replacement: "Type" },
+    { pattern: /^pastes?\b/i, kind: "action", replacement: "Paste" },
+    { pattern: /^submits?\b/i, kind: "action", replacement: "Submit" },
+    { pattern: /^clicks?\b/i, kind: "action", replacement: "Click" },
+    { pattern: /^taps?\b/i, kind: "action", replacement: "Tap" },
+    { pattern: /^selects?\b/i, kind: "action", replacement: "Select" },
+    { pattern: /^opens?\b/i, kind: "action", replacement: "Open" },
+    { pattern: /^retries?\b/i, kind: "action", replacement: "Retry" },
+  ];
+  const matched = patterns.find(({ pattern }) => pattern.test(value));
+  if (!matched) {
+    return undefined;
+  }
+  return {
+    kind: matched.kind,
+    label: sentenceLabel(value.replace(matched.pattern, matched.replacement)),
+  };
 }
 
 function diffIntentSubject(
@@ -1312,6 +1454,7 @@ function buildLifecycle(
   commits: ParsedCommit[],
   signals: CodeBehaviorSignal[],
   roleEvidence: ChangeIntentEvidence[],
+  testContracts: ChangedTestContract[] = [],
 ): BehaviorLifecycleStage[] {
   const stages: BehaviorLifecycleStage[] = [];
   for (const commit of commits) {
@@ -1367,6 +1510,7 @@ function buildLifecycle(
   stages.push(...lifecycleFromDeliveryIntegrityEvidence(roleEvidence.filter(isDeliveryIntegrityEvidence)));
   stages.push(...lifecycleFromRuntimeActivationEvidence(roleEvidence.filter(isRuntimeActivationEvidence)));
   stages.push(...lifecycleFromPerformanceEvidence(roleEvidence.filter(isPerformanceEvidence)));
+  stages.push(...lifecycleFromChangedTestContracts(testContracts));
 
   return limitLifecycleStages(removeRedundantOutcomeTimingTriggers(stages));
 }
@@ -5366,13 +5510,34 @@ function orderLifecycleStages(stages: BehaviorLifecycleStage[]): BehaviorLifecyc
 }
 
 function uniqueLifecycleStages(stages: BehaviorLifecycleStage[]): BehaviorLifecycleStage[] {
-  const seen = new Set<string>();
-  return stages.filter((stage) => {
+  const unique: BehaviorLifecycleStage[] = [];
+  const indexByKey = new Map<string, number>();
+  for (const stage of stages) {
     const key = `${stage.kind}:${stripTerminalPunctuation(stage.label).toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex === undefined) {
+      indexByKey.set(key, unique.length);
+      unique.push(stage);
+      continue;
+    }
+    const existing = unique[existingIndex];
+    unique[existingIndex] = {
+      ...existing,
+      confidence: strongerLifecycleConfidence(existing.confidence, stage.confidence),
+      evidence: uniqueEvidence([...existing.evidence, ...stage.evidence]),
+      files: uniqueStrings([...existing.files, ...stage.files]),
+      symbol: existing.symbol ?? stage.symbol,
+    };
+  }
+  return unique;
+}
+
+function strongerLifecycleConfidence(
+  left: ChangeIntentConfidence,
+  right: ChangeIntentConfidence,
+): ChangeIntentConfidence {
+  const rank: Record<ChangeIntentConfidence, number> = { low: 0, medium: 1, high: 2 };
+  return rank[right] > rank[left] ? right : left;
 }
 
 function uniqueCodeSignals(signals: CodeBehaviorSignal[]): CodeBehaviorSignal[] {
@@ -5458,6 +5623,12 @@ function stripTerminalPunctuation(value: string): string {
 
 function assertionForStage(stage: BehaviorLifecycleStage): string {
   const label = stripTerminalPunctuation(stage.label);
+  const changedTestAssertion = stage.evidence.find((item) =>
+    item.symbol === "changed-test-assertion"
+  )?.value;
+  if (changedTestAssertion) {
+    return `Verify repository-authored assertion \`${changedTestAssertion}\`.`;
+  }
   const changedTestContract = label.match(/^Changed test contract:\s*(.+)$/i)?.[1];
   if (changedTestContract) {
     return `Verify the changed test contract: ${changedTestContract}.`;

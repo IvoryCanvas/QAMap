@@ -946,7 +946,9 @@ function isBroadObservableIntentAssertion(assertion: string): boolean {
 }
 
 function isChangedTestContractAssertion(assertion: string): boolean {
-  return /^Verify the changed test contract:\s*.+\.$/i.test(assertion.trim());
+  return /^(?:Verify the changed test contract:\s*.+|Verify repository-authored assertion\s+`.+`)\.$/i.test(
+    assertion.trim(),
+  );
 }
 
 function hasConcreteAssertionEvidence(flow: E2eFlow, assertion: string): boolean {
@@ -6402,7 +6404,19 @@ function intentFlowKind(intent: ChangeIntentAnalysis["intents"][number], project
   if (/\b(?:state|store|persist|sync|toggle|cache|session|notification|reminder)\b/.test(searchable)) {
     return "state";
   }
-  if (intent.lifecycle.some((stage) => stage.kind === "observable-outcome") && projectType !== "api-service") {
+  const hasProductObservableOutcome = intent.lifecycle.some((stage) =>
+    stage.kind === "observable-outcome" &&
+    stage.evidence.some((evidence) => evidence.sourceRole !== "test")
+  );
+  const uiCapableProject = projectType === "web" ||
+    projectType === "expo-react-native" ||
+    projectType === "react-native" ||
+    projectType === "flutter";
+  if (
+    intent.lifecycle.some((stage) => stage.kind === "observable-outcome") &&
+    projectType !== "api-service" &&
+    (uiCapableProject || hasProductObservableOutcome)
+  ) {
     return "ui";
   }
   return "domain";

@@ -38,10 +38,13 @@ evidence from both sides.
 Repository evidence is also more useful across toolchains. Flutter and Dart
 tests participate in project detection and focused validation, and Python
 Compose commands fall back only when the same repository-declared runner is
-available. Changed tests can recover a review-required working-tree intent and
-retain a bounded explicit assertion. The validation command's selected contract
-survives the 4 KB agent handoff, omitted contracts remain counted, and static
-analysis never reports those tests as executed.
+available. Changed tests can recover a review-required working-tree intent,
+connect to a commit-backed product lifecycle, and retain a bounded explicit
+assertion. Contract-bearing assertions can strengthen lifecycle evidence while
+implementation-only existence checks remain supporting test evidence. The
+validation command's selected contract survives the 4 KB agent handoff, omitted
+contracts remain counted, and static analysis never reports those tests as
+executed.
 
 | Gate | Candidate result |
 | --- | --- |
@@ -742,7 +745,7 @@ The matrix below is public, fixture-backed evidence from the repository test sui
 | Test-light project | `generateE2ePlan builds a bootstrap plan for projects without tests`; `generateE2ePlan infers Playwright base URLs from dev scripts`; `generateE2eDraft creates a fallback smoke draft without changed files` | Required bootstrap steps for runner setup, opt-in `qamap e2e setup`, generated setup output that includes the first changed-flow draft file, fixture/mock data, testability, and validation evidence before generated drafts are treated as regression coverage. |
 | API-dependent UI flow | `generateE2ePlan flags missing mock fixtures for API-dependent UI flows` | Playwright-compatible UI flow plus fixture/mock readiness actions, inferred endpoint hints, and route-fulfillment scaffold slots for success, empty, unauthorized, timeout, and server-error responses. |
 | Existing test evidence | `generateE2ePlan evaluates existing test suite coverage evidence`; `generateE2ePlan keeps generic test filenames from overmatching unrelated services` | Coverage evidence rows that distinguish covered, partial, and missing targets without matching unrelated generic test filenames. |
-| Changed test contracts | `collectChangedTestContracts preserves non-Latin pytest contracts from diff evidence`; `collectChangedTestContracts keeps only explicit single-line assertions`; `collectChangedTestContracts bounds assertion evidence across zero-context hunks`; `generateE2ePlan treats test-only changes as evidence verification, not product journeys` | Supported explicit assertions near a changed test declaration are preserved as bounded source evidence; arbitrary, distant, and incomplete expressions are omitted; the selected route contract ranks first and survives 4 KB compaction with an omitted count; every discovered contract remains `not-run` until separately executed. |
+| Changed test contracts | `collectChangedTestContracts preserves non-Latin pytest contracts from diff evidence`; `collectChangedTestContracts keeps only explicit single-line assertions`; `commit-backed intents promote changed test timing and assertions as repository contracts`; `Rails-style Minitest contracts connect to their changed source owner`; `collectChangedTestContracts bounds assertion evidence across zero-context hunks`; `generateE2ePlan treats test-only changes as evidence verification, not product journeys` | JavaScript, pytest, Go, Dart, and Minitest declarations preserve bounded source evidence. Exact related contracts connect to working-tree and commit-backed intents; contract-bearing assertions strengthen matching lifecycle stages, while implementation-only existence checks remain supporting evidence. Arbitrary, distant, and incomplete expressions are omitted; the selected route contract ranks first and survives 4 KB compaction with an omitted count; every discovered contract remains `not-run` until separately executed. |
 | Evidence-only changes | `generateE2ePlan treats test-only changes as evidence verification, not product journeys`; `generateE2ePlan treats docs-only changes as documentation verification`; `generateE2ePlan treats generated-only changes as generated artifact verification` | Test-only, docs-only, and generated-output-only branches produce maintainer-oriented evidence checklists instead of product journeys inferred from filenames such as `admin-primary-journey.spec.ts` or generated API clients. |
 
 See [E2E output examples](e2e-output-examples.md) for the kind of plan and draft snippets users should see from the current release.

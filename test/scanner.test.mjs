@@ -150,6 +150,17 @@ test("collectChangedTestContracts keeps only explicit single-line assertions", (
         { line: 42, text: "});" },
       ],
     }],
+    "test/services/status_service_test.rb": [{
+      file: "test/services/status_service_test.rb",
+      startLine: 50,
+      endLine: 54,
+      hunkHeader: "@@ -49,0 +50,5 @@",
+      lines: [
+        { line: 50, text: 'test "shows ready state after retry" do' },
+        { line: 51, text: '  assert_equal "Ready", result.label' },
+        { line: 52, text: "end" },
+      ],
+    }],
   });
 
   assert.deepEqual(contracts, [
@@ -180,6 +191,13 @@ test("collectChangedTestContracts keeps only explicit single-line assertions", (
       line: 40,
       framework: "dart",
       assertion: "expect(find.text('Saved'), findsOneWidget)",
+    },
+    {
+      file: "test/services/status_service_test.rb",
+      title: "shows ready state after retry",
+      line: 50,
+      framework: "minitest",
+      assertion: 'assert_equal "Ready", result.label',
     },
   ]);
 });

@@ -83,6 +83,12 @@ test("working-tree test contracts recover weak product intent without neighborin
   assert.equal(intent.reviewRequired, true);
   assert.deepEqual(intent.commits, []);
   assert.ok(intent.files.includes("src/preferences/PreferenceStatus.test.mjs"));
+  assert.equal(
+    intent.lifecycle.some((stage) =>
+      stage.evidence.some((item) => item.symbol === "changed-test-assertion")
+    ),
+    false,
+  );
   assert.ok(intent.lifecycle.some((stage) =>
     stage.kind === "observable-outcome" && /shows the saved preference after reload/i.test(stage.label)
   ));
