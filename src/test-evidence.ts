@@ -43,7 +43,7 @@ export interface ChangedTestContract {
   file: string;
   title: string;
   line: number;
-  framework: "javascript" | "pytest" | "go";
+  framework: "javascript" | "pytest" | "go" | "dart";
 }
 
 export interface CoverageEvidence {
@@ -320,7 +320,7 @@ function importsFlowFile(testFile: string, imports: string[], flowFiles: string[
 
 function normalizePathForMatch(value: string): string {
   return value
-    .replace(/\.(?:[cm]?[jt]sx?|vue|svelte|py|go|rs|java|kt|swift)$/i, "")
+    .replace(/\.(?:[cm]?[jt]sx?|vue|svelte|py|go|rs|java|kt|swift|dart)$/i, "")
     .replace(/^\.\//, "")
     .replace(/\.\.\//g, "")
     .replaceAll(".", "/")
@@ -329,7 +329,7 @@ function normalizePathForMatch(value: string): string {
 
 function extractTestNames(text: string): string[] {
   const names: string[] = [];
-  const matcher = /\b(?:describe|it|test)\s*(?:\.\w+)?\s*\(\s*(["'`])([^"'`]+)\1/g;
+  const matcher = /\b(?:describe|it|test|testWidgets)\s*(?:\.\w+)?\s*\(\s*(["'`])([^"'`]+)\1/g;
   for (const match of text.matchAll(matcher)) {
     names.push(normalizeText(match[2]));
   }
@@ -367,6 +367,19 @@ function changedTestContractsFromLine(
         line,
         framework: "go",
         title: normalizeTestIdentifier(match[1], /^Test/),
+      });
+    }
+    return contracts;
+  }
+
+  if (/(?:^|\/)[^/]+_test\.dart$/i.test(file)) {
+    const matcher = /^\s*(?:test|testWidgets)\s*\(\s*(["'])([^"']+)\1/g;
+    for (const match of text.matchAll(matcher)) {
+      contracts.push({
+        file,
+        line,
+        framework: "dart",
+        title: normalizeText(match[2]),
       });
     }
     return contracts;
@@ -415,6 +428,10 @@ function extractImports(text: string): string[] {
         imports.push(modulePath);
       }
     }
+  }
+  const dartImportMatcher = /^import\s+["']([^"']+)["']/gm;
+  for (const match of text.matchAll(dartImportMatcher)) {
+    imports.push(match[1]);
   }
   return uniqueStrings(imports).slice(0, 80);
 }
@@ -527,6 +544,11 @@ function detectFrameworkSignals(projectFiles: ProjectFile[], testFiles: TestSuit
   if (/\.maestro\//.test(testFiles.map((file) => file.path).join("\n"))) {
     signals.push("maestro");
   }
+  if (/package:flutter_test\/flutter_test\.dart|sdk:\s*flutter\b/.test(text)) {
+    signals.push("flutter");
+  } else if (/package:test\/test\.dart/.test(text) || testFiles.some((file) => /_test\.dart$/i.test(file.path))) {
+    signals.push("dart:test");
+  }
   return uniqueStrings(signals);
 }
 
@@ -539,6 +561,7 @@ function isTestLikeFile(file: string): boolean {
     /(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(file) ||
     /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(file) ||
+    /(?:^|\/)[^/]+_test\.dart$/i.test(file) ||
     /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift)$/i.test(file) ||
     /(?:^|\/)[^/]+_(?:test|spec)\.rs$/i.test(file) ||
     /(?:^|\/)\.maestro\/[^/]+\.ya?ml$/i.test(file)

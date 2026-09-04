@@ -4630,6 +4630,9 @@ function formatProjectType(type: E2eProjectType): string {
   if (type === "react-native") {
     return "React Native";
   }
+  if (type === "flutter") {
+    return "Flutter";
+  }
   if (type === "web") {
     return "Web";
   }

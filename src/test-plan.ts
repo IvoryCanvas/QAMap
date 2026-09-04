@@ -299,7 +299,7 @@ function buildStateItem(files: string[]): TestPlanItem | undefined {
 
 function buildConfigItem(files: string[]): TestPlanItem | undefined {
   const matched = files.filter((file) =>
-    /(?:package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|docker|env)/i.test(
+    /(?:package\.json|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|pubspec\.ya?ml|pyproject\.toml|requirements\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|pom\.xml|build\.gradle|gradle\.properties|vite|webpack|babel|tsconfig|next\.config|app\.config|eas\.json|docker|env)/i.test(
       file,
     ),
   );
@@ -345,11 +345,67 @@ async function discoverSuggestedCommands(
   const commandGroups = await Promise.all([
     discoverJavaScriptCommands(root, workspaceRoot, changedFiles),
     discoverPythonCommands(root, changedFiles),
+    discoverDartCommands(root, changedFiles),
     discoverGoCommands(root),
     discoverRustCommands(root),
     discoverJvmCommands(root),
   ]);
   return uniqueCommands(commandGroups.flat());
+}
+
+async function discoverDartCommands(
+  root: string,
+  changedFiles: TestPlanChangedFile[],
+): Promise<string[]> {
+  const pubspecText = await readTextIfExists(path.join(root, "pubspec.yaml")) ??
+    await readTextIfExists(path.join(root, "pubspec.yml"));
+  if (!pubspecText) {
+    return [];
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    const value = YAML.parse(pubspecText);
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return [];
+    }
+    parsed = value as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+
+  const isFlutter = hasFlutterSdkDependency(parsed) || isRecordValue(parsed.flutter);
+  const testCommand = isFlutter ? "flutter test" : "dart test";
+  const analyzeCommand = isFlutter ? "flutter analyze" : "dart analyze";
+  const changedTests = changedFiles
+    .map((file) => file.path)
+    .filter((file) => /(?:^|\/)[^/]+_test\.dart$/i.test(file));
+  const hasDartChange = changedFiles.some((file) => /\.dart$/i.test(file.path));
+  if (!hasDartChange && changedTests.length === 0) {
+    return [];
+  }
+
+  return uniqueCommands([
+    ...(changedTests.length > 0
+      ? [`${testCommand} ${changedTests.map(shellArgument).join(" ")}`]
+      : []),
+    testCommand,
+    analyzeCommand,
+  ]);
+}
+
+function hasFlutterSdkDependency(pubspec: Record<string, unknown>): boolean {
+  return [pubspec.dependencies, pubspec.dev_dependencies].some((section) => {
+    if (!isRecordValue(section)) {
+      return false;
+    }
+    const flutter = section.flutter;
+    return isRecordValue(flutter) && flutter.sdk === "flutter";
+  });
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 async function discoverJavaScriptCommands(
@@ -1207,6 +1263,7 @@ function isTestLikeFile(filePath: string): boolean {
     /(\.|-)(test|spec)\.[cm]?[jt]sx?$/i.test(filePath) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(filePath) ||
     /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(filePath) ||
+    /(?:^|\/)[^/]+_test\.dart$/i.test(filePath) ||
     /(?:^|\/)[^/]+(?:Test|Tests|Spec)\.(?:java|kt|cs|swift)$/i.test(filePath) ||
     /(?:^|\/)[^/]+_(?:test|spec)\.rs$/i.test(filePath) ||
     /(?:^|\/)\.maestro\/[^/]+\.ya?ml$/i.test(filePath)

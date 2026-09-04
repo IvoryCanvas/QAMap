@@ -222,7 +222,8 @@ function isConfigurationPath(file: string): boolean {
   return /(?:^|\/)\.github(?:\/|$)/i.test(file) ||
     /(?:^|\/)(?:settings|config)(?:\/|$).+\.py$/i.test(file) ||
     /(?:^|\/)(?:android|ios)(?:\/|$)/i.test(file) && /(?:gradle|plist|pbxproj|xcconfig)$/i.test(basename) ||
-    /^(?:package\.json|tsconfig(?:\.[^.]+)?\.json|jsconfig\.json|app\.json|eas\.json|pyproject\.toml|Cargo\.toml|go\.mod)$/i.test(basename) ||
+    /^(?:AndroidManifest\.xml)$/i.test(basename) ||
+    /^(?:package\.json|tsconfig(?:\.[^.]+)?\.json|jsconfig\.json|app\.json|eas\.json|pubspec\.ya?ml|pyproject\.toml|Cargo\.toml|go\.mod)$/i.test(basename) ||
     /(?:^|[.-])config\.[^/]+$/i.test(basename) ||
     /^(?:Dockerfile|Makefile|\.env(?:\..+)?)$/i.test(basename);
 }

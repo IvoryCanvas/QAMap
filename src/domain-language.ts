@@ -236,7 +236,7 @@ async function buildFullTextBehaviorFallbacks(
     if (fallbacks.has(candidate.name)) {
       continue;
     }
-    const uiFiles = candidate.files.filter((file) => /\.(?:tsx|jsx|vue|svelte)$/i.test(file)).slice(0, 2);
+    const uiFiles = candidate.files.filter((file) => /\.(?:tsx|jsx|vue|svelte|dart)$/i.test(file)).slice(0, 2);
     if (uiFiles.length === 0) {
       continue;
     }
@@ -416,7 +416,7 @@ function behaviorLabelFromAddedText(addedText: string | undefined, domainTerm: s
 }
 
 function behaviorLabelFromPath(file: string, domainTerm: string): string | undefined {
-  const basename = path.basename(file).replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|json|ya?ml|md|py|go|rs|kt|java|swift|cs)$/i, "");
+  const basename = path.basename(file).replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|json|ya?ml|md|py|go|rs|kt|java|swift|cs|dart)$/i, "");
   const domainTokens = behaviorTokensFromText(domainTerm);
   const tokens = behaviorTokensFromText(basename)
     .filter((token) => !domainTokens.some((domainToken) => sameToken(domainToken, token)))
@@ -632,7 +632,7 @@ function normalizeSegment(value: string | undefined): string | undefined {
     return undefined;
   }
   const normalized = value
-    .replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|json|ya?ml|md|py|go|rs|kt|java|swift|cs|png|jpe?g|webp|gif|svg)$/i, "")
+    .replace(/\.(?:d\.)?(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|json|ya?ml|md|py|go|rs|kt|java|swift|cs|dart|png|jpe?g|webp|gif|svg)$/i, "")
     .replace(/(?:Api|Service|Controller|Component|Screen)$/g, "")
     .replace(/^_+|_+$/g, "")
     .trim();
@@ -680,7 +680,10 @@ function isDomainLanguageFile(file: string): boolean {
 }
 
 function isUiImplementationFile(file: string): boolean {
-  return /\.(?:tsx|jsx|vue|svelte)$/i.test(file);
+  return /\.(?:tsx|jsx|vue|svelte)$/i.test(file) ||
+    (/\.dart$/i.test(file) &&
+      (/(?:^|\/)(?:screens?|pages?|views?|widgets?|presentation|ui|components?)\//i.test(file) ||
+        /(?:screen|page|view|widget)\.dart$/i.test(file)));
 }
 
 function isTestLikeFile(file: string): boolean {
@@ -688,7 +691,7 @@ function isTestLikeFile(file: string): boolean {
     /(?:^|\/)(?:__tests__|tests?|specs?|e2e)\//i.test(file) ||
     /(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(file) ||
-    /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(file)
+    /(?:^|\/)[^/]+_test\.(?:py|go|dart)$/i.test(file)
     || /(?:^|\/)\.maestro\/[^/]+\.ya?ml$/i.test(file)
   );
 }
