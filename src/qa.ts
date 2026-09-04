@@ -32,12 +32,14 @@ import {
   neutralizeInstructionLikeValues,
   qaActionContract,
   qaEvidenceBoundary,
+  qaInferenceBoundary,
 } from "./qa-contract.js";
 import type {
   QaActionContract,
   QaActionId,
   QaCapabilityResult,
   QaEvidenceBoundary,
+  QaInferenceBoundary,
 } from "./qa-contract.js";
 import { buildQaReasoningTraces, summarizeQaTraceEvidence } from "./qa-trace.js";
 import type {
@@ -99,6 +101,7 @@ export interface QaDraftResult {
   route: QaRouteDecision;
   action: QaActionContract;
   evidenceBoundary: QaEvidenceBoundary;
+  inferenceBoundary: QaInferenceBoundary;
   readiness: QaReadinessSummary;
   flows: QaDraftFlow[];
   missingEvidence: QaDraftMissingEvidence[];
@@ -575,6 +578,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
       ...qaEvidenceBoundary,
       neutralizedValues: 0,
     },
+    inferenceBoundary: qaInferenceBoundary,
     readiness,
     flows: annotateExecutableScenarios(flows, options.config, draft.runner),
     missingEvidence,
@@ -601,6 +605,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
       ...qaEvidenceBoundary,
       neutralizedValues: protectedResult.neutralizedValues,
     },
+    inferenceBoundary: qaInferenceBoundary,
   };
 }
 
@@ -1721,6 +1726,7 @@ function buildAgentQaSummary(
     capabilities: compactAgentCapabilities(result.capabilities),
     action: compactAgentAction(result.action),
     evidenceBoundary: result.evidenceBoundary,
+    inferenceBoundary: result.inferenceBoundary,
     readiness: {
       score: result.readiness.score,
       level: result.readiness.level,
@@ -1799,10 +1805,15 @@ function buildAgentQaSummary(
       reviewRequired: intent.reviewRequired,
       evidence: intent.evidence.slice(0, 1).map((item) => truncateForAgent(item.value, 100)),
       sources: strongestEvidence(intent.evidence, 1).map(formatAgentEvidenceSource),
-      lifecycle: selectAgentLifecycleStages(intent.lifecycle.map((stage) => ({
-        phase: stage.kind,
-        label: truncateForAgent(stage.label, 120),
-      })), 6),
+      lifecycle: selectAgentLifecycleStages(intent.lifecycle.map((stage) => {
+        const source = strongestLocatedEvidence(stage.evidence, 1)[0];
+        return {
+          phase: stage.kind,
+          label: truncateForAgent(stage.label, 120),
+          confidence: stage.confidence,
+          source: source ? formatAgentLifecycleEvidenceSource(source) : undefined,
+        };
+      }), 6),
       scenarioCount: intent.scenarios.length,
       omittedScenarioCount: Math.max(0, intent.scenarios.length - 2),
       scenarios: intent.scenarios.slice(0, 2).map((scenario) => {
@@ -1918,6 +1929,7 @@ interface AgentSummaryShape {
   capabilities: AgentCapabilityShape[];
   action: AgentActionShape;
   evidenceBoundary: QaEvidenceBoundary;
+  inferenceBoundary: QaInferenceBoundary;
   context: AgentContextContract;
   currentDelta?: {
     scope?: unknown;
@@ -2222,6 +2234,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
       : { capabilities: compactAgentCapabilities(summary.capabilities) }),
     action: compactAgentAction(summary.action),
     evidenceBoundary: summary.evidenceBoundary,
+    inferenceBoundary: summary.inferenceBoundary,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     evidenceSummary: summary.evidenceSummary,
@@ -2321,6 +2334,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     route: summary.route,
     automation: summary.automation,
     evidenceBoundary: summary.evidenceBoundary,
+    inferenceBoundary: summary.inferenceBoundary,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     evidenceSummary: summary.evidenceSummary,
@@ -2392,6 +2406,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     execution: summary.execution,
     route: summary.route,
     automation: summary.automation,
+    inferenceBoundary: summary.inferenceBoundary,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     evidenceSummary: summary.evidenceSummary,
@@ -2495,7 +2510,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
       id: scenario.id,
       priority: scenario.priority,
       kind: scenario.kind,
-      title: truncateForAgent(String(scenario.title ?? ""), 45),
+      title: truncateForAgent(String(scenario.title ?? ""), 70),
       confidence: scenario.confidence,
       sources: scenario.sources?.slice(0, 1).map((source) => {
         if (!source || typeof source !== "object") return source;
@@ -2542,6 +2557,7 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     execution: summary.execution,
     route: summary.route,
     automation: summary.automation,
+    inferenceBoundary: summary.inferenceBoundary,
     readiness: summary.readiness,
     scenarioCoverage: summary.scenarioCoverage,
     evidenceSummary: summary.evidenceSummary,
@@ -2584,6 +2600,20 @@ function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormat
     },
     () => {
       for (const flow of hardLimitSummary.flows) delete flow.existingEvidence;
+    },
+    () => {
+      for (const intent of hardLimitSummary.intents) {
+        for (const stage of (intent.lifecycle as Array<Record<string, unknown>> | undefined) ?? []) {
+          delete stage.source;
+        }
+      }
+    },
+    () => {
+      for (const intent of hardLimitSummary.intents) {
+        for (const stage of (intent.lifecycle as Array<Record<string, unknown>> | undefined) ?? []) {
+          delete stage.confidence;
+        }
+      }
     },
     () => {
       for (const flow of hardLimitSummary.flows) delete flow.changedFiles;
@@ -2672,6 +2702,9 @@ function minimumAgentReadiness(value: unknown): unknown {
   return {
     score: readiness.score,
     level: readiness.level,
+    basis: readiness.basis,
+    automationApplicable: readiness.automationApplicable,
+    verificationStatus: readiness.verificationStatus,
   };
 }
 
@@ -2937,6 +2970,8 @@ function compactAgentLifecycleStage(stage: unknown): unknown {
   return {
     phase: value.phase,
     label: truncateForAgent(String(value.label ?? ""), 45),
+    confidence: value.confidence,
+    source: value.source ? compactAgentLifecycleEvidenceSource(value.source) : undefined,
   };
 }
 
@@ -2946,6 +2981,8 @@ function emergencyAgentLifecycleStage(stage: unknown): unknown {
   return {
     phase: value.phase,
     label: truncateForAgent(String(value.label ?? ""), 35),
+    confidence: value.confidence,
+    source: value.source ? compactAgentLifecycleEvidenceSource(value.source) : undefined,
   };
 }
 
@@ -2975,6 +3012,24 @@ function formatAgentEvidenceSource(evidence: ChangeIntentEvidence): Record<strin
   if (evidence.endLine !== undefined) source.endLine = evidence.endLine;
   if (evidence.hunkHeader) source.hunk = truncateForAgent(evidence.hunkHeader, 80);
   return source;
+}
+
+function formatAgentLifecycleEvidenceSource(evidence: ChangeIntentEvidence): Record<string, string | number> {
+  const source: Record<string, string | number> = {};
+  if (evidence.commit) source.commit = evidence.commit.slice(0, 12);
+  if (evidence.file) source.file = evidence.file;
+  if (evidence.startLine !== undefined) source.line = evidence.startLine;
+  return source;
+}
+
+function compactAgentLifecycleEvidenceSource(source: unknown): unknown {
+  if (!source || typeof source !== "object") return source;
+  const value = source as Record<string, unknown>;
+  return {
+    commit: value.commit,
+    file: value.file,
+    line: value.line,
+  };
 }
 
 function formatAgentRepositoryContract(
@@ -3025,6 +3080,10 @@ function strongestEvidence(evidence: ChangeIntentEvidence[], limit: number): Cha
     .map(({ item }) => item);
 }
 
+function strongestLocatedEvidence(evidence: ChangeIntentEvidence[], limit: number): ChangeIntentEvidence[] {
+  return strongestEvidence(evidence.filter((item) => Boolean(item.file || item.commit)), limit);
+}
+
 function evidenceStrength(evidence: ChangeIntentEvidence): number {
   const relationScore = evidence.relation === "direct" ? 2 : evidence.relation === "supporting" ? 1 : 0;
   if (evidence.kind === "diff" && evidence.file && evidence.startLine !== undefined) return 4 + relationScore;
@@ -3071,6 +3130,7 @@ export function formatTextQaDraft(result: QaDraftResult): string {
 
   lines.push("QAMap QA");
   lines.push("Local static analysis. No cloud or LLM token. Product QA was not run.");
+  lines.push("Inferred behavior is a draft, not a product specification; intended versus broken remains a human decision.");
   lines.push("");
   lines.push("Change");
   if (primaryIntent) {
@@ -3222,6 +3282,10 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
   lines.push("## At a Glance");
   lines.push("");
   lines.push(`- ${qaExecutionAtAGlance(result.execution)}`);
+  lines.push(
+    "- Inference boundary: evidence-backed draft, not a product specification; " +
+      "intended-versus-broken classification requires human judgment.",
+  );
   lines.push(`- Analysis scope: ${escapeMarkdownInline(formatAnalysisScope(result.analysisScope))}`);
   const primaryIntent = result.changeAnalysis.intents[0];
   if (primaryIntent) {

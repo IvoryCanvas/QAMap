@@ -99,9 +99,10 @@ inventing a contract or a passing result.
 
 ## Limits
 
-QAMap is early and pre-`1.0`. Static analysis cannot know every product decision,
-and inferred scenarios still require review. One passing command does not prove
-that an entire product passed QA.
+QAMap is early and pre-`1.0`. An inferred lifecycle is an evidence-backed draft,
+not a product specification. A person must decide whether observed behavior is
+intended or broken, and one passing command does not prove that an entire product
+passed QA.
 
 ## Contributing
 

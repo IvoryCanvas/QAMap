@@ -1417,7 +1417,12 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
   assert.match(compactSummary.traces[0].risk.statement, /miss intended evidence or report unrelated behavior/i);
   assert.ok(compactSummary.intents[0].scenarios[0].sources.length > 0);
   assert.equal(compactSummary.flows[0].source, qa.flows[0].source);
-  assert.ok(compactSummary.flows[0].changedFiles.length > 0);
+  assert.ok(compactSummary.flows[0].changedFiles?.length > 0, JSON.stringify({
+    bytes: Buffer.byteLength(compactOutput),
+    compaction: compactSummary.compaction,
+    flow: compactSummary.flows[0],
+    lifecycle: compactSummary.intents[0]?.lifecycle,
+  }));
   assert.equal(typeof compactSummary.flows[0].reviewQuestion, "string");
   assert.equal(typeof compactSummary.flows[0].successSignal, "string");
   assert.ok(compactSummary.flows[0].steps.length > 0);
