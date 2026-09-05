@@ -4,6 +4,22 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
+## Unreleased - Lifecycle Contracts
+
+Changed tests can now connect to commit-backed product lifecycles, including
+Ruby Minitest contracts. Contract-bearing assertions strengthen the associated
+lifecycle; implementation-only existence checks remain supporting evidence.
+
+Related changed tests keep their conditions and assertions in separate
+scenarios. Public fixtures cover masked typing, paste, display policy, submission,
+and asynchronous loading, success, failure, and retry. Equal titles preserve
+distinct declaration locations; missing actions remain empty. The five tests in
+`test/independent-lifecycle-contracts.test.mjs` failed before the fix and pass
+after it. The full suite passes 472 tests.
+
+These results verify QAMap's static analysis, not browser or device execution.
+The implementation is pending a package release.
+
 ## Package Manager Compatibility - 2026-08-11
 
 The public `@ivorycanvas/qamap@0.4.13` package was installed and exercised in
@@ -38,13 +54,10 @@ evidence from both sides.
 Repository evidence is also more useful across toolchains. Flutter and Dart
 tests participate in project detection and focused validation, and Python
 Compose commands fall back only when the same repository-declared runner is
-available. Changed tests can recover a review-required working-tree intent,
-connect to a commit-backed product lifecycle, and retain a bounded explicit
-assertion. Contract-bearing assertions can strengthen lifecycle evidence while
-implementation-only existence checks remain supporting test evidence. The
-validation command's selected contract survives the 4 KB agent handoff, omitted
-contracts remain counted, and static analysis never reports those tests as
-executed.
+available. Changed tests can recover a review-required working-tree intent and
+retain a bounded explicit assertion. The validation command's selected contract
+survives the 4 KB agent handoff, omitted contracts remain counted, and static
+analysis never reports those tests as executed.
 
 | Gate | Candidate result |
 | --- | --- |
