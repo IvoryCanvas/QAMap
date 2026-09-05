@@ -941,7 +941,7 @@ function buildCommitIntent(
   const housekeepingOnly = commits.every((commit) => isCleanupCommitStatement(commit.statement));
   const scenarios = housekeepingOnly
     ? []
-    : buildIntentQaScenarios(id, title, lifecycle, keywords, scenarioEvidence, confidence);
+    : buildIntentQaScenarios(id, title, lifecycle, keywords, scenarioEvidence, confidence, relevantTestContracts);
   return {
     id,
     title,
@@ -1229,7 +1229,7 @@ function buildDiffOnlyIntent(
     keywords,
     evidence,
     lifecycle,
-    scenarios: buildIntentQaScenarios(id, title, lifecycle, keywords, evidence, "low"),
+    scenarios: buildIntentQaScenarios(id, title, lifecycle, keywords, evidence, "low", testContracts),
     reviewRequired: true,
   };
 }
@@ -1271,7 +1271,7 @@ function changedTestContractEvidenceSet(contract: ChangedTestContract): ChangeIn
 }
 
 function lifecycleFromChangedTestContracts(contracts: ChangedTestContract[]): BehaviorLifecycleStage[] {
-  return contracts.slice(0, 3).flatMap((contract) => {
+  return contracts.flatMap((contract) => {
     const contractEvidence = changedTestContractEvidence(contract);
     const assertionEvidence = changedTestAssertionEvidence(contract);
     if (!assertionEvidence || !isContractBearingChangedAssertion(assertionEvidence.value)) {
@@ -1307,6 +1307,44 @@ function lifecycleFromChangedTestContracts(contracts: ChangedTestContract[]): Be
     ));
     return stages;
   });
+}
+
+function changedTestQaScenarios(intentId: string, contracts: ChangedTestContract[]): IntentQaScenario[] {
+  const boundedContracts = contracts.filter((contract) =>
+    contract.assertion && isContractBearingChangedAssertion(contract.assertion)
+  );
+  if (boundedContracts.length < 2) {
+    return [];
+  }
+  return boundedContracts.map((contract) => {
+    const lifecycle = lifecycleFromChangedTestContracts([contract]);
+    const evidence = changedTestContractEvidenceSet(contract);
+    const scenario = makeScenario(
+      intentId,
+      `test-contract:${contract.file}:${contract.line}:${contract.title}`,
+      "state-transition",
+      "recommended",
+      sentenceTitle(contract.title),
+      lifecycle.filter((stage) => stage.kind === "condition").map((stage) => stage.label),
+      lifecycle.filter((stage) => stage.kind === "trigger" || stage.kind === "action").map((stage) => stage.label),
+      [`Verify repository-authored assertion \`${contract.assertion}\`.`],
+      [],
+      evidence,
+    );
+    scenario.rationale =
+      "A changed repository test pairs this condition with its own expected result. Review it as a draft contract; missing actions or setup require repository evidence and execution remains unverified.";
+    return scenario;
+  });
+}
+
+function isChangedTestEvidence(evidence: ChangeIntentEvidence): boolean {
+  return evidence.sourceRole === "test" &&
+    (evidence.symbol === "changed-test-contract" || evidence.symbol === "changed-test-assertion");
+}
+
+function changedTestEvidenceKey(evidence: ChangeIntentEvidence[]): string {
+  return evidence.filter((item) => item.symbol === "changed-test-contract")
+    .map((item) => `${item.file}:${item.startLine}`).join(":");
 }
 
 function isContractBearingChangedAssertion(assertion: string): boolean {
@@ -1750,7 +1788,7 @@ function createLifecycleStage(
 ): BehaviorLifecycleStage {
   const normalizedLabel = sentenceLabel(label);
   return {
-    id: stableId("stage", `${kind}:${normalizedLabel}:${evidence.map((item) => item.commit ?? item.file ?? item.value).join(":")}`),
+    id: stableId("stage", `${kind}:${normalizedLabel}:${evidence.map((item) => item.commit ?? item.file ?? item.value).join(":")}${symbol === "changed-test-contract" ? `:${changedTestEvidenceKey(evidence)}` : ""}`),
     kind,
     label: normalizedLabel,
     confidence,
@@ -1767,7 +1805,18 @@ function buildIntentQaScenarios(
   keywords: string[],
   evidence: ChangeIntentEvidence[],
   confidence: ChangeIntentConfidence,
+  testContracts: ChangedTestContract[] = [],
 ): IntentQaScenario[] {
+  const testScenarios = changedTestQaScenarios(intentId, testContracts);
+  if (testScenarios.length > 0) {
+    // Different tests can describe mutually exclusive states. Keep their
+    // conditions and expectations out of the aggregate product scenario.
+    lifecycle = lifecycle.map((stage) => ({
+      ...stage,
+      evidence: stage.evidence.filter((item) => !isChangedTestEvidence(item)),
+    })).filter((stage) => stage.evidence.length > 0);
+    evidence = evidence.filter((item) => !isChangedTestEvidence(item));
+  }
   const conditions = lifecycle.filter((stage) => stage.kind === "condition").map((stage) => stage.label);
   const actions = selectPrimaryLifecycleSteps(lifecycle, keywords);
   const outcomeStages = lifecycle
@@ -1813,7 +1862,7 @@ function buildIntentQaScenarios(
     primary.assertions.push(unresolvedPrimaryScenarioAssertion);
   }
 
-  const scenarios = [primary];
+  const scenarios = [primary, ...testScenarios];
   for (const annotatedRisk of qaAnnotationRiskScenarios(evidence).slice(0, 3)) {
     const riskScenario = makeScenario(
       intentId,
@@ -5513,7 +5562,7 @@ function uniqueLifecycleStages(stages: BehaviorLifecycleStage[]): BehaviorLifecy
   const unique: BehaviorLifecycleStage[] = [];
   const indexByKey = new Map<string, number>();
   for (const stage of stages) {
-    const key = `${stage.kind}:${stripTerminalPunctuation(stage.label).toLowerCase()}`;
+    const key = `${stage.kind}:${stripTerminalPunctuation(stage.label).toLowerCase()}${stage.symbol === "changed-test-contract" ? `:${changedTestEvidenceKey(stage.evidence)}` : ""}`;
     const existingIndex = indexByKey.get(key);
     if (existingIndex === undefined) {
       indexByKey.set(key, unique.length);
@@ -5553,7 +5602,7 @@ function uniqueCodeSignals(signals: CodeBehaviorSignal[]): CodeBehaviorSignal[] 
 function uniqueScenarios(scenarios: IntentQaScenario[]): IntentQaScenario[] {
   const seen = new Set<string>();
   return scenarios.filter((scenario) => {
-    const key = scenario.title.toLowerCase();
+    const key = `${scenario.title.toLowerCase()}:${changedTestEvidenceKey(scenario.evidence)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

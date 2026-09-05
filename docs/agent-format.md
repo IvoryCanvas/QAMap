@@ -83,6 +83,21 @@ Read `inferenceBoundary` before treating an inferred lifecycle as repository pol
 
 List fields are capped to keep the payload small; caps may grow within version 1 but the shapes above will not change.
 
+## Independent Test Expectations
+
+When two or more related changed tests contain contract-bearing assertions,
+QAMap gives each its own review-required scenario. A typing expectation stays
+with its typing condition; a pending-request expectation stays separate from
+success, failure, and recovery. Equal test titles remain distinct by their file
+and declaration line. These expectations do not become a combined assertion in
+the aggregate product scenario.
+
+Only supported assertions near an added test declaration participate. Setup and
+actions come from that declaration's bounded lifecycle evidence; missing fields
+stay empty. Existing scenario limits still apply, so inspect omitted counts and
+the full report when consuming compact output. This is static contract analysis,
+not proof that the tests or the application passed.
+
 ## Example
 
 The trace portion below is shown with line breaks for readability. The CLI keeps it on the same single JSON line as the compatibility fields that follow.
