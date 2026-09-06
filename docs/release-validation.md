@@ -15,10 +15,28 @@ scenarios. Public fixtures cover masked typing, paste, display policy, submissio
 and asynchronous loading, success, failure, and retry. Equal titles preserve
 distinct declaration locations; missing actions remain empty. The five tests in
 `test/independent-lifecycle-contracts.test.mjs` failed before the fix and pass
-after it. The full suite passes 472 tests.
+after it. That increment passed the full 472-test suite.
 
 These results verify QAMap's static analysis, not browser or device execution.
 The implementation is pending a package release.
+
+The next lifecycle increment connects supported test-body setup and actions to
+their own assertions, and connects source-only JSX state branches to exact
+same-component evidence. Missing setup, actions, and transitions remain explicit;
+multiple candidate controls require a human decision. See
+[Lifecycle evidence](lifecycle-evidence.md) for the bounded syntax contract.
+
+`test/concrete-lifecycle-evidence.test.mjs` covers web input, Dart recovery, Ruby
+request setup, source-only states, partial source edits, ambiguity, independent
+component scopes, historical-head isolation, stable file ordering, critical-risk
+priority, and negative comment, nested-scope, formatting, and missing-line cases.
+These are analyzer regressions, not executed web, Ruby, or mobile application tests.
+
+Latest validation: all 12 concrete-lifecycle regressions and the full 484-test
+suite pass. The fixed static benchmark passes all 43 contracts. The separate
+execution benchmark catches all three seeded regressions and passes their fixes;
+context reuse passes 10 checks. These receipts do not expand the supported
+syntax or promote an inferred product lifecycle into an executed QA result.
 
 ## Package Manager Compatibility - 2026-08-11
 
