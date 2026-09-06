@@ -86,7 +86,9 @@ List fields are capped to keep the payload small; caps may grow within version 1
 ## Independent Test Expectations
 
 When two or more related changed tests contain contract-bearing assertions,
-QAMap gives each its own review-required scenario. A typing expectation stays
+QAMap gives each its own review-required scenario. A single test also receives a
+separate scenario when its supported setup or action statements are connected
+to its assertion. A typing expectation stays
 with its typing condition; a pending-request expectation stays separate from
 success, failure, and recovery. Equal test titles remain distinct by their file
 and declaration line. These expectations do not become a combined assertion in
@@ -97,6 +99,12 @@ actions come from that declaration's bounded lifecycle evidence; missing fields
 stay empty. Existing scenario limits still apply, so inspect omitted counts and
 the full report when consuming compact output. This is static contract analysis,
 not proof that the tests or the application passed.
+
+Concrete lifecycle contracts carry exact setup, action, and assertion locations.
+Missing or ambiguous fields are listed in scenario `edgeCases`, with empty
+setup or steps where appropriate. Concrete contracts precede a generic primary
+summary, while critical failure and boundary scenarios retain priority.
+See [Lifecycle evidence](lifecycle-evidence.md) for supported syntax and limits.
 
 ## Example
 

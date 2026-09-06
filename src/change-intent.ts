@@ -15,7 +15,8 @@ import {
 } from "./symbol-annotations.js";
 import { isInstructionLikeRepositoryText } from "./qa-contract.js";
 import { collectChangedTestContracts } from "./test-evidence.js";
-import type { ChangedTestContract } from "./test-evidence.js";
+import { collectSourceLifecycleContracts, connectTestLifecycleBodies } from "./product-lifecycle.js";
+import type { LifecycleTestContract as ChangedTestContract, SourceLifecycleContract } from "./product-lifecycle.js";
 import type {
   ChangedQaSymbolAnnotation,
 } from "./symbol-annotations.js";
@@ -154,6 +155,7 @@ interface CodeBehaviorSignal {
   file: string;
   symbol: string;
   evidence: ChangeIntentEvidence;
+  contract?: SourceLifecycleContract;
 }
 
 const behavioralCommitTypes = new Set(["feat", "feature", "fix", "hotfix", "perf"]);
@@ -329,8 +331,12 @@ export async function analyzeChangeIntents(
   const diagnostics: string[] = [];
   const commits = await collectCommitEvidence(gitRoot, options.base, options.head, relativeRoot, diagnostics);
   const parsedCommits = commits.map(parseCommit);
-  const changedSourceRoles = classifyChangedSourceRoles(
-    await collectChangedSourceRoleText(root, gitRoot, options),
+  const sourceTexts = await collectChangedSourceTexts(root, gitRoot, options);
+  const changedSourceRoles = classifyChangedSourceRoles(sourceTexts.roleText);
+  const sourceContracts = collectSourceLifecycleContracts(
+    Object.fromEntries(Object.entries(sourceTexts.headText).filter(([file]) => changedSourceRoles[file]?.role === "product")),
+    Object.fromEntries(Object.entries(options.addedDiffEvidence ?? {}).map(([file, hunks]) =>
+      [file, hunks.filter((hunk) => !isFormattingOnlyHunk(hunk))])),
   );
   const annotationAnalysis = await collectChangedQaSymbolAnnotations(root, {
     head: options.head,
@@ -349,6 +355,7 @@ export async function analyzeChangeIntents(
   const annotationSignals = collectQaSymbolAnnotationSignals(productAnnotations);
   const annotationEvidence = collectQaSymbolAnnotationEvidence(productAnnotations);
   const codeSignals = selectCodeSignals([
+    ...sourceContracts.flatMap(sourceLifecycleSignals),
     ...annotationSignals,
     ...collectCodeBehaviorSignals(
       options.addedDiffText ?? {},
@@ -397,7 +404,10 @@ export async function analyzeChangeIntents(
     options.addedDiffEvidence ?? {},
     changedSourceRoles,
   );
-  const changedTestContracts = collectChangedTestContracts(options.addedDiffEvidence ?? {});
+  const changedTestContracts = connectTestLifecycleBodies(
+    collectChangedTestContracts(options.addedDiffEvidence ?? {}),
+    options.addedDiffEvidence ?? {},
+  );
   const changedFiles = options.changedFiles.map((file) => file.path);
   const commitClusters = clusterBehaviorCommits(parsedCommits);
   const sharedCommitFiles = filesSharedByCommitClusters(commitClusters);
@@ -460,17 +470,18 @@ export async function analyzeChangeIntents(
   };
 }
 
-async function collectChangedSourceRoleText(
+async function collectChangedSourceTexts(
   root: string,
   gitRoot: string,
   options: ChangeIntentAnalysisOptions,
-): Promise<Record<string, string>> {
+): Promise<{ roleText: Record<string, string>; headText: Record<string, string> }> {
   const headIsCurrent = await refsResolveToSameCommit(gitRoot, options.head, "HEAD");
   const dirtyFiles = headIsCurrent && !options.includeWorkingTree
     ? await collectDirtyRepositoryFiles(gitRoot)
     : new Set<string>();
   const relativeRoot = toPosixPath(path.relative(gitRoot, root)).replace(/^\.\/+|\/+$/g, "");
   const entries = new Array<readonly [string, string]>(options.changedFiles.length);
+  const headText: Record<string, string> = {};
   let cursor = 0;
   const workers = Array.from(
     { length: Math.min(8, options.changedFiles.length) },
@@ -496,6 +507,7 @@ async function collectChangedSourceRoleText(
                 { cwd: gitRoot, maxBuffer: 512 * 1024 },
               )).stdout;
           entries[index] = [file, `${locatedText}\n${currentText.slice(0, 256 * 1024)}`];
+          headText[file] = currentText.slice(0, 256 * 1024);
         } catch {
           entries[index] = [file, locatedText];
         }
@@ -503,7 +515,7 @@ async function collectChangedSourceRoleText(
     },
   );
   await Promise.all(workers);
-  return Object.fromEntries(entries);
+  return { roleText: Object.fromEntries(entries), headText };
 }
 
 async function collectDirtyRepositoryFiles(root: string): Promise<Set<string>> {
@@ -941,7 +953,7 @@ function buildCommitIntent(
   const housekeepingOnly = commits.every((commit) => isCleanupCommitStatement(commit.statement));
   const scenarios = housekeepingOnly
     ? []
-    : buildIntentQaScenarios(id, title, lifecycle, keywords, scenarioEvidence, confidence, relevantTestContracts);
+    : buildIntentQaScenarios(id, title, lifecycle, keywords, scenarioEvidence, confidence, relevantTestContracts, sourceContractsFromSignals(relevantSignals));
   return {
     id,
     title,
@@ -1229,7 +1241,7 @@ function buildDiffOnlyIntent(
     keywords,
     evidence,
     lifecycle,
-    scenarios: buildIntentQaScenarios(id, title, lifecycle, keywords, evidence, "low", testContracts),
+    scenarios: buildIntentQaScenarios(id, title, lifecycle, keywords, evidence, "low", testContracts, sourceContractsFromSignals(codeSignals)),
     reviewRequired: true,
   };
 }
@@ -1260,13 +1272,19 @@ function changedTestAssertionEvidence(contract: ChangedTestContract): ChangeInte
     symbol: "changed-test-assertion",
     relation: "supporting",
     side: "head",
-    startLine: contract.line,
-    endLine: contract.line,
+    startLine: contract.body?.assertionLine ?? contract.line,
+    endLine: contract.body?.assertionLine ?? contract.line,
   };
 }
 
 function changedTestContractEvidenceSet(contract: ChangedTestContract): ChangeIntentEvidence[] {
-  return [changedTestContractEvidence(contract), changedTestAssertionEvidence(contract)]
+  return [changedTestContractEvidence(contract), changedTestAssertionEvidence(contract),
+    ...(contract.body?.facts ?? []).map((fact) => ({
+      ...changedTestContractEvidence(contract), value: fact.text,
+      symbol: `changed-test-${fact.kind === "condition" ? "setup" : fact.kind}`,
+      startLine: fact.line, endLine: fact.line,
+    })),
+  ]
     .filter((item): item is ChangeIntentEvidence => item !== undefined);
 }
 
@@ -1285,6 +1303,18 @@ function lifecycleFromChangedTestContracts(contracts: ChangedTestContract[]): Be
       )];
     }
     const evidence = [contractEvidence, assertionEvidence];
+    if (contract.body) {
+      const bodyEvidence = changedTestContractEvidenceSet(contract);
+      return [
+        ...contract.body.facts.map((fact) => createLifecycleStage(
+          fact.kind, fact.label, "medium",
+          [contractEvidence, ...bodyEvidence.filter((item) => item.startLine === fact.line)],
+          [contract.file], "changed-test-contract",
+        )),
+        createLifecycleStage("observable-outcome", `Observe repository assertion \`${contract.assertion}\`.`,
+          "medium", evidence, [contract.file], "changed-test-contract"),
+      ];
+    }
     const parsed = parseChangedTestLifecycle(contract.title);
     const stages: BehaviorLifecycleStage[] = [];
     if (parsed.context) {
@@ -1313,7 +1343,7 @@ function changedTestQaScenarios(intentId: string, contracts: ChangedTestContract
   const boundedContracts = contracts.filter((contract) =>
     contract.assertion && isContractBearingChangedAssertion(contract.assertion)
   );
-  if (boundedContracts.length < 2) {
+  if (boundedContracts.length < 2 && !boundedContracts.some((contract) => contract.body)) {
     return [];
   }
   return boundedContracts.map((contract) => {
@@ -1326,9 +1356,13 @@ function changedTestQaScenarios(intentId: string, contracts: ChangedTestContract
       "recommended",
       sentenceTitle(contract.title),
       lifecycle.filter((stage) => stage.kind === "condition").map((stage) => stage.label),
-      lifecycle.filter((stage) => stage.kind === "trigger" || stage.kind === "action").map((stage) => stage.label),
+      lifecycle.filter((stage) => stage.kind === "trigger" || stage.kind === "action" || stage.kind === "state-change").map((stage) => stage.label),
       [`Verify repository-authored assertion \`${contract.assertion}\`.`],
-      [],
+      contract.body ? [
+        ...(!contract.body.facts.some((fact) => fact.kind === "condition") ? ["Missing repository evidence: precondition and fixture state."] : []),
+        ...(!contract.body.facts.some((fact) => fact.kind === "action") ? ["Missing repository evidence: user or system action."] : []),
+        ...(!contract.body.facts.some((fact) => fact.kind === "state-change") ? ["Missing repository evidence: explicit intermediate state transition."] : []),
+      ] : [],
       evidence,
     );
     scenario.rationale =
@@ -1339,7 +1373,36 @@ function changedTestQaScenarios(intentId: string, contracts: ChangedTestContract
 
 function isChangedTestEvidence(evidence: ChangeIntentEvidence): boolean {
   return evidence.sourceRole === "test" &&
-    (evidence.symbol === "changed-test-contract" || evidence.symbol === "changed-test-assertion");
+    /^changed-test-(?:contract|assertion|setup|action|state-change)$/.test(evidence.symbol ?? "");
+}
+
+function sourceLifecycleSignals(contract: SourceLifecycleContract): CodeBehaviorSignal[] {
+  return contract.facts.map((fact) => ({
+    kind: fact.kind, label: fact.label, file: contract.file,
+    symbol: `product-contract:${contract.line}:${fact.kind}`, contract,
+    evidence: {
+      kind: "source", value: fact.text, sourceRole: "product", file: contract.file,
+      symbol: "product-lifecycle-contract", relation: "direct", side: "head",
+      startLine: fact.line, endLine: fact.line,
+    },
+  }));
+}
+
+function sourceContractsFromSignals(signals: CodeBehaviorSignal[]): SourceLifecycleContract[] {
+  return [...new Set(signals.flatMap((signal) => signal.contract ? [signal.contract] : []))];
+}
+
+function sourceLifecycleScenarios(intentId: string, contracts: SourceLifecycleContract[]): IntentQaScenario[] {
+  return contracts.map((contract) => {
+    const scenario = makeScenario(intentId, `source-contract:${contract.file}:${contract.line}`, "state-transition",
+      "recommended", contract.title,
+      contract.facts.filter((fact) => fact.kind === "condition").map((fact) => fact.label),
+      contract.facts.filter((fact) => fact.kind === "action" || fact.kind === "state-change").map((fact) => fact.label),
+      contract.facts.filter((fact) => fact.kind === "observable-outcome").map((fact) => `Verify: ${fact.label}`),
+      contract.missing, sourceLifecycleSignals(contract).map((signal) => signal.evidence));
+    scenario.rationale = "The component connects this exact state condition to a rendered result. This is a source-backed draft, not a product specification or execution receipt. Missing or ambiguous actions require human review.";
+    return scenario;
+  });
 }
 
 function changedTestEvidenceKey(evidence: ChangeIntentEvidence[]): string {
@@ -1748,7 +1811,9 @@ function lifecycleFromSourceRoles(evidence: ChangeIntentEvidence[]): BehaviorLif
 }
 
 function limitLifecycleStages(stages: BehaviorLifecycleStage[]): BehaviorLifecycleStage[] {
-  const unique = uniqueLifecycleStages(stages);
+  const unique = uniqueLifecycleStages(stages).sort((left, right) =>
+    Number(hasConcreteLifecycleEvidence(right.evidence)) - Number(hasConcreteLifecycleEvidence(left.evidence))
+  );
   const selected: BehaviorLifecycleStage[] = [];
   const selectedIds = new Set<string>();
   const orderedKinds: BehaviorLifecycleStageKind[] = [
@@ -1806,16 +1871,22 @@ function buildIntentQaScenarios(
   evidence: ChangeIntentEvidence[],
   confidence: ChangeIntentConfidence,
   testContracts: ChangedTestContract[] = [],
+  sourceContracts: SourceLifecycleContract[] = [],
 ): IntentQaScenario[] {
   const testScenarios = changedTestQaScenarios(intentId, testContracts);
-  if (testScenarios.length > 0) {
+  const sourceScenarios = sourceLifecycleScenarios(intentId, sourceContracts);
+  if (testScenarios.length > 0 || sourceScenarios.length > 0) {
     // Different tests can describe mutually exclusive states. Keep their
     // conditions and expectations out of the aggregate product scenario.
     lifecycle = lifecycle.map((stage) => ({
       ...stage,
-      evidence: stage.evidence.filter((item) => !isChangedTestEvidence(item)),
+      evidence: stage.evidence.filter((item) =>
+        !(testScenarios.length > 0 && isChangedTestEvidence(item)) &&
+        !(sourceScenarios.length > 0 && item.symbol === "product-lifecycle-contract")),
     })).filter((stage) => stage.evidence.length > 0);
-    evidence = evidence.filter((item) => !isChangedTestEvidence(item));
+    evidence = evidence.filter((item) =>
+      !(testScenarios.length > 0 && isChangedTestEvidence(item)) &&
+      !(sourceScenarios.length > 0 && item.symbol === "product-lifecycle-contract"));
   }
   const conditions = lifecycle.filter((stage) => stage.kind === "condition").map((stage) => stage.label);
   const actions = selectPrimaryLifecycleSteps(lifecycle, keywords);
@@ -1862,7 +1933,7 @@ function buildIntentQaScenarios(
     primary.assertions.push(unresolvedPrimaryScenarioAssertion);
   }
 
-  const scenarios = [primary, ...testScenarios];
+  const scenarios = [primary, ...testScenarios, ...sourceScenarios];
   for (const annotatedRisk of qaAnnotationRiskScenarios(evidence).slice(0, 3)) {
     const riskScenario = makeScenario(
       intentId,
@@ -5610,6 +5681,12 @@ function uniqueScenarios(scenarios: IntentQaScenario[]): IntentQaScenario[] {
 }
 
 function rankIntentQaScenarios(scenarios: IntentQaScenario[]): IntentQaScenario[] {
+  const hasConcreteContracts = scenarios.some((scenario) => hasConcreteLifecycleEvidence(scenario.evidence));
+  const contractRank = (scenario: IntentQaScenario): number => {
+    if (scenario.priority === "critical" && scenario.kind !== "primary") return 0;
+    if (hasConcreteLifecycleEvidence(scenario.evidence)) return 1;
+    return scenario.kind === "primary" ? 2 : 3;
+  };
   const kindRank: Record<IntentQaScenarioKind, number> = {
     primary: 0,
     failure: 1,
@@ -5619,6 +5696,10 @@ function rankIntentQaScenarios(scenarios: IntentQaScenario[]): IntentQaScenario[
   return scenarios
     .map((scenario, index) => ({ scenario, index }))
     .sort((left, right) => {
+      const concreteDifference = hasConcreteContracts
+        ? contractRank(left.scenario) - contractRank(right.scenario)
+        : 0;
+      if (concreteDifference !== 0) return concreteDifference;
       if (left.scenario.kind === "primary" || right.scenario.kind === "primary") {
         if (left.scenario.kind === "primary" && right.scenario.kind === "primary") {
           return left.index - right.index;
@@ -5639,6 +5720,10 @@ function rankIntentQaScenarios(scenarios: IntentQaScenario[]): IntentQaScenario[
       return rightDirectEvidence - leftDirectEvidence || left.index - right.index;
     })
     .map(({ scenario }) => scenario);
+}
+
+function hasConcreteLifecycleEvidence(evidence: ChangeIntentEvidence[]): boolean {
+  return evidence.some((item) => item.symbol === "product-lifecycle-contract" || item.symbol === "changed-test-action");
 }
 
 function uniqueEvidence(evidence: ChangeIntentEvidence[]): ChangeIntentEvidence[] {
