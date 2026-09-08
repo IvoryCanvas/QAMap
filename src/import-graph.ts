@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { comparePaths, createRepositoryTextReader, discoverRepositoryPaths } from "./repository-discovery.js";
 import type { DiscoveryGap } from "./repository-discovery.js";
+import { openImportCache } from "./import-index-cache.js";
+import type { ImportBlock } from "./import-index-cache.js";
 
 const maxGraphFiles = 12000;
 const maxSourceBytes = 300_000;
@@ -60,6 +62,18 @@ export interface ReverseImportIndex {
   importersOf: Map<string, Set<string>>;
   importsOf: Map<string, Set<string>>;
   coverage: ImportDiscoveryCoverage;
+  reuse: ImportIndexReuse;
+}
+
+export interface ImportIndexReuse {
+  status: "cold" | "warm" | "incremental" | "rebuilt" | "disabled" | "unavailable";
+  storage: "saved" | "unchanged" | "skipped" | "failed";
+  reusedSources: number;
+  rebuiltSources: number;
+  hasBaseline: boolean;
+  changedSources: string[];
+  affectedImporters: string[];
+  reason?: "invalid-cache" | "expired-cache" | "resolution-context-changed";
 }
 
 interface WorkspacePackages {
@@ -74,7 +88,9 @@ interface TsconfigPaths {
 const importSpecifierMatcher =
   /(?:import|export)\s+(?:[\s\S]*?from\s+)?["']([^"'\n]+)["']|require\(\s*["']([^"'\n]+)["']\s*\)|import\(\s*["']([^"'\n]+)["']\s*\)/g;
 
-export async function buildReverseImportIndex(rootInput: string): Promise<ReverseImportIndex> {
+export async function buildReverseImportIndex(
+  rootInput: string, options: { cacheDirectory?: string | false } = {},
+): Promise<ReverseImportIndex> {
   const root = path.resolve(rootInput);
   const inventory = await discoverRepositoryPaths(root, ignoredDirectories);
   const skipped = [...inventory.skipped];
@@ -103,6 +119,22 @@ export async function buildReverseImportIndex(rootInput: string): Promise<Revers
   const fileSet = new Set(sourceFiles);
   const tsconfigPaths = await readTsconfigPaths(inventory.files, readText);
   const workspacePackages = await readWorkspacePackages(packageJsonFiles, readText);
+  // Resolution depends on candidate paths and configuration, not only the importing file.
+  const context = createHash("sha256").update(JSON.stringify({
+    policy: "resolved-imports-v1", sourceFiles, config: fingerprints, maxGraphFiles, maxSourceBytes,
+  })).digest("hex");
+  const cache = await openImportCache(root, options.cacheDirectory,
+    inventory.discovery !== "unavailable" && inventory.inventoryComplete);
+  let previous = cache.previous;
+  if (previous?.context === context && previous.blocks.some((block) =>
+    !fileSet.has(block.file) || block.imports.some((file) => !fileSet.has(file)))) {
+    previous = undefined;
+    cache.state = "invalid-cache";
+  }
+  const oldBlocks = new Map(previous?.blocks.map((block) => [block.file, block]));
+  const sameContext = previous?.context === context;
+  const blocks: ImportBlock[] = [];
+  let reusedSources = 0;
   const importersOf = new Map<string, Set<string>>();
   const importsOf = new Map<string, Set<string>>();
   let parsedSources = 0;
@@ -115,18 +147,24 @@ export async function buildReverseImportIndex(rootInput: string): Promise<Revers
     const text = await readText(file);
     if (text === undefined) continue;
     parsedSources++;
-    for (const match of text.matchAll(importSpecifierMatcher)) {
-      const specifier = match[1] ?? match[2] ?? match[3];
-      const resolved = resolveImportSpecifier(specifier, file, fileSet, tsconfigPaths, workspacePackages);
-      if (!resolved || resolved === file) {
-        continue;
+    const hash = fingerprints[fingerprints.length - 1][1];
+    const old = oldBlocks.get(file);
+    let block: ImportBlock;
+    if (sameContext && old?.hash === hash) {
+      block = old;
+      reusedSources++;
+    } else {
+      const imports = new Set<string>();
+      for (const match of text.matchAll(importSpecifierMatcher)) {
+        const specifier = match[1] ?? match[2] ?? match[3];
+        const resolved = resolveImportSpecifier(specifier, file, fileSet, tsconfigPaths, workspacePackages);
+        if (resolved && resolved !== file) imports.add(resolved);
       }
-      let imports = importsOf.get(file);
-      if (!imports) {
-        imports = new Set<string>();
-        importsOf.set(file, imports);
-      }
-      imports.add(resolved);
+      block = { file, hash, imports: [...imports] };
+    }
+    blocks.push(block);
+    if (block.imports.length) importsOf.set(file, new Set(block.imports));
+    for (const resolved of block.imports) {
       let importers = importersOf.get(resolved);
       if (!importers) {
         importers = new Set<string>();
@@ -143,11 +181,47 @@ export async function buildReverseImportIndex(rootInput: string): Promise<Revers
     version: 1, discovery: inventory.discovery, inventoryComplete: inventory.inventoryComplete,
     files: inventory.files, contents: fingerprints.sort((a, b) => comparePaths(a[0], b[0])), skipped, limits,
   })).digest("hex");
+  const currentBlocks = new Map(blocks.map((block) => [block.file, block]));
+  const changedSources = previous ? [...new Set([...oldBlocks.keys(), ...currentBlocks.keys()])]
+    .filter((file) => oldBlocks.get(file)?.hash !== currentBlocks.get(file)?.hash).sort(comparePaths) : [];
+  const reason = cache.state === "invalid-cache" || cache.state === "expired-cache" ? cache.state
+    : previous && !sameContext ? "resolution-context-changed" : undefined;
+  const status = cache.state === "disabled" || cache.state === "unavailable" ? cache.state
+    : reason ? "rebuilt" : !previous ? "cold" : changedSources.length ? "incremental" : "warm";
+  const affectedImporters = affectedByImportChanges(oldBlocks, currentBlocks, changedSources, !!previous && !sameContext);
+  const storage = await cache.save({ schema: 1, context, blocks });
   return { importersOf, importsOf, coverage: {
     scope: "import-graph", snapshot: "working-tree", discovery: inventory.discovery,
     inventoryComplete: inventory.inventoryComplete, inventoryFiles: inventory.files.length,
     parsedSources, fingerprint, limits, skipped,
-  } };
+  }, reuse: { status, storage, reusedSources, rebuiltSources: parsedSources - reusedSources, hasBaseline: !!previous,
+    changedSources, affectedImporters, ...(reason ? { reason } : {}) } };
+}
+
+function affectedByImportChanges(
+  previous: Map<string, ImportBlock>, current: Map<string, ImportBlock>, changed: string[], contextChanged: boolean,
+): string[] {
+  const reverse = new Map<string, Set<string>>();
+  const affected = new Set<string>();
+  for (const block of [...previous.values(), ...current.values()]) {
+    for (const imported of block.imports) {
+      const importers = reverse.get(imported) ?? new Set<string>();
+      importers.add(block.file);
+      reverse.set(imported, importers);
+    }
+    if (contextChanged && block.imports.length && current.has(block.file)) affected.add(block.file);
+  }
+  const queue = [...changed, ...affected];
+  const visited = new Set(queue);
+  for (let index = 0; index < queue.length; index++) {
+    for (const importer of reverse.get(queue[index]) ?? []) {
+      if (visited.has(importer)) continue;
+      visited.add(importer);
+      queue.push(importer);
+      if (current.has(importer)) affected.add(importer);
+    }
+  }
+  return [...affected].sort(comparePaths);
 }
 
 export function findImportingSurfaces(
