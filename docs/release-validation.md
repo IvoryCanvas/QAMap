@@ -15,12 +15,14 @@ The compact handoff preserves exact action and command-working-directory
 contracts within 4KB. Full local recovery retains the original bounded analysis.
 Cross-file source-to-test paths outrank test-helper references when the path
 budget fills. Deep star-export searches stop with an explicit boundary.
+First-run trace retention is also tested across six recovery-path lengths:
+short Linux temporary paths must not lose evidence preserved on longer paths.
 
 Validated on Node 22.14.0 with public synthetic fixtures:
 
 | Gate | Result |
 | --- | --- |
-| Full test suite | 595/595 passed, including bounded path priority and deep-export guards |
+| Full test suite | 596/596 passed, including bounded path priority, deep-export guards and recovery-path compatibility |
 | Static QA benchmark | 43/43 contracts passed |
 | Repository benchmark | 11/11 checks passed, including all 7 required quality cases |
 | Context reuse | 10/10 checks passed |

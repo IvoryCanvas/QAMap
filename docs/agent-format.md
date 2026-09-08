@@ -55,6 +55,11 @@ multi-flow summary described below. A second flow, trace bodies, context details
 or optional summaries can be omitted. Recover missing information from the full
 report; an empty compact array does not mean no such evidence was found.
 `recoveryRequired` also overrides the normal minimum retained-contract rules.
+The duplicate `context.recovery` pointer, or the optional `context` summary,
+can be omitted before a located trace is dropped. Use `compaction.fullReport`
+to recover it. Recovery-path length must not decide whether a normal first-run
+handoff retains its primary trace; the fresh-install fixture tests this across
+short and long paths.
 
 ## Stability policy
 

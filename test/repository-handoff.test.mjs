@@ -4,10 +4,29 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { formatAgentQaDraft, formatAgentQaFullReport, generateQaDraft } from "../dist/qa.js";
 import { collectSchemaViolations } from "./helpers/schema-validation.mjs";
+import { materializeFixtureRepo } from "../scripts/lib/fixture-repo.mjs";
 
 const schema = JSON.parse(await readFile(new URL("../schema/qamap-agent.schema.json", import.meta.url), "utf8"));
+
+test("fresh-install trace evidence survives recovery-path length differences", async (t) => {
+  const fixture = await materializeFixtureRepo({
+    fixtureRoot: fileURLToPath(new URL("./benchmarks/web-symbol-annotated-renewal/", import.meta.url)),
+    commits: [{ dir: "head", message: "feat: prevent duplicate renewal requests" }],
+  });
+  t.after(fixture.cleanup);
+  const result = await generateQaDraft(fixture.repositoryRoot, { base: "HEAD~1", head: "HEAD" });
+  for (const length of [16, 48, 80, 112, 160, 240]) {
+    const compact = JSON.parse(formatAgentQaDraft(result, { fullReportPath: `/tmp/${"x".repeat(length)}.json` }));
+    assert.ok(compact.traces.some((trace) => trace.source?.file), `trace missing at recovery path length ${length}`);
+    assert.ok(compact.intents[0]?.scenarios.length > 0);
+    assert.equal(compact.execution.status, "not-run");
+    assert.deepEqual(collectSchemaViolations(schema, compact), []);
+    assert.ok(Buffer.byteLength(JSON.stringify(compact)) < 4096);
+  }
+});
 
 test("mixed maintenance and product edits retain evidence in 4KB and recover the complete analysis", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "qamap-repository-handoff-test-"));

@@ -1673,6 +1673,13 @@ export function formatAgentQaDraft(result: QaDraftResult, options?: AgentFormatO
   const compaction = { ...(output.compaction as Record<string, unknown> | undefined), maxBytes: defaultAgentPayloadByteLimit,
     ...(options?.fullReportPath ? { fullReport: options.fullReportPath } : {}), repositoryFirst: true, omittedFields: [] as string[] };
   output.compaction = compaction;
+  if (Array.isArray(output.traces)) for (const trace of output.traces) {
+    if (trace.artifact && typeof trace.artifact.draft !== "string") {
+      const original = summary.traces.find((candidate) => candidate.id === trace.id)?.artifact;
+      if (typeof original?.draft === "string") trace.artifact.draft = original.draft;
+      else { delete trace.artifact; compaction.omittedFields.push("trace-artifact"); }
+    }
+  }
   const bytes = (): number => Buffer.byteLength(JSON.stringify(output));
   // Recovery preserves whole fields. Never truncate a path, command, or assertion.
   for (const key of ["capabilities", "prChecklist", "requiredBootstrap", "requiredEvidence", "automation", "manifestCorrection"]) {
@@ -1716,10 +1723,15 @@ export function formatAgentQaDraft(result: QaDraftResult, options?: AgentFormatO
     if (bytes() <= defaultAgentPayloadByteLimit) break;
     if (key in output) { compaction.omittedFields.push(key); delete output[key]; }
   }
-  for (const key of ["traces", "intents", "flows", "context"]) {
+  const context = output.context as Record<string, unknown> | undefined;
+  if (bytes() > defaultAgentPayloadByteLimit && context?.recovery && compaction.fullReport) {
+    delete context.recovery;
+    compaction.omittedFields.push("context-recovery");
+  }
+  for (const key of ["context", "traces", "intents", "flows"]) {
     if (bytes() <= defaultAgentPayloadByteLimit) break;
     if (Array.isArray(output[key])) { output[`omitted${key[0].toUpperCase()}${key.slice(1, -1)}Count`] = numericCount(output[`${key.slice(0, -1)}Count`]); output[key] = []; }
-    else delete output[key];
+    else { if (key in output) compaction.omittedFields.push(key); delete output[key]; }
   }
   if (bytes() > defaultAgentPayloadByteLimit) {
     // Pathological identifiers may not fit at all. Require full recovery before action.
