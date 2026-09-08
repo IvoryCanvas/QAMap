@@ -1,5 +1,7 @@
-import { promises as fs } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
+import { comparePaths, createRepositoryTextReader, discoverRepositoryPaths } from "./repository-discovery.js";
+import type { DiscoveryGap } from "./repository-discovery.js";
 
 const maxGraphFiles = 12000;
 const maxSourceBytes = 300_000;
@@ -42,9 +44,22 @@ export interface ChangedFileExpansion {
   via: Record<string, string[]>;
 }
 
-interface ReverseImportIndex {
+export interface ImportDiscoveryCoverage {
+  scope: "import-graph";
+  snapshot: "working-tree";
+  discovery: "git" | "filesystem" | "unavailable";
+  inventoryComplete: boolean;
+  inventoryFiles: number;
+  parsedSources: number;
+  fingerprint: string;
+  limits: { sourceFiles: number; sourceBytes: number; packageFiles: number; traversalHops: number; impactSurfaces: number };
+  skipped: DiscoveryGap[];
+}
+
+export interface ReverseImportIndex {
   importersOf: Map<string, Set<string>>;
   importsOf: Map<string, Set<string>>;
+  coverage: ImportDiscoveryCoverage;
 }
 
 interface WorkspacePackages {
@@ -59,44 +74,47 @@ interface TsconfigPaths {
 const importSpecifierMatcher =
   /(?:import|export)\s+(?:[\s\S]*?from\s+)?["']([^"'\n]+)["']|require\(\s*["']([^"'\n]+)["']\s*\)|import\(\s*["']([^"'\n]+)["']\s*\)/g;
 
-// Per-process cache: safe because the CLI is one-shot per invocation. Callers that
-// mutate source files and re-plan within one process will see a stale graph.
-const indexCache = new Map<string, Promise<ReverseImportIndex>>();
-const maxCachedIndexes = 8;
-
 export async function buildReverseImportIndex(rootInput: string): Promise<ReverseImportIndex> {
   const root = path.resolve(rootInput);
-  const cached = indexCache.get(root);
-  if (cached) {
-    return cached;
+  const inventory = await discoverRepositoryPaths(root, ignoredDirectories);
+  const skipped = [...inventory.skipped];
+  const readable = createRepositoryTextReader(root, skipped, maxSourceBytes);
+  const fingerprints: Array<[string, string]> = [];
+  const readText = async (file: string): Promise<string | undefined> => {
+    const text = await readable(file);
+    if (text !== undefined) fingerprints.push([file, createHash("sha256").update(text).digest("hex")]);
+    return text;
+  };
+  const sourceFiles: string[] = [];
+  const packageJsonFiles: string[] = [];
+  for (const file of inventory.files) {
+    if (file.split("/").slice(0, -1).some((part) => ignoredDirectories.has(part) || part.startsWith("."))) {
+      skipped.push({ path: file, reason: "excluded-directory" });
+    } else if (path.posix.basename(file) === "package.json") {
+      if (packageJsonFiles.length < 200) packageJsonFiles.push(file);
+      else skipped.push({ path: file, reason: "package-limit" });
+    } else if (sourceExtensions.has(path.extname(file))) {
+      sourceFiles.push(file);
+    } else if (file !== "tsconfig.json" && file !== "jsconfig.json") {
+      skipped.push({ path: file, reason: /\.(?:py|go|rs|rb|php|java|kt|swift|dart|c|cpp|h|cs)$/i.test(file)
+        ? "unsupported-language" : "non-source" });
+    }
   }
-  const pending = buildReverseImportIndexUncached(root);
-  if (indexCache.size >= maxCachedIndexes) {
-    indexCache.clear();
-  }
-  indexCache.set(root, pending);
-  return pending;
-}
-
-async function buildReverseImportIndexUncached(root: string): Promise<ReverseImportIndex> {
-  const { sourceFiles, packageJsonFiles } = await collectSourceFiles(root);
   const fileSet = new Set(sourceFiles);
-  const tsconfigPaths = await readTsconfigPaths(root);
-  const workspacePackages = await readWorkspacePackages(root, packageJsonFiles);
+  const tsconfigPaths = await readTsconfigPaths(inventory.files, readText);
+  const workspacePackages = await readWorkspacePackages(packageJsonFiles, readText);
   const importersOf = new Map<string, Set<string>>();
   const importsOf = new Map<string, Set<string>>();
+  let parsedSources = 0;
 
   for (const file of sourceFiles) {
-    let text: string;
-    try {
-      const stats = await fs.stat(path.join(root, file));
-      if (stats.size > maxSourceBytes) {
-        continue;
-      }
-      text = await fs.readFile(path.join(root, file), "utf8");
-    } catch {
+    if (parsedSources >= maxGraphFiles) {
+      skipped.push({ path: file, reason: "source-limit" });
       continue;
     }
+    const text = await readText(file);
+    if (text === undefined) continue;
+    parsedSources++;
     for (const match of text.matchAll(importSpecifierMatcher)) {
       const specifier = match[1] ?? match[2] ?? match[3];
       const resolved = resolveImportSpecifier(specifier, file, fileSet, tsconfigPaths, workspacePackages);
@@ -118,7 +136,18 @@ async function buildReverseImportIndexUncached(root: string): Promise<ReverseImp
     }
   }
 
-  return { importersOf, importsOf };
+  skipped.sort((left, right) => comparePaths(left.path, right.path) || comparePaths(left.reason, right.reason));
+  const limits = { sourceFiles: maxGraphFiles, sourceBytes: maxSourceBytes, packageFiles: 200,
+    traversalHops: defaultMaxHops, impactSurfaces: maxImpactSurfaces };
+  const fingerprint = createHash("sha256").update(JSON.stringify({
+    version: 1, discovery: inventory.discovery, inventoryComplete: inventory.inventoryComplete,
+    files: inventory.files, contents: fingerprints.sort((a, b) => comparePaths(a[0], b[0])), skipped, limits,
+  })).digest("hex");
+  return { importersOf, importsOf, coverage: {
+    scope: "import-graph", snapshot: "working-tree", discovery: inventory.discovery,
+    inventoryComplete: inventory.inventoryComplete, inventoryFiles: inventory.files.length,
+    parsedSources, fingerprint, limits, skipped,
+  } };
 }
 
 export function findImportingSurfaces(
@@ -267,55 +296,13 @@ function* walkImports(
   }
 }
 
-async function collectSourceFiles(root: string): Promise<{ sourceFiles: string[]; packageJsonFiles: string[] }> {
-  const sourceFiles: string[] = [];
-  const packageJsonFiles: string[] = [];
-  const queue: string[] = [""];
-  while (queue.length > 0 && sourceFiles.length < maxGraphFiles) {
-    const relativeDir = queue.shift() as string;
-    let entries;
-    try {
-      entries = await fs.readdir(path.join(root, relativeDir), { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    if (
-      relativeDir &&
-      entries.some((entry) => entry.name === ".git" && (entry.isFile() || entry.isDirectory()))
-    ) {
-      continue;
-    }
-    for (const entry of entries) {
-      if (sourceFiles.length >= maxGraphFiles) {
-        break;
-      }
-      const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) {
-        if (!ignoredDirectories.has(entry.name) && !entry.name.startsWith(".")) {
-          queue.push(relativePath);
-        }
-        continue;
-      }
-      if (!entry.isFile()) {
-        continue;
-      }
-      if (entry.name === "package.json") {
-        packageJsonFiles.push(relativePath);
-        continue;
-      }
-      if (sourceExtensions.has(path.extname(entry.name))) {
-        sourceFiles.push(relativePath);
-      }
-    }
-  }
-  return { sourceFiles, packageJsonFiles };
-}
-
-async function readWorkspacePackages(root: string, packageJsonFiles: string[]): Promise<WorkspacePackages> {
+async function readWorkspacePackages(
+  packageJsonFiles: string[], readText: (file: string) => Promise<string | undefined>,
+): Promise<WorkspacePackages> {
   const byName = new Map<string, string>();
   for (const file of packageJsonFiles.slice(0, 200)) {
     try {
-      const parsed = JSON.parse(await fs.readFile(path.join(root, file), "utf8")) as { name?: string };
+      const parsed = JSON.parse(await readText(file) ?? "") as { name?: string };
       const directory = path.posix.dirname(toPosix(file));
       if (parsed.name && directory !== ".") {
         byName.set(parsed.name, directory);
@@ -327,12 +314,17 @@ async function readWorkspacePackages(root: string, packageJsonFiles: string[]): 
   return { byName };
 }
 
-async function readTsconfigPaths(root: string): Promise<TsconfigPaths> {
+async function readTsconfigPaths(
+  files: string[], readText: (file: string) => Promise<string | undefined>,
+): Promise<TsconfigPaths> {
   const empty: TsconfigPaths = { baseUrl: "", patterns: [] };
   for (const candidate of ["tsconfig.json", "jsconfig.json"]) {
     let raw: string;
     try {
-      raw = await fs.readFile(path.join(root, candidate), "utf8");
+      if (!files.includes(candidate)) continue;
+      const text = await readText(candidate);
+      if (text === undefined) continue;
+      raw = text;
     } catch {
       continue;
     }

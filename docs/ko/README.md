@@ -13,6 +13,7 @@ QAMap을 사용하는 데 필요한 내용을 한국어로 정리했습니다. �
 | 설치하지 않고 한 번 실행해 보기 | [빠른 시작](quickstart.md) |
 | Codex, ChatGPT 또는 다른 에이전트에서 사용하기 | [에이전트 연동](agent-integration.md) |
 | 반복되는 오해를 저장소별 QA 기준으로 보완하기 | [Manifest 안내](manifest.md) |
+| 저장소에서 어디까지 탐색했는지 확인하기 | [탐색 범위 안내](repository-discovery.md) |
 | 제품 개요부터 다시 보기 | [한국어 README](../../README.ko.md) |
 
 ## 자주 쓰는 명령

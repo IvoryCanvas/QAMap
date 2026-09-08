@@ -36,6 +36,7 @@ Example from the committed subscription-renewal fixture:
 QAMap QA
 Local static analysis. No cloud or LLM token. Product QA was not run.
 Inferred behavior is a draft, not a product specification; intended versus broken remains a human decision.
+Import discovery: 2 source files parsed from 3 inventoried paths (git; working-tree import graph only; inventory complete).
 
 Change
   Prevent duplicate subscription renewal requests (medium confidence; review required)

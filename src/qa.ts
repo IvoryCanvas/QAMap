@@ -59,6 +59,8 @@ import {
 import type { AddedDiffEvidence } from "./test-plan.js";
 import { parsePythonValidationCommand } from "./validation-command.js";
 import { TOOL_NAME, VERSION } from "./version.js";
+import { buildReverseImportIndex } from "./import-graph.js";
+import type { ImportDiscoveryCoverage } from "./import-graph.js";
 
 export interface QaDraftOptions extends Omit<E2eDraftOptions, "dryRun" | "output"> {
   automaticWorkspaceScope?: boolean;
@@ -88,6 +90,7 @@ export interface QaDraftResult {
   noCloud: true;
   noLlmToken: true;
   analysisScope: QaAnalysisScope;
+  importDiscovery?: ImportDiscoveryCoverage;
   execution: QaExecutionReceipt;
   testSuite: E2eDraftResult["plan"]["testSuite"];
   changedTestContracts: ChangedTestContract[];
@@ -558,6 +561,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     noCloud: true,
     noLlmToken: true,
     analysisScope: detectedScope ?? explicitOrRootAnalysisScope(root, e2eOptions.workspaceRoot),
+    importDiscovery: (await buildReverseImportIndex(root)).coverage,
     execution: {
       status: "not-run",
       performed: false,
@@ -3121,6 +3125,11 @@ function repositoryContractExecutionLine(execution: QaExecutionReceipt): string 
   return `Execution status: ${execution.status}; QAMap ran the selected repository command with exit code ${execution.exitCode ?? "not available"}.`;
 }
 
+function importDiscoverySummary(coverage: ImportDiscoveryCoverage): string {
+  return `${coverage.parsedSources} source files parsed from ${coverage.inventoryFiles} inventoried paths ` +
+    `(${coverage.discovery}; working-tree import graph only; inventory ${coverage.inventoryComplete ? "complete" : "incomplete"}).`;
+}
+
 export function formatTextQaDraft(result: QaDraftResult): string {
   const lines: string[] = [];
   const primaryIntent = result.changeAnalysis.intents[0];
@@ -3131,6 +3140,9 @@ export function formatTextQaDraft(result: QaDraftResult): string {
   lines.push("QAMap QA");
   lines.push("Local static analysis. No cloud or LLM token. Product QA was not run.");
   lines.push("Inferred behavior is a draft, not a product specification; intended versus broken remains a human decision.");
+  if (result.importDiscovery) {
+    lines.push(`Import discovery: ${importDiscoverySummary(result.importDiscovery)}`);
+  }
   lines.push("");
   lines.push("Change");
   if (primaryIntent) {
@@ -3287,6 +3299,16 @@ export function formatMarkdownQaDraft(result: QaDraftResult): string {
       "intended-versus-broken classification requires human judgment.",
   );
   lines.push(`- Analysis scope: ${escapeMarkdownInline(formatAnalysisScope(result.analysisScope))}`);
+  if (result.importDiscovery) {
+    const coverage = result.importDiscovery;
+    lines.push(`- Import discovery: ${importDiscoverySummary(coverage)}`);
+    const reasons = new Map<string, number>();
+    for (const gap of coverage.skipped) reasons.set(gap.reason, (reasons.get(gap.reason) ?? 0) + 1);
+    if (reasons.size > 0) {
+      lines.push(`- Import discovery exclusions: ${[...reasons].map(([reason, count]) => `${reason} ${count}`).join(", ")}. Exact paths are in JSON \`importDiscovery.skipped\`.`);
+    }
+    lines.push("- Discovery limits: static JS/TS/Vue/Svelte imports from the current filesystem, not full semantic coverage or proof of test execution. Historical refs and unresolved runtime wiring require separate evidence.");
+  }
   const primaryIntent = result.changeAnalysis.intents[0];
   if (primaryIntent) {
     lines.push(`- Change intent: ${escapeMarkdownInline(primaryIntent.title)} [${primaryIntent.confidence}]`);

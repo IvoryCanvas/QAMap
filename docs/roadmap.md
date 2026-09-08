@@ -38,6 +38,33 @@ There is no fixed end date or patch count for `0.4.x`. QAMap will remain on comp
 
 ### Current Focus After 0.4.17
 
+#### 0.4.18 Delivery Order
+
+The release remains in preparation. Do not bump package or plugin versions until
+the required behavior and release checks pass. Existing inference boundaries
+(#273) and concrete lifecycle evidence (#274, #275, #276; #261) are already merged.
+
+| Order | Issue | Remaining contract |
+| --- | --- | --- |
+| 1 | [#259](https://github.com/IvoryCanvas/QAMap/issues/259) | Repository index with coverage and incremental invalidation. Import discovery receipts are the first foundation, not completion of the full index. |
+| 2 | [#260](https://github.com/IvoryCanvas/QAMap/issues/260) | Trace changed symbols across packages and product boundaries, including unresolved edges. |
+| 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Reject vocabulary-only behavior without hiding positive evidence. This can be developed independently of indexing. |
+| 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Carry coverage and targeted uncertainty into the bounded agent handoff without losing product contracts. |
+| 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Compare generic, cold-index, and warm-index tasks with quality gates before making savings claims. |
+| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | Verify the exact published package with a self-contained manifest smoke. |
+
+Each delivery stays reviewable and independently tested. A unit-test pass is not
+a product benchmark pass. Benchmarks must retain relevant evidence, reject
+unrelated controls, distinguish static plans from execution, and report missing
+provider measurements as unavailable. New public reproductions must be neutral,
+never copied from private repositories.
+
+See [repository discovery](repository-discovery.md) for the scope of the first
+indexing increment. Persistent blocks, dependency invalidation, and compact
+handoff integration remain pending until their own acceptance criteria pass.
+
+#### Generalized Work Queue
+
 The OpenAI Plugin Directory is a real first-run surface, so the next patches
 continue to prioritize recommendation quality over another distribution channel
 or runner name. QAMap 0.4.17 preserves schema-derived response provenance,
