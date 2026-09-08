@@ -1,7 +1,7 @@
 # Optional Repository Cache Arms
 
 The existing `agent-bench.config.json` and `generic`/`qamap` arms retain their
-workflow. `agent-repository-bench.config.json` opts into the same task suite and
+workflow. `agent-repository-bench.config.json` opts into six repository tasks and
 provider adapters with `generic`, `qamap-cold`, and `qamap-warm`. All QAMap arms
 have identical tool schemas. Every arm receives the identical system/task
 prompts, turn/output limits, and model. No extra agent engine is involved.
@@ -18,6 +18,27 @@ operator explicitly configures `QAMAP_BENCH_PROVIDER`, `QAMAP_BENCH_MODEL`, and
 returns `skipped`. Neither the config nor tests include credentials; focused
 tests and dry runs never call a provider. This workflow does not install fixture
 dependencies or execute generated Playwright tests automatically.
+
+## Measurement Run
+
+Start with one task after approving the model and expenditure:
+
+```sh
+node scripts/agent-bench.mjs --config agent-repository-bench.config.json --task trace-shared-package --runs 1 --max-requests 36 --assert --format json --save
+```
+
+Remove `--task` and use at least three runs for the full comparison after the
+pilot. `--max-requests` is shared across every task, arm and repeat in one
+invocation, including failed requests. The default is 100; raising it requires
+the operator to reconsider the approved budget. It is a request ceiling,
+**not a currency cap**. The 60-second request timeout includes reading the
+response body. A timed-out request may still incur provider charges.
+
+If a later request fails, prior confirmed usage survives in `partialUsage`;
+complete-run usage is null and that run cannot support a savings comparison.
+Saved JSON preserves these receipts. The report pins an implementation digest,
+prompts, fixtures, limits and model so a version label alone cannot conceal a
+different local build. Save notifications use stderr to keep JSON stdout valid.
 
 ## Cache Treatment
 
@@ -69,9 +90,17 @@ and missing usage are ineligible.
 Token fields come only from provider-reported input/output/cache usage. Cache
 counts retain provider-native meaning and are not combined with input counts.
 
+The six tasks cover editor behavior, transitive package impact, a changed test,
+mixed documentation and product edits, unresolved dynamic wiring, and an editor
+follow-up. The [task oracle](../../test/agent-tasks/README.md) scores located
+evidence precision/recall, contract completeness and uncertainty. Fixture bytes
+are checked independently of Git metadata. The offline script deliberately
+does not write the expected answer and therefore never passes model quality;
+its second unchanged QAMap query verifies warm reuse after the head update.
+
 Dry-run success means **harness-only**. Scripted usage is null and comparisons
 are `not-measured`; passing offline tests prove neither model quality nor token
-savings. Existing local criteria inspect deliverables and selected commands;
-they do not establish browser reproduction quality. All fixture inputs are the
-existing public synthetic suite. Temporary state is removed on completion or
+savings. Local criteria inspect deliverables and selected commands;
+they do not establish browser reproduction quality. All fixture inputs are
+public and synthetic. Temporary state is removed on completion or
 an error after baseline materialization.

@@ -11,6 +11,13 @@ committed public fixture from `test/benchmarks/`:
 | `verify-copy-against-spec` | `web-divergent-surface-copy` | Compare rendered copy on two surfaces with a specification table committed as a task input. |
 | `reverify-after-fix` | `web-persisted-workspace-setting` | Re-verify a persistence fix on top of a seeded regression with a pre-authored manifest baseline. |
 
+The optional `agent-repository-bench.config.json` selects six separate static
+review tasks from `repository-agent-quality`: direct editor behavior,
+transitive shared-package impact, a new test contract, mixed maintenance and
+product changes, unresolved dynamic wiring, and a one-file follow-up. Each
+asks for located evidence and concrete structured contracts. No answer oracle
+is copied into the repository shown to the model.
+
 ## What a task declares
 
 `task.json` is validated against [`schema.json`](schema.json):
@@ -32,7 +39,7 @@ committed public fixture from `test/benchmarks/`:
 ## How success is judged
 
 Success is decided locally and deterministically after the agent stops. The
-model's prose is never read. Four check kinds exist:
+model's prose is never read. Five check kinds exist:
 
 | Kind | Passes when |
 | --- | --- |
@@ -40,8 +47,23 @@ model's prose is never read. Four check kinds exist:
 | `command-exit` | An argv command run from the repository root exits with the expected code. |
 | `stdout-includes` | An argv command's stdout contains a string. |
 | `json-path-equals` | A dotted path inside a JSON file equals an expected literal. |
+| `qa-evidence` | Exact source locations, requested contract values, uncertainty and execution status match the public task oracle. |
 
-Checks are static and cheap: they confirm that a deliverable exists at the
+`qa-evidence` reports evidence precision, recall and contract completeness.
+Duplicates, unrelated locations, missing contracts, speculative dynamic edges
+and incorrect execution states fail. This is a bounded exact-answer benchmark,
+not a general semantic judge. Alternative valid line choices outside the
+declared expression/assertion locations are not accepted. Answer files are
+bounded to 64KB and cannot be symlinks. Fixture bytes and modes are checked
+before and after the agent independently of mutable Git metadata.
+
+The shared-package oracle separately executes the committed Node test and
+confirms its seeded regression; the test-only oracle confirms its passing
+contract. These are judge checks, not evidence that the model or a browser
+executed QA. The editor tasks remain static reviews.
+
+Checks inspect structured results and run bounded local commands: they confirm
+that a deliverable exists at the
 requested path, references the expected endpoint, selector, or key, leaves
 product source untouched, and reports the expected structured answer. They do
 not install dependencies or launch a browser; the

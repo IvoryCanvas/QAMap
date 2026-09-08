@@ -1,0 +1,60 @@
+{
+  "id": "plan-ui-change",
+  "title": "plan ui change",
+  "prompt": "Plan the changed editor disabled state for blank and nonblank input. Report contracts with keys emptyDisabled and filledDisabled. Cite the button expression and each existing editor test assertion. Identify whether the blank-input test now conflicts with the implementation in contracts.blankTestConflicts.\nWrite only qa-result.json with exactly four fields: evidence (a list of {file, line}, one-based repository-relative locations, no duplicates), contracts (the requested keys), uncertainties (a list of missing-input identifiers), and execution ('not-run' for this static review). Do not edit source, tests, configuration or docs, install dependencies, or run product tests. Inspect the repository rather than assuming an intended behavior; inferred behavior remains a draft. The locations must point to the requested expressions and assertions, not merely declarations nearby.",
+  "fixture": {
+    "path": "test/benchmarks/repository-agent-quality",
+    "baseOverlay": "base",
+    "headOverlay": "ui",
+    "commitMessage": "fix: disable saving blank input"
+  },
+  "successCriteria": [
+    {
+      "kind": "qa-evidence",
+      "path": "qa-result.json",
+      "expected": {
+        "evidence": [
+          {
+            "file": "src/editor.tsx",
+            "line": 3
+          },
+          {
+            "file": "test/editor.test.tsx",
+            "line": 5
+          },
+          {
+            "file": "test/editor.test.tsx",
+            "line": 6
+          }
+        ],
+        "contracts": {
+          "emptyDisabled": true,
+          "filledDisabled": false,
+          "blankTestConflicts": true
+        },
+        "uncertainties": [],
+        "execution": "not-run"
+      },
+      "description": "Located repository evidence, concrete contracts and uncertainty match the public oracle."
+    },
+    {
+      "kind": "command-exit",
+      "command": [
+        "git",
+        "diff",
+        "--quiet",
+        "HEAD",
+        "--",
+        "src",
+        "packages",
+        "test",
+        "docs",
+        "package.json"
+      ],
+      "exitCode": 0,
+      "description": "Product source, contracts and fixture configuration remain unchanged."
+    }
+  ],
+  "maxTurns": 12,
+  "firstAuthoring": true
+}

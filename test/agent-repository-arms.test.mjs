@@ -203,6 +203,7 @@ test("optional config is offline harness-only and missing-provider runs stay ski
       cwd: root, env, maxBuffer: 10 * 1024 * 1024,
     })).stdout);
     assert.equal(report.status, "dry-run");
+    assert.equal(report.tasks.length, 6);
     assert.equal(report.summary.harnessPassed, true);
     assert.equal(report.summary.qualityPassed, null);
     for (const task of report.tasks) {
@@ -222,6 +223,7 @@ test("optional config is offline harness-only and missing-provider runs stay ski
         assert.equal(run.cacheWriteTokens, null);
         assert.equal(run.wallClockMs, null);
         assert.equal(run.success, false);
+        assert.equal(run.quality[0].passed, false, "the scripted harness does not fabricate a correct answer");
       }
       const cold = task.arms["qamap-cold"].runs[0];
       const warm = task.arms["qamap-warm"].runs[0];
@@ -230,6 +232,8 @@ test("optional config is offline harness-only and missing-provider runs stay ski
       assert.equal(warm.repositoryCache.setup.status, "prebuilt");
       assert.equal(cold.io.repositoryIndexes[0].reuse.status, "cold");
       assert.equal(warm.io.repositoryIndexes[0].reuse.status, "incremental");
+      assert.equal(warm.io.repositoryIndexes[1].reuse.status, "warm");
+      assert.equal(warm.io.repositoryIndexes[1].reuse.rebuiltFiles, 0);
     }
     assert.doesNotMatch(JSON.stringify(report), /\/var\/folders|\/private\/var|\/tmp\//);
     assert.deepEqual(await fs.readdir(env.TMPDIR), [], "all fixture/cache directories must be cleaned");

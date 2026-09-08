@@ -1,0 +1,5 @@
+{
+  "name": "@sample/rules",
+  "type": "module",
+  "exports": "./index.mjs"
+}

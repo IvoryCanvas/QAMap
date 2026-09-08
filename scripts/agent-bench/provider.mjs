@@ -38,6 +38,8 @@ export function createProvider({
   apiKey,
   fetchImpl = globalThis.fetch,
   maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS,
+  requestTimeoutMs = 60_000,
+  maxRequests = 100,
   endpoint,
 }) {
   if (!SUPPORTED_PROVIDERS.includes(name)) {
@@ -55,33 +57,47 @@ export function createProvider({
   if (!Number.isInteger(maxOutputTokens) || maxOutputTokens <= 0) {
     throw new Error("maxOutputTokens must be a positive integer.");
   }
+  if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 1 || requestTimeoutMs > 300_000) {
+    throw new Error("requestTimeoutMs must be between 1 and 300000.");
+  }
+  if (!Number.isSafeInteger(maxRequests) || maxRequests < 1) throw new Error("maxRequests must be a positive integer.");
   const adapter = name === "anthropic" ? anthropicAdapter : openAiAdapter;
   const url = endpoint ?? adapter.url;
+  let requests = 0;
 
   return {
     name,
     model,
     maxOutputTokens,
     async complete({ system, messages, tools }) {
-      const body = adapter.buildRequest({ model, system, messages, tools, maxOutputTokens });
-      const response = await fetchImpl(url, {
-        method: "POST",
-        headers: { "content-type": "application/json", ...adapter.headers(apiKey) },
-        body: JSON.stringify(body),
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        throw new Error(
-          `${name} request failed with status ${response.status}: ${redact(text, apiKey).slice(0, 300)}`,
-        );
-      }
-      let json;
+      if (requests >= maxRequests) throw new Error(`${name} request budget exhausted.`);
+      requests++;
+      const signal = AbortSignal.timeout(requestTimeoutMs);
       try {
-        json = JSON.parse(text);
-      } catch {
-        throw new Error(`${name} response was not valid JSON.`);
+        const body = adapter.buildRequest({ model, system, messages, tools, maxOutputTokens });
+        const response = await fetchImpl(url, {
+          method: "POST",
+          headers: { "content-type": "application/json", ...adapter.headers(apiKey) },
+          body: JSON.stringify(body),
+          signal,
+        });
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(
+            `${name} request failed with status ${response.status}: ${redact(text, apiKey).slice(0, 300)}`,
+          );
+        }
+        let json;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          throw new Error(`${name} response was not valid JSON.`);
+        }
+        return adapter.parseResponse(json);
+      } catch (error) {
+        if (signal.aborted) throw new Error(`${name} request timed out; usage for this request is unknown.`);
+        throw new Error(redact(error instanceof Error ? error.message : String(error), apiKey));
       }
-      return adapter.parseResponse(json);
     },
   };
 }

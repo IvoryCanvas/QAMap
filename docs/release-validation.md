@@ -22,16 +22,30 @@ Validated on Node 22.14.0 with public synthetic fixtures:
 
 | Gate | Result |
 | --- | --- |
-| Full test suite | 596/596 passed, including bounded path priority, deep-export guards and recovery-path compatibility |
+| Full test suite with coverage | 610/610 passed; lines 91.56%, branches 88.45%, functions 96.20% |
 | Static QA benchmark | 43/43 contracts passed |
 | Repository benchmark | 11/11 checks passed, including all 7 required quality cases |
 | Context reuse | 10/10 checks passed |
 | Execution benchmark | 3/3 seeded regressions caught and fixed fixtures passed |
 | Production package install | 234-file artifact installed in isolation and produced located static QA evidence |
 | Published-package smoke | Exact npm 0.4.17 passed six self-contained checks; fixture removed |
-| Optional three-arm harness | Three public tasks across generic, cold and warm arms passed offline harness checks; provider usage remains unmeasured |
+| Optional three-arm harness | Six public tasks across generic, cold and warm arms completed 18 offline runs with no harness error; model quality and provider usage remain unmeasured |
+| Provider failure boundaries | Five local-only transport tests passed, including timeout, request ceiling, partial usage and post-response judge failure |
+| Repository policy and plugin metadata | Zero scan findings; metadata checks and package preview passed |
 
-The 2,117-file repository benchmark rebuilt 2,117 blocks on cold startup, zero
+The six review tasks check exact source locations, contract values, uncertainty
+and static execution status. Independent fixture checks reject omitted evidence,
+incorrect answers and source changes. These are bounded oracle tests, not
+observed model scores. The scripted offline run deliberately does not supply
+correct answers or token counts.
+
+Provider requests now have a shared request ceiling and body-inclusive timeout.
+Confirmed usage survives later transport or judge failures without making failed
+runs eligible for comparison. Saved reports identify the executed implementation.
+Use the [one-task pilot](../scripts/agent-bench/README.md#measurement-run) only
+after configuring a model, API key and spending limit.
+
+The preceding 2,117-file repository benchmark rebuilt 2,117 blocks on cold startup, zero
 on an unchanged warm run, and one after a single source or package-file edit.
 Each case retained the expected evidence. Warm runs still read and hash all
 supported files: 93,660 source bytes plus 780,628 cache bytes in the unchanged

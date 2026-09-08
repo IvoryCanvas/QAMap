@@ -84,7 +84,7 @@ report is deterministic and is never a measurement. Supported providers are
 Node.js built-in `fetch` and no additional dependency.
 
 The task suite lives in [`test/agent-tasks/`](../test/agent-tasks/README.md).
-Every task reuses a committed fixture from `test/benchmarks/`: reproduce a
+The default three tasks reuse committed fixtures from `test/benchmarks/`: reproduce a
 duplicate-request regression, verify surface copy against a specification
 table, and re-verify a persistence fix after a seeded regression. For each
 task, the harness materializes the fixture as a temporary Git repository and
@@ -117,10 +117,23 @@ run and reports all runs as steady state.
 
 The report pins what was run: provider, model, run count, maximum output tokens
 per request, and SHA-256 digests of the system prompt, each arm's tool schema,
-and the task suite, plus the QAMap version. `--format json` prints the
+and the task suite, plus the QAMap version and compiled implementation digest.
+Request timeout and the shared request ceiling are pinned separately from any
+operator-approved monetary budget. `--format json` prints the
 `qamap.agent-benchmark` v1 contract, `--save` writes it under the gitignored
 `bench-results/`, `--arm generic|qamap` limits the arms, and `--assert` fails
-only when a run errored, never on a skipped run or an unmet task.
+on harness errors or failed measured task quality. A skipped run does not fail
+CI, and a dry run checks the harness without claiming model quality.
+
+For repository-first evaluation, the optional
+[`agent-repository-bench.config.json`](../agent-repository-bench.config.json)
+uses six static-review tasks with generic, cold-index and warm-index arms.
+It checks exact evidence precision/recall, requested contract values,
+uncertainty, source integrity and execution status before allowing a token
+comparison. See the [measurement runbook](../scripts/agent-bench/README.md)
+for offline checks, a one-task pilot, repeat counts and request limits.
+If a request fails after earlier responses, confirmed usage remains in
+`partialUsage`, while complete-run totals are unknown and ineligible.
 
 What leaves the machine when a key is configured: the committed system prompt,
 the committed task prompts and tool schemas, and tool results produced inside a
@@ -133,9 +146,10 @@ report. The benchmark never reads a private repository.
 The benchmark makes no pricing claim. It does not convert tokens to money, does
 not infer a cost-reduction multiplier, and does not compare providers with each
 other; QAMap itself makes no model request, so both arms spend the calling
-agent's tokens. Success checks are static, so a passing reproduction test proves
-that the deliverable has the requested shape, not that it was executed; the
-execution benchmark below remains the gate for generated browser tests.
+agent's tokens. Deliverable checks do not prove that a generated reproduction
+was executed. The optional suite also runs two bounded Node contract checks;
+those are independent judge executions, not browser QA. The execution benchmark
+below remains the gate for generated browser tests.
 
 ## Run the execution contract
 

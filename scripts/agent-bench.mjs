@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { aggregateRuns, compareQualityGatedRuns } from "./agent-bench/aggregate.mjs";
 import { judgeSuccess } from "./agent-bench/judge.mjs";
+import { snapshotEvidenceFixture } from "./agent-bench/evidence-quality.mjs";
 import { runAgentLoop } from "./agent-bench/loop.mjs";
 import { createProvider, DEFAULT_MAX_OUTPUT_TOKENS } from "./agent-bench/provider.mjs";
 import { formatTextReport } from "./agent-bench/report.mjs";
@@ -32,6 +33,7 @@ const save = args.includes("--save");
 const assertContract = args.includes("--assert");
 const format = readArg("--format") ?? "text";
 const armFilter = readArg("--arm");
+const taskFilter = readArg("--task");
 const runsOverride = readArg("--runs");
 
 if (!["json", "text"].includes(format)) {
@@ -46,6 +48,8 @@ if (armFilter !== undefined && !config.arms.includes(armFilter)) {
 }
 const arms = armFilter === undefined ? config.arms : [armFilter];
 const maxOutputTokens = config.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
+const maxProviderRequests = parsePositiveInteger(readArg("--max-requests") ?? config.maxProviderRequests ?? 100, "--max-requests");
+const requestTimeoutMs = config.requestTimeoutMs ?? 60_000;
 const carryOverPaths = config.carryOverPaths ?? [".qamap"];
 const repositoryExperiment = config.arms.some(isRepositoryArm);
 const cliPath = path.join(repositoryRoot, "dist", "cli.js");
@@ -53,12 +57,16 @@ if (!(await exists(cliPath))) {
   throw new Error("dist/cli.js is missing; run `pnpm build` before the agent benchmark.");
 }
 
-const suite = await loadSuite({ repositoryRoot, taskIds: config.tasks });
+if (taskFilter !== undefined && !config.tasks.includes(taskFilter)) throw new Error("--task must name a task in the selected config.");
+const suite = await loadSuite({ repositoryRoot, taskIds: taskFilter ? [taskFilter] : config.tasks });
 const systemPrompt = await fs.readFile(path.resolve(repositoryRoot, config.systemPrompt), "utf8");
 const packageJson = JSON.parse(await fs.readFile(path.join(repositoryRoot, "package.json"), "utf8"));
 const pinnedBase = {
+  implementationSha256: await implementationFingerprint(),
   runs,
   maxOutputTokens,
+  maxProviderRequests,
+  requestTimeoutMs,
   systemPromptSha256: sha256(systemPrompt),
   toolSchemaSha256: Object.fromEntries(config.arms.map((arm) => [arm, toolSchemaSha256(toolsForArm(arm))])),
   suiteSha256: suite.sha256,
@@ -86,7 +94,7 @@ if (setup.kind === "skipped") {
   }
   report = buildReport({
     status: dryRun ? "dry-run" : "measured",
-    pinned: { provider: setup.provider, model: setup.model, ...pinnedBase },
+    pinned: { provider: dryRun ? "scripted" : setup.provider.name, model: setup.model, ...pinnedBase },
     tasks,
   });
 }
@@ -102,7 +110,7 @@ if (save) {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const outputPath = path.join("bench-results", `agent-bench-${stamp}.json`);
   await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`);
-  console.log(`\nSaved: ${outputPath}`);
+  process.stderr.write(`\nSaved: ${outputPath}\n`);
 }
 
 // A skipped run is not a failure: CI without a provider key must stay green.
@@ -123,6 +131,8 @@ async function runArm({ task, arm, setup }) {
       let executor;
       try {
         prepared = await materializeTaskRepo(task, carried, arm);
+        const evidenceTask = task.successCriteria.some((criterion) => criterion.kind === "qa-evidence");
+        const protectedFixture = evidenceTask ? await snapshotEvidenceFixture(prepared.repositoryRoot) : null;
         if (repositoryExperiment) {
           record.repositoryCache = prepared.repositoryCache;
           record.pairing = await repositoryPairing({ task, repositoryRoot: prepared.repositoryRoot,
@@ -131,7 +141,8 @@ async function runArm({ task, arm, setup }) {
         }
         executor = await createToolExecutor({ repositoryRoot: prepared.repositoryRoot, cliPath,
           env: prepared.env, measureIO: repositoryExperiment });
-        const provider = setup.kind === "dry-run" ? createScriptedProvider({ arm }) : setup.provider;
+        const provider = setup.kind === "dry-run" ? createScriptedProvider({ arm,
+          staticReview: task.successCriteria.some((criterion) => criterion.kind === "qa-evidence") }) : setup.provider;
         const loop = await runAgentLoop({
           provider,
           tools,
@@ -140,8 +151,15 @@ async function runArm({ task, arm, setup }) {
           prompt: task.prompt,
           maxTurns: task.maxTurns,
         });
+        Object.assign(record, loop);
         const verdict = await judgeSuccess(task.successCriteria, prepared.repositoryRoot, { env: prepared.env });
-        Object.assign(record, loop, { success: verdict.success && (!repositoryExperiment || loop.stopReason === "end-turn"), checks: verdict.checks });
+        if (protectedFixture) {
+          const unchanged = protectedFixture === await snapshotEvidenceFixture(prepared.repositoryRoot);
+          verdict.checks.push({ kind: "protected-fixture", description: "Fixture bytes and modes are unchanged independently of Git state.", passed: unchanged });
+          verdict.success &&= unchanged;
+        }
+        Object.assign(record, { success: verdict.success && (!repositoryExperiment || loop.stopReason === "end-turn"), checks: verdict.checks });
+        if (verdict.quality) record.quality = verdict.quality;
         if (setup.kind === "dry-run") {
           // Wall-clock is not a measurement in a dry run and would break
           // deterministic output.
@@ -151,6 +169,7 @@ async function runArm({ task, arm, setup }) {
           carried = await collectCarryOver(prepared.repositoryRoot, carried);
         }
       } catch (error) {
+        if (error?.receipt) Object.assign(record, error.receipt);
         record.error = sanitizeMessage(error, prepared?.tempRoot);
       } finally {
         if (repositoryExperiment && executor) record.io = executor.measurements();
@@ -241,7 +260,7 @@ function resolveProvider(providerConfig) {
   return {
     kind: "provider",
     ...visible,
-    provider: createProvider({ name, model, apiKey, maxOutputTokens }),
+    provider: createProvider({ name, model, apiKey, maxOutputTokens, maxRequests: maxProviderRequests, requestTimeoutMs }),
   };
 }
 
@@ -313,6 +332,8 @@ function summarize(status, tasks) {
 }
 
 function validateConfig(value) {
+  if (value?.requestTimeoutMs !== undefined && (!Number.isSafeInteger(value.requestTimeoutMs)
+    || value.requestTimeoutMs < 1 || value.requestTimeoutMs > 300_000)) throw new Error("requestTimeoutMs must be between 1 and 300000.");
   if (!value || value.schemaVersion !== 1) {
     throw new Error("Agent benchmark config must use schemaVersion 1.");
   }
@@ -359,7 +380,7 @@ function readArg(name) {
 
 function parsePositiveInteger(value, flag) {
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${flag} must be a positive integer`);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${flag} must be a positive integer`);
   return parsed;
 }
 
@@ -371,6 +392,21 @@ function sanitizeMessage(error, tempRoot) {
 
 function sha256(text) {
   return createHash("sha256").update(text).digest("hex");
+}
+
+async function implementationFingerprint() {
+  const hash = createHash("sha256");
+  async function visit(relative) {
+    const stats = await fs.stat(path.join(repositoryRoot, relative));
+    if (stats.isDirectory()) {
+      for (const name of (await fs.readdir(path.join(repositoryRoot, relative))).sort()) await visit(`${relative}/${name}`);
+    } else if (/\.(?:m?js)$/.test(relative)) {
+      hash.update(relative); hash.update("\0");
+      hash.update(await fs.readFile(path.join(repositoryRoot, relative))); hash.update("\0");
+    }
+  }
+  for (const relative of ["dist", "scripts/agent-bench", "scripts/agent-bench.mjs", "scripts/lib/fixture-repo.mjs"]) await visit(relative);
+  return hash.digest("hex");
 }
 
 async function git(cwd, gitArgs) {
