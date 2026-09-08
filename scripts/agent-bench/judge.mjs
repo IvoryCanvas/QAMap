@@ -8,20 +8,29 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
+import { evaluateEvidenceAnswer } from "./evidence-quality.mjs";
 
 const execFileAsync = promisify(execFile);
 const SECRET_ENV_PATTERN = /(key|token|secret|password|passwd|credential)/i;
 
-export const LOCAL_CRITERIA_KINDS = ["file-exists", "command-exit", "stdout-includes", "json-path-equals"];
+export const LOCAL_CRITERIA_KINDS = ["file-exists", "command-exit", "stdout-includes", "json-path-equals", "qa-evidence"];
 
 export async function judgeSuccess(criteria, repositoryRoot, { timeoutMs = 60_000, env } = {}) {
   const root = path.resolve(repositoryRoot);
   const checks = [];
+  const quality = [];
   for (const criterion of criteria) {
     let passed = false;
     let detail;
     try {
-      passed = await evaluate(criterion, root, timeoutMs, env);
+      if (criterion.kind === "qa-evidence") {
+        const file = resolveInside(root, criterion.path);
+        const stat = await fs.lstat(file).catch(() => null);
+        const answer = stat?.isFile() && stat.size <= 65_536 ? JSON.parse(await fs.readFile(file, "utf8")) : null;
+        const result = evaluateEvidenceAnswer(answer, criterion.expected);
+        quality.push(result);
+        passed = result.passed;
+      } else passed = await evaluate(criterion, root, timeoutMs, env);
     } catch (error) {
       detail = (error instanceof Error ? error.message : String(error)).split(root).join("<repo>");
     }
@@ -32,7 +41,8 @@ export async function judgeSuccess(criteria, repositoryRoot, { timeoutMs = 60_00
       ...(detail ? { detail } : {}),
     });
   }
-  return { success: checks.length > 0 && checks.every((check) => check.passed), checks };
+  return { success: checks.length > 0 && checks.every((check) => check.passed), checks,
+    ...(quality.length ? { quality } : {}) };
 }
 
 export function readJsonPath(value, jsonPath) {

@@ -1,0 +1,56 @@
+{
+  "id": "review-follow-up",
+  "title": "review follow up",
+  "prompt": "Review the one-file follow-up to the editor. Report contracts with keys blankDisabled, filledEditableDisabled, and filledReadOnlyDisabled. Cite the changed parameter declaration and the disabled expression. Keep the previous blank-input rule distinct from the added read-only rule.\nWrite only qa-result.json with exactly four fields: evidence (a list of {file, line}, one-based repository-relative locations, no duplicates), contracts (the requested keys), uncertainties (a list of missing-input identifiers), and execution ('not-run' for this static review). Do not edit source, tests, configuration or docs, install dependencies, or run product tests. Inspect the repository rather than assuming an intended behavior; inferred behavior remains a draft. The locations must point to the requested expressions and assertions, not merely declarations nearby.",
+  "fixture": {
+    "path": "test/benchmarks/repository-agent-quality",
+    "baseOverlay": "ui",
+    "headOverlay": "followup",
+    "commitMessage": "fix: prevent editing read-only content"
+  },
+  "successCriteria": [
+    {
+      "kind": "qa-evidence",
+      "path": "qa-result.json",
+      "expected": {
+        "evidence": [
+          {
+            "file": "src/editor.tsx",
+            "line": 2
+          },
+          {
+            "file": "src/editor.tsx",
+            "line": 3
+          }
+        ],
+        "contracts": {
+          "blankDisabled": true,
+          "filledEditableDisabled": false,
+          "filledReadOnlyDisabled": true
+        },
+        "uncertainties": [],
+        "execution": "not-run"
+      },
+      "description": "Located repository evidence, concrete contracts and uncertainty match the public oracle."
+    },
+    {
+      "kind": "command-exit",
+      "command": [
+        "git",
+        "diff",
+        "--quiet",
+        "HEAD",
+        "--",
+        "src",
+        "packages",
+        "test",
+        "docs",
+        "package.json"
+      ],
+      "exitCode": 0,
+      "description": "Product source, contracts and fixture configuration remain unchanged."
+    }
+  ],
+  "maxTurns": 12,
+  "firstAuthoring": true
+}

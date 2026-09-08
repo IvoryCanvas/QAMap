@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "runs": 3,
-  "tasks": ["reproduce-regression", "verify-copy-against-spec", "reverify-after-fix"],
+  "tasks": ["plan-ui-change", "trace-shared-package", "review-test-contract", "separate-mixed-change", "report-dynamic-boundary", "review-follow-up"],
   "arms": ["generic", "qamap-cold", "qamap-warm"],
   "provider": {
     "nameEnv": "QAMAP_BENCH_PROVIDER",
@@ -9,6 +9,8 @@
     "apiKeyEnv": "QAMAP_BENCH_API_KEY"
   },
   "maxOutputTokens": 4096,
+  "maxProviderRequests": 100,
+  "requestTimeoutMs": 60000,
   "carryOverPaths": [],
   "systemPrompt": "scripts/agent-bench/prompts/system.md"
 }

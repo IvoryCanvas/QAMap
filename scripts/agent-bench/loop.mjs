@@ -18,7 +18,16 @@ export async function runAgentLoop({ provider, tools, executor, system, prompt, 
 
   while (turns < maxTurns) {
     turns += 1;
-    const response = await provider.complete({ system, messages, tools });
+    let response;
+    try {
+      response = await provider.complete({ system, messages, tools });
+    } catch (cause) {
+      const error = new Error(cause instanceof Error ? cause.message : String(cause));
+      error.receipt = { ...Object.fromEntries(USAGE_FIELDS.map((field) => [field, null])),
+        partialUsage: { ...usage }, usageComplete: false, toolCalls, turns,
+        stopReason: "provider-error", wallClockMs: now() - startedAt };
+      throw error;
+    }
     addUsage(usage, response.usage);
     messages.push(response.assistantMessage);
     if (response.toolUses.length === 0) {
@@ -50,7 +59,7 @@ function addUsage(total, usage) {
   for (const field of USAGE_FIELDS) {
     if (total[field] === null) continue;
     const value = usage?.[field];
-    if (!Number.isInteger(value)) {
+    if (!Number.isSafeInteger(value) || value < 0 || !Number.isSafeInteger(total[field] + value)) {
       total[field] = null;
       continue;
     }

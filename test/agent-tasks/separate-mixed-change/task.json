@@ -1,0 +1,61 @@
+{
+  "id": "separate-mixed-change",
+  "title": "separate mixed change",
+  "prompt": "Separate the editor change from documentation maintenance. Report contracts with keys emptyDisabled, filledDisabled, blankTestConflicts, and docsChangeAffectsProduct. Cite only the button expression and both existing editor assertions as product evidence, not documentation vocabulary.\nWrite only qa-result.json with exactly four fields: evidence (a list of {file, line}, one-based repository-relative locations, no duplicates), contracts (the requested keys), uncertainties (a list of missing-input identifiers), and execution ('not-run' for this static review). Do not edit source, tests, configuration or docs, install dependencies, or run product tests. Inspect the repository rather than assuming an intended behavior; inferred behavior remains a draft. The locations must point to the requested expressions and assertions, not merely declarations nearby.",
+  "fixture": {
+    "path": "test/benchmarks/repository-agent-quality",
+    "baseOverlay": "base",
+    "headOverlay": "mixed",
+    "commitMessage": "fix: disable saving blank input"
+  },
+  "successCriteria": [
+    {
+      "kind": "qa-evidence",
+      "path": "qa-result.json",
+      "expected": {
+        "evidence": [
+          {
+            "file": "src/editor.tsx",
+            "line": 3
+          },
+          {
+            "file": "test/editor.test.tsx",
+            "line": 5
+          },
+          {
+            "file": "test/editor.test.tsx",
+            "line": 6
+          }
+        ],
+        "contracts": {
+          "emptyDisabled": true,
+          "filledDisabled": false,
+          "blankTestConflicts": true,
+          "docsChangeAffectsProduct": false
+        },
+        "uncertainties": [],
+        "execution": "not-run"
+      },
+      "description": "Located repository evidence, concrete contracts and uncertainty match the public oracle."
+    },
+    {
+      "kind": "command-exit",
+      "command": [
+        "git",
+        "diff",
+        "--quiet",
+        "HEAD",
+        "--",
+        "src",
+        "packages",
+        "test",
+        "docs",
+        "package.json"
+      ],
+      "exitCode": 0,
+      "description": "Product source, contracts and fixture configuration remain unchanged."
+    }
+  ],
+  "maxTurns": 12,
+  "firstAuthoring": true
+}

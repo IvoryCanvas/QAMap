@@ -67,6 +67,19 @@
     }
   },
   "definitions": {
+    "evidenceAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence", "contracts", "uncertainties", "execution"],
+      "properties": {
+        "evidence": { "type": "array", "minItems": 1, "maxItems": 64,
+          "items": { "type": "object", "additionalProperties": false, "required": ["file", "line"],
+            "properties": { "file": { "$ref": "#/definitions/relativePath" }, "line": { "type": "integer", "minimum": 1 } } } },
+        "contracts": { "type": "object" },
+        "uncertainties": { "type": "array", "maxItems": 64, "items": { "type": "string" } },
+        "execution": { "enum": ["not-run", "passed", "failed", "blocked"] }
+      }
+    },
     "relativePath": {
       "type": "string",
       "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9._/-]+$"
@@ -79,6 +92,17 @@
     },
     "criterion": {
       "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "path", "expected"],
+          "properties": {
+            "kind": { "const": "qa-evidence" },
+            "path": { "$ref": "#/definitions/relativePath" },
+            "expected": { "$ref": "#/definitions/evidenceAnswer" },
+            "description": { "type": "string" }
+          }
+        },
         {
           "type": "object",
           "additionalProperties": false,

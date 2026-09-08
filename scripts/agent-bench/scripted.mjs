@@ -33,8 +33,12 @@ const QAMAP_SCRIPT = [
   GENERIC_SCRIPT[2],
 ];
 
-export function createScriptedProvider({ arm }) {
-  const script = ["qamap", "qamap-cold", "qamap-warm"].includes(arm) ? QAMAP_SCRIPT : GENERIC_SCRIPT;
+export function createScriptedProvider({ arm, staticReview = false }) {
+  const qamap = ["qamap", "qamap-cold", "qamap-warm"].includes(arm);
+  const script = staticReview && qamap
+    ? [GENERIC_SCRIPT[0], [...GENERIC_SCRIPT[1], { name: "qamap_qa", input: { format: "agent" } }],
+      [{ name: "qamap_qa", input: { format: "agent" } }], GENERIC_SCRIPT[2]]
+    : qamap ? QAMAP_SCRIPT : GENERIC_SCRIPT;
   return {
     name: "scripted",
     model: null,

@@ -11,14 +11,16 @@ const suiteRoot = path.join(root, "test", "agent-tasks");
 
 test("every committed agent task validates, reuses a public fixture, and judges success locally", async () => {
   const config = JSON.parse(await readFile(path.join(root, "agent-bench.config.json"), "utf8"));
+  const repositoryConfig = JSON.parse(await readFile(path.join(root, "agent-repository-bench.config.json"), "utf8"));
+  const allTasks = [...new Set([...config.tasks, ...repositoryConfig.tasks])];
   const entries = await readdir(suiteRoot, { withFileTypes: true });
   const taskDirectories = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
-  assert.deepEqual(taskDirectories, [...config.tasks].sort());
+  assert.deepEqual(taskDirectories, [...allTasks].sort());
   assert.deepEqual(config.arms, ["generic", "qamap"]);
   assert.equal(config.runs >= 3, true, "the committed contract records at least three runs");
 
-  const suite = await loadSuite({ repositoryRoot: root, taskIds: config.tasks });
-  assert.equal(suite.tasks.length, 3);
+  const suite = await loadSuite({ repositoryRoot: root, taskIds: allTasks });
+  assert.equal(suite.tasks.length, 9);
   assert.match(suite.sha256, /^[a-f0-9]{64}$/);
 
   for (const task of suite.tasks) {
@@ -33,7 +35,7 @@ test("every committed agent task validates, reuses a public fixture, and judges 
       assert.equal(LOCAL_CRITERIA_KINDS.includes(criterion.kind), true, `${task.id} uses ${criterion.kind}`);
       assert.doesNotMatch(JSON.stringify(criterion), /^\/|\/tmp|\/var\/folders|\.\./);
     }
-    assert.equal(task.successCriteria.some((criterion) => criterion.kind === "json-path-equals"), true);
+    assert.equal(task.successCriteria.some((criterion) => ["json-path-equals", "qa-evidence"].includes(criterion.kind)), true);
     assert.equal(
       task.successCriteria.some((criterion) =>
         criterion.kind === "command-exit" && criterion.command.join(" ").startsWith("git diff --quiet HEAD")

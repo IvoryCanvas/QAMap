@@ -1,0 +1,67 @@
+{
+  "id": "review-test-contract",
+  "title": "review test contract",
+  "prompt": "Review the newly added normalization test without treating it as a production behavior change. Report contracts with keys productChanged, addedTestInput, addedTestExpected, and existingTestPasses. Cite the added assertion and the source expression it checks.\nWrite only qa-result.json with exactly four fields: evidence (a list of {file, line}, one-based repository-relative locations, no duplicates), contracts (the requested keys), uncertainties (a list of missing-input identifiers), and execution ('not-run' for this static review). Do not edit source, tests, configuration or docs, install dependencies, or run product tests. Inspect the repository rather than assuming an intended behavior; inferred behavior remains a draft. The locations must point to the requested expressions and assertions, not merely declarations nearby.",
+  "fixture": {
+    "path": "test/benchmarks/repository-agent-quality",
+    "baseOverlay": "base",
+    "headOverlay": "contract",
+    "commitMessage": "test: cover preserved internal whitespace"
+  },
+  "successCriteria": [
+    {
+      "kind": "qa-evidence",
+      "path": "qa-result.json",
+      "expected": {
+        "evidence": [
+          {
+            "file": "test/rules.test.mjs",
+            "line": 6
+          },
+          {
+            "file": "packages/rules/normalize.mjs",
+            "line": 2
+          }
+        ],
+        "contracts": {
+          "productChanged": false,
+          "addedTestInput": "a  b",
+          "addedTestExpected": "a  b",
+          "existingTestPasses": true
+        },
+        "uncertainties": [],
+        "execution": "not-run"
+      },
+      "description": "Located repository evidence, concrete contracts and uncertainty match the public oracle."
+    },
+    {
+      "kind": "command-exit",
+      "command": [
+        "git",
+        "diff",
+        "--quiet",
+        "HEAD",
+        "--",
+        "src",
+        "packages",
+        "test",
+        "docs",
+        "package.json"
+      ],
+      "exitCode": 0,
+      "description": "Product source, contracts and fixture configuration remain unchanged."
+    },
+    {
+      "kind": "command-exit",
+      "command": [
+        "node",
+        "--test",
+        "test/rules.test.mjs"
+      ],
+      "exitCode": 0,
+      "description": "The independent fixture test confirms the expected regression or passing contract."
+    }
+  ],
+  "maxTurns": 12,
+  "firstAuthoring": true
+}

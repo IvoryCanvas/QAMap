@@ -180,6 +180,23 @@ Counts describe observed file I/O, not physical disk I/O or model tokens. Warm s
 
 Wall-clock samples use `performance.now()` and are diagnostic only: fixed order, one instrumented process, shared-machine contention, no timing threshold or speedup claim. Deterministic comparisons exclude only diagnostic timing. Actual provider usage remains unmeasured; no token or cost reduction may be inferred. A provider comparison separately needs an approved provider, pinned model, budget, and quality-passing paired runs.
 
+### Provider Comparison
+
+Before the 0.4.18 release decision, use the
+[six-task measurement runbook](../scripts/agent-bench/README.md) to compare
+generic, cold and warm arms. Offline assertions verify the harness only.
+An actual measurement needs an explicitly chosen provider, exact model, locally
+configured key and approved spending limit. Start with one task, then repeat
+the full suite at least three times per arm if the pilot is valid.
+
+Save the report with its implementation, fixture and prompt digests. Report
+failed or incomplete tasks alongside successes. Require evidence precision,
+recall, contract completeness, uncertainty and execution-state checks to pass
+before interpreting token differences. Missing usage is unknown, not zero;
+partial receipts from failed requests cannot establish savings. The shared
+request ceiling is not a monetary cap. Do not replace these measurements with
+offline byte counts or publish a fixed savings claim without the paired results.
+
 ## Rollback Notes
 
 If a broken package is published:

@@ -19,6 +19,8 @@ export function formatTextReport(report) {
   lines.push(`- model: ${report.pinned.model ?? "none"}`);
   lines.push(`- runs per task and arm: ${report.pinned.runs}`);
   lines.push(`- max output tokens per request: ${report.pinned.maxOutputTokens}`);
+  if (report.pinned.maxProviderRequests) lines.push(`- shared request ceiling: ${report.pinned.maxProviderRequests}; timeout ms: ${report.pinned.requestTimeoutMs}`);
+  if (report.pinned.implementationSha256) lines.push(`- executed implementation: sha256:${report.pinned.implementationSha256}`);
   lines.push(`- system prompt: sha256:${report.pinned.systemPromptSha256}`);
   for (const [arm, digest] of Object.entries(report.pinned.toolSchemaSha256)) {
     lines.push(`- ${arm} tool schema: sha256:${digest}`);
@@ -57,6 +59,8 @@ export function formatTextReport(report) {
       );
       for (const run of result.runs) {
         if (run.error) lines.push(`  ! run ${run.run} errored: ${run.error}`);
+        if (run.partialUsage) lines.push(`  known partial input/output: ${formatValue(run.partialUsage.inputTokens)}/${formatValue(run.partialUsage.outputTokens)}; failed-request usage unknown, excluded from comparisons`);
+        for (const quality of run.quality ?? []) lines.push(`  evidence precision/recall: ${quality.evidencePrecision}/${quality.evidenceRecall}; contract completeness: ${quality.contractCompleteness}; passed: ${quality.passed}`);
         if (run.repositoryCache) {
           const setup = run.repositoryCache.setup;
           const observations = run.io?.repositoryIndexes ?? [];

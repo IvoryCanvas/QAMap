@@ -1,0 +1,57 @@
+{
+  "id": "report-dynamic-boundary",
+  "title": "report dynamic boundary",
+  "prompt": "Review loadPolicy. Determine whether the repository identifies the module selected at runtime. Report contracts with keys targetKnown and humanDecisionRequired. Use the uncertainty identifier runtime-module when a runtime module choice is missing. Cite the dynamic import and the returned member; do not infer an edge to the old normalization package.\nWrite only qa-result.json with exactly four fields: evidence (a list of {file, line}, one-based repository-relative locations, no duplicates), contracts (the requested keys), uncertainties (a list of missing-input identifiers), and execution ('not-run' for this static review). Do not edit source, tests, configuration or docs, install dependencies, or run product tests. Inspect the repository rather than assuming an intended behavior; inferred behavior remains a draft. The locations must point to the requested expressions and assertions, not merely declarations nearby.",
+  "fixture": {
+    "path": "test/benchmarks/repository-agent-quality",
+    "baseOverlay": "base",
+    "headOverlay": "dynamic",
+    "commitMessage": "feat: select policy module at runtime"
+  },
+  "successCriteria": [
+    {
+      "kind": "qa-evidence",
+      "path": "qa-result.json",
+      "expected": {
+        "evidence": [
+          {
+            "file": "src/load-policy.mjs",
+            "line": 2
+          },
+          {
+            "file": "src/load-policy.mjs",
+            "line": 3
+          }
+        ],
+        "contracts": {
+          "targetKnown": false,
+          "humanDecisionRequired": true
+        },
+        "uncertainties": [
+          "runtime-module"
+        ],
+        "execution": "not-run"
+      },
+      "description": "Located repository evidence, concrete contracts and uncertainty match the public oracle."
+    },
+    {
+      "kind": "command-exit",
+      "command": [
+        "git",
+        "diff",
+        "--quiet",
+        "HEAD",
+        "--",
+        "src",
+        "packages",
+        "test",
+        "docs",
+        "package.json"
+      ],
+      "exitCode": 0,
+      "description": "Product source, contracts and fixture configuration remain unchanged."
+    }
+  ],
+  "maxTurns": 12,
+  "firstAuthoring": true
+}
