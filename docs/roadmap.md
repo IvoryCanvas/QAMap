@@ -46,7 +46,7 @@ the required behavior and release checks pass. Existing inference boundaries
 
 | Order | Issue | Remaining contract |
 | --- | --- | --- |
-| 1 | [#259](https://github.com/IvoryCanvas/QAMap/issues/259) | Repository index with coverage and incremental invalidation. Import discovery receipts are the first foundation, not completion of the full index. |
+| 1 | [#259](https://github.com/IvoryCanvas/QAMap/issues/259) | Import discovery receipts and reusable import blocks provide the foundation. Other evidence kinds and narrower configuration invalidation remain. |
 | 2 | [#260](https://github.com/IvoryCanvas/QAMap/issues/260) | Trace changed symbols across packages and product boundaries, including unresolved edges. |
 | 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Reject vocabulary-only behavior without hiding positive evidence. This can be developed independently of indexing. |
 | 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Carry coverage and targeted uncertainty into the bounded agent handoff without losing product contracts. |
@@ -59,9 +59,9 @@ unrelated controls, distinguish static plans from execution, and report missing
 provider measurements as unavailable. New public reproductions must be neutral,
 never copied from private repositories.
 
-See [repository discovery](repository-discovery.md) for the scope of the first
-indexing increment. Persistent blocks, dependency invalidation, and compact
-handoff integration remain pending until their own acceptance criteria pass.
+See [repository discovery](repository-discovery.md) for import-block reuse,
+content invalidation, and affected-importer receipts. Non-import evidence blocks,
+finer resolver invalidation, and compact handoff integration remain pending.
 
 #### Generalized Work Queue
 

@@ -1,6 +1,6 @@
 # QAMap Privacy Notice
 
-Effective date: August 6, 2026
+Effective date: September 8, 2026
 
 QAMap is an open-source, local-first command-line tool. This notice explains what the QAMap CLI and its packaged agent skill read, write, and transmit.
 
@@ -20,6 +20,8 @@ QAMap uses this material to infer changed behavior, route QA scenarios, cite evi
 `qamap qa` performs local static analysis. QAMap does not operate a hosted analysis service, upload repository source, or include product analytics or telemetry.
 
 The compact agent format can write one recovery report to the operating system's temporary directory so an agent can inspect evidence omitted by compaction. QAMap creates this file with user-only permissions where the operating system supports them and removes stale QAMap recovery reports during later agent-format runs. The analyzed repository is not modified by this behavior.
+
+Import analysis can also store disposable snapshots in a user-specific `qamap-import-index-*` directory under the operating system's temporary directory. These contain relative file paths, content hashes, and resolved relative import relationships, not source bodies or raw import strings. Paths can still reveal repository structure. These snapshots stay local and use user-only permissions where supported. Set `QAMAP_IMPORT_CACHE=off` to disable import-cache reads and writes.
 
 ## Network Access
 
@@ -48,6 +50,8 @@ Local history remains in the user's repository and is ignored by Git by default.
 ## Retention And Control
 
 QAMap has no server-side repository-data retention because it has no hosted analysis service. Repository files remain under the user's control. Temporary recovery reports are local to the machine and are eligible for automatic cleanup after 24 hours.
+
+Import snapshots are limited to 8 MiB each. Successful writes prune managed snapshots to eight repositories and remove managed files older than 24 hours, including abandoned temporary writes. Concurrent writers can temporarily exceed the count. Cleanup runs on later writes, not on a background timer. You may remove the import-cache directory at any time without losing repository work.
 
 You can inspect all QAMap behavior in the public source repository and remove local QAMap files at any time.
 

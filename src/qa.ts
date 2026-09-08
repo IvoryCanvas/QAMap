@@ -60,7 +60,7 @@ import type { AddedDiffEvidence } from "./test-plan.js";
 import { parsePythonValidationCommand } from "./validation-command.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 import { buildReverseImportIndex } from "./import-graph.js";
-import type { ImportDiscoveryCoverage } from "./import-graph.js";
+import type { ImportDiscoveryCoverage, ImportIndexReuse } from "./import-graph.js";
 
 export interface QaDraftOptions extends Omit<E2eDraftOptions, "dryRun" | "output"> {
   automaticWorkspaceScope?: boolean;
@@ -91,6 +91,7 @@ export interface QaDraftResult {
   noLlmToken: true;
   analysisScope: QaAnalysisScope;
   importDiscovery?: ImportDiscoveryCoverage;
+  importIndexReuse?: ImportIndexReuse;
   execution: QaExecutionReceipt;
   testSuite: E2eDraftResult["plan"]["testSuite"];
   changedTestContracts: ChangedTestContract[];
@@ -539,6 +540,7 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     },
   });
 
+  const importIndex = await buildReverseImportIndex(root);
   const result: QaDraftResult = {
     tool: {
       name: TOOL_NAME,
@@ -561,7 +563,8 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     noCloud: true,
     noLlmToken: true,
     analysisScope: detectedScope ?? explicitOrRootAnalysisScope(root, e2eOptions.workspaceRoot),
-    importDiscovery: (await buildReverseImportIndex(root)).coverage,
+    importDiscovery: importIndex.coverage,
+    importIndexReuse: importIndex.reuse,
     execution: {
       status: "not-run",
       performed: false,

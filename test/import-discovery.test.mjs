@@ -199,6 +199,8 @@ test("QA exposes scoped discovery without changing static execution or compact p
   const result = await generateQaDraft(root, { base: "main", head: "HEAD", includeWorkingTree: true });
   assert.equal(result.importDiscovery.scope, "import-graph");
   assert.equal(result.importDiscovery.parsedSources, 1);
+  assert.equal(result.importIndexReuse.reusedSources + result.importIndexReuse.rebuiltSources, 1);
+  assert.ok(["cold", "warm", "incremental", "rebuilt", "disabled", "unavailable"].includes(result.importIndexReuse.status));
   assert.equal(result.execution.status, "not-run");
   assert.equal(result.execution.performed, false);
   const markdown = formatMarkdownQaDraft(result);
