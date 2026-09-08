@@ -62,6 +62,8 @@ jobs:
         run: pnpm bench:agent:compiled --dry-run --assert
       - name: Validate context reuse
         run: pnpm bench:context:compiled
+      - name: Validate repository index quality and reuse
+        run: pnpm bench:repository:compiled
       - name: Scan repository policy
         run: pnpm scan:compiled
 

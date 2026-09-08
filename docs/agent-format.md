@@ -1,6 +1,12 @@
 # Agent Format Contract
 
-`qamap qa --format agent` prints one compact line of JSON designed to be pasted into a coding agent's context instead of the full markdown report. The complete line stays below 4KB. When the uncapped result would be larger, QAMap preserves the strongest intent, its highest-priority routed scenarios, the primary affected flow, and total/omitted counts instead of silently overflowing the context budget. A flow's evidence-matched changed action and observable assertion are kept in `focus` so setup-first step ordering cannot hide what the PR actually changed. Multi-surface results also retain a compact second flow with its supporting file, review question, and success signal. Even the emergency shape keeps that distinction plus one validation command when the repository exposes one. This page is the contract for that output: what the fields mean, what an agent may rely on, and how the format is allowed to change.
+`qamap qa --format agent` prints one JSON line within 4KB for a coding agent.
+It prioritizes the selected action, relevant evidence and unresolved questions.
+An evidence-matched `focus` names the changed action and observable assertion.
+Lower-priority flows and details may require the local full report; omitted
+counts and `compaction.omittedFields` disclose that reduction. If critical
+evidence cannot fit, `recoveryRequired` withholds action rather than presenting
+an incomplete instruction as executable.
 
 ```sh
 qamap qa . --base origin/main --head HEAD --format agent
@@ -12,11 +18,49 @@ To consume the same decision and explicitly execute only its selected existing r
 qamap qa run . --base origin/main --head HEAD --format agent
 ```
 
+## Repository-First Handoff (Development)
+
+The additive `repository` field identifies the current working-tree evidence
+index. `fingerprint`, `indexedFiles`, `inventoryFiles`, `complete`, and
+`skippedCount` describe its bounded coverage. Paths use `pathBase`, independently
+of package-relative legacy QA evidence.
+
+When available, `path` retains the changed declaration and related test or
+registration candidate, plus the full path's index and step count. This is not a
+claim that those two endpoints are directly connected: inspect
+`repositoryImpact.paths[path.index].evidence` in the local recovery file for every
+intermediate import, export and reference. `unresolved` prioritizes a boundary on
+that path. `boundaryCount`, `pathCount`, and optional `omittedPathCount` disclose
+the bounded result and any paths that exceeded traversal limits.
+
+The handoff reserves space for the full selected `action`, its exact `route`, a
+changed test contract and repository evidence before optional summary detail.
+Current-delta source and test paths precede documentation. If a pathological
+identifier cannot fit without losing critical meaning, `recoveryRequired: true`
+withholds the action; read the full result before doing anything with side effects.
+
+The recovery report contains `repositoryIndex`, `repositoryImpact`, all
+`currentDelta` files and changed `testContracts`. Its `evidence` object contains
+the original bounded QA result, including every trace, intent and flow. It is not
+another capped summary. Analyzer limits still apply: full recovery cannot restore
+files or syntax that were never analyzed. The compact result must not override
+contradictory code, an explicit specification or observed execution.
+
+Older version-1 outputs may omit these additive fields. Use targeted code reads
+for unresolved boundaries; do not start a broad repository rescan merely because
+the legacy summary omitted a list.
+
+When `repository` is present, its evidence budget takes priority over the older
+multi-flow summary described below. A second flow, trace bodies, context details
+or optional summaries can be omitted. Recover missing information from the full
+report; an empty compact array does not mean no such evidence was found.
+`recoveryRequired` also overrides the normal minimum retained-contract rules.
+
 ## Stability policy
 
 - The output is a single JSON object on one line, followed by a newline. Nothing else is printed to stdout, and it is never colorized.
 - Every payload carries `schema: { "name": "qamap.qa", "version": 1 }`. Check both before parsing the rest.
-- Within version 1, fields are **only ever added** — existing fields are never removed, renamed, or retyped. Parse leniently: ignore fields you do not recognize.
+- Within version 1, defined fields are not renamed or retyped. Required schema fields remain present; optional fields and capped list entries may be omitted under the byte budget. Inspect omission receipts and parse unknown fields leniently.
 - A breaking change bumps `schema.version` to 2. Version 1 output will not silently change shape underneath you.
 - The machine-readable definition lives at [`schema/qamap-agent.schema.json`](../schema/qamap-agent.schema.json) and is validated against real output in the test suite.
 
@@ -81,7 +125,12 @@ Read `inferenceBoundary` before treating an inferred lifecycle as repository pol
 | `prChecklist` | array of string | Ready-to-paste PR checklist lines (capped). |
 | `commands` | array of string | Suggested next commands, most useful first (capped at 4). |
 
-List fields are capped to keep the payload small; caps may grow within version 1 but the shapes above will not change.
+List fields are capped to keep the payload small. With `repository` present,
+`scenarioCoverage`, `evidenceSummary`, flow review questions and flow details are
+optional under compaction. A retained flow can have empty `steps` and `selectors`;
+this is a reduced view, not an empty test plan. Counts and `omittedFields` identify
+what to recover. The recovery file's `evidence` object, rather than its legacy
+summary fields, holds the original complete bounded analysis.
 
 ## Independent Test Expectations
 

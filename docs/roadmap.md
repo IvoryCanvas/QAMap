@@ -44,14 +44,14 @@ The release remains in preparation. Do not bump package or plugin versions until
 the required behavior and release checks pass. Existing inference boundaries
 (#273) and concrete lifecycle evidence (#274, #275, #276; #261) are already merged.
 
-| Order | Issue | Remaining contract |
+| Order | Issue | Development status |
 | --- | --- | --- |
-| 1 | [#259](https://github.com/IvoryCanvas/QAMap/issues/259) | Import discovery receipts and reusable import blocks provide the foundation. Other evidence kinds and narrower configuration invalidation remain. |
-| 2 | [#260](https://github.com/IvoryCanvas/QAMap/issues/260) | Trace changed symbols across packages and product boundaries, including unresolved edges. |
-| 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Reject vocabulary-only behavior without hiding positive evidence. This can be developed independently of indexing. |
-| 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Carry coverage and targeted uncertainty into the bounded agent handoff without losing product contracts. |
-| 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Compare generic, cold-index, and warm-index tasks with quality gates before making savings claims. |
-| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | Verify the exact published package with a self-contained manifest smoke. |
+| 1 | [#259](https://github.com/IvoryCanvas/QAMap/issues/259) | Reusable JS/TS syntax, test, contract and configuration metadata; changed-block refresh. Warm runs still read and hash files. |
+| 2 | [#260](https://github.com/IvoryCanvas/QAMap/issues/260) | Symbol-linked package and alias paths to test references and registration candidates. Ambiguous or unsupported paths remain boundaries. |
+| 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Structural gates distinguish operational evidence from comments, literals and computational vocabulary. Positive controls protect real actions. |
+| 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Repository evidence in the 4KB handoff, source/test priority, and complete bounded recovery. |
+| 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Offline quality checks and optional generic/cold/warm provider arms implemented. Actual provider usage and broader measured task quality remain open release prerequisites. |
+| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | Self-contained exact-version smoke implemented; repeat against the new published package after release. |
 
 Each delivery stays reviewable and independently tested. A unit-test pass is not
 a product benchmark pass. Benchmarks must retain relevant evidence, reject
@@ -59,9 +59,12 @@ unrelated controls, distinguish static plans from execution, and report missing
 provider measurements as unavailable. New public reproductions must be neutral,
 never copied from private repositories.
 
-See [repository discovery](repository-discovery.md) for import-block reuse,
-content invalidation, and affected-importer receipts. Non-import evidence blocks,
-finer resolver invalidation, and compact handoff integration remain pending.
+See [repository discovery](repository-discovery.md) for supported metadata,
+invalidation, working-tree alignment and explicit limits. This is not a complete
+runtime dependency model. Actual agent quality and provider usage require separate
+measured runs; offline read counts cannot establish token or billing savings.
+Use the [three-arm benchmark guide](../scripts/agent-bench/README.md) for the
+isolated experiment. The normal CI path remains offline and credential-free.
 
 #### Generalized Work Queue
 

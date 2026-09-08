@@ -12,11 +12,12 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { aggregateRuns } from "./agent-bench/aggregate.mjs";
+import { aggregateRuns, compareQualityGatedRuns } from "./agent-bench/aggregate.mjs";
 import { judgeSuccess } from "./agent-bench/judge.mjs";
 import { runAgentLoop } from "./agent-bench/loop.mjs";
 import { createProvider, DEFAULT_MAX_OUTPUT_TOKENS } from "./agent-bench/provider.mjs";
 import { formatTextReport } from "./agent-bench/report.mjs";
+import { compareRepositoryArms, createRepositoryEnvironment, isRepositoryArm, prebuildRepositoryIndex, repositoryPairing } from "./agent-bench/repository-arms.mjs";
 import { createScriptedProvider } from "./agent-bench/scripted.mjs";
 import { loadSuite } from "./agent-bench/suite.mjs";
 import { createToolExecutor, toolSchemaSha256, toolsForArm } from "./agent-bench/tools.mjs";
@@ -46,6 +47,7 @@ if (armFilter !== undefined && !config.arms.includes(armFilter)) {
 const arms = armFilter === undefined ? config.arms : [armFilter];
 const maxOutputTokens = config.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
 const carryOverPaths = config.carryOverPaths ?? [".qamap"];
+const repositoryExperiment = config.arms.some(isRepositoryArm);
 const cliPath = path.join(repositoryRoot, "dist", "cli.js");
 if (!(await exists(cliPath))) {
   throw new Error("dist/cli.js is missing; run `pnpm build` before the agent benchmark.");
@@ -105,7 +107,7 @@ if (save) {
 
 // A skipped run is not a failure: CI without a provider key must stay green.
 if (assertContract && report.status !== "skipped" && !report.summary.passed) {
-  console.error(`\nAgent benchmark recorded ${report.summary.failedRuns} errored run(s).`);
+  console.error(`\nAgent benchmark failed its harness or measured task-quality checks (${report.summary.failedRuns} errored run(s)).`);
   process.exitCode = 1;
 }
 
@@ -118,9 +120,17 @@ async function runArm({ task, arm, setup }) {
       const firstAuthoring = task.firstAuthoring && index === 0;
       const record = { run: index + 1, firstAuthoring, success: false };
       let prepared;
+      let executor;
       try {
-        prepared = await materializeTaskRepo(task, carried);
-        const executor = await createToolExecutor({ repositoryRoot: prepared.repositoryRoot, cliPath });
+        prepared = await materializeTaskRepo(task, carried, arm);
+        if (repositoryExperiment) {
+          record.repositoryCache = prepared.repositoryCache;
+          record.pairing = await repositoryPairing({ task, repositoryRoot: prepared.repositoryRoot,
+            env: prepared.env, provider: setup.kind === "dry-run" ? "scripted" : setup.provider.name,
+            model: setup.model, system: systemPrompt, tools, maxOutputTokens });
+        }
+        executor = await createToolExecutor({ repositoryRoot: prepared.repositoryRoot, cliPath,
+          env: prepared.env, measureIO: repositoryExperiment });
         const provider = setup.kind === "dry-run" ? createScriptedProvider({ arm }) : setup.provider;
         const loop = await runAgentLoop({
           provider,
@@ -130,8 +140,8 @@ async function runArm({ task, arm, setup }) {
           prompt: task.prompt,
           maxTurns: task.maxTurns,
         });
-        const verdict = await judgeSuccess(task.successCriteria, prepared.repositoryRoot);
-        Object.assign(record, loop, { success: verdict.success, checks: verdict.checks });
+        const verdict = await judgeSuccess(task.successCriteria, prepared.repositoryRoot, { env: prepared.env });
+        Object.assign(record, loop, { success: verdict.success && (!repositoryExperiment || loop.stopReason === "end-turn"), checks: verdict.checks });
         if (setup.kind === "dry-run") {
           // Wall-clock is not a measurement in a dry run and would break
           // deterministic output.
@@ -143,6 +153,7 @@ async function runArm({ task, arm, setup }) {
       } catch (error) {
         record.error = sanitizeMessage(error, prepared?.tempRoot);
       } finally {
+        if (repositoryExperiment && executor) record.io = executor.measurements();
         await prepared?.cleanup?.();
       }
       records.push(record);
@@ -153,38 +164,55 @@ async function runArm({ task, arm, setup }) {
   return { runs: records, aggregate: aggregateRuns(records) };
 }
 
-async function materializeTaskRepo(task, carried) {
+async function materializeTaskRepo(task, carried, arm) {
   const { baseOverlay, headOverlay, commitMessage } = task.fixture;
-  const materialized = await materializeFixtureRepo({
-    fixtureRoot: task.fixtureRoot,
-    tempPrefix: "qamap-agent-bench-",
-    baseDirs: baseOverlay === "base" ? ["base"] : ["base", baseOverlay],
-    commits: [{ dir: headOverlay, message: commitMessage }],
-    identity: { name: "QAMap Agent Benchmark", email: "agent-benchmark@qamap.local" },
-    git,
-    afterBaseline: async ({ repositoryRoot: root }) => {
-      for (const input of task.inputs ?? []) {
-        const destination = path.resolve(root, input.to);
-        await fs.mkdir(path.dirname(destination), { recursive: true });
-        await fs.copyFile(path.join(task.dir, input.from), destination);
-      }
-      if ((task.inputs ?? []).length > 0) {
-        await git(root, ["add", "-A"]);
-        await git(root, ["commit", "-m", "docs: add task inputs"]);
-      }
-      // A task without first authoring models a team that already verified
-      // this area: a manifest baseline is committed on main before the change.
-      if (!task.firstAuthoring) {
-        await execFileAsync(process.execPath, [cliPath, "manifest", "init", "."], { cwd: root });
-        await git(root, ["add", ".qamap"]);
-        await git(root, ["commit", "-m", "chore: add verification manifest baseline"]);
-      }
-    },
-  });
-  if (carried) {
-    await fs.cp(carried, materialized.repositoryRoot, { recursive: true, force: true });
+  let tempRoot;
+  let env;
+  let repositoryCache;
+  try {
+    const materialized = await materializeFixtureRepo({
+      fixtureRoot: task.fixtureRoot,
+      tempPrefix: "qamap-agent-bench-",
+      baseDirs: baseOverlay === "base" ? ["base"] : ["base", baseOverlay],
+      commits: [{ dir: headOverlay, message: commitMessage }],
+      identity: { name: "QAMap Agent Benchmark", email: "agent-benchmark@qamap.local" },
+      git,
+      afterBaseline: async ({ repositoryRoot: root, tempRoot: temporary }) => {
+        tempRoot = temporary;
+        if (repositoryExperiment) env = await createRepositoryEnvironment(temporary);
+        for (const input of task.inputs ?? []) {
+          const destination = path.resolve(root, input.to);
+          await fs.mkdir(path.dirname(destination), { recursive: true });
+          await fs.copyFile(path.join(task.dir, input.from), destination);
+        }
+        if ((task.inputs ?? []).length > 0) {
+          await git(root, ["add", "-A"]);
+          await git(root, ["commit", "-m", "docs: add task inputs"]);
+        }
+        // A task without first authoring models a team that already verified
+        // this area: a manifest baseline is committed on main before the change.
+        if (!task.firstAuthoring) {
+          await execFileAsync(process.execPath, [cliPath, "manifest", "init", "."], { cwd: root, env });
+          await git(root, ["add", ".qamap"]);
+          await git(root, ["commit", "-m", "chore: add verification manifest baseline"]);
+        }
+        if (repositoryExperiment) {
+          repositoryCache = { treatment: arm === "qamap-warm" ? "base-prebuilt" : "empty",
+            isolation: "per-task-arm-run", setup: { status: "not-requested", wallClockMs: null } };
+          if (arm === "qamap-warm") repositoryCache.setup = await prebuildRepositoryIndex({
+            repositoryRoot: root, cliPath, env, dryRun,
+          });
+        }
+      },
+    });
+    if (carried) {
+      await fs.cp(carried, materialized.repositoryRoot, { recursive: true, force: true });
+    }
+    return { ...materialized, env, repositoryCache };
+  } catch (error) {
+    if (tempRoot) await fs.rm(tempRoot, { recursive: true, force: true });
+    throw new Error(sanitizeMessage(error, tempRoot));
   }
-  return materialized;
 }
 
 // Durable QA context left behind by one run (by default `.qamap/`) is copied
@@ -222,7 +250,9 @@ function buildReport({ status, reason, pinned, tasks }) {
     schema: { name: "qamap.agent-benchmark", version: 1 },
     status,
     ...(reason ? { reason } : {}),
-    pinned,
+    pinned: { ...pinned, ...(repositoryExperiment ? { repositoryExperiment: {
+      cacheIsolation: "per-task-arm-run", warmBaseline: "same-root-base-before-head-overlay", carryOver: "none",
+    } } : {}) },
     normativeMetrics: [
       "provider-input-tokens",
       "provider-output-tokens",
@@ -238,9 +268,18 @@ function buildReport({ status, reason, pinned, tasks }) {
       "QAMap itself makes no model request; both arms spend the calling agent's tokens.",
       "No provider pricing or money-saved figure is inferred.",
       "Success is judged by deterministic local checks, never by reading the model's prose.",
+      "Token differences are eligible only for paired measured arms whose local task checks all pass. Dry-run and skipped runs do not establish task quality or token savings.",
+      "Input counts retain provider-native definitions; cache counts are separate and are not added to or subtracted from input counts. Providers are not compared against each other.",
       "The first-authoring column is the first run from a bare repository; steady-state runs reuse carried-over QA context, so any saving starts on the second run.",
+      ...(repositoryExperiment ? [
+        "Repository arms override carry-over: every run has an isolated repository, home, and temp/cache environment; first-authoring is only a task label, not evidence of cross-run cache reuse.",
+        "Warm setup builds the SAME root's base index before the fixture head overlay. Setup costs are separate from agent wall-clock; observed head rebuild/reuse counters are recorded under io.repositoryIndexes, never inferred from the arm name.",
+        "Executor I/O is UTF-8 bytes, not tokens: direct reads and tool responses are measured; subprocess filesystem reads are unknown. Full-report diagnostic reads are separate from agent recovery reads, which can be capped prefixes.",
+        "Local criteria are the existing task checks, not proof that generated browser tests were executed. Dry runs exercise the harness only; no provider quality or savings are established.",
+      ] : []),
     ],
-    tasks,
+    tasks: tasks.map((task) => ({ ...task, comparison: compareQualityGatedRuns(task.arms, status),
+      ...(repositoryExperiment ? { repositoryComparisons: compareRepositoryArms(task.arms, status) } : {}) })),
     summary: summarize(status, tasks),
   };
 }
@@ -257,6 +296,9 @@ function summarize(status, tasks) {
     }
   }
   const failedRuns = Object.values(byArm).reduce((sum, entry) => sum + entry.failedRuns, 0);
+  const harnessPassed = failedRuns === 0;
+  const qualityPassed = status === "measured" ? Object.values(byArm).length > 0
+    && Object.values(byArm).every((entry) => entry.runs > 0 && entry.successfulRuns === entry.runs) : null;
   return {
     status,
     tasks: tasks.length,
@@ -264,7 +306,9 @@ function summarize(status, tasks) {
     runsPerArm: runs,
     failedRuns,
     byArm,
-    passed: failedRuns === 0,
+    harnessPassed,
+    qualityPassed,
+    passed: harnessPassed && (qualityPassed ?? true),
   };
 }
 
@@ -278,8 +322,12 @@ function validateConfig(value) {
   if (!Array.isArray(value.tasks) || value.tasks.length === 0 || value.tasks.some((id) => typeof id !== "string")) {
     throw new Error("Agent benchmark config requires a non-empty tasks array of task ids.");
   }
-  if (!Array.isArray(value.arms) || value.arms.length === 0 || value.arms.some((arm) => !["generic", "qamap"].includes(arm))) {
-    throw new Error("Agent benchmark config arms must list generic and/or qamap.");
+  if (!Array.isArray(value.arms) || value.arms.length === 0 || value.arms.some((arm) => !["generic", "qamap"].includes(arm) && !isRepositoryArm(arm))) {
+    throw new Error("Agent benchmark config arms must list generic, qamap, qamap-cold, and/or qamap-warm.");
+  }
+  if (new Set(value.arms).size !== value.arms.length) throw new Error("Agent benchmark arms must be unique.");
+  if (value.arms.some(isRepositoryArm) && (!Array.isArray(value.carryOverPaths) || value.carryOverPaths.length !== 0)) {
+    throw new Error("Repository cold/warm arms require carryOverPaths: [] for identical paired task inputs.");
   }
   const provider = value.provider;
   for (const field of ["nameEnv", "modelEnv", "apiKeyEnv"]) {

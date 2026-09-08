@@ -87,6 +87,11 @@ Playwright, Maestro, selectors, fixtures, or a test runner does not hide an
 important scenario. When evidence is insufficient, QAMap stops instead of
 inventing a contract or a passing result.
 
+On the development branch, a reusable JS/TS evidence index connects declared
+imports and exports to test references and registration candidates across
+packages. [Coverage and limits](docs/repository-discovery.md) remain explicit;
+this is not a complete runtime model or a measured token-savings guarantee.
+
 ## Documentation
 
 | Goal | Guide |

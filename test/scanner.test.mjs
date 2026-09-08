@@ -25,6 +25,7 @@ import {
   formatMarkdownE2ePlan,
   formatMarkdownE2eSetup,
   formatAgentQaDraft,
+  formatAgentQaFullReport,
   formatMarkdownQaDraft,
   formatTextQaDraft,
   formatQaScriptInitReport,
@@ -56,6 +57,7 @@ import {
   writeVerificationManifestBaseline,
 } from "../dist/index.js";
 import { VERSION } from "../dist/version.js";
+import { collectSchemaViolations } from "./helpers/schema-validation.mjs";
 
 const cliPath = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -7847,7 +7849,10 @@ test("qa isolates current working-tree contracts from committed branch history",
   assert.match(qa.suggestedCommands[0], /ArchiveScreen\.test\.tsx/);
   assert.doesNotMatch(qa.suggestedCommands[0], /StatisticsScreen/);
   assert.equal(agent.currentDelta.scope, "working-tree-only");
-  assert.deepEqual(agent.currentDelta.files, qa.currentDelta.files);
+  assert.deepEqual(agent.currentDelta.files, [
+    "src/archive/ArchiveScreen.tsx",
+    "src/archive/ArchiveScreen.test.tsx",
+  ]);
   assert.equal(agent.currentDelta.repositoryContracts[0].authority, "repository-contract");
   assert.equal(agent.currentDelta.repositoryContracts[0].approvalRequired, true);
   assert.match(markdown, /## Current Local Delta/);
@@ -8993,8 +8998,10 @@ test("qa command emits a PR comment draft without requiring a manifest", async (
   assert.equal(Array.isArray(agentSummary.requiredEvidence), true);
   assert.equal(Array.isArray(agentSummary.prChecklist), true);
   assert.equal(agentSummary.firstDraftCommand, undefined);
-  assert.equal(agentSummary.automation.optIn, true);
-  assert.equal(agentSummary.automation.adapter, "playwright");
+  const recoveredSummary = JSON.parse(formatAgentQaFullReport(qa));
+  assert.ok(agentSummary.automation || agentSummary.compaction.omittedFields.includes("automation"));
+  assert.equal(recoveredSummary.automation.optIn, true);
+  assert.equal(recoveredSummary.automation.adapter, "playwright");
   assert.equal(agentOutput.trim().includes("\n"), false);
   assert.equal(agentOutput.length < 4096, true);
 
@@ -11249,62 +11256,6 @@ test("generateAgentContext reflects npm scripts and repository boundaries", asyn
 // schema/qamap-agent.schema.json honest against real output. Supports the
 // keywords that schema actually uses: local $ref, type, const, enum,
 // required, properties, items, minimum, maximum.
-function collectSchemaViolations(schema, value, location = "$", rootSchema = schema) {
-  if (schema.$ref) {
-    const resolved = schema.$ref
-      .replace(/^#\//, "")
-      .split("/")
-      .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
-      .reduce((current, part) => current?.[part], rootSchema);
-    return resolved
-      ? collectSchemaViolations(resolved, value, location, rootSchema)
-      : [`${location}: unresolved schema reference ${schema.$ref}`];
-  }
-  const violations = [];
-  const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
-  if (types.length > 0) {
-    const actual = value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
-    const matches = types.some((type) =>
-      type === actual ||
-      (type === "integer" && typeof value === "number" && Number.isInteger(value)) ||
-      (type === "number" && typeof value === "number")
-    );
-    if (!matches) {
-      violations.push(`${location}: expected ${types.join("|")}, got ${actual}`);
-      return violations;
-    }
-  }
-  if ("const" in schema && value !== schema.const) {
-    violations.push(`${location}: expected const ${JSON.stringify(schema.const)}, got ${JSON.stringify(value)}`);
-  }
-  if (schema.enum && !schema.enum.includes(value)) {
-    violations.push(`${location}: ${JSON.stringify(value)} not in enum ${JSON.stringify(schema.enum)}`);
-  }
-  if (typeof schema.minimum === "number" && typeof value === "number" && value < schema.minimum) {
-    violations.push(`${location}: ${value} below minimum ${schema.minimum}`);
-  }
-  if (typeof schema.maximum === "number" && typeof value === "number" && value > schema.maximum) {
-    violations.push(`${location}: ${value} above maximum ${schema.maximum}`);
-  }
-  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-    for (const key of schema.required ?? []) {
-      if (!(key in value)) {
-        violations.push(`${location}: missing required ${key}`);
-      }
-    }
-    for (const [key, child] of Object.entries(schema.properties ?? {})) {
-      if (key in value && value[key] !== undefined) {
-        violations.push(...collectSchemaViolations(child, value[key], `${location}.${key}`, rootSchema));
-      }
-    }
-  }
-  if (Array.isArray(value) && schema.items) {
-    for (const [index, item] of value.entries()) {
-      violations.push(...collectSchemaViolations(schema.items, item, `${location}[${index}]`, rootSchema));
-    }
-  }
-  return violations;
-}
 
 async function createQaWorkspaceFixture() {
   const root = await makeTempRepo();

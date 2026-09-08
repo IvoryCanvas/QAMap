@@ -57,7 +57,21 @@ export function formatTextReport(report) {
       );
       for (const run of result.runs) {
         if (run.error) lines.push(`  ! run ${run.run} errored: ${run.error}`);
+        if (run.repositoryCache) {
+          const setup = run.repositoryCache.setup;
+          const observations = run.io?.repositoryIndexes ?? [];
+          lines.push(`  run ${run.run} cache setup: ${setup.status}; setup ms: ${formatValue(setup.wallClockMs)}; ` +
+            `head index observations: ${observations.length || "unavailable"}`);
+          for (const observation of observations) lines.push(`    ${observation.reuse.status}: ` +
+            `${observation.reuse.rebuiltFiles} rebuilt, ${observation.reuse.reusedFiles} reused (index-reported)`);
+          if (run.io) lines.push(`    executor bytes: tool output ${run.io.toolOutputBytes}, ` +
+            `compact ${run.io.compactOutputBytes}, recovery read ${run.io.fullRecoveryReadBytes}`);
+        }
       }
+    }
+    for (const comparison of task.repositoryComparisons ?? []) {
+      lines.push(`- ${comparison.baselineArm} vs ${comparison.candidateArm}: ${comparison.status}; ` +
+        `provider input-token median difference ${formatValue(comparison.inputTokensMedianDifference)}`);
     }
     lines.push("");
   }

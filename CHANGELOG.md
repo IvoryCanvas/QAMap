@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+
+- Reusable repository evidence blocks for JS/TS declarations, references, tests, package entries, compiler aliases, API contract pointers and validation metadata, with explicit coverage and incremental refresh receipts.
+- Cross-package symbol paths to test references and registration candidates, with stop conditions for ambiguous exports, unsupported resolution and mismatched source snapshots.
+- Quality-gated cold, warm and incremental index benchmarks plus a self-contained exact-version package smoke.
+
+### Fixed
+
+- Computational calls, comments and string contents no longer become product behavior solely through matching vocabulary; real file and network actions remain visible.
+- Compact handoffs prioritize source/test evidence, preserve the selected action and command location, and recover the original bounded analysis instead of another truncated summary.
+- Shadowed bindings, conflicting star exports, unsupported module substitutions and parser failures no longer create unproven impact paths.
+
+### Measurement
+
+- Offline benchmark success is reported separately from measured agent quality. Missing provider usage cannot produce a token or cost savings claim.
+
 ## 0.4.17 - 2026-09-04
 
 ### Added

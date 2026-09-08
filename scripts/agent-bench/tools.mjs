@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
+import { createIORecorder } from "./io.mjs";
 
 const execFileAsync = promisify(execFile);
 const SKIPPED_DIRECTORIES = new Set([".git", "node_modules"]);
@@ -111,7 +112,7 @@ export const QAMAP_TOOLS = [
 
 export function toolsForArm(arm) {
   if (arm === "generic") return GENERIC_TOOLS;
-  if (arm === "qamap") return [...GENERIC_TOOLS, ...QAMAP_TOOLS];
+  if (["qamap", "qamap-cold", "qamap-warm"].includes(arm)) return [...GENERIC_TOOLS, ...QAMAP_TOOLS];
   throw new Error(`Unknown benchmark arm "${arm}".`);
 }
 
@@ -125,12 +126,19 @@ export async function createToolExecutor({
   cliPath,
   timeoutMs = 60_000,
   maxOutputBytes = 16_384,
+  env: environment,
+  measureIO = false,
 }) {
   const root = path.resolve(repositoryRoot);
   const sanitize = await createPathSanitizer(root);
-  const env = scrubbedEnvironment();
+  const env = environment ?? scrubbedEnvironment();
+  const io = measureIO ? createIORecorder({ tempDirectory: env.TMPDIR }) : null;
 
-  async function runCommand(file, commandArgs) {
+  async function runCommand(file, commandArgs, qamapFormat) {
+    let stdout;
+    let stderr;
+    let code = 0;
+    let timedOut = false;
     try {
       const result = await execFileAsync(file, commandArgs, {
         cwd: root,
@@ -138,27 +146,36 @@ export async function createToolExecutor({
         timeout: timeoutMs,
         maxBuffer: maxOutputBytes * 8,
       });
-      return formatCommandOutput(result.stdout, result.stderr, 0, false);
+      ({ stdout, stderr } = result);
     } catch (error) {
-      const code = typeof error.code === "number" ? error.code : 1;
-      return formatCommandOutput(error.stdout ?? "", error.stderr ?? "", code, Boolean(error.killed));
+      code = typeof error.code === "number" ? error.code : 1;
+      stdout = error.stdout ?? "";
+      stderr = error.stderr ?? "";
+      timedOut = Boolean(error.killed);
     }
+    io?.command(stdout, stderr, code);
+    if (io && qamapFormat) stdout = await io.qamapOutput(stdout, qamapFormat);
+    return formatCommandOutput(stdout, stderr, code, timedOut);
   }
 
   function runQamap(commandArgs) {
-    return runCommand(process.execPath, [cliPath, ...commandArgs]);
+    const formatAt = commandArgs.indexOf("--format");
+    return runCommand(process.execPath, [cliPath, ...commandArgs], formatAt < 0 ? undefined : commandArgs[formatAt + 1]);
   }
 
   const handlers = {
     bash: (input) => runCommand("bash", ["-c", requireString(input, "command")]),
     read_file: async (input) => {
-      const file = resolveInside(root, requireString(input, "path"));
+      const requested = requireString(input, "path");
+      const recoveryPath = io?.recoveryPath(requested);
+      const file = recoveryPath ?? resolveInside(root, requested);
       const stats = await fs.stat(file);
       if (!stats.isFile()) throw new Error("Path is not a file.");
       const handle = await fs.open(file, "r");
       try {
         const buffer = Buffer.alloc(Math.min(stats.size, maxOutputBytes));
         const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+        io?.read(bytesRead, recoveryPath ? requested : null, stats.size);
         return buffer.subarray(0, bytesRead).toString("utf8");
       } finally {
         await handle.close();
@@ -177,7 +194,7 @@ export async function createToolExecutor({
       const start = resolveInside(root, optionalString(input, "path") ?? ".");
       const limit = Number.isInteger(input.maxResults) ? Math.min(Math.max(input.maxResults, 1), 200) : 50;
       const matches = [];
-      await grepPath(start, root, pattern, matches, limit);
+      await grepPath(start, root, pattern, matches, limit, io);
       return matches.length > 0 ? matches.join("\n") : "No matches.";
     },
     qamap_qa: (input) => {
@@ -193,29 +210,46 @@ export async function createToolExecutor({
   };
 
   return {
+    measurements: () => io?.snapshot() ?? null,
     async execute(name, input) {
-      const handler = handlers[name];
-      if (!handler) throw new Error(`Unknown tool "${name}".`);
-      const output = await handler(input && typeof input === "object" ? input : {});
-      return truncate(sanitize(output), maxOutputBytes);
+      const normalized = input && typeof input === "object" ? input : {};
+      io?.input(name, normalized);
+      try {
+        const handler = handlers[name];
+        if (!handler) throw new Error(`Unknown tool "${name}".`);
+        const output = sanitize(await handler(normalized));
+        const delivered = truncate(output, maxOutputBytes);
+        io?.output(delivered, {
+          compact: name === "qamap_qa" && normalized.format === "agent",
+          recovery: name === "read_file" && Boolean(io?.recoveryPath(normalized.path))
+            || name === "qamap_qa" && normalized.format === "json",
+          truncated: delivered !== output,
+        });
+        return delivered;
+      } catch (error) {
+        io?.error();
+        throw new Error(sanitize(error instanceof Error ? error.message : String(error)));
+      }
     },
   };
 }
 
-async function grepPath(target, root, pattern, matches, limit) {
+async function grepPath(target, root, pattern, matches, limit, io) {
   if (matches.length >= limit) return;
   const stats = await fs.stat(target);
   if (stats.isDirectory()) {
     const entries = await fs.readdir(target, { withFileTypes: true });
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       if (SKIPPED_DIRECTORIES.has(entry.name)) continue;
-      await grepPath(path.join(target, entry.name), root, pattern, matches, limit);
+      await grepPath(path.join(target, entry.name), root, pattern, matches, limit, io);
       if (matches.length >= limit) return;
     }
     return;
   }
   if (!stats.isFile() || stats.size > MAX_GREP_FILE_BYTES) return;
-  const text = await fs.readFile(target, "utf8");
+  const buffer = await fs.readFile(target);
+  io?.read(buffer.length);
+  const text = buffer.toString("utf8");
   if (text.includes("\u0000")) return;
   const relative = path.relative(root, target).split(path.sep).join("/");
   const lines = text.split(/\r?\n/);
@@ -264,9 +298,9 @@ function truncate(text, maxBytes) {
 
 function scrubbedEnvironment() {
   const env = {};
-  for (const [key, value] of Object.entries(process.env)) {
+  for (const key of Object.keys(process.env)) {
     if (SECRET_ENV_PATTERN.test(key)) continue;
-    env[key] = value;
+    env[key] = process.env[key];
   }
   return { ...env, CI: "1", FORCE_COLOR: "0", NO_COLOR: "1" };
 }

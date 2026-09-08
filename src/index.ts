@@ -427,3 +427,7 @@ export type {
   QaTraceRisk,
   QaTraceScenario,
 } from "./qa-trace.js";
+export { buildRepositoryEvidenceIndex } from "./repository-index.js";
+export type { RepositoryEvidenceIndex, RepositoryIndexBlock } from "./repository-index.js";
+export { traceRepositoryImpact } from "./repository-impact.js";
+export type { RepositoryImpact, ImpactStep } from "./repository-impact.js";

@@ -34,7 +34,7 @@ const QAMAP_SCRIPT = [
 ];
 
 export function createScriptedProvider({ arm }) {
-  const script = arm === "qamap" ? QAMAP_SCRIPT : GENERIC_SCRIPT;
+  const script = ["qamap", "qamap-cold", "qamap-warm"].includes(arm) ? QAMAP_SCRIPT : GENERIC_SCRIPT;
   return {
     name: "scripted",
     model: null,

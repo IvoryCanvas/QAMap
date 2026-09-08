@@ -3,6 +3,8 @@ import { execFile } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { isBuiltin } from "node:module";
+import ts from "typescript";
 import {
   classifyChangedSourceRoles,
   classifyChangeSourceRole,
@@ -361,6 +363,7 @@ export async function analyzeChangeIntents(
       options.addedDiffText ?? {},
       options.addedDiffEvidence ?? {},
       changedSourceRoles,
+      sourceTexts.headText,
     ),
   ]);
   const deliveryIntegrityEvidence = await collectDeliveryIntegrityEvidence(
@@ -392,7 +395,7 @@ export async function analyzeChangeIntents(
     ...runtimeActivationEvidence,
     ...unscopedAccountStorageEvidence,
     ...divergentSurfaceCopyEvidence,
-    ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}, changedSourceRoles),
+    ...collectDiffRiskEvidence(options.addedDiffEvidence ?? {}, changedSourceRoles, sourceTexts.headText),
     ...collectRemovalContractEvidence(
       options.changedFiles,
       options.addedDiffEvidence ?? {},
@@ -3278,6 +3281,7 @@ function collectCodeBehaviorSignals(
   addedDiffText: Record<string, string>,
   addedDiffEvidence: AddedDiffEvidence,
   changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
+  headText: Record<string, string>,
 ): CodeBehaviorSignal[] {
   const signals: CodeBehaviorSignal[] = [];
   const locatedFiles = new Set<string>();
@@ -3288,13 +3292,14 @@ function collectCodeBehaviorSignals(
       continue;
     }
     locatedFiles.add(file);
+    const structure = vocabularyStructure(file, headText[file] ?? locatedVocabularyText(hunks));
     for (const hunk of hunks) {
       if (isFormattingOnlyHunk(hunk)) {
         continue;
       }
       collectTransformationContractSignals(signals, file, hunk);
       for (const line of hunk.lines) {
-        collectCodeBehaviorSignalsFromText(signals, file, line.text, hunk, line.line);
+        collectCodeBehaviorSignalsFromText(signals, file, line.text, hunk, line.line, structure);
       }
       collectRenderedMetadataSignals(signals, file, hunk);
     }
@@ -3304,7 +3309,7 @@ function collectCodeBehaviorSignals(
     if (sourceRole !== "product" || locatedFiles.has(file)) {
       continue;
     }
-    collectCodeBehaviorSignalsFromText(signals, file, text);
+    collectCodeBehaviorSignalsFromText(signals, file, text, undefined, undefined, vocabularyStructure(file, text));
   }
   return selectCodeSignals(signals);
 }
@@ -3457,6 +3462,7 @@ function selectCodeSignals(signals: CodeBehaviorSignal[]): CodeBehaviorSignal[] 
 function collectDiffRiskEvidence(
   addedDiffEvidence: AddedDiffEvidence,
   changedSourceRoles: ReturnType<typeof classifyChangedSourceRoles>,
+  headText: Record<string, string>,
 ): ChangeIntentEvidence[] {
   const evidence: ChangeIntentEvidence[] = [];
   for (const [file, hunks] of Object.entries(addedDiffEvidence)) {
@@ -3473,6 +3479,10 @@ function collectDiffRiskEvidence(
       evidence.push(...collectCommandDiffEvidence(file, hunks));
       continue;
     }
+    const headStructure = vocabularyStructure(file, headText[file] ?? locatedVocabularyText(hunks));
+    const baseStructure = vocabularyStructure(file, locatedVocabularyText(hunks.map((hunk) => ({
+      ...hunk, lines: hunk.removedLines ?? [],
+    }))));
     for (const hunk of hunks) {
       if (isFormattingOnlyHunk(hunk)) {
         continue;
@@ -3491,6 +3501,9 @@ function collectDiffRiskEvidence(
       }
       for (const [side, lines] of [["head", hunk.lines], ["base", hunk.removedLines ?? []]] as const) {
         for (const line of lines) {
+          const structure = side === "head" ? headStructure : baseStructure;
+          const code = structure?.codeLines[line.line - 1] ?? sourceOutsideStringLiterals(line.text);
+          if (!code.trim()) continue;
           if (isStaticVocabularyOrMetadataLine(line.text)) {
             continue;
           }
@@ -3546,10 +3559,10 @@ function collectDiffRiskEvidence(
               side,
             ));
           }
-          const routingSignal = matchRoutingSignal(line.text);
-          const queryOperation = line.text.match(
-            /\b((?:params|queryParams|searchParams)|[A-Za-z_$][\w$]*\.searchParams)\.(get|set|delete)\(\s*["'`]([^"'`]+)["'`]/i,
-          );
+          const routingSignal = matchRoutingSignal(code);
+          const queryOperation = [...line.text.matchAll(
+            /\b((?:params|queryParams|searchParams)|[A-Za-z_$][\w$]*\.searchParams)\.(get|set|delete)\(\s*["'`]([^"'`]+)["'`]/gi,
+          )].find((match) => code.slice(match.index, (match.index ?? 0) + match[1].length) === match[1]);
           const metadataOnlyRoutingMatch = routingSignal &&
             /^(?:payload|destination)$/i.test(routingSignal) &&
             isStructuredDataFile(file);
@@ -3582,7 +3595,7 @@ function collectDiffRiskEvidence(
               ));
             }
           }
-          const guardMatch = line.text.match(
+          const guardMatch = code.match(
             /(guard\w*|validat\w*|permission\w*|authoriz\w*|authenticat\w*|isAllowed|isDenied|protected)/i,
           );
           if (guardMatch) {
@@ -3595,7 +3608,7 @@ function collectDiffRiskEvidence(
               side,
             ));
           }
-          const accessMatch = line.text.match(
+          const accessMatch = code.match(
             /(PUBLIC_[A-Z0-9_]*(?:PATH|ROUTE|ASSET)|(?:unauthenticated|public|protected)[A-Za-z0-9_]*(?:Path|Route|Asset)|NextResponse\.next|login redirect)/,
           );
           if (accessMatch) {
@@ -3634,7 +3647,7 @@ function collectDiffRiskEvidence(
               side,
             ));
           }
-          const shareSymbol = sharingCapabilitySymbol(line.text);
+          const shareSymbol = /\.go$/i.test(file) ? undefined : sharingCapabilitySymbol(line.text);
           if (shareSymbol) {
             evidence.push(diffRiskEvidence(
               file,
@@ -4606,7 +4619,7 @@ function performanceSignal(
     return { mechanism: "image-loading", rawSymbol: "preload:image" };
   }
 
-  const codeSplit = text.match(
+  const codeSplit = /\.(?:[cm]?[jt]sx?|vue|svelte|astro|html?)$/i.test(file) && sourceOutsideStringLiterals(text).match(
     /\b(defineAsyncComponent|React\.lazy)\s*\(|\b(lazy|dynamic)\s*\([^\n]*\bimport\s*\(|\b(import)\s*\(/,
   );
   if (codeSplit) {
@@ -5116,17 +5129,179 @@ function diffTextForRoleClassification(hunks: AddedDiffHunk[]): string {
   ]).join("\n");
 }
 
+interface VocabularyStructure {
+  calls: Array<{ symbol: string; line: number }>;
+  codeLines: string[];
+}
+
+function locatedVocabularyText(hunks: AddedDiffHunk[]): string | undefined {
+  const lines: string[] = [];
+  for (const hunk of hunks) {
+    for (const line of hunk.lines) {
+      // A sparse diff is context, not permission to allocate an unbounded file.
+      if (!Number.isSafeInteger(line.line) || line.line < 1 || line.line > 100_000) return undefined;
+      lines[line.line - 1] = line.text;
+    }
+  }
+  return lines.join("\n");
+}
+
+function vocabularyStructure(file: string, text: string | undefined): VocabularyStructure | undefined {
+  try { return parseVocabularyStructure(file, text); }
+  catch { return { calls: [], codeLines: [] }; }
+}
+
+function parseVocabularyStructure(file: string, text: string | undefined): VocabularyStructure | undefined {
+  if (text === undefined) return undefined;
+  if (/\.go$/i.test(file)) return goVocabularyStructure(text);
+  if (!/\.[cm]?[jt]sx?$/i.test(file)) return undefined;
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  const masked = text.split("");
+  const mask = (start: number, end: number) => {
+    for (let index = start; index < end; index += 1) {
+      if (masked[index] !== "\n" && masked[index] !== "\r") masked[index] = " ";
+    }
+  };
+  const scopes = new Map<ts.Node, Map<string, ts.Node>>();
+  const scopeFor = (node: ts.Node): ts.Node => {
+    let scope = node.parent;
+    while (scope && !ts.isSourceFile(scope) && !ts.isBlock(scope) && !ts.isFunctionLike(scope)) scope = scope.parent;
+    return scope ?? source;
+  };
+  const bind = (name: ts.BindingName, declaration: ts.Node, scope = scopeFor(declaration)) => {
+    const bindings = scopes.get(scope) ?? new Map<string, ts.Node>();
+    scopes.set(scope, bindings);
+    if (ts.isIdentifier(name)) bindings.set(name.text, declaration);
+    else for (const element of name.elements) {
+      if (ts.isBindingElement(element)) bind(element.name, element, scope);
+    }
+  };
+  const index = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) bind(node.name, node);
+    if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) bind(node.name, node);
+    if (ts.isImportClause(node) && node.name) bind(node.name, node, source);
+    if (ts.isImportSpecifier(node) || ts.isNamespaceImport(node)) bind(node.name, node, source);
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node) || ts.isTypeNode(node) ||
+      ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
+      ts.isStringLiteralLike(node) || ts.isRegularExpressionLiteral(node) ||
+      node.kind === ts.SyntaxKind.PublicKeyword || node.kind === ts.SyntaxKind.ProtectedKeyword ||
+      node.kind === ts.SyntaxKind.PrivateKeyword ||
+      node.kind === ts.SyntaxKind.JsxText || node.kind === ts.SyntaxKind.TemplateHead ||
+      node.kind === ts.SyntaxKind.TemplateMiddle || node.kind === ts.SyntaxKind.TemplateTail) {
+      mask(node.getStart(source), node.end);
+    }
+    ts.forEachChild(node, index);
+  };
+  index(source);
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, text);
+  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
+    if (token === ts.SyntaxKind.SingleLineCommentTrivia || token === ts.SyntaxKind.MultiLineCommentTrivia) {
+      mask(scanner.getTokenPos(), scanner.getTextPos());
+    }
+  }
+  const bindingFor = (identifier: ts.Identifier): ts.Node | undefined => {
+    for (let scope: ts.Node | undefined = identifier; scope; scope = scope.parent) {
+      const binding = scopes.get(scope)?.get(identifier.text);
+      if (binding) return binding;
+    }
+    return undefined;
+  };
+  const builtinReceiver = (node: ts.Node, seen = new Set<ts.Node>()): boolean => {
+    if (seen.has(node)) return false;
+    seen.add(node);
+    if (ts.isIdentifier(node)) {
+      const binding = bindingFor(node);
+      return binding ? builtinReceiver(binding, seen) : false;
+    }
+    if (ts.isImportClause(node) || ts.isImportSpecifier(node) || ts.isNamespaceImport(node)) {
+      let declaration: ts.Node = node;
+      while (!ts.isImportDeclaration(declaration) && declaration.parent) declaration = declaration.parent;
+      return ts.isImportDeclaration(declaration) && ts.isStringLiteral(declaration.moduleSpecifier) &&
+        isBuiltin(declaration.moduleSpecifier.text) && /^(?:node:)?crypto$/.test(declaration.moduleSpecifier.text);
+    }
+    if (ts.isVariableDeclaration(node)) {
+      return Boolean(node.initializer && ts.isVariableDeclarationList(node.parent) &&
+        (node.parent.flags & ts.NodeFlags.Const) && builtinReceiver(node.initializer, seen));
+    }
+    if (ts.isBindingElement(node)) return builtinReceiver(node.parent.parent, seen);
+    if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) ||
+      ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node)) {
+      return builtinReceiver(node.expression, seen);
+    }
+    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      if (ts.isIdentifier(node.expression) && node.expression.text === "require" && !bindingFor(node.expression) &&
+        node.arguments?.length === 1 && ts.isStringLiteral(node.arguments[0])) return isBuiltin(node.arguments[0].text) && /^(?:node:)?crypto$/.test(node.arguments[0].text);
+      return builtinReceiver(node.expression, seen);
+    }
+    return false;
+  };
+  const callName = (node: ts.Expression): string | undefined => {
+    if (ts.isIdentifier(node)) return node.text;
+    if (ts.isPropertyAccessExpression(node)) {
+      const receiver = callName(node.expression);
+      return receiver ? `${receiver}.${node.name.text}` : undefined;
+    }
+    if (ts.isCallExpression(node)) {
+      const receiver = callName(node.expression);
+      return receiver ? `${receiver}()` : undefined;
+    }
+    if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node)) return callName(node.expression);
+    return undefined;
+  };
+  const calls: VocabularyStructure["calls"] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && !(ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.text === "update" && builtinReceiver(node.expression))) {
+      const symbol = callName(node.expression);
+      const target = ts.isPropertyAccessExpression(node.expression) ? node.expression.name : node.expression;
+      if (symbol && symbol !== "import") calls.push({ symbol, line: source.getLineAndCharacterOfPosition(target.getStart(source)).line + 1 });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return { calls, codeLines: masked.join("").split(/\r?\n/) };
+}
+
+function goVocabularyStructure(text: string): VocabularyStructure {
+  // Go's import grammar is bounded here; unsupported languages keep the existing fallback.
+  const source = text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|`[^`]*`/g,
+    (token) => token.startsWith("/") ? token.replace(/[^\r\n]/g, " ") : token);
+  const standardImports = new Set<string>();
+  const imports = /\bimport\s*(?:\(([\s\S]*?)\)|((?:(?:[A-Za-z_]\w*|\.)\s+)?["`][^"`]+["`]))/g;
+  const code = source.replace(imports, (statement, group: string | undefined, single: string | undefined) => {
+    for (const match of (group ?? single ?? "").matchAll(/(?:(\w+|\.)\s+)?["`]([^"`]+)["`]/g)) {
+      const specifier = match[2];
+      if (specifier === "io") standardImports.add(match[1] ?? "io");
+    }
+    return statement.replace(/[^\r\n]/g, " ");
+  }).replace(/"(?:\\.|[^"\\])*"|`[^`]*`/g, (token) => token.replace(/[^\r\n]/g, " "));
+  const codeLines = code.split(/\r?\n/);
+  const calls: VocabularyStructure["calls"] = [];
+  for (const [index, line] of codeLines.entries()) {
+    for (const match of line.matchAll(/\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*\(/g)) {
+      if (/\bfunc\s*(?:\([^)]*\)\s*)?$/.test(line.slice(0, match.index)) ||
+        standardImports.has(match[1].split(".")[0]) || match[1] === "import") continue;
+      calls.push({ symbol: match[1], line: index + 1 });
+    }
+  }
+  return { calls, codeLines };
+}
+
 function collectCodeBehaviorSignalsFromText(
   signals: CodeBehaviorSignal[],
   file: string,
   text: string,
   hunk?: AddedDiffHunk,
   line?: number,
+  structure?: VocabularyStructure,
 ): void {
+  const code = structure ? (line === undefined ? structure.codeLines.join("\n") : structure.codeLines[line - 1] ?? "") : text;
+  if (!code.trim()) return;
   collectStaticUiOutcomeSignals(signals, file, text, hunk, line);
   for (const match of text.matchAll(
     /\b(?:router\.(?:push|replace)|navigate|(?:window\.)?location\.(?:assign|replace))\s*\(\s*(["'`])([^"'`\n]+)\1/g,
   )) {
+    if (!code.slice(match.index, (match.index ?? 0) + 1).trim()) continue;
     const destination = match[2].trim();
     if (!destination) continue;
     const symbol = `navigation:${destination}`;
@@ -5228,7 +5403,7 @@ function collectCodeBehaviorSignalsFromText(
       evidence: codeSignalEvidence(label, file, visibleText, hunk, line),
     });
   }
-  for (const match of text.matchAll(/\b(on[A-Z][A-Za-z0-9_]*)\b/g)) {
+  for (const match of code.matchAll(/\b(on[A-Z][A-Za-z0-9_]*)\b/g)) {
     const symbol = match[1];
     if (/^on(?:Click|Press|Submit|Change)$/.test(symbol)) {
       continue;
@@ -5242,15 +5417,13 @@ function collectCodeBehaviorSignalsFromText(
       evidence: codeSignalEvidence(label, file, symbol, hunk, line),
     });
   }
-  for (const match of text.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*\(/g)) {
-    const symbol = match[1];
-    if (isInsideRegexLiteral(text, match.index ?? 0)) {
-      continue;
-    }
-    const prefix = text.slice(0, match.index ?? 0);
-    if (/\b(?:function|class)\s+$/.test(prefix)) {
-      continue;
-    }
+  const calls = structure
+    ? structure.calls.filter((call) => line === undefined || call.line === line)
+    : [...text.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*\(/g)]
+      .filter((match) => !isInsideRegexLiteral(text, match.index ?? 0) &&
+        !/\b(?:function|class)\s+$/.test(text.slice(0, match.index ?? 0)))
+      .map((match) => ({ symbol: match[1] }));
+  for (const { symbol } of calls) {
     const leaf = symbol.split(".").at(-1) ?? symbol;
     if (ignoredCallNames.has(leaf) || leaf.length < 3) {
       continue;

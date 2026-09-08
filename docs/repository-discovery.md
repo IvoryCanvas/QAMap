@@ -2,6 +2,54 @@
 
 [한국어](ko/repository-discovery.md)
 
+## Repository Evidence Index (Development)
+
+Full QA JSON now adds `repositoryIndex` and `repositoryImpact`. The index reads
+the Git inventory before choosing relevant metadata. Supported JS/TS files use
+the TypeScript syntax parser; this is not type checking or code execution.
+Declarations, named and namespace imports, reexports, lexical references, test
+locations, registration candidates, package entry declarations, compiler aliases,
+OpenAPI operation/response pointers, and validation-script hashes are reusable
+blocks. Unsupported syntax, languages, malformed documents and bounded omissions
+remain visible in `coverage.skipped`.
+
+`repositoryIndex.reuse` separates content reads (`readFiles`, `readBytes`) from
+syntax work (`reusedFiles`, `rebuiltFiles`). Warm refreshes still read and hash
+supported files. Changed blocks rebuild; relationships are recomputed through
+previous and current imports. Configuration changes invalidate import-bearing
+relationships without discarding unchanged syntax. These counters describe one
+index refresh, not all work performed by the CLI or an LLM.
+
+`repositoryImpact.paths` traces changed declarations through exact aliases,
+declared package entries and reexports to test references or registration
+candidates. An unused importer is not an affected product flow. Namespace access
+must identify the referenced export. Multiple resolvable package conditions,
+dynamic module loading, unrecognized declarations and traversal limits are
+boundaries for focused review. A registration-shaped call is only a candidate,
+not proof that a framework registered a route. Every path is a `draft` and
+execution remains `not-run`.
+
+The repository index uses the workspace root during explicit or automatic package
+QA. Its paths remain workspace-relative even when existing QA evidence is
+package-relative. It describes **current working-tree files**, not a reconstructed
+historical checkout. Committed-only QA with a different source/configuration tree
+returns `repository-snapshot-mismatch` instead of citing current-file lines as
+historical evidence. Working-tree analysis may trace the current index directly.
+
+The separate `qamap-repository-index-<user-id>` cache shares the private storage
+rules below: 8 MiB per snapshot, at most eight retained repositories after a
+successful write, 24-hour expiry, and fail-open rebuilding. It stores structural
+metadata and hashes, not source bodies, test descriptions, command bodies or
+response examples. Names, module specifiers and schema pointers can still expose
+repository structure. Disable it with `QAMAP_REPOSITORY_CACHE=off`. The existing
+import cache is independently controlled by `QAMAP_IMPORT_CACHE=off`.
+
+The compact `repository` handoff retains index identity, coverage counts, an
+affected test path and targeted uncertainty. Its recovery file contains all
+indexed blocks and complete bounded impact paths. "Complete" recovery means no
+additional summary truncation; analyzer limits and unsupported evidence still
+apply. See [agent format](agent-format.md).
+
 QAMap's import graph starts with Git-tracked paths and non-ignored untracked
 paths in the selected directory. Ignored untracked paths are not searched. When
 Git confirms that the directory is not a repository, a filesystem walk with fixed
@@ -88,12 +136,12 @@ file reads**, and does not establish an LLM token-savings claim.
   languages, and unresolved imports still need focused inspection.
 - Git discovery includes current untracked work but excludes ignored untracked
   paths. It does not inspect submodule contents or follow symbolic links.
-- A scoped package receipt does not cover the rest of a monorepo.
+- The legacy import receipt follows package scope. The new repository index uses
+  the supplied workspace root; neither receipt proves semantic completeness.
 - `qa` does not modify the analyzed repository and remains `not-run`. No
   dependencies are installed and no product tests are executed. The disposable
   import cache is stored separately, as described above.
-- Other evidence blocks and repository-first compact agent output remain
-  separate work. Import reuse does not establish full-repository QA coverage.
+- Neither index establishes full-repository QA coverage or provider token savings.
 
 ## Verification
 

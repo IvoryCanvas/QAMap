@@ -48,12 +48,14 @@
     "plugin:smoke:compiled": "node scripts/plugin-smoke.mjs",
     "plugin:smoke": "pnpm build && pnpm plugin:smoke:compiled",
     "report": "pnpm build && node dist/cli.js report . --output QAMAP_REPORT.md",
-    "release:check": "pnpm test && pnpm scan && pnpm plugin:check && pnpm plugin:smoke && pnpm bench:ci && pnpm bench:agent --dry-run --assert && pnpm bench:context && pnpm bench:execution && git diff --check && pnpm run coverage && pnpm pack --dry-run",
+    "release:check": "pnpm test && pnpm scan && pnpm plugin:check && pnpm plugin:smoke && pnpm bench:ci && pnpm bench:repository && pnpm bench:agent --dry-run --assert && pnpm bench:context && pnpm bench:execution && git diff --check && pnpm run coverage && pnpm pack --dry-run",
     "bench": "pnpm build && node scripts/bench.mjs",
     "bench:ci:compiled": "node scripts/bench.mjs --config bench.config.json --assert",
     "bench:ci": "pnpm build && pnpm bench:ci:compiled",
     "bench:context:compiled": "node scripts/context-bench.mjs --assert",
     "bench:context": "pnpm build && pnpm bench:context:compiled",
+    "bench:repository:compiled": "node scripts/bench-repository-index.mjs --assert",
+    "bench:repository": "pnpm build && pnpm bench:repository:compiled",
     "bench:execution:compiled": "node scripts/execution-bench.mjs --config execution-bench.config.json",
     "bench:execution": "pnpm build && pnpm bench:execution:compiled",
     "bench:agent:compiled": "node scripts/agent-bench.mjs --config agent-bench.config.json",
@@ -106,10 +108,10 @@
     "access": "public"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "typescript": "^5.8.0"
+    "@types/node": "^24.0.0"
   },
   "dependencies": {
+    "typescript": "^5.8.0",
     "yaml": "^2.9.0"
   }
 }

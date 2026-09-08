@@ -1,4 +1,5 @@
 import path from "node:path";
+import ts from "typescript";
 
 export type ChangeSourceRole =
   | "product"
@@ -144,7 +145,7 @@ export function classifyChangeSourceRole(
       reason: "The changed source defines analyzer, matcher, routing, or static-rule behavior.",
     };
   }
-  if (hasCommandSourceSignal(changedText)) {
+  if (hasCommandSourceSignal(file, changedText)) {
     return { role: "command", reason: "The path or changed source defines a command-line entry surface." };
   }
   if (isConfigurationPath(file)) {
@@ -186,8 +187,29 @@ function isCommandPath(file: string): boolean {
     /(?:^|\/)(?:cli|command)(?:\.[^/]+)?$/i.test(file);
 }
 
-function hasCommandSourceSignal(text: string): boolean {
-  return /\bprocess\.argv\b|\bparseArgs\s*\(|\b(?:commander|yargs|meow|cac)\b|\b(?:program|cli)\.(?:command|requiredOption|option)\s*\(/i.test(text);
+function hasCommandSourceSignal(file: string, text: string): boolean {
+  try { return parseCommandSourceSignal(file, text); }
+  catch { return false; }
+}
+
+function parseCommandSourceSignal(file: string, text: string): boolean {
+  if (!/\.[cm]?[jt]sx?$/i.test(file)) {
+    return /\bprocess\.argv\b|\bparseArgs\s*\(|\b(?:commander|yargs|meow|cac)\b|\b(?:program|cli)\.(?:command|requiredOption|option)\s*\(/i.test(text);
+  }
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) &&
+      /^(?:commander|yargs|meow|cac)(?:\/|$)/.test(node.moduleSpecifier.text)) found = true;
+    if (ts.isPropertyAccessExpression(node) && node.getText(source) === "process.argv") found = true;
+    if (ts.isCallExpression(node) && /^(?:parseArgs|(?:program|cli)\.(?:command|requiredOption|option))$/.test(node.expression.getText(source))) found = true;
+    if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || node.expression.getText(source) === "require") &&
+      node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0]) &&
+      /^(?:commander|yargs|meow|cac)(?:\/|$)/.test(node.arguments[0].text)) found = true;
+    if (!found) ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
 }
 
 function isAnalysisRuleSource(file: string, text: string): boolean {
@@ -237,9 +259,23 @@ function referencesChangedAnalysisSource(
 }
 
 function referencesChangedSource(file: string, text: string, targetFile: string): boolean {
-  const imports = [...text.matchAll(
-    /(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*["']([^"']+)["']/g,
-  )].map((match) => match[1]);
+  const imports: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) imports.push(node.moduleSpecifier.text);
+    if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+      ts.isIdentifier(node.expression) && node.expression.text === "require") &&
+      node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0])) imports.push(node.arguments[0].text);
+    ts.forEachChild(node, visit);
+  };
+  if (/\.[cm]?[jt]sx?$/i.test(file)) {
+    try { visit(ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)); }
+    catch { return false; }
+  } else {
+    imports.push(...[...text.matchAll(
+      /(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*["']([^"']+)["']/g,
+    )].map((match) => match[1]));
+  }
   return imports.some((specifier) => {
     if (!specifier.startsWith(".")) {
       return false;

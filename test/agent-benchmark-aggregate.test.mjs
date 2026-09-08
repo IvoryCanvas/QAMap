@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { aggregateRuns, median, range, RUN_METRICS } from "../scripts/agent-bench/aggregate.mjs";
+import { aggregateRuns, compareQualityGatedRuns, median, range, RUN_METRICS } from "../scripts/agent-bench/aggregate.mjs";
 
 test("median and range handle odd, even, single, and empty samples", () => {
   assert.equal(median([30, 10, 20]), 20);
@@ -90,3 +90,28 @@ function run(overrides) {
     ...overrides,
   };
 }
+
+test("token differences require complete paired usage and passing task quality", () => {
+  const arms = {
+    generic: { runs: [run({ inputTokens: 100, outputTokens: 50 })] },
+    qamap: { runs: [run({ inputTokens: 20, outputTokens: 60 })] },
+  };
+  const eligible = compareQualityGatedRuns(arms, "measured");
+  assert.equal(eligible.eligible, true);
+  assert.equal(eligible.inputTokensMedianDifference, 80);
+  assert.equal(eligible.outputTokensMedianDifference, -10, "increased usage must remain visible");
+  for (const status of ["dry-run", "skipped"]) {
+    const result = compareQualityGatedRuns(arms, status);
+    assert.equal(result.eligible, false);
+    assert.equal(result.qualityPassed, null);
+    assert.equal(result.inputTokensMedianDifference, null);
+  }
+  arms.qamap.runs[0].success = false;
+  assert.equal(compareQualityGatedRuns(arms, "measured").status, "quality-failed");
+  assert.equal(compareQualityGatedRuns(arms, "measured").inputTokensMedianDifference, null);
+  arms.qamap.runs[0].success = true;
+  arms.qamap.runs[0].inputTokens = null;
+  assert.equal(compareQualityGatedRuns(arms, "measured").status, "usage-incomplete");
+  arms.qamap.runs = [];
+  assert.equal(compareQualityGatedRuns(arms, "measured").status, "unpaired");
+});

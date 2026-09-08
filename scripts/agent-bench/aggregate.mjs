@@ -46,6 +46,25 @@ export function aggregateRuns(runs) {
   };
 }
 
+export function compareQualityGatedRuns(arms, status) {
+  const baseline = arms.generic?.runs ?? [];
+  const candidate = arms.qamap?.runs ?? [];
+  const measured = status === "measured";
+  const paired = baseline.length > 0 && baseline.length === candidate.length
+    && baseline.every((run, index) => run.firstAuthoring === candidate[index].firstAuthoring);
+  const qualityPassed = measured && paired && [...baseline, ...candidate].every((run) => !run.error && run.success === true);
+  const usageComplete = qualityPassed && [...baseline, ...candidate].every((run) =>
+    [run.inputTokens, run.outputTokens].every((value) => Number.isSafeInteger(value) && value >= 0));
+  return {
+    status: !measured ? "not-measured" : !paired ? "unpaired" : !qualityPassed ? "quality-failed" : !usageComplete ? "usage-incomplete" : "eligible",
+    qualityPassed: measured ? qualityPassed : null,
+    eligible: usageComplete,
+    // Preserve provider-native input definitions and never add cache counts to them.
+    inputTokensMedianDifference: usageComplete ? median(baseline.map((run) => run.inputTokens)) - median(candidate.map((run) => run.inputTokens)) : null,
+    outputTokensMedianDifference: usageComplete ? median(baseline.map((run) => run.outputTokens)) - median(candidate.map((run) => run.outputTokens)) : null,
+  };
+}
+
 export function median(values) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((left, right) => left - right);

@@ -34,6 +34,9 @@ test("agent benchmark dry run is deterministic and never needs a provider", asyn
   );
 
   for (const task of first.tasks) {
+    assert.equal(task.comparison.status, "not-measured");
+    assert.equal(task.comparison.eligible, false);
+    assert.equal(task.comparison.inputTokensMedianDifference, null);
     assert.deepEqual(Object.keys(task.arms), ["generic", "qamap"]);
     for (const arm of Object.values(task.arms)) {
       assert.equal(arm.runs.length, 2);
@@ -62,6 +65,8 @@ test("agent benchmark dry run is deterministic and never needs a provider", asyn
   assert.match(first.interpretation.join(" "), /no provider pricing/i);
   assert.match(first.interpretation.join(" "), /second run/i);
   assert.equal(first.summary.passed, true);
+  assert.equal(first.summary.harnessPassed, true);
+  assert.equal(first.summary.qualityPassed, null);
   assert.doesNotMatch(JSON.stringify(first), forbiddenReportText);
 });
 
@@ -78,6 +83,7 @@ test("agent benchmark is skipped without a provider key and exits 0 even with --
   assert.equal(report.pinned.provider, null);
   assert.deepEqual(report.tasks.map((task) => task.arms), [{}, {}, {}]);
   assert.equal(report.summary.passed, true);
+  assert.equal(report.summary.qualityPassed, null);
   assert.doesNotMatch(JSON.stringify(report), forbiddenReportText);
 
   const text = await execFileAsync(
