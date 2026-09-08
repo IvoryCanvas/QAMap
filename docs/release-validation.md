@@ -22,7 +22,8 @@ Validated on Node 22.14.0 with public synthetic fixtures:
 
 | Gate | Result |
 | --- | --- |
-| Full test suite with coverage | 610/610 passed; lines 91.56%, branches 88.45%, functions 96.20% |
+| Full test suite | 611/611 passed, including file-boundary integrity regression |
+| Coverage baseline | Preceding 610-test run: lines 91.56%, branches 88.45%, functions 96.20%; the integrity follow-up does not change production runtime code |
 | Static QA benchmark | 43/43 contracts passed |
 | Repository benchmark | 11/11 checks passed, including all 7 required quality cases |
 | Context reuse | 10/10 checks passed |
@@ -38,6 +39,10 @@ and static execution status. Independent fixture checks reject omitted evidence,
 incorrect answers and source changes. These are bounded oracle tests, not
 observed model scores. The scripted offline run deliberately does not supply
 correct answers or token counts.
+
+Integrity snapshots include each file's length so moving a serialized file
+header and payload into another file cannot preserve the same hash input.
+The new boundary regression failed before this fix and passes afterward.
 
 Provider requests now have a shared request ceiling and body-inclusive timeout.
 Confirmed usage survives later transport or judge failures without making failed

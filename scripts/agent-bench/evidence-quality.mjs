@@ -17,7 +17,7 @@ export async function snapshotEvidenceFixture(root) {
       if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile()) || stat.size > 1_048_576) {
         throw new Error("Evidence fixture contains an unsupported entry.");
       }
-      hash.update(JSON.stringify([file, stat.isDirectory(), stat.mode & 0o777]));
+      hash.update(JSON.stringify([file, stat.isDirectory(), stat.mode & 0o777, stat.isFile() ? stat.size : 0]));
       if (stat.isDirectory()) await visit(file);
       else hash.update(await fs.readFile(path.join(root, file)));
     }
