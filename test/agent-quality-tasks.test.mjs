@@ -57,3 +57,20 @@ test("quality answer files are bounded and symlinks are not read", async (t) => 
   await fs.writeFile(answer, " ".repeat(65_537) + JSON.stringify(criterion.expected));
   assert.equal((await judgeSuccess([criterion], prepared.repositoryRoot)).success, false);
 });
+
+test("fixture integrity distinguishes bytes moved across file boundaries", async (t) => {
+  const task = suite.tasks[0];
+  const prepared = await materializeFixtureRepo({ fixtureRoot: task.fixtureRoot,
+    commits: [{ dir: task.fixture.headOverlay, message: task.fixture.commitMessage }] });
+  t.after(prepared.cleanup);
+  const first = path.join(prepared.repositoryRoot, "a");
+  const second = path.join(prepared.repositoryRoot, "b");
+  await fs.writeFile(first, "first");
+  await fs.writeFile(second, "second");
+  const before = await snapshotEvidenceFixture(prepared.repositoryRoot);
+  const mode = (await fs.stat(second)).mode & 0o777;
+  // Without a file length, these edits preserve the concatenated hash input.
+  await fs.appendFile(first, JSON.stringify(["b", false, mode]) + "second");
+  await fs.unlink(second);
+  assert.notEqual(await snapshotEvidenceFixture(prepared.repositoryRoot), before);
+});

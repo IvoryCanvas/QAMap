@@ -15,6 +15,7 @@
 - Compact handoffs prioritize source/test evidence, preserve the selected action and command location, and recover the original bounded analysis instead of another truncated summary.
 - Shadowed bindings, conflicting star exports, unsupported module substitutions and parser failures no longer create unproven impact paths.
 - Provider failures retain confirmed partial usage without counting it as a complete run; request ceilings and timeouts bound benchmark requests.
+- Fixture integrity snapshots preserve file boundaries when checking source changes.
 
 ### Measurement
 

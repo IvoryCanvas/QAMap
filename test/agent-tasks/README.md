@@ -54,7 +54,7 @@ Duplicates, unrelated locations, missing contracts, speculative dynamic edges
 and incorrect execution states fail. This is a bounded exact-answer benchmark,
 not a general semantic judge. Alternative valid line choices outside the
 declared expression/assertion locations are not accepted. Answer files are
-bounded to 64KB and cannot be symlinks. Fixture bytes and modes are checked
+bounded to 64KB and cannot be symlinks. Fixture bytes, lengths and modes are checked
 before and after the agent independently of mutable Git metadata.
 
 The shared-package oracle separately executes the committed Node test and
