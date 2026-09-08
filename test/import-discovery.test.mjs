@@ -137,6 +137,25 @@ test("a failed Git inventory stays unavailable instead of scanning ignored files
   assert.ok(!JSON.stringify(coverage).includes("DO_NOT_READ"));
 });
 
+test("missing Git cannot broaden a repository scan past ignore rules", async (t) => {
+  const root = await repository(t);
+  const emptyPath = await repository(t, false);
+  await put(root, ".gitignore", "private/\n");
+  track(root);
+  await put(root, "private/secret.ts", "export const secret = 1;");
+  const moduleUrl = new URL("../dist/import-graph.js", import.meta.url).href;
+  const output = execFileSync(process.execPath, ["--input-type=module", "-e", `
+    import { buildReverseImportIndex } from ${JSON.stringify(moduleUrl)};
+    const { coverage } = await buildReverseImportIndex(process.cwd());
+    console.log(JSON.stringify(coverage));
+  `], { cwd: root, env: { ...process.env, PATH: emptyPath }, encoding: "utf8" });
+  const coverage = JSON.parse(output);
+  assert.equal(coverage.discovery, "unavailable");
+  assert.equal(coverage.inventoryComplete, false);
+  assert.equal(coverage.parsedSources, 0);
+  assert.ok(!output.includes("secret"));
+});
+
 test("package capacity and unreadable alias configuration stay visible", async (t) => {
   const root = await repository(t);
   const outside = await repository(t, false);

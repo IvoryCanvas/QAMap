@@ -3,9 +3,11 @@
 [한국어](ko/repository-discovery.md)
 
 QAMap's import graph starts with Git-tracked paths and non-ignored untracked
-paths in the selected directory. Ignored build output is not searched. Without
-Git metadata, a filesystem walk is used and labeled as such. A Git error or
-truncated inventory does not silently fall back to a broader scan.
+paths in the selected directory. Ignored untracked paths are not searched. When
+Git confirms that the directory is not a repository, a filesystem walk with fixed
+directory exclusions is used and labeled as such. This fallback does not interpret
+Git ignore files. Missing Git, other Git errors, or a truncated inventory do not
+silently fall back to a broader scan.
 
 ## Read The Receipt
 
@@ -49,5 +51,6 @@ structure, so keep reports from private repositories private.
 
 `test/import-discovery.test.mjs` covers a Git inventory beyond 2,000 paths,
 explicit 12,000-source truncation, ignored files, source-size and binary limits,
-symlink boundaries, fallback discovery, in-process edits and deletions,
-configuration changes, and static QA output.
+symlink boundaries, non-repository fallback, missing or failing Git, package
+capacity, in-process edits and deletions, configuration changes, and static QA
+output.

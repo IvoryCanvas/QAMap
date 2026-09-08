@@ -46,9 +46,9 @@ export async function discoverRepositoryPaths(
       skipped: [],
     };
   } catch (error) {
-    const failure = error as { code?: string; stderr?: string };
-    // Do not broaden discovery after a timeout, ownership error, or buffer limit.
-    if (failure.code !== "ENOENT" && !/not a git repository/i.test(failure.stderr ?? "")) {
+    const failure = error as { stderr?: string };
+    // Only a confirmed non-repository can use the broader filesystem fallback.
+    if (!/not a git repository/i.test(failure.stderr ?? "")) {
       return { discovery: "unavailable", inventoryComplete: false, files: [], skipped: [] };
     }
   }
