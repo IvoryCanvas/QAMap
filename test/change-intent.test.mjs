@@ -9,6 +9,7 @@ import { analyzeChangeIntents } from "../dist/change-intent.js";
 import { generateE2eDraft, generateE2ePlan } from "../dist/e2e.js";
 import {
   formatAgentQaDraft,
+  formatAgentQaFullReport,
   formatMarkdownQaDraft,
   formatTextQaDraft,
   generateQaDraft,
@@ -1423,9 +1424,12 @@ test("analysis-only changes stay analyzer verification even inside a CLI reposit
     flow: compactSummary.flows[0],
     lifecycle: compactSummary.intents[0]?.lifecycle,
   }));
-  assert.equal(typeof compactSummary.flows[0].reviewQuestion, "string");
   assert.equal(typeof compactSummary.flows[0].successSignal, "string");
-  assert.ok(compactSummary.flows[0].steps.length > 0);
+  assert.ok(compactSummary.compaction.omittedFields.includes("flow-details"));
+  const recovered = JSON.parse(formatAgentQaFullReport(oversizedQa));
+  assert.equal(typeof recovered.flows[0].reviewQuestion, "string");
+  assert.ok(recovered.flows[0].steps.length > 0);
+  assert.equal(JSON.stringify(recovered.evidence.flows), JSON.stringify(oversizedQa.flows));
 });
 
 test("one analyzer rule change keeps adapters and schema in one verification intent", async (t) => {
@@ -2360,7 +2364,12 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.ok(agentSummary.intents[0].scenarios.every((scenario) => scenario.sources.length > 0));
   assert.ok(agentSummary.intents[0].scenarios.every((scenario) => scenario.routing?.decision));
   assert.ok(agentSummary.intents[0].scenarios.every((scenario) => scenario.automation?.status));
-  assert.ok(agentSummary.scenarioCoverage.required >= 1);
+  const recoveredSummary = JSON.parse(formatAgentQaFullReport(qa));
+  if (agentSummary.scenarioCoverage) assert.ok(agentSummary.scenarioCoverage.required >= 1);
+  else {
+    assert.ok(agentSummary.compaction.omittedFields.includes("scenarioCoverage"));
+    assert.ok(recoveredSummary.scenarioCoverage.required >= 1);
+  }
   const requiredTrace = qa.traces.find((trace) => trace.scenario.decision === "required");
   assert.ok(requiredTrace);
   assert.equal(requiredTrace.status, "traceable");
@@ -2371,9 +2380,11 @@ test("E2E planning promotes commit intent before runner-specific draft generatio
   assert.equal(requiredTrace.manifestCorrection.requiresHumanApproval, true);
   assert.equal(requiredTrace.execution, "not-run");
   assert.equal(agentSummary.traceCount, qa.traces.length);
-  assert.deepEqual(agentSummary.evidenceSummary, qa.evidenceSummary);
+  if (agentSummary.evidenceSummary) assert.deepEqual(agentSummary.evidenceSummary, qa.evidenceSummary);
+  else assert.ok(agentSummary.compaction.omittedFields.includes("evidenceSummary"));
+  assert.deepEqual(recoveredSummary.evidenceSummary, qa.evidenceSummary);
   assert.equal(
-    agentSummary.evidenceSummary.uniqueSources,
+    recoveredSummary.evidenceSummary.uniqueSources,
     new Set(qa.traces.flatMap((trace) => trace.sources.map((source) => JSON.stringify(source)))).size,
   );
   assert.ok(agentSummary.traces.length > 0);
@@ -5452,7 +5463,9 @@ test("diff evidence keeps merged target-branch changes outside the QA evidence b
       hunk.lines.some((line) => /does not dispatch recovery twice/i.test(line.text))
     ),
   );
-  assert.equal(JSON.stringify(qa).includes("CatalogScreen"), false);
+  assert.equal(JSON.stringify({ intents: qa.changeAnalysis.intents, traces: qa.traces, flows: qa.flows,
+    impactPaths: qa.repositoryImpact.paths }).includes("CatalogScreen"), false);
+  assert.ok(qa.repositoryIndex.blocks.some((block) => block.file === baselineFile));
   assert.ok(JSON.stringify(qa).includes("deliveryWorker"));
   assert.equal(qa.execution.status, "not-run");
 });

@@ -61,6 +61,10 @@ import { parsePythonValidationCommand } from "./validation-command.js";
 import { TOOL_NAME, VERSION } from "./version.js";
 import { buildReverseImportIndex } from "./import-graph.js";
 import type { ImportDiscoveryCoverage, ImportIndexReuse } from "./import-graph.js";
+import { buildRepositoryEvidenceIndex, repositoryIndexMatchesRef } from "./repository-index.js";
+import type { RepositoryEvidenceIndex } from "./repository-index.js";
+import { traceRepositoryImpact } from "./repository-impact.js";
+import type { RepositoryImpact } from "./repository-impact.js";
 
 export interface QaDraftOptions extends Omit<E2eDraftOptions, "dryRun" | "output"> {
   automaticWorkspaceScope?: boolean;
@@ -92,6 +96,8 @@ export interface QaDraftResult {
   analysisScope: QaAnalysisScope;
   importDiscovery?: ImportDiscoveryCoverage;
   importIndexReuse?: ImportIndexReuse;
+  repositoryIndex?: RepositoryEvidenceIndex;
+  repositoryImpact?: RepositoryImpact;
   execution: QaExecutionReceipt;
   testSuite: E2eDraftResult["plan"]["testSuite"];
   changedTestContracts: ChangedTestContract[];
@@ -279,6 +285,11 @@ interface QaRuntimePrerequisiteTestGap {
 }
 
 export async function generateQaDraft(rootInput: string, options: QaDraftOptions = {}): Promise<QaDraftResult> {
+  const index = await buildRepositoryEvidenceIndex(options.workspaceRoot ?? path.resolve(rootInput));
+  return generateQaDraftWithIndex(rootInput, options, index);
+}
+
+async function generateQaDraftWithIndex(rootInput: string, options: QaDraftOptions, repositoryIndex: RepositoryEvidenceIndex): Promise<QaDraftResult> {
   const root = path.resolve(rootInput);
   const {
     automaticWorkspaceScope = true,
@@ -292,13 +303,13 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     const candidates = workspaceTargets.map(qaScopeCandidate);
     const selected = selectAutomaticWorkspaceTarget(workspaceTargets, preflight.changedFiles.map((file) => file.path));
     if (selected) {
-      const scoped = await generateQaDraft(path.join(root, selected.path), {
+      const scoped = await generateQaDraftWithIndex(path.join(root, selected.path), {
         ...e2eOptions,
         base: preflight.base,
         head: preflight.head,
         workspaceRoot: root,
         automaticWorkspaceScope: false,
-      });
+      }, repositoryIndex);
       const qualified = qualifyAutomaticPackageCommands(scoped, selected.path);
       return {
         ...qualified,
@@ -541,6 +552,13 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   });
 
   const importIndex = await buildReverseImportIndex(root);
+  const repositoryPrefix = e2eOptions.workspaceRoot ? toPosixPath(path.relative(e2eOptions.workspaceRoot, root)) : "";
+  const indexMatchesChange = draft.plan.includeWorkingTree || await repositoryIndexMatchesRef(e2eOptions.workspaceRoot ?? root, repositoryIndex, draft.plan.head);
+  const repositoryImpact = traceRepositoryImpact(repositoryIndex, (indexMatchesChange ? changedFiles : []).map((file) => ({
+    file: repositoryPrefix ? `${repositoryPrefix}/${file}` : file,
+    ...(addedDiffEvidence[file]?.some((hunk) => hunk.lines.length) ? { lines: addedDiffEvidence[file].flatMap((hunk) => hunk.lines.map((entry) => entry.line)) } : {}),
+  })));
+  if (!indexMatchesChange) repositoryImpact.boundaries.push({ file: repositoryPrefix || ".", reason: "repository-snapshot-mismatch" });
   const result: QaDraftResult = {
     tool: {
       name: TOOL_NAME,
@@ -565,6 +583,8 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
     analysisScope: detectedScope ?? explicitOrRootAnalysisScope(root, e2eOptions.workspaceRoot),
     importDiscovery: importIndex.coverage,
     importIndexReuse: importIndex.reuse,
+    repositoryIndex,
+    repositoryImpact,
     execution: {
       status: "not-run",
       performed: false,
@@ -1489,7 +1509,7 @@ function appendPackageTestArguments(command: string, args: string): string {
 }
 
 const agentListLimit = 6;
-const agentPayloadByteLimit = 4 * 1024 - 1;
+const defaultAgentPayloadByteLimit = 4 * 1024 - 1;
 
 function truncateForAgent(value: string, maxLength = 140): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
@@ -1633,15 +1653,164 @@ export interface AgentFormatOptions {
 }
 
 export function formatAgentQaDraft(result: QaDraftResult, options?: AgentFormatOptions): string {
-  return `${serializeAgentSummary(buildAgentQaSummary(result, {
+  const summary = buildAgentQaSummary(result, {
     recoveryPath: options?.fullReportPath,
-  }), options)}\n`;
+  });
+  if (!result.repositoryIndex) return `${serializeAgentSummary(summary, options)}\n`;
+  const repository = compactRepositoryEvidence(result);
+  const output = JSON.parse(serializeAgentSummary(summary, options)) as Record<string, unknown>;
+  output.repository = repository;
+  output.action = result.action;
+  output.route = result.route;
+  if (output.analysisScope || result.analysisScope.selectedPath) output.analysisScope = {
+    ...(output.analysisScope as Record<string, unknown> | undefined),
+    mode: result.analysisScope.mode,
+    commandCwd: result.analysisScope.commandCwd,
+    candidates: (output.analysisScope as Record<string, unknown> | undefined)?.candidates ?? [],
+    reason: (output.analysisScope as Record<string, unknown> | undefined)?.reason ?? "See full analysis for scope selection.",
+    ...(result.analysisScope.selectedPath ? { selectedPath: result.analysisScope.selectedPath } : {}),
+  };
+  const compaction = { ...(output.compaction as Record<string, unknown> | undefined), maxBytes: defaultAgentPayloadByteLimit,
+    ...(options?.fullReportPath ? { fullReport: options.fullReportPath } : {}), repositoryFirst: true, omittedFields: [] as string[] };
+  output.compaction = compaction;
+  if (Array.isArray(output.traces)) for (const trace of output.traces) {
+    if (trace.artifact && typeof trace.artifact.draft !== "string") {
+      const original = summary.traces.find((candidate) => candidate.id === trace.id)?.artifact;
+      if (typeof original?.draft === "string") trace.artifact.draft = original.draft;
+      else { delete trace.artifact; compaction.omittedFields.push("trace-artifact"); }
+    }
+  }
+  const bytes = (): number => Buffer.byteLength(JSON.stringify(output));
+  // Recovery preserves whole fields. Never truncate a path, command, or assertion.
+  for (const key of ["capabilities", "prChecklist", "requiredBootstrap", "requiredEvidence", "automation", "manifestCorrection"]) {
+    if (bytes() <= defaultAgentPayloadByteLimit) break;
+    if (key in output) compaction.omittedFields.push(key);
+    if (Array.isArray(output[key])) output[key] = [];
+    else delete output[key];
+  }
+  for (const [key, countKey, omittedKey] of [["flows", "flowCount", "omittedFlowCount"], ["intents", "intentCount", "omittedIntentCount"], ["traces", "traceCount", "omittedTraceCount"]]) {
+    const items = output[key];
+    if (!Array.isArray(items)) continue;
+    while (items.length > (key === "flows" ? 2 : 1) && bytes() > defaultAgentPayloadByteLimit) {
+      items.pop(); output[omittedKey] = numericCount(output[countKey]) - items.length;
+    }
+  }
+  if (bytes() > defaultAgentPayloadByteLimit && Array.isArray(output.flows)) {
+    output.flows = output.flows.map((flow: Record<string, unknown>) => ({ ...Object.fromEntries(
+      ["title", "source", "draft", "runnable", "verificationMode", "authority", "approvalRequired", "focus", "evidence", "existingEvidence", "successSignal", "changedFiles"]
+        .filter((key) => flow[key] !== undefined).map((key) => [key, flow[key]]),
+    ), steps: [], selectors: [] }));
+    compaction.omittedFields.push("flow-details");
+  }
+  if (bytes() > defaultAgentPayloadByteLimit && Array.isArray(output.intents)) {
+    for (const intent of output.intents) {
+      if (Array.isArray(intent.lifecycle) && intent.lifecycle.length > 1) {
+        intent.omittedLifecycleCount = intent.lifecycle.length - 1;
+        const rank = (stage: { phase?: string; source?: { file?: string } }): number =>
+          (stage.source?.file ? 10 : 0) + (stage.phase === "state-change" ? 30 : stage.phase === "action" ? 2 : 0);
+        intent.lifecycle = [...intent.lifecycle].sort((a, b) => rank(b) - rank(a)).slice(0, 1);
+      }
+      if (Array.isArray(intent.evidence)) intent.evidence = [];
+    }
+    compaction.omittedFields.push("intent-details");
+  }
+  if (bytes() > defaultAgentPayloadByteLimit && Array.isArray(output.flows) && output.flows.length > 1
+    && output.flows[0].changedFiles?.[0] && output.flows[0].changedFiles[0] === output.flows[1].changedFiles?.[0]) {
+    output.flows.pop();
+    output.omittedFlowCount = numericCount(output.flowCount) - output.flows.length;
+  }
+  for (const key of ["manifestCorrection", "evidenceSummary", "scenarioCoverage"]) {
+    if (bytes() <= defaultAgentPayloadByteLimit) break;
+    if (key in output) { compaction.omittedFields.push(key); delete output[key]; }
+  }
+  const context = output.context as Record<string, unknown> | undefined;
+  if (bytes() > defaultAgentPayloadByteLimit && context?.recovery && compaction.fullReport) {
+    delete context.recovery;
+    compaction.omittedFields.push("context-recovery");
+  }
+  for (const key of ["context", "traces", "intents", "flows"]) {
+    if (bytes() <= defaultAgentPayloadByteLimit) break;
+    if (Array.isArray(output[key])) { output[`omitted${key[0].toUpperCase()}${key.slice(1, -1)}Count`] = numericCount(output[`${key.slice(0, -1)}Count`]); output[key] = []; }
+    else { if (key in output) compaction.omittedFields.push(key); delete output[key]; }
+  }
+  if (bytes() > defaultAgentPayloadByteLimit) {
+    // Pathological identifiers may not fit at all. Require full recovery before action.
+    const recovery = { schema: summary.schema, base: output.base, head: output.head,
+      project: output.project, runner: output.runner, manifest: output.manifest, readiness: output.readiness,
+      testSuite: output.testSuite, flows: [], requiredEvidence: [], requiredBootstrap: [], prChecklist: [], commands: [],
+      recommendedEvidenceCount: output.recommendedEvidenceCount,
+      execution: { status: result.execution.status, performed: result.execution.performed, scope: result.execution.scope },
+      recoveryRequired: true, reason: "critical-evidence-exceeds-budget", compaction: {
+        maxBytes: defaultAgentPayloadByteLimit, ...(options?.fullReportPath && Buffer.byteLength(options.fullReportPath) < 2000 ? { fullReport: options.fullReportPath } : {}),
+        repositoryFirst: true,
+      } };
+    if (Buffer.byteLength(JSON.stringify(recovery)) > defaultAgentPayloadByteLimit) delete recovery.compaction.fullReport;
+    if (Buffer.byteLength(JSON.stringify(recovery)) > defaultAgentPayloadByteLimit) {
+      recovery.base = ""; recovery.head = ""; recovery.manifest = null;
+    }
+    return `${JSON.stringify(recovery)}\n`;
+  }
+  return `${JSON.stringify(output)}\n`;
 }
 
-// The agent summary before byte-budget compaction, as a single JSON line.
-// This is what `compaction.fullReport` points at.
+// Compatibility summary plus the complete analysis; recovery must not be another capped view.
 export function formatAgentQaFullReport(result: QaDraftResult): string {
-  return `${JSON.stringify(buildAgentQaSummary(result, { includeContextDetails: true }))}\n`;
+  return `${JSON.stringify({ ...buildAgentQaSummary(result, { includeContextDetails: true }),
+    currentDelta: result.currentDelta,
+    analysisScope: result.analysisScope,
+    action: result.action,
+    testContracts: { declared: result.changedTestContracts.length, omittedItemCount: 0, execution: "not-run",
+      items: prioritizeChangedTestContractsForAgent(result).map(formatAgentRepositoryContract) },
+    repositoryIndex: result.repositoryIndex,
+    repositoryImpact: result.repositoryImpact,
+    evidence: { ...result, repositoryIndex: undefined, repositoryImpact: undefined },
+  })}\n`;
+}
+
+function compactRepositoryEvidence(result: QaDraftResult): Record<string, unknown> {
+  const index = result.repositoryIndex!;
+  const paths = result.repositoryImpact?.paths ?? [];
+  const selected = paths.find((entry) => entry.endpoint === "test-reference") ?? paths[0];
+  const boundaries = result.repositoryImpact?.boundaries ?? [];
+  const selectedFiles = new Set(selected?.evidence.map((step) => step.file));
+  const boundaryScore = (entry: RepositoryImpact["boundaries"][number]): number =>
+    (selectedFiles.has(entry.file) ? 100 : 0)
+    + (/ambiguous|parse-error|runtime-module|limit/.test(entry.reason) ? 50 : 0)
+    - (/no-observable|changed-symbol-not-resolved|external-or-unresolved/.test(entry.reason) ? 50 : 0);
+  const boundary = [...boundaries].sort((a, b) => boundaryScore(b) - boundaryScore(a))[0];
+  const skipped = index.coverage.skipped.filter((entry) => !["non-source", "documentation", "generated", "excluded-directory"].includes(entry.reason));
+  return {
+    fingerprint: index.coverage.fingerprint,
+    pathBase: result.analysisScope.mode === "explicit-package" || result.analysisScope.mode === "automatic-package" ? "workspace-root" : "repository-root",
+    indexedFiles: index.coverage.indexedFiles,
+    inventoryFiles: index.coverage.inventoryFiles,
+    complete: index.coverage.complete,
+    skippedCount: index.coverage.skipped.length,
+    ...(selected ? { path: { index: paths.indexOf(selected), changed: selected.evidence[0], contract: selected.evidence.at(-1), steps: selected.evidence.length } } : {}),
+    pathCount: paths.length,
+    ...(result.repositoryImpact?.omittedPaths ? { omittedPathCount: result.repositoryImpact.omittedPaths } : {}),
+    boundaryCount: boundaries.length,
+    unresolved: boundary ? [boundary] : skipped.slice(0, 1),
+  };
+}
+
+function prioritizeCurrentDeltaFiles(result: QaDraftResult): string[] {
+  const files = result.currentDelta?.files ?? [];
+  const contracts = prioritizeChangedTestContractsForAgent(result).map((contract) => contract.file);
+  const structural = new Map(result.repositoryIndex?.blocks.map((block) => [block.file, block]));
+  const rank = (file: string): number => {
+    const block = structural.get(file) ?? structural.get(`${result.analysisScope.selectedPath}/${file}`);
+    if (result.repositoryImpact?.paths.some((entry) => entry.changedFile === file)) return 400;
+    if (block?.kind === "source") return 300;
+    if (contracts.includes(file)) return 250 - Math.min(100, contracts.indexOf(file));
+    if (block?.kind === "test" || block?.kind === "contract") return 200;
+    if (block?.kind === "configuration") return 100;
+    return /\.(?:md|mdx|txt|svg|png)$/.test(file) ? 0 : 50;
+  };
+  const sorted = [...files].sort((a, b) => rank(b) - rank(a) || files.indexOf(a) - files.indexOf(b));
+  const source = sorted.find((file) => rank(file) >= 300);
+  const test = contracts.find((file) => files.includes(file));
+  return uniqueStrings([...(source ? [source] : []), ...(test ? [test] : []), ...sorted]);
 }
 
 function buildAgentQaSummary(
@@ -1716,8 +1885,9 @@ function buildAgentQaSummary(
     currentDelta: result.currentDelta
       ? {
           scope: result.currentDelta.scope,
-          files: result.currentDelta.files.slice(0, 6),
-          repositoryContracts: result.currentDelta.repositoryContracts.slice(0, 3).map(formatAgentRepositoryContract),
+          files: prioritizeCurrentDeltaFiles(result).slice(0, 6),
+          repositoryContracts: agentTestContracts.filter((contract) => result.currentDelta!.repositoryContracts.some((current) => current.file === contract.file && current.line === contract.line))
+            .slice(0, 3).map(formatAgentRepositoryContract),
         }
       : undefined,
     analysisScope: {
@@ -1875,7 +2045,8 @@ function buildAgentQaSummary(
       : undefined,
     flowCount: result.flows.length,
     omittedFlowCount: Math.max(0, result.flows.length - agentListLimit),
-    flows: result.flows.slice(0, agentListLimit).map((flow) => {
+    flows: [...result.flows].sort((a, b) => Number(!!buildAgentFlowFocus(b, scenariosById)) - Number(!!buildAgentFlowFocus(a, scenariosById)))
+      .slice(0, agentListLimit).map((flow) => {
       const focus = buildAgentFlowFocus(flow, scenariosById);
       return {
         title: truncateForAgent(flow.title, 80),
@@ -2033,7 +2204,7 @@ type CompactAgentFlowShape = Omit<AgentSummaryShape["flows"][number], "evidence"
   evidence?: string[];
 };
 
-function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormatOptions): string {
+function serializeAgentSummary(summary: AgentSummaryShape, options?: AgentFormatOptions, agentPayloadByteLimit = defaultAgentPayloadByteLimit): string {
   const payload = JSON.stringify(summary);
   if (Buffer.byteLength(payload) <= agentPayloadByteLimit) {
     return payload;

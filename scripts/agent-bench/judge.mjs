@@ -14,14 +14,14 @@ const SECRET_ENV_PATTERN = /(key|token|secret|password|passwd|credential)/i;
 
 export const LOCAL_CRITERIA_KINDS = ["file-exists", "command-exit", "stdout-includes", "json-path-equals"];
 
-export async function judgeSuccess(criteria, repositoryRoot, { timeoutMs = 60_000 } = {}) {
+export async function judgeSuccess(criteria, repositoryRoot, { timeoutMs = 60_000, env } = {}) {
   const root = path.resolve(repositoryRoot);
   const checks = [];
   for (const criterion of criteria) {
     let passed = false;
     let detail;
     try {
-      passed = await evaluate(criterion, root, timeoutMs);
+      passed = await evaluate(criterion, root, timeoutMs, env);
     } catch (error) {
       detail = (error instanceof Error ? error.message : String(error)).split(root).join("<repo>");
     }
@@ -48,18 +48,18 @@ export function readJsonPath(value, jsonPath) {
   return current;
 }
 
-async function evaluate(criterion, root, timeoutMs) {
+async function evaluate(criterion, root, timeoutMs, env) {
   switch (criterion.kind) {
     case "file-exists": {
       const stats = await fs.stat(resolveInside(root, criterion.path)).catch(() => null);
       return Boolean(stats && stats.isFile());
     }
     case "command-exit": {
-      const result = await runCommand(criterion.command, root, timeoutMs);
+      const result = await runCommand(criterion.command, root, timeoutMs, env);
       return result.code === (criterion.exitCode ?? 0);
     }
     case "stdout-includes": {
-      const result = await runCommand(criterion.command, root, timeoutMs);
+      const result = await runCommand(criterion.command, root, timeoutMs, env);
       return result.stdout.includes(criterion.includes);
     }
     case "json-path-equals": {
@@ -90,11 +90,11 @@ function describe(criterion) {
   }
 }
 
-async function runCommand(command, cwd, timeoutMs) {
+async function runCommand(command, cwd, timeoutMs, environment) {
   const [file, ...commandArgs] = command;
   const env = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (!SECRET_ENV_PATTERN.test(key)) env[key] = value;
+  for (const key of Object.keys(environment ?? process.env)) {
+    if (!SECRET_ENV_PATTERN.test(key)) env[key] = (environment ?? process.env)[key];
   }
   try {
     const result = await execFileAsync(file, commandArgs, {

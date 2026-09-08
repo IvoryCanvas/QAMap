@@ -4,6 +4,49 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
+## Unreleased - Repository Evidence
+
+The next candidate inventories supported repository metadata before QA analysis,
+reuses unchanged syntax blocks, and follows symbol references across declared
+package exports and aliases. Unsupported syntax, ambiguous resolution and
+traversal limits remain explicit. These paths are drafts, not runtime proof.
+
+The compact handoff preserves exact action and command-working-directory
+contracts within 4KB. Full local recovery retains the original bounded analysis.
+Cross-file source-to-test paths outrank test-helper references when the path
+budget fills. Deep star-export searches stop with an explicit boundary.
+First-run trace retention is also tested across six recovery-path lengths:
+short Linux temporary paths must not lose evidence preserved on longer paths.
+
+Validated on Node 22.14.0 with public synthetic fixtures:
+
+| Gate | Result |
+| --- | --- |
+| Full test suite | 596/596 passed, including bounded path priority, deep-export guards and recovery-path compatibility |
+| Static QA benchmark | 43/43 contracts passed |
+| Repository benchmark | 11/11 checks passed, including all 7 required quality cases |
+| Context reuse | 10/10 checks passed |
+| Execution benchmark | 3/3 seeded regressions caught and fixed fixtures passed |
+| Production package install | 234-file artifact installed in isolation and produced located static QA evidence |
+| Published-package smoke | Exact npm 0.4.17 passed six self-contained checks; fixture removed |
+| Optional three-arm harness | Three public tasks across generic, cold and warm arms passed offline harness checks; provider usage remains unmeasured |
+
+The 2,117-file repository benchmark rebuilt 2,117 blocks on cold startup, zero
+on an unchanged warm run, and one after a single source or package-file edit.
+Each case retained the expected evidence. Warm runs still read and hash all
+supported files: 93,660 source bytes plus 780,628 cache bytes in the unchanged
+fixture, versus 374,640 bytes for the explicit four-pass generic baseline.
+Total read volume therefore increased; syntax reuse is not an I/O or token
+savings claim. Timing is diagnostic only and varies with concurrent local work.
+
+TypeScript is now a production dependency for syntax parsing. The isolated
+install checks that dependency is available; its installed directory adds
+approximately 23 MB in the measured local environment.
+
+Actual provider-token comparison, broader measured task quality, and the final
+0.4.18 release run remain open under #264. No provider call, version bump,
+publication, or fixed savings claim is implied by these offline receipts.
+
 ## Unreleased - Lifecycle Contracts
 
 Changed tests can now connect to commit-backed product lifecycles, including

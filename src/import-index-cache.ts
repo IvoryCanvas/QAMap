@@ -24,11 +24,13 @@ export interface ImportSnapshot {
 
 type StorageState = "saved" | "unchanged" | "skipped" | "failed";
 
-export interface ImportCache {
+export interface LocalIndexCache<T> {
   state: "cold" | "loaded" | "invalid-cache" | "expired-cache" | "disabled" | "unavailable";
-  previous?: ImportSnapshot;
-  save: (snapshot: ImportSnapshot) => Promise<StorageState>;
+  previous?: T;
+  save: (snapshot: T) => Promise<StorageState>;
 }
+
+export type ImportCache = LocalIndexCache<ImportSnapshot>;
 
 function safeRelative(file: unknown): file is string {
   return typeof file === "string" && file.length > 0 && file.length <= 4096
@@ -85,14 +87,22 @@ async function prune(directory: string, keep: string): Promise<void> {
 export async function openImportCache(
   root: string, requestedDirectory?: string | false, available = true,
 ): Promise<ImportCache> {
-  const inactive = (state: "disabled" | "unavailable"): ImportCache => ({ state, save: async () => "skipped" });
-  if (requestedDirectory === false || process.env.QAMAP_IMPORT_CACHE === "off") return inactive("disabled");
+  return openLocalIndexCache(root, "import", validSnapshot,
+    process.env.QAMAP_IMPORT_CACHE === "off" ? false : requestedDirectory, available);
+}
+
+export async function openLocalIndexCache<T>(
+  root: string, namespace: "import" | "repository", validate: (value: unknown) => value is T,
+  requestedDirectory?: string | false, available = true,
+): Promise<LocalIndexCache<T>> {
+  const inactive = (state: "disabled" | "unavailable"): LocalIndexCache<T> => ({ state, save: async () => "skipped" });
+  if (requestedDirectory === false) return inactive("disabled");
   if (!available) return inactive("unavailable");
   try {
     const canonicalRoot = await realpath(root);
     const owner = typeof process.getuid === "function" ? String(process.getuid())
       : createHash("sha256").update(os.userInfo().username).digest("hex").slice(0, 16);
-    const requested = path.resolve(requestedDirectory ?? path.join(os.tmpdir(), `qamap-import-index-${owner}`));
+    const requested = path.resolve(requestedDirectory ?? path.join(os.tmpdir(), `qamap-${namespace}-index-${owner}`));
     const directory = path.join(await realpath(path.dirname(requested)), path.basename(requested));
     if (inside(canonicalRoot, directory)) return inactive("unavailable");
     await mkdir(directory, { mode: 0o700 }).catch((error: NodeJS.ErrnoException) => {
@@ -100,10 +110,10 @@ export async function openImportCache(
     });
     const directoryStat = await lstat(directory);
     if (!directoryStat.isDirectory() || !isPrivate(directoryStat)) return inactive("unavailable");
-    const name = `${createHash("sha256").update(canonicalRoot).digest("hex")}.json`;
+    const name = `${createHash("sha256").update(`${namespace}:${canonicalRoot}`).digest("hex")}.json`;
     const filename = path.join(directory, name);
-    let state: ImportCache["state"] = "cold";
-    let previous: ImportSnapshot | undefined;
+    let state: LocalIndexCache<T>["state"] = "cold";
+    let previous: T | undefined;
     const stat = await lstat(filename).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== "ENOENT") throw error;
       return undefined;
@@ -126,7 +136,7 @@ export async function openImportCache(
           }
           if (length < bytes.length) {
             const parsed: unknown = JSON.parse(bytes.subarray(0, length).toString("utf8"));
-            if (validSnapshot(parsed)) { previous = parsed; state = "loaded"; }
+            if (validate(parsed)) { previous = parsed; state = "loaded"; }
           }
         } catch { /* Invalid local state is disposable, never an analysis failure. */ }
         finally { await handle.close(); }
@@ -136,7 +146,7 @@ export async function openImportCache(
       state, previous,
       save: async (snapshot) => {
         const text = JSON.stringify(snapshot);
-        if (Buffer.byteLength(text) > maxBytes || !validSnapshot(snapshot)) return "skipped";
+        if (Buffer.byteLength(text) > maxBytes || !validate(snapshot)) return "skipped";
         const temporary = `${filename}.${randomUUID()}.tmp`;
         try {
           const currentDirectory = await lstat(directory);

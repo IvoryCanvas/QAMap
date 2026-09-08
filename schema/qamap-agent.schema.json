@@ -836,11 +836,39 @@
       "minimum": 0,
       "description": "Flows omitted from the compact payload."
     },
+    "repository": {
+      "type": "object",
+      "description": "Bounded working-tree index receipt. Static reference paths are draft evidence, not an execution result or an authoritative product specification.",
+      "required": ["fingerprint", "pathBase", "indexedFiles", "inventoryFiles", "complete", "skippedCount", "pathCount", "boundaryCount", "unresolved"],
+      "properties": {
+        "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "pathBase": { "enum": ["repository-root", "workspace-root"] },
+        "indexedFiles": { "type": "integer", "minimum": 0 },
+        "inventoryFiles": { "type": "integer", "minimum": 0 },
+        "complete": { "type": "boolean" },
+        "skippedCount": { "type": "integer", "minimum": 0 },
+        "path": {
+          "type": "object",
+          "required": ["index", "changed", "contract", "steps"],
+          "description": "Endpoints of one path; recover its complete evidence array using this index in repositoryImpact.paths in the full report."
+        },
+        "pathCount": { "type": "integer", "minimum": 0 },
+        "omittedPathCount": { "type": "integer", "minimum": 0 },
+        "boundaryCount": { "type": "integer", "minimum": 0 },
+        "unresolved": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "recoveryRequired": {
+      "type": "boolean",
+      "description": "Critical evidence exceeded the byte budget. Do not execute an action from this receipt; recover the full analysis first."
+    },
     "compaction": {
       "type": "object",
-      "description": "Present when QAMap reduced lower-priority detail to keep the complete line below 4KB while retaining the highest-priority flow and a compact second flow for multi-surface changes. Identifier values (draft paths, changed files, existing evidence, selectors, entry hints, commands) are never emitted as partial strings; oversized payloads drop whole optional values, disclosed through the omitted counts.",
+      "description": "Describes detail omitted to keep the complete line within 4KB. Secondary flows and optional fields may require full recovery. Identifier values are not split to make them fit.",
       "properties": {
         "maxBytes": { "type": "integer", "minimum": 1 },
+        "repositoryFirst": { "type": "boolean" },
+        "omittedFields": { "type": "array", "items": { "type": "string" } },
         "originalBytes": { "type": "integer", "minimum": 1 },
         "lean": { "type": "boolean" },
         "emergency": { "type": "boolean" },
@@ -854,7 +882,7 @@
         },
         "fullReport": {
           "type": "string",
-          "description": "Absolute path of a locally written temp file containing the same agent summary before byte-budget compaction. Written by the CLI on a best-effort basis; recover omitted traces, scenarios, and flows from it instead of re-running the analysis."
+          "description": "Absolute path of a locally written full report containing the compatibility summary, repository index, impact paths, and original analysis under evidence. Written by the CLI on a best-effort basis. Analyzer discovery limits still apply."
         }
       }
     },

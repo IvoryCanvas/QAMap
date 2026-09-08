@@ -46,6 +46,8 @@ The gate must pass:
 - `pnpm plugin:check`
 - `pnpm plugin:smoke`
 - `pnpm bench:ci`
+- `pnpm bench:agent --dry-run --assert` (scripted harness smoke, not measured task quality)
+- `pnpm bench:context`
 - `pnpm bench:execution`
 - `git diff --check`
 - coverage thresholds for lines, branches, and functions
@@ -98,12 +100,26 @@ After publish, verify the public package can be executed without a source checko
 
 ```sh
 VERSION="$(node -p "require('./package.json').version")"
-pnpm dlx "@ivorycanvas/qamap@$VERSION" qa . --base origin/main --head HEAD
-pnpm dlx "@ivorycanvas/qamap@$VERSION" manifest validate .
-pnpm dlx "@ivorycanvas/qamap@$VERSION" e2e draft . --base origin/main --head HEAD --dry-run
+node scripts/release-smoke.mjs --version "$VERSION"
 ```
 
-Use a fresh shell or temporary directory for the smoke check when possible.
+The smoke installs that exact public npm version with lifecycle scripts disabled, creates a temporary generic Git fixture, initializes its own `.qamap/manifest.yaml`, and checks version, static QA, manifest validation/explanation, and draft dry-run without fixture writes. The checkout root does not need a manifest. The fixture, installed package, caches, and temporary reports are removed on success or failure.
+
+To reproduce the published `0.4.17` smoke specifically (not the current checkout build):
+
+```sh
+node scripts/release-smoke.mjs --version 0.4.17
+```
+
+This downloads the public package and dependencies. It does not call a model, execute repository validation, or run browser/device QA. `execution.status: not-run` and a passing static smoke are compatible; a dry-run preview is not an executed E2E test. A generated fixture manifest is not reviewed production QA policy: a schema-valid `needs-work` manifest is reported as such, not promoted to reviewed coverage.
+
+For offline harness regression checks against an already compiled local CLI:
+
+```sh
+node --test test/release-smoke.test.mjs
+```
+
+This reports `source: local-cli`, not published-package verification. It does not build or install dependencies.
 
 If the release is the version pinned by the OpenAI skill package, also run the published-package form of the smoke before submitting the plugin. The directory submission must refer to a package version that already resolves from the public registry. Follow [the plugin submission runbook](plugin-submission.md); npm publication does not imply directory approval.
 
@@ -143,13 +159,26 @@ The release notes body should contain:
 After the tag and GitHub Release are visible, run:
 
 ```sh
-pnpm dlx "@ivorycanvas/qamap@$VERSION" --version
-pnpm dlx "@ivorycanvas/qamap@$VERSION" qa . --base origin/main --head HEAD --format agent
-pnpm dlx "@ivorycanvas/qamap@$VERSION" manifest explain . --base origin/main --head HEAD
-pnpm dlx "@ivorycanvas/qamap@$VERSION" verify . --base origin/main --head HEAD
+node scripts/release-smoke.mjs --version "$VERSION"
 ```
 
 Then update any public setup examples that should pin to the new `v$VERSION` tag.
+
+## Repository-First Benchmark
+
+After compilation, run the offline structural benchmark without rebuilding:
+
+```sh
+node scripts/bench-repository-index.mjs --assert
+node scripts/bench-repository-index.mjs --files 2105 --format json --assert
+node --test test/repository-index-bench.test.mjs
+```
+
+The deterministic synthetic fixture compares four exhaustive generic discovery/read passes with repository-first cold, warm, one-file-edit, and one-package-file-edit passes. Structural precision/recall, real impact-path precision/recall, and complete primary-fixture coverage gate read-reduction claims. Seven required quality cases cover relative imports, package exports/reexports, compiler-path aliases, ambiguous conditional exports, dynamic and unresolved module boundaries, and mixed product/maintenance changes. Incomplete metadata coverage must be disclosed in the boundary controls; it is not silently promoted to complete coverage. Missing, failed, blocked, or not-run quality cases prevent a passing summary and suppress read-reduction claims. Impact paths remain draft/not-run; the generic baseline measures structural discovery, not agent product-path quality.
+
+Counts describe observed file I/O, not physical disk I/O or model tokens. Warm syntax reuse still reads content to validate hashes. Cache reads are reported separately and included in total read-byte differences, which may be negative. Actual compact UTF-8 JSON byte counts cover blocks, impact arrays, and the repository index used for a recovery round-trip. Persisted cache snapshot sizes are separate. These are not full CLI output or full recovery-report sizes.
+
+Wall-clock samples use `performance.now()` and are diagnostic only: fixed order, one instrumented process, shared-machine contention, no timing threshold or speedup claim. Deterministic comparisons exclude only diagnostic timing. Actual provider usage remains unmeasured; no token or cost reduction may be inferred. A provider comparison separately needs an approved provider, pinned model, budget, and quality-passing paired runs.
 
 ## Rollback Notes
 

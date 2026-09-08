@@ -23,6 +23,15 @@ The compact agent format can write one recovery report to the operating system's
 
 Import analysis can also store disposable snapshots in a user-specific `qamap-import-index-*` directory under the operating system's temporary directory. These contain relative file paths, content hashes, and resolved relative import relationships, not source bodies or raw import strings. Paths can still reveal repository structure. These snapshots stay local and use user-only permissions where supported. Set `QAMAP_IMPORT_CACHE=off` to disable import-cache reads and writes.
 
+The repository evidence index uses a separate `qamap-repository-index-*` directory
+with the same storage and retention rules. It stores declaration names, static
+module specifiers, import/export bindings, reference and test locations, schema
+pointers, validation-script names and content hashes. It does not persist source
+bodies, test descriptions, command bodies or response examples. This metadata can
+still identify private repository structure. Set `QAMAP_REPOSITORY_CACHE=off` to
+disable repository-index persistence. Both indexes still read and hash supported
+files when refreshing; disabling persistence does not disable local analysis.
+
 ## Network Access
 
 The QAMap analysis engine does not require an OpenAI API call or another LLM call.
