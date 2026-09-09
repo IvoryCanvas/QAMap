@@ -10,6 +10,7 @@ import { createManifestBehaviorAdapter } from "./behavior-manifest.js";
 import { analyzeBranchDivergence } from "./branch-divergence.js";
 import {
   analyzeChangeIntents,
+  isDirectAnalysisRuleEvidence,
   unresolvedPrimaryScenarioAssertion,
 } from "./change-intent.js";
 import { buildDomainLanguageSummary } from "./domain-language.js";
@@ -3335,7 +3336,7 @@ function hasAnalysisRuleFocusedDiffEvidence(evidence: ChangeIntentEvidence[] | u
   const locatedEvidence = (evidence ?? []).filter(
     (evidence) => evidence.kind === "diff" && evidence.sourceRole !== undefined,
   );
-  return locatedEvidence.some((evidence) => evidence.sourceRole === "analysis-rule") &&
+  return locatedEvidence.some(isDirectAnalysisRuleEvidence) &&
     locatedEvidence.every((evidence) =>
       evidence.sourceRole === "analysis-rule" ||
       (evidence.sourceRole === "product" && evidence.relation !== "direct")
@@ -6372,7 +6373,7 @@ function intentFlowKind(intent: ChangeIntentAnalysis["intents"][number], project
   const locatedRoles = intent.evidence
     .filter((evidence) => evidence.kind === "diff" && evidence.sourceRole !== undefined)
     .map((evidence) => evidence.sourceRole);
-  const analysisRuleOnly = locatedRoles.includes("analysis-rule") &&
+  const analysisRuleOnly = intent.evidence.some(isDirectAnalysisRuleEvidence) &&
     locatedRoles.every((role) => role === "analysis-rule");
   if (intent.keywords.includes("repository-verification")) {
     return intent.keywords.includes("release-readiness") ? "config" : "documentation";

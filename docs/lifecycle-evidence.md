@@ -67,6 +67,21 @@ change or an unrelated edit does not activate an unchanged contract.
 Source statements are limited to 240 characters and at most 24 contracts per
 analysis, in stable file order. Large or unsupported expressions are skipped.
 
+## Analysis Rule Changes
+
+A file's analysis role is context, not proof that every edit changes its rules.
+Rule-specific scenarios and risk explanations require direct changed-line
+evidence, such as a recognized analyzer contract or rule-evaluation syntax.
+Adding a read counter beside an unchanged analyzer does not justify a claim
+about changed findings or false positives. When a counter and a rule change
+together, rule explanations cite the rule line, not the first line in the hunk.
+
+Related imports and schemas remain contextual evidence so one analyzer change
+can stay in one review flow. Unsupported or context-only changes retain their
+source locations without inventing rule behavior. This is bounded recognition,
+not a proof of every rule's semantics; changes needing unavailable surrounding
+definitions still require review. Removed definitions retain base-side evidence.
+
 ## Missing Evidence
 
 - No supported setup or action: leave that field empty and identify the gap.

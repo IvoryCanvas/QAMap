@@ -1,0 +1,7 @@
+{
+  "name": "read-instrumentation-fixture",
+  "private": true,
+  "type": "module",
+  "bin": { "read-prefix": "src/cli.mjs" },
+  "scripts": { "test": "node --test" }
+}
