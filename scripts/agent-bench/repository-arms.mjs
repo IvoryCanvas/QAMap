@@ -5,7 +5,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { compareQualityGatedRuns } from "./aggregate.mjs";
+import { compareQualityGatedRuns, median } from "./aggregate.mjs";
 
 const execFileAsync = promisify(execFile);
 export const REPOSITORY_ARMS = ["qamap-cold", "qamap-warm"];
@@ -81,7 +81,18 @@ export function compareRepositoryArms(arms, status) {
       status: "unpaired", eligible: false, qualityPassed: false,
       inputTokensMedianDifference: null, outputTokensMedianDifference: null,
     });
-    return { baselineArm, candidateArm, ...result };
+    const difference = (read) => {
+      const left = baseline.map(read);
+      const right = candidate.map(read);
+      if (!result.eligible || ![...left, ...right].every((value) => typeof value === "number" && Number.isFinite(value) && value >= 0)) return null;
+      return median(left) - median(right);
+    };
+    return { baselineArm, candidateArm, ...result, diagnostics: {
+      toolCallsMedianDifference: difference((run) => run.toolCalls),
+      toolOutputBytesMedianDifference: difference((run) => run.io?.toolOutputBytes),
+      repeatedFileReadBytesMedianDifference: difference((run) => run.io?.exploration?.directFileReads?.repeatedBytes),
+      totalWallClockMsMedianDifference: difference((run) => run.timing?.totalMs),
+    } };
   });
 }
 
