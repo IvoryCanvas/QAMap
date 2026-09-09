@@ -1,3 +1,4 @@
+import { isDirectAnalysisRuleEvidence } from "./change-intent.js";
 import type {
   BehaviorLifecycleStage,
   BehaviorLifecycleStageKind,
@@ -370,7 +371,9 @@ function hasSourceRole(
 ): boolean {
   const locatedScenarioEvidence = scenarioEvidence.filter((item) => item.kind === "diff" && item.file);
   const evidence = locatedScenarioEvidence.length > 0 ? locatedScenarioEvidence : intentEvidence;
-  return evidence.some((item) => item.sourceRole === role);
+  return role === "analysis-rule"
+    ? evidence.some(isDirectAnalysisRuleEvidence)
+    : evidence.some((item) => item.sourceRole === role);
 }
 
 function strongestTraceEvidence(evidence: ChangeIntentEvidence[], limit: number): ChangeIntentEvidence[] {

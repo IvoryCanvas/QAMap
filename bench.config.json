@@ -2,6 +2,26 @@
   "$comment": "Committed quality contract. Each fixture is materialized as a temporary Git repository with a main baseline and either a committed PR change or an explicit working-tree overlay.",
   "targets": [
     {
+      "name": "analysis-read-instrumentation",
+      "fixture": "test/benchmarks/analysis-read-instrumentation",
+      "commitMessage": "fix: record direct file reads",
+      "expect": {
+        "readinessBasis": "repository-validation",
+        "automationApplicable": false,
+        "routeNextAction": "run-repository-command",
+        "mustRouteCommands": ["test"],
+        "minFlows": 1,
+        "minChangeIntents": 1,
+        "minReasoningTraces": 1,
+        "mustReachFiles": ["src/inspection-tools.mjs"],
+        "mustNameIntents": ["record direct file reads"],
+        "mustNotIncludeLifecycle": ["unrelated rule vocabulary", "intended findings", "static-analysis rule"],
+        "mustNotIncludeQaScenarios": ["analysis rule positive and negative controls", "unrelated false positives"],
+        "maxMissingReasoningTraces": 0,
+        "maxAgentBytes": 4096
+      }
+    },
+    {
       "name": "web-working-tree-test-contract",
       "fixture": "test/benchmarks/web-working-tree-test-contract",
       "workingTreeDir": "working-tree",

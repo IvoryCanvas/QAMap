@@ -941,7 +941,9 @@ function buildCommitIntent(
     ? []
     : selectIntentFallbackDiffAnchor(relevantDiffAnchors, keywords).map((anchor) => ({
         ...anchor,
-        relation: files.length === 1 ? "direct" as const : "contextual" as const,
+        relation: files.length === 1 && anchor.sourceRole !== "analysis-rule"
+          ? "direct" as const
+          : "contextual" as const,
       }));
   const evidence = uniqueEvidence([
     ...scenarioEvidence,
@@ -1755,7 +1757,7 @@ function lifecycleFromPerformanceEvidence(
 
 function lifecycleFromSourceRoles(evidence: ChangeIntentEvidence[]): BehaviorLifecycleStage[] {
   const stages: BehaviorLifecycleStage[] = [];
-  const analysisEvidence = evidence.filter((item) => item.sourceRole === "analysis-rule");
+  const analysisEvidence = evidence.filter(isDirectAnalysisRuleEvidence);
   if (analysisEvidence.length > 0) {
     const files = uniqueStrings(analysisEvidence.map((item) => item.file ?? "").filter(Boolean));
     stages.push(
@@ -2142,7 +2144,7 @@ function buildIntentQaScenarios(
     scenarios.push(retirement);
   }
 
-  const analysisRuleEvidence = evidence.filter((item) => item.sourceRole === "analysis-rule");
+  const analysisRuleEvidence = evidence.filter(isDirectAnalysisRuleEvidence);
   if (analysisRuleEvidence.length > 0) {
     scenarios.push(makeScenario(
       intentId,
@@ -4530,6 +4532,14 @@ function collectChangedDiffAnchors(
     if (sourceRole === "test" || sourceRole === "documentation" || sourceRole === "generated") {
       continue;
     }
+    // A file-level role is context, not proof that every changed hunk changes a rule.
+    const ruleEvidence = sourceRole === "analysis-rule"
+      ? collectAnalysisRuleDiffEvidence(file, hunks)
+      : [];
+    if (ruleEvidence.length > 0) {
+      anchors.push({ ...ruleEvidence[0], relation: "contextual" });
+      continue;
+    }
     for (const hunk of hunks) {
       const addedLine = hunk.lines.find((line) => meaningfulChangedLine(line.text)) ?? hunk.lines[0];
       const removedLine = hunk.removedLines?.find((line) => meaningfulChangedLine(line.text)) ??
@@ -5030,7 +5040,11 @@ function collectAnalysisRuleDiffEvidence(
   const evidence: ChangeIntentEvidence[] = [];
   for (const hunk of hunks) {
     for (const [side, lines] of [["head", hunk.lines], ["base", hunk.removedLines ?? []]] as const) {
-      const line = lines.find((candidate) => meaningfulChangedLine(candidate.text));
+      const line = lines.find((candidate) =>
+        meaningfulChangedLine(candidate.text) &&
+        (classifyChangeSourceRole(file, candidate.text).role === "analysis-rule" ||
+          hasRuleEvaluationSyntax(file, candidate.text))
+      );
       if (!line) continue;
       const symbol = declaredOrCalledSymbol(line.text) ?? path.basename(file).replace(/\.[^.]+$/, "");
       evidence.push(diffRiskEvidence(
@@ -5045,6 +5059,32 @@ function collectAnalysisRuleDiffEvidence(
     }
   }
   return uniqueEvidence(evidence);
+}
+
+export function isDirectAnalysisRuleEvidence(evidence: ChangeIntentEvidence): boolean {
+  return evidence.kind === "diff" && evidence.sourceRole === "analysis-rule" &&
+    evidence.relation === "direct";
+}
+
+function hasRuleEvaluationSyntax(file: string, text: string): boolean {
+  if (!/\.[cm]?[jt]sx?$/i.test(file)) return false;
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  let matched = false;
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && node.initializer &&
+      (ts.isRegularExpressionLiteral(node.initializer) ||
+        ts.isNewExpression(node.initializer) &&
+        ts.isIdentifier(node.initializer.expression) && node.initializer.expression.text === "RegExp")) {
+      matched = true;
+    }
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) &&
+      /^(?:test|exec|match|matchAll)$/.test(node.expression.name.text)) {
+      matched = true;
+    }
+    if (!matched) ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return matched;
 }
 
 function collectCommandDiffEvidence(

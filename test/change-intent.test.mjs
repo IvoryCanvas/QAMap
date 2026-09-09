@@ -1765,6 +1765,92 @@ test("compacted agent payloads keep identifier values whole and disclose a full 
   assert.ok(Buffer.byteLength(JSON.stringify(fullReport)) > 4 * 1024 - 1);
 });
 
+test("analysis file context does not turn instrumentation into rule changes", async (t) => {
+  for (const file of ["src/inspection-tools.ts", "src/rules/inspection.ts"]) {
+    await t.test(file, async (t) => {
+      const root = await makeRepo(t);
+      const before = [
+        "// Tools can return a QA scenario for review.",
+        "export function analyzeEvidence(source) { return /request/.test(source); }",
+        "export function readChunk(buffer, bytesRead, recorder) {",
+        "  recorder.read(bytesRead);",
+        "  return buffer.subarray(0, bytesRead);",
+        "}",
+      ].join("\n");
+      await write(root, file, before);
+      commit(root, "benchmark baseline");
+      branch(root, "fix/read-observations");
+      await write(root, file, before.replace(
+        "  recorder.read(bytesRead);",
+        "  recorder.read(bytesRead);\n  recorder.directRead(buffer.subarray(0, bytesRead));",
+      ));
+      commit(root, "fix: record direct file reads");
+
+      const qa = await generateQaDraft(root, { base: "main", head: "HEAD" });
+      const intents = qa.changeAnalysis.intents;
+      assert.ok(intents.length > 0, "keep the change available for review");
+      const descriptions = intents.flatMap((intent) => [
+        intent.title,
+        ...intent.lifecycle.map((stage) => stage.label),
+        ...intent.scenarios.flatMap((scenario) => [scenario.title, ...scenario.assertions]),
+      ]).join("\n");
+      assert.doesNotMatch(descriptions, /analysis rule|static-analysis rule|unrelated rule vocabulary|intended findings|unrelated false positives/i);
+      assert.ok(intents.flatMap((intent) => intent.evidence).some((item) =>
+        item.file === file && item.startLine === 5 && item.sourceRole === "analysis-rule" &&
+        item.relation === "contextual"
+      ), "retain the location and file context without making it direct rule evidence");
+      const traces = buildQaReasoningTraces(intents, []);
+      assert.ok(traces.length > 0);
+      assert.ok(traces.every((trace) => !/changed analyzer|unrelated behavior as a finding/i.test(trace.risk.statement)));
+      assert.ok(qa.flows.every((flow) => flow.verificationMode !== "analysis-rule"));
+      assert.equal(JSON.parse(formatAgentQaDraft(qa)).execution.status, "not-run");
+    });
+  }
+});
+
+test("mixed analysis and instrumentation changes cite the rule rather than a preceding counter", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/rules/request-boundary.ts";
+  const before = [
+    "export function analyzeEvidence(source, recorder) {",
+    "  recorder.read(source.length);",
+    "  const evidencePattern = /request/;",
+    "  return evidencePattern.test(source);",
+    "}",
+  ].join("\n");
+  await write(root, file, before);
+  commit(root, "benchmark baseline");
+  branch(root, "fix/request-boundary");
+  await write(root, file, before
+    .replace("recorder.read(source.length)", "recorder.directRead(source)")
+    .replace("/request/", "/request|response/"));
+  commit(root, "fix: extend request matching and record reads");
+
+  const analysis = await analyze(root, [file]);
+  const ruleStages = analysis.intents.flatMap((intent) => intent.lifecycle).filter((stage) =>
+    /positive and negative controls|intended findings|rule vocabulary/i.test(stage.label)
+  );
+  assert.ok(ruleStages.length > 0, "real rule changes still need controls");
+  const sources = ruleStages.flatMap((stage) => stage.evidence).filter((item) => item.kind === "diff");
+  assert.ok(sources.length > 0);
+  assert.ok(sources.every((item) => item.startLine === 3), JSON.stringify(sources));
+});
+
+test("removed analysis definitions retain base-side rule evidence", async (t) => {
+  const root = await makeRepo(t);
+  const file = "src/rules/content-boundary.ts";
+  await write(root, file, "export const evidencePattern = /session/;\n");
+  commit(root, "benchmark baseline");
+  branch(root, "fix/remove-content-rule");
+  await write(root, file, "export const enabled = false;\n");
+  commit(root, "fix: remove obsolete content matching");
+  const analysis = await analyze(root, [file]);
+  const sources = analysis.intents.flatMap((intent) => intent.lifecycle)
+    .filter((stage) => /positive and negative controls/i.test(stage.label))
+    .flatMap((stage) => stage.evidence);
+  assert.ok(sources.some((item) => item.file === file && item.side === "base" && item.startLine === 1));
+});
+
 test("repository analysis plumbing does not become product boundary QA", async (t) => {
   const root = await makeRepo(t);
   await write(
