@@ -1,4 +1,4 @@
-# Optional Repository Cache Arms
+# Repository QA Measurements
 
 The existing `agent-bench.config.json` and `generic`/`qamap` arms retain their
 workflow. `agent-repository-bench.config.json` opts into six repository tasks and
@@ -89,6 +89,34 @@ checks, exhausted/truncated agent loops, harness/provider errors, unpaired runs,
 and missing usage are ineligible.
 Token fields come only from provider-reported input/output/cache usage. Cache
 counts retain provider-native meaning and are not combined with input counts.
+
+### Exploration And Total Time
+
+`io.exploration` records tool attempts by name, including failures. Successful
+`read_file` calls also record distinct normalized targets and repeated observed
+bytes at the same target. Different contents or targets are not duplicates.
+Repeated capped prefixes count only those bytes, not the unread remainder.
+Recovery-file reads participate; `grep` and arbitrary shell reads are not
+deduplicated. No file paths, contents or content hashes enter these counters.
+
+`afterCompact` starts after the first intact, successful compact response and
+excludes that response. It records later tool attempts, delivered output bytes
+and tool errors, including subsequent QAMap queries. Without such a response it
+is `null`, not zero. These observations cannot establish that compaction caused
+extra work or that rereading was wasteful.
+
+`timing.totalMs` covers each run from fixture setup through cleanup. Phase
+durations separate fixture setup, the agent loop, judging and cleanup; other
+harness overhead remains in the total. Warm index prebuild is already included
+in fixture setup, so never add it again. Unexecuted phases and all offline
+timings are `null`. Failed runs retain diagnostic receipts but are ineligible.
+Suite loading, compilation and report rendering are outside this per-run timer.
+
+For eligible paired runs, `repositoryComparisons[].diagnostics` reports median
+differences in tool calls, delivered bytes, repeated direct-read bytes and total
+time. Values are baseline minus candidate; negative values expose increases.
+Missing metrics stay `null`. Read these beside evidence quality and actual
+provider usage, not as independent savings claims or token estimates.
 
 The six tasks cover editor behavior, transitive package impact, a changed test,
 mixed documentation and product edits, unresolved dynamic wiring, and an editor

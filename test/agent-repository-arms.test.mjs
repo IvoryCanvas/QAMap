@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { compareRepositoryArms, createRepositoryEnvironment, prebuildRepositoryIndex, repositoryPairing } from "../scripts/agent-bench/repository-arms.mjs";
 import { createIORecorder } from "../scripts/agent-bench/io.mjs";
 import { createScriptedProvider } from "../scripts/agent-bench/scripted.mjs";
+import { formatTextReport } from "../scripts/agent-bench/report.mjs";
 import { createToolExecutor, toolsForArm, toolSchemaSha256 } from "../scripts/agent-bench/tools.mjs";
 import { materializeFixtureRepo } from "../scripts/lib/fixture-repo.mjs";
 
@@ -76,6 +77,8 @@ test("same-root warm baseline is incremental after the head change; cold remains
       }
       assert.equal(metrics.fullRecoveryReadBytes, 0, "diagnostic inspection is not agent recovery");
       assert.equal(metrics.compactOutputBytes, Buffer.byteLength(output));
+      assert.ok(metrics.exploration.afterCompact, "a real compact CLI response establishes the observation boundary");
+      assert.equal(metrics.exploration.afterCompact.toolOutputBytes, 0);
       assert.ok(metrics.fullReportGeneratedBytes > 0);
       assert.equal(metrics.diagnosticReadBytes, metrics.fullReportGeneratedBytes);
       const recovery = metrics.recoveryReports[0];
@@ -85,6 +88,10 @@ test("same-root warm baseline is incremental after the head change; cold remains
       assert.equal(after.fullRecoveryReadBytes, Math.min(16_384, recovery.bytes));
       assert.equal(after.fullRecoveryOutputBytes, Buffer.byteLength(recovered));
       assert.equal(after.recoveryReads[0].complete, recovery.bytes <= 16_384);
+      assert.equal(after.exploration.afterCompact.callsByTool.read_file, 1);
+      assert.equal(after.exploration.afterCompact.toolOutputBytes, Buffer.byteLength(recovered));
+      await executor.execute("read_file", { path: recovery.path });
+      assert.equal(executor.measurements().exploration.directFileReads.repeatedCalls, 1);
       assert.equal(after.subprocessFileReadBytes, null);
       await executor.execute("qamap_qa", { format: "json" });
       assert.equal(executor.measurements().repositoryIndexes.at(-1).reuse.status, "warm");
@@ -206,6 +213,12 @@ test("optional config is offline harness-only and missing-provider runs stay ski
     assert.equal(report.tasks.length, 6);
     assert.equal(report.summary.harnessPassed, true);
     assert.equal(report.summary.qualityPassed, null);
+    const rendered = formatTextReport(report);
+    assert.match(rendered, /direct file reads:/);
+    assert.match(rendered, /after first compact receipt: [^\n]*qamap_qa=1/);
+    assert.match(rendered, /after compact: n\/a/);
+    assert.match(rendered, /total run ms: n\/a/);
+    assert.match(rendered, /repeated file-read bytes n\/a, total run ms n\/a/);
     for (const task of report.tasks) {
       assert.deepEqual(Object.keys(task.arms), ["generic", "qamap-cold", "qamap-warm"]);
       assert.equal(task.repositoryComparisons.length, 3);
@@ -213,6 +226,7 @@ test("optional config is offline harness-only and missing-provider runs stay ski
         assert.equal(comparison.status, "not-measured");
         assert.equal(comparison.eligible, false);
         assert.equal(comparison.inputTokensMedianDifference, null);
+        assert.ok(Object.values(comparison.diagnostics).every((value) => value === null));
       }
       for (const arm of Object.values(task.arms)) {
         const run = arm.runs[0];
@@ -222,6 +236,8 @@ test("optional config is offline harness-only and missing-provider runs stay ski
         assert.equal(run.cacheReadTokens, null);
         assert.equal(run.cacheWriteTokens, null);
         assert.equal(run.wallClockMs, null);
+        assert.deepEqual(run.timing, { fixtureSetupMs: null, agentMs: null, judgeMs: null, cleanupMs: null, totalMs: null });
+        assert.ok(run.io.exploration.directFileReads.calls > 0);
         assert.equal(run.success, false);
         assert.equal(run.quality[0].passed, false, "the scripted harness does not fabricate a correct answer");
       }
@@ -234,6 +250,9 @@ test("optional config is offline harness-only and missing-provider runs stay ski
       assert.equal(warm.io.repositoryIndexes[0].reuse.status, "incremental");
       assert.equal(warm.io.repositoryIndexes[1].reuse.status, "warm");
       assert.equal(warm.io.repositoryIndexes[1].reuse.rebuiltFiles, 0);
+      assert.equal(cold.io.exploration.afterCompact.callsByTool.qamap_qa, 1);
+      assert.equal(warm.io.exploration.afterCompact.callsByTool.qamap_qa, 1);
+      assert.equal(task.arms.generic.runs[0].io.exploration.afterCompact, null);
     }
     assert.doesNotMatch(JSON.stringify(report), /\/var\/folders|\/private\/var|\/tmp\//);
     assert.deepEqual(await fs.readdir(env.TMPDIR), [], "all fixture/cache directories must be cleaned");

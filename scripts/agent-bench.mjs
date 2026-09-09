@@ -21,6 +21,7 @@ import { formatTextReport } from "./agent-bench/report.mjs";
 import { compareRepositoryArms, createRepositoryEnvironment, isRepositoryArm, prebuildRepositoryIndex, repositoryPairing } from "./agent-bench/repository-arms.mjs";
 import { createScriptedProvider } from "./agent-bench/scripted.mjs";
 import { loadSuite } from "./agent-bench/suite.mjs";
+import { createRunTiming } from "./agent-bench/timing.mjs";
 import { createToolExecutor, toolSchemaSha256, toolsForArm } from "./agent-bench/tools.mjs";
 import { exists, materializeFixtureRepo } from "./lib/fixture-repo.mjs";
 
@@ -127,10 +128,11 @@ async function runArm({ task, arm, setup }) {
     for (let index = 0; index < runs; index += 1) {
       const firstAuthoring = task.firstAuthoring && index === 0;
       const record = { run: index + 1, firstAuthoring, success: false };
+      const timing = createRunTiming({ enabled: repositoryExperiment && !dryRun });
       let prepared;
       let executor;
       try {
-        prepared = await materializeTaskRepo(task, carried, arm);
+        prepared = await timing.measure("fixtureSetupMs", () => materializeTaskRepo(task, carried, arm));
         const evidenceTask = task.successCriteria.some((criterion) => criterion.kind === "qa-evidence");
         const protectedFixture = evidenceTask ? await snapshotEvidenceFixture(prepared.repositoryRoot) : null;
         if (repositoryExperiment) {
@@ -143,21 +145,24 @@ async function runArm({ task, arm, setup }) {
           env: prepared.env, measureIO: repositoryExperiment });
         const provider = setup.kind === "dry-run" ? createScriptedProvider({ arm,
           staticReview: task.successCriteria.some((criterion) => criterion.kind === "qa-evidence") }) : setup.provider;
-        const loop = await runAgentLoop({
+        const loop = await timing.measure("agentMs", () => runAgentLoop({
           provider,
           tools,
           executor,
           system: systemPrompt,
           prompt: task.prompt,
           maxTurns: task.maxTurns,
-        });
+        }));
         Object.assign(record, loop);
-        const verdict = await judgeSuccess(task.successCriteria, prepared.repositoryRoot, { env: prepared.env });
-        if (protectedFixture) {
-          const unchanged = protectedFixture === await snapshotEvidenceFixture(prepared.repositoryRoot);
-          verdict.checks.push({ kind: "protected-fixture", description: "Fixture bytes and modes are unchanged independently of Git state.", passed: unchanged });
-          verdict.success &&= unchanged;
-        }
+        const verdict = await timing.measure("judgeMs", async () => {
+          const result = await judgeSuccess(task.successCriteria, prepared.repositoryRoot, { env: prepared.env });
+          if (protectedFixture) {
+            const unchanged = protectedFixture === await snapshotEvidenceFixture(prepared.repositoryRoot);
+            result.checks.push({ kind: "protected-fixture", description: "Fixture bytes and modes are unchanged independently of Git state.", passed: unchanged });
+            result.success &&= unchanged;
+          }
+          return result;
+        });
         Object.assign(record, { success: verdict.success && (!repositoryExperiment || loop.stopReason === "end-turn"), checks: verdict.checks });
         if (verdict.quality) record.quality = verdict.quality;
         if (setup.kind === "dry-run") {
@@ -173,7 +178,14 @@ async function runArm({ task, arm, setup }) {
         record.error = sanitizeMessage(error, prepared?.tempRoot);
       } finally {
         if (repositoryExperiment && executor) record.io = executor.measurements();
-        await prepared?.cleanup?.();
+        try {
+          if (prepared) await timing.measure("cleanupMs", () => prepared.cleanup());
+        } catch (error) {
+          record.cleanupError = sanitizeMessage(error, prepared?.tempRoot);
+          record.error ??= record.cleanupError;
+          record.success = false;
+        }
+        if (repositoryExperiment) record.timing = timing.snapshot();
       }
       records.push(record);
     }
@@ -294,6 +306,9 @@ function buildReport({ status, reason, pinned, tasks }) {
         "Repository arms override carry-over: every run has an isolated repository, home, and temp/cache environment; first-authoring is only a task label, not evidence of cross-run cache reuse.",
         "Warm setup builds the SAME root's base index before the fixture head overlay. Setup costs are separate from agent wall-clock; observed head rebuild/reuse counters are recorded under io.repositoryIndexes, never inferred from the arm name.",
         "Executor I/O is UTF-8 bytes, not tokens: direct reads and tool responses are measured; subprocess filesystem reads are unknown. Full-report diagnostic reads are separate from agent recovery reads, which can be capped prefixes.",
+        "Exploration records tool attempts and repeated read_file bytes at the same normalized target. Matching prefixes are not complete file coverage or proof of wasted work; grep and shell reads are not deduplicated.",
+        "After-compact counters begin only after the first intact successful compact response. Later calls are observations, not proof that compaction caused extra work. No compact response means unavailable, not zero follow-up work.",
+        "timing.totalMs covers fixture setup through cleanup, including warm prebuild once, agent execution, judging and harness overhead. All timing fields stay null offline. Failed runs retain diagnostics but cannot support efficiency comparisons.",
         "Local criteria are the existing task checks, not proof that generated browser tests were executed. Dry runs exercise the harness only; no provider quality or savings are established.",
       ] : []),
     ],

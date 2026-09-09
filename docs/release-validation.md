@@ -22,7 +22,7 @@ Validated on Node 22.14.0 with public synthetic fixtures:
 
 | Gate | Result |
 | --- | --- |
-| Full test suite | 611/611 passed, including file-boundary integrity regression |
+| Full test suite | 619/619 passed, including file-boundary integrity and exploration-receipt regressions |
 | Coverage baseline | Preceding 610-test run: lines 91.56%, branches 88.45%, functions 96.20%; the integrity follow-up does not change production runtime code |
 | Static QA benchmark | 43/43 contracts passed |
 | Repository benchmark | 11/11 checks passed, including all 7 required quality cases |
@@ -32,6 +32,7 @@ Validated on Node 22.14.0 with public synthetic fixtures:
 | Published-package smoke | Exact npm 0.4.17 passed six self-contained checks; fixture removed |
 | Optional three-arm harness | Six public tasks across generic, cold and warm arms completed 18 offline runs with no harness error; model quality and provider usage remain unmeasured |
 | Provider failure boundaries | Five local-only transport tests passed, including timeout, request ceiling, partial usage and post-response judge failure |
+| Exploration and timing receipts | Eight focused checks passed for reread identity, capped prefixes, compact-delivery boundaries, quality-gated differences and failure/offline timing |
 | Repository policy and plugin metadata | Zero scan findings; metadata checks and package preview passed |
 
 The six review tasks check exact source locations, contract values, uncertainty
@@ -39,6 +40,13 @@ and static execution status. Independent fixture checks reject omitted evidence,
 incorrect answers and source changes. These are bounded oracle tests, not
 observed model scores. The scripted offline run deliberately does not supply
 correct answers or token counts.
+
+Repository runs now record repeated direct file reads and tool activity after
+the first intact compact response. Per-run timing includes fixture setup through
+cleanup, counting warm prebuild once. Unknown shell reads remain unknown;
+repeated reads are not classified as waste. Paired diagnostic differences use
+the same passing-quality and complete-usage gate as token comparisons, and all
+offline timings remain null. These observations do not establish model savings.
 
 Integrity snapshots include each file's length so moving a serialized file
 header and payload into another file cannot preserve the same hash input.

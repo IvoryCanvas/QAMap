@@ -176,6 +176,7 @@ export async function createToolExecutor({
         const buffer = Buffer.alloc(Math.min(stats.size, maxOutputBytes));
         const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
         io?.read(bytesRead, recoveryPath ? requested : null, stats.size);
+        io?.directRead(file, buffer.subarray(0, bytesRead));
         return buffer.subarray(0, bytesRead).toString("utf8");
       } finally {
         await handle.close();

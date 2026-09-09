@@ -20,6 +20,7 @@
 ### Measurement
 
 - Offline benchmark success is reported separately from measured agent quality. Missing provider usage cannot produce a token or cost savings claim.
+- Repository runs record repeated direct file reads, post-handoff tool activity and setup-through-cleanup timing; diagnostic comparisons require matched passing quality and complete provider usage.
 
 ## 0.4.17 - 2026-09-04
 

@@ -59,6 +59,7 @@ export function formatTextReport(report) {
       );
       for (const run of result.runs) {
         if (run.error) lines.push(`  ! run ${run.run} errored: ${run.error}`);
+        if (run.cleanupError) lines.push(`  cleanup failed: ${run.cleanupError}`);
         if (run.partialUsage) lines.push(`  known partial input/output: ${formatValue(run.partialUsage.inputTokens)}/${formatValue(run.partialUsage.outputTokens)}; failed-request usage unknown, excluded from comparisons`);
         for (const quality of run.quality ?? []) lines.push(`  evidence precision/recall: ${quality.evidencePrecision}/${quality.evidenceRecall}; contract completeness: ${quality.contractCompleteness}; passed: ${quality.passed}`);
         if (run.repositoryCache) {
@@ -70,12 +71,31 @@ export function formatTextReport(report) {
             `${observation.reuse.rebuiltFiles} rebuilt, ${observation.reuse.reusedFiles} reused (index-reported)`);
           if (run.io) lines.push(`    executor bytes: tool output ${run.io.toolOutputBytes}, ` +
             `compact ${run.io.compactOutputBytes}, recovery read ${run.io.fullRecoveryReadBytes}`);
+          const exploration = run.io?.exploration;
+          if (exploration) {
+            const reads = exploration.directFileReads;
+            lines.push(`    direct file reads: ${reads.calls}; distinct targets ${reads.uniqueTargets}; ` +
+              `repeated reads/bytes ${reads.repeatedCalls}/${reads.repeatedBytes} (not a waste estimate)`);
+            lines.push(`    tool attempts: ${formatCalls(exploration.callsByTool)}`);
+            const after = exploration.afterCompact;
+            lines.push(after ? `    after first compact receipt: ${formatCalls(after.callsByTool)}; ` +
+              `output bytes ${after.toolOutputBytes}; tool errors ${after.toolErrors}`
+              : "    after compact: n/a (no intact successful compact receipt)");
+          }
+          if (run.timing) lines.push(`    total run ms: ${formatValue(run.timing.totalMs)}; ` +
+            `fixture setup ${formatValue(run.timing.fixtureSetupMs)}, agent ${formatValue(run.timing.agentMs)}, ` +
+            `judge ${formatValue(run.timing.judgeMs)}, cleanup ${formatValue(run.timing.cleanupMs)}; setup includes any warm prebuild`);
         }
       }
     }
     for (const comparison of task.repositoryComparisons ?? []) {
       lines.push(`- ${comparison.baselineArm} vs ${comparison.candidateArm}: ${comparison.status}; ` +
         `provider input-token median difference ${formatValue(comparison.inputTokensMedianDifference)}`);
+      if (comparison.diagnostics) lines.push(`  eligible diagnostic median differences (baseline minus candidate): ` +
+        `tool calls ${formatValue(comparison.diagnostics.toolCallsMedianDifference)}, ` +
+        `tool output bytes ${formatValue(comparison.diagnostics.toolOutputBytesMedianDifference)}, ` +
+        `repeated file-read bytes ${formatValue(comparison.diagnostics.repeatedFileReadBytesMedianDifference)}, ` +
+        `total run ms ${formatValue(comparison.diagnostics.totalWallClockMsMedianDifference)}`);
     }
     lines.push("");
   }
@@ -84,6 +104,10 @@ export function formatTextReport(report) {
   lines.push("");
   lines.push(`Summary: ${formatSummary(report.summary)}`);
   return lines.join("\n");
+}
+
+function formatCalls(counts) {
+  return Object.entries(counts).filter(([, count]) => count > 0).map(([name, count]) => `${name}=${count}`).join(", ") || "none";
 }
 
 function formatSummary(summary) {

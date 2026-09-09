@@ -134,6 +134,11 @@ comparison. See the [measurement runbook](../scripts/agent-bench/README.md)
 for offline checks, a one-task pilot, repeat counts and request limits.
 If a request fails after earlier responses, confirmed usage remains in
 `partialUsage`, while complete-run totals are unknown and ineligible.
+Repository runs also expose repeated direct file reads, tool activity after the
+first intact compact report, and total time including fixture setup and cleanup.
+These diagnose why a run needed more work; neither repeated reads nor a larger
+response alone proves inefficiency. Diagnostic differences use the same quality
+and usage eligibility gate as token comparisons.
 
 What leaves the machine when a key is configured: the committed system prompt,
 the committed task prompts and tool schemas, and tool results produced inside a
