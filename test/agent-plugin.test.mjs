@@ -36,6 +36,11 @@ test("native agent plugin manifests expose one shared QAMap skill", async () => 
   assert.match(skill, new RegExp(`@ivorycanvas/qamap@${packageJson.version.replaceAll(".", "\\.")}`));
   assert.doesNotMatch(skill, /@ivorycanvas\/qamap@latest/);
   assert.match(skill, /calling agent still uses its own model tokens/i);
+  const reference = await readFile(path.join(repositoryRoot, "skills/qamap-pr-qa/references/advanced-workflow.md"), "utf8");
+  assert.match(skill, /references\/advanced-workflow\.md/);
+  assert.match(reference, /execution\.gitState/);
+  assert.match(skill, /Installation alone is\s+not consent/);
+  assert.match(skill, /do not reread the summary/);
 
   const openaiMetadata = parseYaml(metadata);
   assert.equal(openaiMetadata.interface.display_name, "QAMap PR QA");

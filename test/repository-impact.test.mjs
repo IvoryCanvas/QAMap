@@ -62,6 +62,31 @@ test("namespace members do not pull an unrelated export into a test", async (t) 
   assert.equal(reached[0].evidence.at(-1).line, 2);
 });
 
+test("Node runtime boundaries retain module locations across cold and warm indexes", async (t) => {
+  const { root, put, cacheDirectory } = await fixture(t);
+  const file = "apps/web/tests/route.test.ts";
+  await put(file, "import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nimport { showItem } from '../route';\nimport missing from 'node:qamap_unknown_builtin';\ntest('shows item', () => { assert.equal(showItem(' value '), 'value'); });");
+  const cold = await buildRepositoryEvidenceIndex(root, { cacheDirectory });
+  const warm = await buildRepositoryEvidenceIndex(root, { cacheDirectory });
+  assert.equal(warm.reuse.rebuiltFiles, 0);
+  assert.deepEqual(warm.blocks.find(block => block.file === file).imports, cold.blocks.find(block => block.file === file).imports);
+  const impact = traceRepositoryImpact(cold, [{ file: "packages/labels/src/format.ts", lines: [1] }]);
+  assert.deepEqual(traceRepositoryImpact(warm, [{ file: "packages/labels/src/format.ts", lines: [1] }]), impact);
+  assert.ok(impact.paths.some(entry => entry.evidence.at(-1).file === file));
+  for (const [module, line, reason] of [
+    ["node:assert/strict", 1, "node-builtin-outside-repository"],
+    ["node:test", 2, "node-builtin-outside-repository"],
+    ["node:qamap_unknown_builtin", 4, "unresolved-node-module"],
+  ]) assert.ok(impact.boundaries.some(gap => gap.file === file && gap.module === module && gap.line === line && gap.reason === reason), module);
+  assert.ok(!impact.boundaries.some(gap => gap.reason === "unsupported-module"));
+  assert.equal(impact.execution, "not-run");
+  const fakeMapping = structuredClone(cold);
+  fakeMapping.blocks.find(block => block.file.endsWith("package.json")).modules.push({ specifier: "node:test", target: "apps/web/route.ts" });
+  assert.deepEqual(createRepositoryModuleResolver(fakeMapping.blocks)(file, "node:test"), {
+    candidates: [], reason: "node-builtin-outside-repository",
+  });
+});
+
 test("deep star-export origin searches stop before exhausting the process stack", async (t) => {
   const { root, put } = await fixture(t);
   await put("packages/labels/src/index.ts", "export * from './format';\nexport * from './chain-0';");

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Opt-in `qa report --handoff` returns a bounded summary, hash-checked source/test excerpts and explicit full-report recovery pointers in one response, while preserving receipt-only reporting and static execution state.
 - Reusable repository evidence blocks for JS/TS declarations, references, tests, package entries, compiler aliases, API contract pointers and validation metadata, with explicit coverage and incremental refresh receipts.
 - Cross-package symbol paths to test references and registration candidates, with stop conditions for ambiguous exports, unsupported resolution and mismatched source snapshots.
 - Quality-gated cold, warm and incremental index benchmarks plus a self-contained exact-version package smoke.
@@ -11,6 +12,8 @@
 
 ### Fixed
 
+- Module boundaries retain specifiers and locations, distinguish explicit Node builtins from unresolved dependencies, and remain recoverable when compact output omits them. Handoff excerpts avoid duplicate endpoint pairs and preserve the strongest pair under diagnostic pressure.
+- Local CLI experiment guards accumulate usage across resumed turns, retain observed overruns and reject incomplete or inconsistent receipts instead of reporting successful low-cost runs.
 - Changed test contracts stay within the PR comparison, excluding merged target-branch tests and restored baseline declarations. Recent-file priority uses current head locations instead of stale commit coordinates.
 - Analysis-rule scenarios and risk explanations require direct changed-line evidence; file-level analyzer context no longer turns read instrumentation into a rule change.
 - Computational calls, comments and string contents no longer become product behavior solely through matching vocabulary; real file and network actions remain visible.

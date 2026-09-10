@@ -96,6 +96,7 @@ interface ParsedOptions {
   recordHistory?: boolean;
   dryRun?: boolean;
   agent?: boolean;
+  handoff?: boolean;
   scripts?: boolean;
   timeoutMs?: number;
   executor?: string;
@@ -320,9 +321,12 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
     const runValidation = rest[0] === "run";
-    const options = parseOptions(runValidation || localReport ? rest.slice(1) : rest);
+    const options = parseOptions(runValidation || localReport ? rest.slice(1) : rest, localReport);
     const format = options.format ?? (options.json ? "json" :
-      localReport && !process.stdout.isTTY ? "json" : "text");
+      options.handoff || localReport && !process.stdout.isTTY ? "json" : "text");
+    if (options.handoff && format !== "json" && format !== "agent") {
+      throw new Error("qa report --handoff supports json or agent output only.");
+    }
     if (localReport && format !== "text" && format !== "json" && format !== "agent") {
       throw new Error(`qa report supports text, json, or agent receipts, not ${format}`);
     }
@@ -353,6 +357,11 @@ async function main(argv: string[]): Promise<number> {
         })
       : await generateQaDraft(options.path, qaOptions);
     if (localReport) {
+      if (options.handoff) {
+        const handoff = await writeLocalQaReport(result, options.output, { handoff: true });
+        process.stdout.write(`${JSON.stringify(handoff)}\n`);
+        return 0;
+      }
       const receipt = await writeLocalQaReport(result, options.output);
       process.stdout.write(formatLocalQaReportReceipt(receipt, format === "text"));
       return 0;
@@ -587,7 +596,7 @@ async function main(argv: string[]): Promise<number> {
   throw new Error(`Unknown command: ${command}`);
 }
 
-function parseOptions(args: string[]): ParsedOptions {
+function parseOptions(args: string[], allowHandoff = false): ParsedOptions {
   const options: ParsedOptions = {
     path: ".",
     json: false,
@@ -597,6 +606,12 @@ function parseOptions(args: string[]): ParsedOptions {
   let sawPath = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+
+    if (arg === "--handoff") {
+      if (!allowHandoff) throw new Error("--handoff is only available with qa report.");
+      options.handoff = true;
+      continue;
+    }
 
     if (arg === "--json") {
       options.json = true;
@@ -1129,7 +1144,7 @@ Usage:
 
   qamap qa report [path] [--workspace-root <path>] [--manifest <file>]
     [--base <ref>] [--head <ref>] [--include-working-tree]
-    [--output <directory>] [--format text|json|agent]
+    [--output <directory>] [--format text|json|agent] [--handoff]
 
 Behavior:
   qa       maps diff -> affected behavior -> risk -> scenario -> evidence.
@@ -1138,9 +1153,12 @@ Behavior:
            repository command when the action contract permits it.
   qa report saves static analysis, full evidence, and a compact summary in
            ~/QAMap-reports/qa-* (or a new subdirectory of --output).
-           Prints only a completion receipt, never the analysis itself.
+           By default, prints only a completion receipt, not the analysis.
            Interactive terminals get a banner; pipes get JSON.
            Tests remain not-run. No LLM calls or automatic report reading.
+           --handoff opts into one JSON response containing that summary,
+           bounded source excerpts and full-report recovery pointers.
+           Analysis makes no LLM calls; caller token savings are not guaranteed.
 
 Common examples:
   qamap qa
@@ -1148,6 +1166,7 @@ Common examples:
   qamap qa --format markdown
   qamap qa --format agent
   qamap qa report --format agent
+  qamap qa report --handoff
   qamap qa run
 
 Use \`qamap help --all\` for every advanced and compatibility command.`);
@@ -1168,7 +1187,7 @@ Usage:
   qamap github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
   qamap test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
   qamap qa [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--format <format>] [--output <file>]
-  qamap qa report [path] [--base <ref>] [--head <ref>] [--include-working-tree] [--output <directory>] [--format text|json|agent]
+  qamap qa report [path] [--base <ref>] [--head <ref>] [--include-working-tree] [--output <directory>] [--format text|json|agent] [--handoff]
   qamap qa run [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--timeout-ms <n>] [--format <format>] [--output <file>]
   qamap e2e plan [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   qamap e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force]

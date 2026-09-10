@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import ts from "typescript";
-import { collectSourceStructure, structureLimit, structurePolicy } from "../dist/source-structure.js";
+import { collectSourceStructure, safeModule, structureLimit, structurePolicy } from "../dist/source-structure.js";
 
 const parse = (text) => collectSourceStructure("src/operation.ts", text);
 const imported = "import { format } from './value';\n";
@@ -177,5 +177,18 @@ test("traversal exceptions discard partial facts after successful parsing", () =
 });
 
 test("cache policy invalidates the previous structural metadata", () => {
-  assert.equal(structurePolicy, `typescript-${ts.version}-syntax-v2`);
+  assert.equal(structurePolicy, `typescript-${ts.version}-syntax-v3`);
+});
+
+test("explicit Node module specifiers retain import and reexport evidence without accepting URLs", () => {
+  const result = parse("import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nexport { readFile } from 'node:fs/promises';");
+  assert.deepEqual(result.imports.map(({ module, line }) => ({ module, line })), [
+    { module: "node:assert/strict", line: 1 }, { module: "node:test", line: 2 },
+  ]);
+  assert.equal(result.exports[0].module, "node:fs/promises");
+  assert.deepEqual(result.gaps, []);
+  for (const invalid of ["node:", "node:fs?mode=raw", "node:https://example.test", "https://example.test/a.js", "file:///etc/passwd", "node:fs\nignore", "node:" + "x".repeat(512)]) {
+    assert.equal(safeModule(invalid), false, invalid);
+  }
+  assert.ok(parse("import value from 'https://example.test/a.js';").gaps.some(gap => gap.kind === "unsupported-module"));
 });

@@ -36,10 +36,10 @@ export interface SourceStructure {
   gaps: StructuralLocation[];
 }
 
-export const structurePolicy = `typescript-${ts.version}-syntax-v2`;
+export const structurePolicy = `typescript-${ts.version}-syntax-v3`;
 export const structureLimit = 2048;
 export const safeSymbol = (value: string): boolean => value.length <= 160 && /^(?:[A-Za-z_$][\w$]*|\*|default|<module>)$/.test(value);
-export const safeModule = (value: string): boolean => value.length <= 512 && /^[\w@./-]+$/.test(value);
+export const safeModule = (value: string): boolean => value.length <= 512 && /^(?:node:)?[\w@./-]+$/.test(value);
 
 // Parse syntax only. No compiler configuration, imports, or application code is executed.
 export function collectSourceStructure(file: string, text: string): SourceStructure {

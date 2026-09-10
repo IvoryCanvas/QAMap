@@ -25,6 +25,7 @@ const SKILL_RELATIVE_ROOT = path.join("skills", "qamap-pr-qa");
 const SKILL_BUNDLE_FILES = [
   "SKILL.md",
   path.join("agents", "openai.yaml"),
+  path.join("references", "advanced-workflow.md"),
 ];
 const SKILL_TARGET_RELATIVE_PATHS = [
   path.join(".agents", "skills", "qamap-pr-qa"),
@@ -34,7 +35,7 @@ const SKILL_TARGET_RELATIVE_PATHS = [
 export async function initAgentSetup(rootInput: string, options: { force?: boolean } = {}): Promise<AgentInitResult> {
   const root = path.resolve(rootInput);
   const dlxCommand = await detectDlxCommand(root);
-  const nextCommand = `${dlxCommand} qa . --base origin/main --head HEAD --format agent`;
+  const nextCommand = `${dlxCommand} qa report . --base origin/main --head HEAD --handoff`;
 
   const files: AgentInitFile[] = [];
   files.push(await upsertAgentsSection(root, dlxCommand));
@@ -51,18 +52,22 @@ export function buildAgentQaSection(dlxCommand: string): string {
     SECTION_START,
     "## Pre-PR QA (QAMap)",
     "",
-    "Before opening or updating a pull request, run this local, token-free QA pass:",
+    "For PR bug review or test planning, offer optional local QAMap analysis once.",
+    "Respect explicit user/project choices; a refusal means ordinary review. Installation is not blanket consent.",
+    "QAMap analysis makes no LLM call; invocation and interpretation still use model tokens. Savings are not guaranteed.",
+    "After consent, use an installed version that supports --handoff (check qa --help once per version):",
+    "Prefer its local binary. The package-runner example below may download a package; get approval before installing or upgrading.",
     "",
     "```sh",
-    `${dlxCommand} qa . --base origin/main --head HEAD --format agent`,
+    `${dlxCommand} qa report . --base origin/main --head HEAD --handoff`,
     "```",
     "",
-    "- Read `intents[].scenarios[].sources` first: each accepted scenario should point to a commit or exact diff file and line.",
-    "- Address every `requiredEvidence` item before handing the pull request to a human.",
-    "- Treat `automation` as opt-in. Generate or set up an E2E adapter only after the scenario and source evidence are accepted.",
-    "- Treat the result as QA planning evidence, not as proof that browser, device, or manual QA passed.",
-    `- If \`route.nextAction\` is \`run-repository-command\` and policy permits repository code execution, run \`${dlxCommand} qa run . --base origin/main --head HEAD --format agent\`; do not repeat it when \`execution.performed\` is true.`,
-    "- After `qa run`, inspect `execution.gitState`; a passing command with `changed: true` still requires review of the reported Git-observable paths.",
+    "- Use the actual PR base; include working-tree changes only when requested.",
+    "- Await one command completion through the host tool; do not poll with repeated model calls.",
+    "- Read attached `summary` and `reviewEvidence` first. Do not reread the summary file or rerun analysis.",
+    "- Follow `recovery` pointers into `files.full` only for relevant omitted evidence; broaden review when needed.",
+    "- Tests stay `not-run`; suggested commands, edits and automation need separate authorization.",
+    "- For save-only requests, omit --handoff and stop after returning paths without reading report contents.",
     "- The full workflow lives in `.agents/skills/qamap-pr-qa/SKILL.md`; Claude Code also receives `.claude/skills/qamap-pr-qa/SKILL.md`.",
     SECTION_END,
   ].join("\n");
@@ -171,7 +176,7 @@ export function formatAgentInitReport(result: AgentInitResult): string {
     lines.push(`- [${file.status}] \`${file.path}\` — ${file.detail}`);
   }
   lines.push("");
-  lines.push("Agents that read `AGENTS.md` or project skills will now run QAMap before handing off a pull request.");
+  lines.push("Hosts that read `AGENTS.md` or project skills can offer QAMap during PR review. Automatic discovery depends on the host.");
   lines.push("");
   lines.push("Try it yourself:");
   lines.push("");

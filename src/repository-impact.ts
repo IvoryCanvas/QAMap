@@ -1,4 +1,5 @@
 import path from "node:path";
+import { isBuiltin } from "node:module";
 import { comparePaths } from "./repository-discovery.js";
 import type { RepositoryEvidenceIndex, RepositoryIndexBlock } from "./repository-index.js";
 
@@ -13,7 +14,7 @@ export interface RepositoryImpact {
   status: "draft";
   execution: "not-run";
   paths: Array<{ changedFile: string; changedSymbol: string; endpoint: "test-reference" | "registration-candidate"; evidence: ImpactStep[] }>;
-  boundaries: Array<{ file: string; line?: number; symbol?: string; reason: string }>;
+  boundaries: Array<{ file: string; line?: number; symbol?: string; module?: string; reason: string }>;
   visitedStates: number;
   limits: { states: number; paths: number; pathSteps: number };
   omittedPaths: number;
@@ -41,6 +42,9 @@ export function createRepositoryModuleResolver(blocks: RepositoryIndexBlock[]): 
     return target.replace("*", module.slice(prefix.length, suffix ? -suffix.length : undefined));
   };
   return (file, module) => {
+    // Runtime internals are outside the repository graph, not missing local source.
+    if (module.startsWith("node:")) return { candidates: [],
+      reason: isBuiltin(module) ? "node-builtin-outside-repository" : "unresolved-node-module" };
     if (module.startsWith(".")) {
       const candidates = probe(path.posix.join(path.posix.dirname(file), module));
       return { candidates, ...(candidates.length !== 1 ? { reason: candidates.length ? "ambiguous-module" : "unresolved-relative-module" } : {}) };
@@ -88,18 +92,18 @@ export function traceRepositoryImpact(
   const blocks = new Map(index.blocks.map((block) => [block.file, block]));
   const resolve = createRepositoryModuleResolver(index.blocks);
   const incoming = new Map<string, Array<{ block: RepositoryIndexBlock; local: string; imported: string; line: number; reexport: boolean }>>();
-  const unresolved = new Map<string, Array<{ line: number; reason: string }>>();
-  const blockedIncoming = new Map<string, Array<{ file: string; line: number; symbol: string; reason: string }>>();
+  const unresolved = new Map<string, Array<{ line: number; module: string; reason: string }>>();
+  const blockedIncoming = new Map<string, Array<{ file: string; line: number; symbol: string; module: string; reason: string }>>();
   for (const block of index.blocks) for (const binding of [...block.imports.map((entry) => ({ ...entry, reexport: false })),
     ...block.exports.filter((entry) => entry.module).map((entry) => ({ module: entry.module!, imported: entry.local, local: entry.exported, line: entry.line, reexport: true }))]) {
     const resolution = resolve(block.file, binding.module);
     if (resolution.reason || resolution.candidates.length !== 1) {
       const gaps = unresolved.get(block.file) ?? [];
-      gaps.push({ line: binding.line, reason: resolution.reason ?? "unresolved-module" });
+      gaps.push({ line: binding.line, module: binding.module, reason: resolution.reason ?? "unresolved-module" });
       unresolved.set(block.file, gaps);
       for (const candidate of resolution.candidates) {
         const consumers = blockedIncoming.get(candidate) ?? [];
-        consumers.push({ file: block.file, line: binding.line, symbol: binding.imported, reason: resolution.reason ?? "unresolved-module" });
+        consumers.push({ file: block.file, line: binding.line, symbol: binding.imported, module: binding.module, reason: resolution.reason ?? "unresolved-module" });
         blockedIncoming.set(candidate, consumers);
       }
       continue;
@@ -183,7 +187,7 @@ export function traceRepositoryImpact(
     const block = blocks.get(state.file)!;
     result.visitedStates++;
     for (const gap of [...block.gaps.map((gap) => ({ line: gap.line, reason: gap.kind })), ...(unresolved.get(block.file) ?? [])]) {
-      boundary({ file: block.file, line: gap.line, symbol: state.symbol, reason: gap.reason });
+      boundary({ file: block.file, symbol: state.symbol, ...gap });
     }
     if (block.gaps.some((gap) => gap.kind === "parse-error")) { boundary({ file: block.file, symbol: state.symbol, reason: "invalid-syntax-stops-trace" }); continue; }
     if (state.exported) {
@@ -228,7 +232,8 @@ export function traceRepositoryImpact(
     boundary({ file: change.file, reason: "no-observable-contract-path" });
   }
   result.paths.sort((a, b) => pathRank(b) - pathRank(a));
-  result.boundaries.sort((a, b) => comparePaths(a.file, b.file) || (a.line ?? 0) - (b.line ?? 0) || comparePaths(a.reason, b.reason) || comparePaths(a.symbol ?? "", b.symbol ?? ""));
+  result.boundaries.sort((a, b) => comparePaths(a.file, b.file) || (a.line ?? 0) - (b.line ?? 0) || comparePaths(a.reason, b.reason)
+    || comparePaths(a.symbol ?? "", b.symbol ?? "") || comparePaths(a.module ?? "", b.module ?? ""));
   return result;
 }
 

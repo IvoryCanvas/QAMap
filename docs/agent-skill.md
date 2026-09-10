@@ -1,6 +1,9 @@
 # QAMap As A Local QA Skill
 
-QAMap can be used as a small local tool that an AI coding agent runs before opening, updating, or finalizing a pull request.
+QAMap can gather local evidence inside a coding agent's ordinary PR review.
+The development build supports a [one-call review handoff](agent-handoff.md):
+offer QAMap, obtain consent, then return the summary and selected code evidence
+without an extra report-reading round trip. This mode is not in 0.4.17.
 
 The goal is not to replace a reviewer or claim QA passed. The goal is to remove the repeated setup question:
 
@@ -25,11 +28,16 @@ It performs four idempotent steps:
 
 Both skill copies preserve local changes unless you explicitly pass `--force`. After setup, agents that read `AGENTS.md` or either project-skill location can discover the same QA workflow without receiving a different prompt contract. The rest of this document explains what that pass does and how to wire it manually on other agent surfaces.
 
+The development skill also includes `references/advanced-workflow.md` for
+optional execution and legacy use. Installation is an explicit setup action,
+not blanket consent to analysis; no npm install hook edits other agent settings.
+
 The installed skill bundle also carries optional Codex presentation metadata. QAMap keeps that metadata beside the same `SKILL.md`; it does not create a second workflow for another host.
 
-## Recommended Agent Step
+## Legacy Agent Output
 
-Run this before writing a PR body or asking for review. Agents should prefer the compact agent format — one minified JSON object (about 2 KB for a typical small PR) instead of a long report:
+For released versions without `--handoff`, use compact static output after the
+user chooses QAMap. Model invocation and interpretation still consume tokens:
 
 ```sh
 npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa . --base origin/main --head HEAD --format agent

@@ -57,6 +57,7 @@ try {
     ".codex-plugin/plugin.json",
     "skills/qamap-pr-qa/SKILL.md",
     "skills/qamap-pr-qa/agents/openai.yaml",
+    "skills/qamap-pr-qa/references/advanced-workflow.md",
     "skills/qamap-pr-qa/assets/qamap-logo.png",
     "skills/qamap-pr-qa/assets/qamap-logo.svg",
     "plugin/submission.json",
@@ -126,6 +127,25 @@ try {
   );
   assert.ok(payload.route.nextAction, "fresh install must select one next action");
   assert.ok(Buffer.byteLength(analysis.stdout) <= 4 * 1024, "agent output must stay within 4 KiB");
+
+  const handoffOutput = await run(binary,
+    ["qa", "report", ".", "--base", "HEAD~1", "--handoff", "--output", path.join(tempRoot, "reports")], fixture);
+  const handoff = JSON.parse(handoffOutput.stdout);
+  assert.equal(handoff.schema.name, "qamap.qa.handoff");
+  assert.equal(handoff.summary.execution.status, "not-run");
+  assert.equal(handoff.execution.performed, false);
+  assert.deepEqual(handoff.recovery.repository, ["/repositoryIndex", "/repositoryImpact"]);
+  assert.ok(Buffer.byteLength(handoffOutput.stdout) <= 8192);
+  assert.deepEqual(JSON.parse(await readFile(handoff.files.summary, "utf8")), handoff.summary);
+
+  const agentProject = path.join(tempRoot, "agent-project");
+  await mkdir(agentProject);
+  await run(binary, ["init", agentProject, "--agent"], agentProject);
+  for (const host of [".agents", ".claude"]) {
+    assert.match(await readFile(path.join(agentProject, host, "skills/qamap-pr-qa/references/advanced-workflow.md"), "utf8"),
+      /execution\.gitState/);
+  }
+  assert.match(await readFile(path.join(agentProject, "AGENTS.md"), "utf8"), /--handoff/);
 
   const installedManifest = JSON.parse(
     await readFile(

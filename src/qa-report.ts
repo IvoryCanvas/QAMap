@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { buildLocalQaHandoff, type LocalQaHandoffReceipt } from "./qa-handoff.js";
 import {
   formatAgentQaDraft,
   formatAgentQaFullReport,
@@ -17,10 +18,14 @@ export interface LocalQaReportReceipt {
   files: { report: string; summary: string; full: string };
 }
 
+export function writeLocalQaReport(result: QaDraftResult, outputDirectory?: string): Promise<LocalQaReportReceipt>;
+export function writeLocalQaReport(result: QaDraftResult, outputDirectory: string | undefined,
+  options: { handoff: true }): Promise<LocalQaHandoffReceipt>;
 export async function writeLocalQaReport(
   result: QaDraftResult,
   outputDirectory = path.join(os.homedir(), "QAMap-reports"),
-): Promise<LocalQaReportReceipt> {
+  options: { handoff?: boolean } = {},
+): Promise<LocalQaReportReceipt | LocalQaHandoffReceipt> {
   if (result.execution.status !== "not-run" || result.execution.performed) {
     throw new Error("Local QA reports accept static analysis only; use qa run for execution receipts.");
   }
@@ -39,22 +44,28 @@ export async function writeLocalQaReport(
       summary: path.join(directory, "summary.json"),
       full: path.join(directory, "report.json"),
     };
+    const summary = formatAgentQaDraft(result, { fullReportPath: files.full });
     const contents = [
       [files.full, formatAgentQaFullReport(result)],
-      [files.summary, formatAgentQaDraft(result, { fullReportPath: files.full })],
+      [files.summary, summary],
       [files.report, formatMarkdownQaDraft(result)],
     ];
     for (const [filename, content] of contents) {
       await fs.writeFile(filename, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
     }
     // Publish the receipt only after every artifact has been written successfully.
-    return {
+    const receipt: LocalQaReportReceipt = {
       schema: { name: "qamap.qa.report", version: 1 },
       analysis: "complete",
       execution: { status: "not-run", performed: false },
       noLlmToken: true,
       files,
     };
+    if (!options.handoff) return receipt;
+    const handoff = await buildLocalQaHandoff(result, receipt, JSON.parse(summary));
+    await fs.writeFile(path.join(directory, "handoff.json"), `${JSON.stringify(handoff)}\n`,
+      { encoding: "utf8", flag: "wx", mode: 0o600 });
+    return handoff;
   } catch (error) {
     await fs.rm(directory, { recursive: true, force: true }).catch(() => undefined);
     throw error;
