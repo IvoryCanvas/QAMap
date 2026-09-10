@@ -4,6 +4,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { writeAgentRecoveryReport } from "./agent-report.js";
+import { formatLocalQaReportReceipt, writeLocalQaReport } from "./qa-report.js";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { formatAgentInitReport, initAgentSetup } from "./agent-init.js";
 import { generateAgentContext } from "./context.js";
@@ -312,12 +313,19 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "qa") {
-    if (rest[0] === "help" || rest[0] === "--help" || rest[0] === "-h") {
+    const localReport = rest[0] === "report";
+    if (rest[0] === "help" || rest[0] === "--help" || rest[0] === "-h" ||
+      (localReport && rest.some((arg) => arg === "--help" || arg === "-h"))) {
       printQaHelp();
       return 0;
     }
     const runValidation = rest[0] === "run";
-    const options = parseOptions(runValidation ? rest.slice(1) : rest);
+    const options = parseOptions(runValidation || localReport ? rest.slice(1) : rest);
+    const format = options.format ?? (options.json ? "json" :
+      localReport && !process.stdout.isTTY ? "json" : "text");
+    if (localReport && format !== "text" && format !== "json" && format !== "agent") {
+      throw new Error(`qa report supports text, json, or agent receipts, not ${format}`);
+    }
     const loadedConfig = await loadOptionsConfig(options);
     const qaOptions = {
       base: options.base,
@@ -329,7 +337,6 @@ async function main(argv: string[]): Promise<number> {
       manifestPath: options.manifestPath,
       config: loadedConfig.config,
     };
-    const format = options.format ?? (options.json ? "json" : "text");
     const streamCommandOutput = runValidation &&
       !options.output &&
       (format === "markdown" || format === "text");
@@ -345,6 +352,11 @@ async function main(argv: string[]): Promise<number> {
             : {}),
         })
       : await generateQaDraft(options.path, qaOptions);
+    if (localReport) {
+      const receipt = await writeLocalQaReport(result, options.output);
+      process.stdout.write(formatLocalQaReportReceipt(receipt, format === "text"));
+      return 0;
+    }
     if (streamCommandOutput && result.execution.performed) {
       console.log("");
     }
@@ -1115,17 +1127,27 @@ Usage:
     [--base <ref>] [--head <ref>] [--include-working-tree]
     [--timeout-ms <n>] [--format <format>] [--output <file>]
 
+  qamap qa report [path] [--workspace-root <path>] [--manifest <file>]
+    [--base <ref>] [--head <ref>] [--include-working-tree]
+    [--output <directory>] [--format text|json|agent]
+
 Behavior:
   qa       maps diff -> affected behavior -> risk -> scenario -> evidence.
            Product QA and generated drafts remain marked not run.
   qa run   repeats the analysis, then executes only the selected existing
            repository command when the action contract permits it.
+  qa report saves static analysis, full evidence, and a compact summary in
+           ~/QAMap-reports/qa-* (or a new subdirectory of --output).
+           Prints only a completion receipt, never the analysis itself.
+           Interactive terminals get a banner; pipes get JSON.
+           Tests remain not-run. No LLM calls or automatic report reading.
 
 Common examples:
   qamap qa
   qamap qa --include-working-tree
   qamap qa --format markdown
   qamap qa --format agent
+  qamap qa report --format agent
   qamap qa run
 
 Use \`qamap help --all\` for every advanced and compatibility command.`);
@@ -1146,6 +1168,7 @@ Usage:
   qamap github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
   qamap test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
   qamap qa [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--format <format>] [--output <file>]
+  qamap qa report [path] [--base <ref>] [--head <ref>] [--include-working-tree] [--output <directory>] [--format text|json|agent]
   qamap qa run [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--timeout-ms <n>] [--format <format>] [--output <file>]
   qamap e2e plan [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   qamap e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force]

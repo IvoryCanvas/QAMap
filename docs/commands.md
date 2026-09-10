@@ -41,6 +41,46 @@ Use `--format markdown` for the complete review artifact. It opens with **At a G
 
 Interactive terminal reports are colorized. Files written with `--output`, pipes, CI logs, and machine formats remain plain. The standard `NO_COLOR` and `FORCE_COLOR` environment variables are honored.
 
+### Save A Report Without Reading It
+
+**Development command, not available in 0.4.17.** Use a local build that lists
+`qa report` in `qamap qa --help`:
+
+```sh
+qamap qa report . --base origin/main --head HEAD
+qamap qa report . --base origin/main --head HEAD --format agent
+```
+
+Both commands perform static analysis without calling an LLM or running tests.
+They save a new private folder under `~/QAMap-reports/` for each run:
+
+| File | Purpose |
+| --- | --- |
+| `report.md` | Human-readable QA report with code evidence. |
+| `summary.json` | Existing bounded agent summary, at most 4,096 UTF-8 bytes. |
+| `report.json` | Full collected analysis, including repository index and impact evidence. Analysis coverage limits still apply. |
+
+Use `--output <directory>` to choose the parent folder, preferably outside the
+repository. Existing reports are never overwritten. Report folders use `0700`
+and files use `0600` permissions on POSIX systems. Reports may contain private
+repository data; review them before sharing and delete unwanted runs yourself.
+They are not automatically expired like temporary agent recovery files.
+
+An interactive terminal shows an ASCII completion banner, absolute paths, and a
+`file://` report link. Link opening depends on terminal support. Pipes and
+`--format json` or `--format agent` receive only a `qamap.qa.report` v1 receipt:
+`analysis`, `execution`, `noLlmToken`, and `files.report/summary/full`, plus the
+schema. Use `--format text` to force the plain banner. This receipt is separate
+from the existing `qamap.qa` analysis schema; it contains no scenarios or commands.
+
+Tell an agent to **save only and stop after returning the paths**. Read
+`summary.json` only when interpretation is requested, then recover relevant
+details from `report.json` when necessary. Invocation and later interpretation
+still use the host model's tokens; this mode avoids returning the full analysis
+automatically, not all agent token usage. Local paths work only where those files
+are accessible, not automatically in web chat. `analysis: complete` always keeps
+`execution.status: not-run` in this mode and does not imply passing QA.
+
 Scenario routing and draft mapping answer different questions. Routing explains what the changed behavior should prove before merge. **Draft Mapping And Context Gaps** explains why an optional generated artifact may still need a selector, fixture, runner, or repository fact. Those draft gaps do not invalidate the runner-independent QA judgment and are not automatically PR merge requirements.
 
 Human QA output makes that boundary visible in three layers:

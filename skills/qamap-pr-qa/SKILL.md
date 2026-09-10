@@ -7,6 +7,36 @@ description: Local zero-LLM PR QA workflow. Use when an agent is preparing, upda
 
 Use QAMap as a final local QA pass before presenting a pull request for human review.
 
+## Save Only, Without Interpretation
+
+When the user asks to run QAMap and save a report without interpreting it, use
+this mode instead of the review workflow below. Check that the installed
+binary's `qa --help` lists `qa report`; this command is not in 0.4.17.
+If unavailable, report that limitation without falling back to verbose output
+or installing another version automatically.
+
+```sh
+qamap qa report . --base <base> --head HEAD --format agent
+```
+
+Add `--include-working-tree` only when local changes belong in the comparison.
+The command saves a readable report, full evidence, and a bounded summary in
+`~/QAMap-reports/qa-*`. It returns only a `qamap.qa.report` receipt, not the
+`qamap.qa` analysis contract. No generated launcher script or separate terminal
+application is needed.
+
+- Report completion, `execution.status`, and the file paths, then stop.
+- Do not read, print, attach, summarize, or execute anything from those files
+  automatically. Do not poll a synchronous command after it has completed.
+- If the user later requests interpretation, read `files.summary` first.
+  Recover relevant evidence from `files.full` as needed, respecting omitted
+  evidence and the action contract before any proposed execution.
+- Analysis completion is not test completion. This mode always keeps tests
+  `not-run`. The calling agent still uses tokens for invocation and its receipt;
+  reading or interpreting the files later uses additional model context.
+- Paths refer to the machine that ran QAMap. A web chat or another host may not
+  access them; never upload private reports automatically.
+
 ## Workflow
 
 1. Detect the comparison base.

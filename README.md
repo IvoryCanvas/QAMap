@@ -62,6 +62,9 @@ only when you want to execute a selected repository command. Use
 `qamap e2e draft . --dry-run` to preview optional browser, mobile, API, CLI, or
 manual automation.
 
+On the development branch, `qamap qa report` saves reports locally and returns
+only their paths. [Save first, interpret later](docs/commands.md#save-a-report-without-reading-it).
+
 ## See A Real Run
 
 This public fixture changes a subscription renewal flow. QAMap finds the
