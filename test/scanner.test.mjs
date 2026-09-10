@@ -63,6 +63,32 @@ const cliPath = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const execFileAsync = promisify(execFile);
 
+for (const fileCount of [1, 3]) {
+  test(`collectChangedTestContracts preserves all declarations across ${fileCount} changed test files`, () => {
+    const expected = [];
+    const entries = Array.from({ length: fileCount }, (_, fileIndex) => {
+      const file = `tests/contract-${fileIndex}.test.mjs`;
+      const lines = Array.from({ length: 28 }, (_, index) => {
+        const title = `preserves contract ${fileIndex}-${index}`;
+        const line = index * 3 + 1;
+        expected.push({ file, title, line, framework: "javascript", assertion: `assert.equal(actual, ${index})` });
+        return [
+          { line, text: `test("${title}", () => {` },
+          { line: line + 1, text: `  assert.equal(actual, ${index});` },
+          { line: line + 2, text: "});" },
+        ];
+      }).flat();
+      const hunk = { file, startLine: 1, endLine: lines.length, hunkHeader: `@@ -0,0 +1,${lines.length} @@`, lines };
+      return [file, [hunk, structuredClone(hunk)]];
+    });
+
+    const contracts = collectChangedTestContracts(Object.fromEntries(entries));
+    assert.deepEqual(contracts, expected);
+    const reversed = collectChangedTestContracts(Object.fromEntries(entries.toReversed()));
+    assert.deepEqual(reversed, entries.toReversed().flatMap(([file]) => expected.filter((contract) => contract.file === file)));
+  });
+}
+
 test("collectChangedTestContracts preserves non-Latin pytest contracts from diff evidence", () => {
   const contracts = collectChangedTestContracts({
     "catalog/tests/test_visibility.py": [{

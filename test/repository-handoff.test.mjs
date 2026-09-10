@@ -45,7 +45,7 @@ test("mixed maintenance and product edits retain evidence in 4KB and recover the
   await put("src/value.ts", "export function format(value: string) { return value.trim(); }");
   await put("tests/value.test.ts", [
     "import { showItem } from '../src/route';",
-    ...Array.from({ length: 9 }, (_, i) => `test('preserves case ${i}', () => { expect(showItem(' value ')).toBe('value'); });`),
+    ...Array.from({ length: 36 }, (_, i) => `test('preserves case ${i}', () => { expect(showItem(' value ')).toBe('value'); });`),
   ].join("\n"));
   const result = await generateQaDraft(root, { base: "HEAD", head: "HEAD", includeWorkingTree: true });
   const fullReportPath = path.join(root, "not-written-by-formatter.json");
@@ -66,8 +66,15 @@ test("mixed maintenance and product edits retain evidence in 4KB and recover the
   assert.equal(compact.compaction.fullReport, fullReportPath);
   assert.equal(full.currentDelta.files.length, 12);
   assert.deepEqual(full.evidence.currentDelta.files, result.currentDelta.files);
-  assert.equal(full.testContracts.items.length, 9);
+  assert.equal(result.currentDelta.repositoryContracts.length, 36);
+  assert.equal(full.testContracts.declared, 36);
+  assert.equal(full.testContracts.items.length, 36);
   assert.equal(full.testContracts.omittedItemCount, 0);
+  assert.deepEqual(full.evidence.changedTestContracts, result.changedTestContracts);
+  assert.equal(compact.testContracts.declared, 36);
+  assert.equal(compact.testContracts.omittedItemCount, 36 - compact.testContracts.items.length);
+  assert.equal(compact.testContracts.execution, "not-run");
+  assert.ok(compact.testContracts.omittedItemCount > 0);
   assert.deepEqual(full.repositoryIndex, result.repositoryIndex);
   assert.deepEqual(full.repositoryImpact, result.repositoryImpact);
   assert.deepEqual(full.evidence.traces, result.traces);
