@@ -58,7 +58,6 @@ export interface CoverageEvidence {
 
 const maxInventoryFiles = 20000;
 const maxEvidenceFiles = 6;
-const maxChangedTestContracts = 24;
 
 export async function collectTestSuiteInventory(root: string): Promise<TestSuiteInventory> {
   const projectFiles = await collectProjectFiles(root, maxInventoryFiles);
@@ -136,7 +135,7 @@ export function collectChangedTestContracts(evidence: AddedDiffEvidence): Change
     }
     seen.add(key);
     return true;
-  }).slice(0, maxChangedTestContracts);
+  });
 }
 
 function changedAssertionSummary(
