@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- Changed test contracts stay within the PR comparison, excluding merged target-branch tests and restored baseline declarations. Recent-file priority uses current head locations instead of stale commit coordinates.
 - Analysis-rule scenarios and risk explanations require direct changed-line evidence; file-level analyzer context no longer turns read instrumentation into a rule change.
 - Computational calls, comments and string contents no longer become product behavior solely through matching vocabulary; real file and network actions remain visible.
 - Compact handoffs prioritize source/test evidence, preserve the selected action and command location, and recover the original bounded analysis instead of another truncated summary.

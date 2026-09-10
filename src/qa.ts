@@ -353,17 +353,19 @@ async function generateQaDraftWithIndex(rootInput: string, options: QaDraftOptio
     })
     : addedDiffEvidence;
   const currentDelta = await collectCurrentDelta(root, draft, e2eOptions.workspaceRoot);
-  const latestCommitContracts = Object.keys(committedDiffEvidence).length > 0
+  const committedTestContracts = collectChangedTestContracts(committedDiffEvidence);
+  const latestCommitContracts = committedTestContracts.length > 0
     ? await collectLatestCommitContracts(
       root,
       draft.plan.head,
       e2eOptions.workspaceRoot,
+      committedTestContracts,
     )
     : [];
   const changedTestContracts = uniqueChangedTestContracts([
     ...(currentDelta?.repositoryContracts ?? []),
     ...latestCommitContracts,
-    ...collectChangedTestContracts(committedDiffEvidence),
+    ...committedTestContracts,
   ]);
   const runtimePrerequisiteTestGaps = await collectRuntimePrerequisiteTestGaps(
     root,
@@ -685,19 +687,22 @@ async function collectLatestCommitContracts(
   root: string,
   head: string,
   workspaceRoot: string | undefined,
+  committedContracts: ChangedTestContract[],
 ): Promise<ChangedTestContract[]> {
   const evidence = await collectAddedDiffEvidence(root, {
     base: `${head}^`,
     head,
     workspaceRoot,
   });
-  return collectChangedTestContracts(evidence);
+  const latestKeys = new Set(collectChangedTestContracts(evidence).map(changedTestContractKey));
+  // Recency may reorder PR evidence, but must not introduce target-branch contracts.
+  return committedContracts.filter((contract) => latestKeys.has(changedTestContractKey(contract)));
 }
 
 function uniqueChangedTestContracts(contracts: ChangedTestContract[]): ChangedTestContract[] {
   const seen = new Set<string>();
   return contracts.filter((contract) => {
-    const key = `${contract.file}:${contract.line}:${contract.title}`;
+    const key = changedTestContractKey(contract);
     if (seen.has(key)) {
       return false;
     }

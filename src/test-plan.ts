@@ -1423,13 +1423,28 @@ async function mergePriorityDiffEvidence(
     if (!priorityCommit) {
       return;
     }
+    const priorityFiles = await collectChangedFiles(gitRoot, {
+      base: `${priorityCommit}^`, head: priorityCommit,
+    });
+    const priorityPaths = new Set(priorityFiles.flatMap((file) => [file.path, file.previousPath]));
+    const files = (await collectChangedFiles(gitRoot, options))
+      .filter((file) => priorityPaths.has(file.path) || (file.previousPath && priorityPaths.has(file.previousPath)))
+      .filter((file) => !relativeRoot || stripScopedPath(file.path, relativeRoot, `${relativeRoot}/`))
+      .slice(0, maxAddedTextFiles)
+      .flatMap((file) => file.previousPath ? [file.previousPath, file.path] : [file.path]);
+    if (files.length === 0) {
+      return;
+    }
+    // Prioritize recent files using the current comparison's hunks and coordinates.
     const { stdout } = await git(gitRoot, [
+      "--literal-pathspecs",
       "diff",
       "--no-color",
       "--find-renames",
       "--unified=0",
-      `${priorityCommit}^`,
-      priorityCommit,
+      `${options.base}...${options.head}`,
+      "--",
+      ...files,
     ]);
     mergeAddedDiffEvidence(byFile, stdout, relativeRoot);
   } catch {

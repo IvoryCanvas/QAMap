@@ -39,6 +39,12 @@ npx --yes @ivorycanvas/qamap@latest qa --format agent
 `route.additionalCommands`에 따로 들어갑니다. 이 명령들은 자동으로
 실행되지 않으며 각각 별도의 승인과 실행 결과가 필요합니다.
 
+`testContracts`는 지정한 PR 비교 범위에서 추가되거나 바뀐 테스트 선언입니다.
+기준 브랜치를 병합하면서 들어온 테스트나 원래 내용으로 되돌린 선언은
+이번 PR의 새 계약으로 세지 않습니다. 최신 커밋은 범위 안의 테스트를 먼저
+보여주는 데만 사용하고, 위치는 현재 head를 기준으로 표시합니다.
+`--include-working-tree`로 요청한 미커밋 변경은 `currentDelta`에서 구분합니다.
+
 ## 결과를 읽지 않고 파일로만 저장하기
 
 **개발 중인 기능이며 0.4.17에는 없습니다.** 로컬 빌드의 `qamap qa --help`에
