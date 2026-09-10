@@ -47,7 +47,11 @@ files or syntax that were never analyzed. The compact result must not override
 contradictory code, an explicit specification or observed execution.
 
 Changed test declarations are deduplicated without a count cap at collection
-time. The full report keeps every detected contract; the compact line still
+time. Committed contracts come from the selected base/head comparison; merged
+target-branch tests and declarations restored to their baseline are not new PR
+contracts. Recent-commit priority only reorders contracts in that comparison,
+using current head locations. `currentDelta` separately preserves requested
+working-tree changes. The full report keeps every detected contract; the compact line still
 limits displayed items and reports the remainder in `omittedItemCount`.
 `declared` counts supported declarations found in the analyzed diff, not all
 behaviors that need testing or tests that have passed.
