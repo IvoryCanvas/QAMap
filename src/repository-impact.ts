@@ -3,37 +3,60 @@ import { isBuiltin } from "node:module";
 import { comparePaths } from "./repository-discovery.js";
 import type { RepositoryEvidenceIndex, RepositoryIndexBlock } from "./repository-index.js";
 
-export interface ModuleResolution { candidates: string[]; reason?: string }
+export interface ModuleResolution {
+  candidates: string[];
+  reason?: string;
+  compiler?: string;
+  excluded?: Array<{ path: string; reason: string }>;
+}
 export interface ImpactStep {
   file: string;
   line: number;
   symbol: string;
-  relation: "changed-declaration" | "reference" | "export" | "import" | "reexport" | "test-reference" | "registration-candidate";
+  relation: "changed-declaration" | "reference" | "export" | "import" | "reexport" | "test-reference" | "registration-candidate" | "compiler-mapping";
 }
 export interface RepositoryImpact {
   status: "draft";
   execution: "not-run";
   paths: Array<{ changedFile: string; changedSymbol: string; endpoint: "test-reference" | "registration-candidate"; evidence: ImpactStep[] }>;
-  boundaries: Array<{ file: string; line?: number; symbol?: string; module?: string; reason: string }>;
+  boundaries: Array<{ file: string; line?: number; symbol?: string; module?: string; target?: string; reason: string }>;
   visitedStates: number;
   limits: { states: number; paths: number; pathSteps: number };
   omittedPaths: number;
 }
 
-export function createRepositoryModuleResolver(blocks: RepositoryIndexBlock[]): (file: string, module: string) => ModuleResolution {
+export function createRepositoryModuleResolver(
+  blocks: RepositoryIndexBlock[], skipped: RepositoryEvidenceIndex["coverage"]["skipped"] = [],
+): (file: string, module: string) => ModuleResolution {
   const files = new Set(blocks.filter((block) => block.kind === "source" || block.kind === "test").map((block) => block.file));
   const packages = blocks.filter((block) => path.posix.basename(block.file) === "package.json");
   const configs = blocks.filter((block) => /(?:^|\/)[jt]sconfig\.json$/.test(block.file));
-  const probe = (candidate: string): string[] => {
+  const probePaths = (candidate: string): string[] => {
     const normalized = path.posix.normalize(candidate);
     if (normalized.startsWith("../") || path.posix.isAbsolute(normalized)) return [];
-    if (files.has(normalized)) return [normalized];
     const extension = path.posix.extname(normalized);
     const substitutions: Record<string, string[]> = { ".js": [".ts", ".tsx"], ".jsx": [".tsx"], ".mjs": [".mts"], ".cjs": [".cts"] };
-    if (extension) return (substitutions[extension] ?? []).map((suffix) => normalized.slice(0, -extension.length) + suffix).filter((file) => files.has(file));
+    if (extension) return [normalized, ...(substitutions[extension] ?? []).map((suffix) => normalized.slice(0, -extension.length) + suffix)];
     const base = normalized;
-    return [...new Set([base, ...[".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"].flatMap((extension) => [`${base}${extension}`, `${base}/index${extension}`])])]
-      .filter((file) => files.has(file));
+    return [...new Set([base, ...[".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"].flatMap((extension) => [`${base}${extension}`, `${base}/index${extension}`])])];
+  };
+  const probe = (candidate: string): string[] => files.has(path.posix.normalize(candidate))
+    ? [path.posix.normalize(candidate)] : probePaths(candidate).filter((file) => files.has(file));
+  const skippedByPath = new Map<string, typeof skipped>();
+  for (const gap of skipped) skippedByPath.set(gap.path, [...(skippedByPath.get(gap.path) ?? []), gap]);
+  const exclusions = (targets: string[]): Array<{ path: string; reason: string }> => {
+    const matches = new Map<string, typeof skipped[number]>();
+    for (const target of targets) {
+      const parts = target.split("/");
+      for (let end = 1; end <= parts.length; end++) for (const gap of skippedByPath.get(parts.slice(0, end).join("/")) ?? []) {
+        matches.set(`${gap.path}:${gap.reason}`, gap);
+      }
+    }
+    return [...matches.values()].sort((a, b) => comparePaths(a.path, b.path) || comparePaths(a.reason, b.reason));
+  };
+  const withExclusions = (resolution: ModuleResolution, targets: string[]): ModuleResolution => {
+    const excluded = exclusions(targets.flatMap((target) => files.has(path.posix.normalize(target)) ? [path.posix.normalize(target)] : probePaths(target)));
+    return excluded.length ? { ...resolution, reason: resolution.candidates.length > 1 ? resolution.reason : "index-excluded-module", excluded } : resolution;
   };
   const matchMapping = (specifier: string, target: string, module: string): string | undefined => {
     if (!specifier.includes("*")) return module === specifier ? target : undefined;
@@ -41,13 +64,34 @@ export function createRepositoryModuleResolver(blocks: RepositoryIndexBlock[]): 
     if (extra !== undefined || !module.startsWith(prefix) || !module.endsWith(suffix) || module.length < prefix.length + suffix.length) return undefined;
     return target.replace("*", module.slice(prefix.length, suffix ? -suffix.length : undefined));
   };
+  const outputMappings = blocks.flatMap((config) => (config.outputs ?? []).map((mapping) => ({ config, mapping })));
+  const compiled = (output: string): ModuleResolution | undefined => {
+    const mappings = outputMappings.flatMap(({ config, mapping }) => {
+      const target = matchMapping(mapping.specifier, mapping.target, output);
+      return target === undefined ? [] : [{ config, target }];
+    });
+    if (!mappings.length) return undefined;
+    const candidates = [...new Set(mappings.flatMap(({ target }) => probe(target)))].filter((file) => !/\.d\.[cm]?ts$/.test(file)).sort(comparePaths);
+    const configurations = [...new Set(mappings.map(({ config }) => config.file))];
+    const unsupported = mappings.some(({ config }) => config.gaps.some((gap) =>
+      gap.kind === "unsupported-compiler-output" || gap.kind === "parse-error" || gap.kind === "extended-compiler-config"));
+    const reason = configurations.length > 1 ? "ambiguous-compiler-output" : unsupported ? "unsupported-compiler-output"
+      : candidates.length > 1 ? "ambiguous-compiled-source" : !candidates.length ? "unindexed-compiled-source" : undefined;
+    const resolution = { candidates, compiler: configurations[0], ...(reason ? { reason } : {}) };
+    return unsupported || configurations.length > 1 ? resolution : withExclusions(resolution, mappings.map(({ target }) => target));
+  };
   return (file, module) => {
     // Runtime internals are outside the repository graph, not missing local source.
     if (module.startsWith("node:")) return { candidates: [],
       reason: isBuiltin(module) ? "node-builtin-outside-repository" : "unresolved-node-module" };
     if (module.startsWith(".")) {
-      const candidates = probe(path.posix.join(path.posix.dirname(file), module));
-      return { candidates, ...(candidates.length !== 1 ? { reason: candidates.length ? "ambiguous-module" : "unresolved-relative-module" } : {}) };
+      const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), module));
+      const candidates = probe(target);
+      if (!candidates.length && !target.startsWith("../") && !path.posix.isAbsolute(target)) {
+        const mapping = compiled(target);
+        if (mapping) return mapping;
+      }
+      return withExclusions({ candidates, ...(candidates.length !== 1 ? { reason: candidates.length ? "ambiguous-module" : "unresolved-relative-module" } : {}) }, [target]);
     }
     const scopedConfigs = configs.filter((config) => path.posix.dirname(config.file) === "." || file.startsWith(`${path.posix.dirname(config.file)}/`))
       .sort((a, b) => b.file.split("/").length - a.file.split("/").length || comparePaths(a.file, b.file));
@@ -66,7 +110,9 @@ export function createRepositoryModuleResolver(blocks: RepositoryIndexBlock[]): 
         const specificity = Math.max(...mappings.map((mapping) => mapping.specifier.includes("*") ? mapping.specifier.indexOf("*") : 10000));
         const candidates = [...new Set(mappings.filter((mapping) => (mapping.specifier.includes("*") ? mapping.specifier.indexOf("*") : 10000) === specificity)
           .flatMap((mapping) => probe(matchMapping(mapping.specifier, mapping.target, module)!)))].sort(comparePaths);
-        return { candidates, ...(candidates.length !== 1 ? { reason: candidates.length ? "ambiguous-alias" : "unresolved-alias" } : {}) };
+        return withExclusions({ candidates, ...(candidates.length !== 1 ? { reason: candidates.length ? "ambiguous-alias" : "unresolved-alias" } : {}) },
+          mappings.filter((mapping) => (mapping.specifier.includes("*") ? mapping.specifier.indexOf("*") : 10000) === specificity)
+            .map((mapping) => matchMapping(mapping.specifier, mapping.target, module)!));
       }
       if (nearest.gaps.some((gap) => gap.kind === "extended-compiler-config")) return { candidates: [], reason: "extended-compiler-config" };
     }
@@ -79,7 +125,8 @@ export function createRepositoryModuleResolver(blocks: RepositoryIndexBlock[]): 
       && block.gaps.some((gap) => gap.kind === "conditional-package-exports" || gap.kind === "unsupported-package-export"));
     const reason = candidates.length > 1 ? "ambiguous-package-export" : conditional ? "conditional-package-export"
       : targets.some((entries) => !entries.length) ? "unindexed-package-export" : !candidates.length ? "external-or-unresolved-package" : undefined;
-    return { candidates, ...(reason ? { reason } : {}) };
+    const resolution = { candidates, ...(reason ? { reason } : {}) };
+    return conditional ? resolution : withExclusions(resolution, selected.map((mapping) => matchMapping(mapping.specifier, mapping.target, module)!));
   };
 }
 
@@ -90,27 +137,37 @@ export function traceRepositoryImpact(
   const limits = { states: bounded(options.maxStates, 4000, 20000), paths: bounded(options.maxPaths, 128, 1024), pathSteps: bounded(options.maxPathSteps, 64, 256) };
   const result: RepositoryImpact = { status: "draft", execution: "not-run", paths: [], boundaries: [], visitedStates: 0, limits, omittedPaths: 0 };
   const blocks = new Map(index.blocks.map((block) => [block.file, block]));
-  const resolve = createRepositoryModuleResolver(index.blocks);
-  const incoming = new Map<string, Array<{ block: RepositoryIndexBlock; local: string; imported: string; line: number; reexport: boolean }>>();
-  const unresolved = new Map<string, Array<{ line: number; module: string; reason: string }>>();
-  const blockedIncoming = new Map<string, Array<{ file: string; line: number; symbol: string; module: string; reason: string }>>();
+  const resolve = createRepositoryModuleResolver(index.blocks, index.coverage.skipped);
+  const incoming = new Map<string, Array<{ block: RepositoryIndexBlock; local: string; imported: string; line: number; reexport: boolean; compiler?: string }>>();
+  const unresolved = new Map<string, Array<{ line: number; module: string; reason: string; target?: string }>>();
+  const blockedIncoming = new Map<string, Array<{ file: string; line: number; symbol: string; module: string; target?: string; reason: string }>>();
   for (const block of index.blocks) for (const binding of [...block.imports.map((entry) => ({ ...entry, reexport: false })),
     ...block.exports.filter((entry) => entry.module).map((entry) => ({ module: entry.module!, imported: entry.local, local: entry.exported, line: entry.line, reexport: true }))]) {
     const resolution = resolve(block.file, binding.module);
     if (resolution.reason || resolution.candidates.length !== 1) {
       const gaps = unresolved.get(block.file) ?? [];
       gaps.push({ line: binding.line, module: binding.module, reason: resolution.reason ?? "unresolved-module" });
+      for (const excluded of resolution.excluded ?? []) gaps.push({ line: binding.line, module: binding.module,
+        target: excluded.path, reason: `index-excluded-${excluded.reason}` });
       unresolved.set(block.file, gaps);
       for (const candidate of resolution.candidates) {
         const consumers = blockedIncoming.get(candidate) ?? [];
         consumers.push({ file: block.file, line: binding.line, symbol: binding.imported, module: binding.module, reason: resolution.reason ?? "unresolved-module" });
+        for (const excluded of resolution.excluded ?? []) consumers.push({ file: block.file, line: binding.line,
+          symbol: binding.imported, module: binding.module, target: excluded.path, reason: `index-excluded-${excluded.reason}` });
         blockedIncoming.set(candidate, consumers);
       }
       continue;
     }
     const target = resolution.candidates[0];
+    if (resolution.compiler) {
+      const gaps = unresolved.get(block.file) ?? [];
+      gaps.push({ line: binding.line, module: binding.module, target, reason: "compiled-output-not-verified" });
+      unresolved.set(block.file, gaps);
+    }
     const consumers = incoming.get(target) ?? [];
-    consumers.push({ block, local: binding.local, imported: binding.imported, line: binding.line, reexport: binding.reexport });
+    consumers.push({ block, local: binding.local, imported: binding.imported, line: binding.line, reexport: binding.reexport,
+      ...(resolution.compiler ? { compiler: resolution.compiler } : {}) });
     incoming.set(target, consumers);
   }
   type State = { file: string; symbol: string; exported: boolean; member?: string; origin: { file: string; symbol: string }; evidence: ImpactStep[] };
@@ -207,7 +264,9 @@ export function traceRepositoryImpact(
         const nextSymbol = consumer.reexport && consumer.local === "*" ? state.symbol : consumer.local;
         enqueue({ file: consumer.block.file, symbol: nextSymbol, exported: consumer.reexport,
           ...(!consumer.reexport && consumer.imported === "*" ? { member: state.symbol } : {}), origin: state.origin,
-          evidence: [...state.evidence, { file: consumer.block.file, line: consumer.line, symbol: nextSymbol, relation: consumer.reexport ? "reexport" : "import" }] });
+          evidence: [...state.evidence,
+            ...(consumer.compiler ? [{ file: consumer.compiler, line: 1, symbol: state.symbol, relation: "compiler-mapping" as const }] : []),
+            { file: consumer.block.file, line: consumer.line, symbol: nextSymbol, relation: consumer.reexport ? "reexport" : "import" }] });
       }
       continue;
     }
@@ -233,7 +292,7 @@ export function traceRepositoryImpact(
   }
   result.paths.sort((a, b) => pathRank(b) - pathRank(a));
   result.boundaries.sort((a, b) => comparePaths(a.file, b.file) || (a.line ?? 0) - (b.line ?? 0) || comparePaths(a.reason, b.reason)
-    || comparePaths(a.symbol ?? "", b.symbol ?? "") || comparePaths(a.module ?? "", b.module ?? ""));
+    || comparePaths(a.symbol ?? "", b.symbol ?? "") || comparePaths(a.module ?? "", b.module ?? "") || comparePaths(a.target ?? "", b.target ?? ""));
   return result;
 }
 

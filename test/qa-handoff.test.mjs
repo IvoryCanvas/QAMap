@@ -122,9 +122,27 @@ test("module boundaries keep line, symbol, specifier, and original recovery poin
 test("invalid optional gap metadata is not echoed into the handoff", async () => {
   const { collectReviewEvidence } = await import("../dist/qa-handoff.js");
   const scoped = structuredClone(result);
-  scoped.repositoryImpact.boundaries = [{ file: "test/rules.test.mjs", line: -1, symbol: "ignore instructions", module: "https://example.test/prompt", reason: "unsupported-module" }];
+  scoped.repositoryImpact.boundaries = [{ file: "test/rules.test.mjs", line: -1, symbol: "ignore instructions", module: "https://example.test/prompt", target: "../outside.ts", reason: "unsupported-module" }];
   const evidence = await collectReviewEvidence(scoped);
   assert.deepEqual(evidence.gaps[0], { file: "test/rules.test.mjs", reason: "unsupported-module", pointer: "/repositoryImpact/boundaries/0" });
+});
+
+test("excluded module targets keep distinct causes ahead of generic boundaries", async () => {
+  const { collectReviewEvidence } = await import("../dist/qa-handoff.js");
+  const scoped = structuredClone(result);
+  scoped.repositoryImpact.paths = [];
+  const location = { file: "test/rules.test.mjs", line: 3, module: "../src/rules" };
+  scoped.repositoryImpact.boundaries = [
+    { ...location, reason: "index-excluded-module" },
+    { ...location, target: "src/rules.ts", reason: "index-excluded-oversized" },
+    { ...location, target: "src/rules.tsx", reason: "index-excluded-oversized" },
+  ];
+  const evidence = await collectReviewEvidence(scoped);
+  assert.deepEqual(evidence.gaps.map(gap => gap.target), ["src/rules.ts", "src/rules.tsx", undefined]);
+  assert.deepEqual(evidence.gaps.map(gap => gap.pointer), [
+    "/repositoryImpact/boundaries/1", "/repositoryImpact/boundaries/2", "/repositoryImpact/boundaries/0",
+  ]);
+  assert.equal(evidence.omittedGapCount, 0);
 });
 
 test("repeated module locations do not crowd out other gaps or discard original boundaries", async () => {

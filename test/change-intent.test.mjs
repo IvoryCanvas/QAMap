@@ -5108,6 +5108,43 @@ test("status vocabulary and background scheduling names do not fabricate lifecyc
   assert.equal(titles.includes("Scheduling, calendar, and duplicate boundary"), false);
 });
 
+test("internal timer scheduling does not imply calendar QA while dated scheduling still does", async (t) => {
+  const root = await makeRepo(t);
+  await write(root, "src/polling.ts", "export const polling = false;\n");
+  await write(root, "src/appointment.ts", "export const appointment = false;\n");
+  commit(root, "chore: polling and appointment baseline");
+  branch(root, "feat/bounded-polling");
+  await write(root, "src/polling.ts", [
+    "export function poll(sample, intervalMs) {",
+    "  let closed = false;",
+    "  let timer;",
+    "  function schedule() {",
+    "    timer = setTimeout(() => {",
+    "      sample().finally(() => { if (!closed) schedule(); });",
+    "    }, intervalMs);",
+    "  }",
+    "  schedule();",
+    "  return () => { closed = true; clearTimeout(timer); };",
+    "}",
+  ].join("\n"));
+  commit(root, "feat: repeat a bounded sample until closed");
+  const timer = await analyze(root, ["src/polling.ts"]);
+  assert.ok(timer.intents.length > 0);
+  assert.equal(timer.intents.flatMap(intent => intent.scenarios).some(scenario => scenario.title === "Scheduling, calendar, and duplicate boundary"), false);
+  assert.equal(timer.intents.flatMap(intent => intent.evidence).some(item => /calendar or scheduling evidence for schedule\./.test(item.value)), false);
+  await write(root, "src/appointment.ts", [
+    "export function reserve(appointment) {",
+    "  return bookings.schedule(appointment.scheduledAt, appointment.timezone);",
+    "}",
+  ].join("\n"));
+  commit(root, "feat: reserve an appointment at its selected date");
+  const dated = await analyze(root, ["src/polling.ts", "src/appointment.ts"]);
+  const calendars = dated.intents.flatMap(intent => intent.scenarios).filter(scenario => scenario.title === "Scheduling, calendar, and duplicate boundary");
+  assert.ok(calendars.length > 0);
+  assert.ok(calendars.some(scenario => scenario.evidence.some(item => item.file === "src/appointment.ts" && item.startLine)));
+  assert.ok(calendars.every(scenario => !scenario.evidence.some(item => item.file === "src/polling.ts")));
+});
+
 test("a cleanup tip commit does not displace the substantive change intent", async (t) => {
   const root = await makeRepo(t);
   const dialogFile = "src/reports/resetReportPreferences.ts";

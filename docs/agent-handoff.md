@@ -56,6 +56,14 @@ missing connection.
 Repeated module diagnostics at the same location share one representative in
 the handoff. Other symbol contexts remain in the full report and count as omitted.
 
+When explicit compiler settings connect a test's built JavaScript import to its
+TypeScript source, the full path includes a `compiler-mapping` step. This is not
+proof that the build is current: `compiled-output-not-verified` preserves that
+boundary. Unsupported or conflicting settings stop the connection. See the
+[supported mapping scope](agent-format.md#repository-first-handoff-development).
+Files excluded from the index retain their actual cause and `target`, such as
+`index-excluded-oversized`. Distinct excluded targets are not deduplicated together.
+
 The local analysis command does not upload source code. When a cloud-backed
 agent invokes it, the returned excerpts can enter that model's context. Follow
 your host and repository data policies; local analysis is not a promise that

@@ -7,7 +7,7 @@ import { isInstructionLikeRepositoryText } from "./qa-contract.js";
 import { safeModule, safeSymbol } from "./source-structure.js";
 
 const limits = { paths: 2, excerptLines: 7, excerptBytes: 1200, evidenceBytes: 3072, responseBytes: 8192 } as const;
-type EvidenceGap = { file: string; reason: string; line?: number; symbol?: string; module?: string; pointer?: string };
+type EvidenceGap = { file: string; reason: string; line?: number; symbol?: string; module?: string; target?: string; pointer?: string };
 interface SourceExcerpt {
   file: string;
   line: number;
@@ -48,12 +48,14 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
   const read = createRepositoryTextReader(result.analysisScope.workspaceRoot, skipped, 300_000);
   const texts = new Map<string, string | undefined>();
   const moduleLocations = new Set<string>();
+  const gapRank = (reason: string): number => reason === "node-builtin-outside-repository" ? 3
+    : reason === "compiled-output-not-verified" ? 2 : reason === "index-excluded-module" ? 1 : 0;
   const gaps: EvidenceGap[] = (result.repositoryImpact?.boundaries ?? []).map((gap, index) => ({ gap, index }))
-    .sort((a, b) => Number(a.gap.reason === "node-builtin-outside-repository") - Number(b.gap.reason === "node-builtin-outside-repository")
+    .sort((a, b) => gapRank(a.gap.reason) - gapRank(b.gap.reason)
       || Number(blocks.get(b.gap.file)?.kind === "source") - Number(blocks.get(a.gap.file)?.kind === "source"))
     .filter(({ gap }) => {
       if (!gap.module || !Number.isSafeInteger(gap.line) || gap.line! < 1) return true;
-      const key = JSON.stringify([gap.file, gap.line, gap.module, gap.reason]);
+      const key = JSON.stringify([gap.file, gap.line, gap.module, gap.reason, gap.target]);
       if (moduleLocations.has(key)) return false;
       moduleLocations.add(key);
       return true;
@@ -63,6 +65,7 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
       ...(Number.isSafeInteger(gap.line) && gap.line! > 0 ? { line: gap.line } : {}),
       ...(gap.symbol && safeSymbol(gap.symbol) ? { symbol: gap.symbol } : {}),
       ...(gap.module && safeModule(gap.module) ? { module: gap.module } : {}),
+      ...(gap.target && safeFile(gap.target) ? { target: gap.target } : {}),
       pointer: `/repositoryImpact/boundaries/${index}` }));
   const evidence: ReviewEvidence = {
     pathBase: "workspace-root", basis: "indexed-working-tree", authority: "inferred-draft", complete: false,

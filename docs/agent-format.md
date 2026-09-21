@@ -33,6 +33,24 @@ intermediate import, export and reference. `unresolved` prioritizes a boundary o
 that path. `boundaryCount`, `pathCount`, and optional `omittedPathCount` disclose
 the bounded result and any paths that exceeded traversal limits.
 
+Compiled test imports can connect to TypeScript source when an indexed compiler
+configuration explicitly declares `rootDir` and `outDir`. A `compiler-mapping`
+step cites that configuration. The `compiled-output-not-verified` boundary means
+the mapping is static: QAMap has not built the project, checked emitted-file
+freshness, or run the test.
+
+This mapping currently supports whole source-tree includes, optionally limited
+to `.ts`, `.tsx`, `.mts`, or `.cts`. Inherited settings, project references,
+file lists, custom exclusions, partial-tree includes, JavaScript inputs, bundled
+output, and disabled JavaScript emission remain unsupported boundaries.
+Overlapping output configurations or multiple source candidates are not resolved
+by guessing. Other module-resolution paths retain their existing behavior.
+
+An `index-excluded-module` boundary is accompanied by specific causes such as
+`index-excluded-oversized`, with a `target` path. These refer to recorded index
+exclusions, not missing files. Compact handoffs prioritize those causes; their
+pointers lead to the original boundaries in the full report.
+
 The handoff reserves space for the full selected `action`, its exact `route`, a
 changed test contract and repository evidence before optional summary detail.
 Current-delta source and test paths precede documentation. If a pathological

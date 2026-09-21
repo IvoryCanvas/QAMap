@@ -2394,7 +2394,7 @@ function buildIntentQaScenarios(
   const calendarEvidence = scenarioEvidenceFor(
     productLifecycle,
     productEvidence,
-    /schedul|reminder|tomorrow|timezone|recurr|cron|deadline|dueat|duedate|starts?at|ends?at/i,
+    /scheduled?(?:at|time|date)|reminder|tomorrow|timezone|recurr|cron|deadline|dueat|duedate|starts?at|ends?at/i,
   );
   if (calendarEvidence.length > 0) {
     scenarios.push(makeScenario(intentId, "calendar-boundary", "boundary", "critical", "Scheduling, calendar, and duplicate boundary", [
@@ -3510,7 +3510,7 @@ function collectDiffRiskEvidence(
             continue;
           }
           const calendarMatch = sourceOutsideStringLiterals(line.text).match(
-            /(timezone|scheduledAt|\bschedule\w*\b|\breminder\w*\b|\btomorrow\b|\brecurr\w*\b|\bcron\w*\b|\bdeadline\w*\b|\bdueAt\b|\bdueDate\b|\bstarts?At\b|\bends?At\b)/i,
+            /(timezone|\bscheduled?(?:At|Time|Date)\b|\breminder\w*\b|\btomorrow\b|\brecurr\w*\b|\bcron\w*\b|\bdeadline\w*\b|\bdueAt\b|\bdueDate\b|\bstarts?At\b|\bends?At\b)/i,
           );
           const recordsCurrentTimestamp = /^timezone$/i.test(calendarMatch?.[1] ?? "") &&
             /\btimezone\.now\s*\(/i.test(line.text);

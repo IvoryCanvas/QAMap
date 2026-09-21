@@ -62,6 +62,100 @@ test("namespace members do not pull an unrelated export into a test", async (t) 
   assert.equal(reached[0].evidence.at(-1).line, 2);
 });
 
+test("explicit compiler output mappings connect compiled test imports without claiming a fresh build", async (t) => {
+  const { root, put, cacheDirectory } = await fixture(t);
+  await put("packages/labels/tsconfig.json", { compilerOptions: { rootDir: "src", outDir: "dist" }, include: ["src/**/*.ts"] });
+  await put("packages/labels/tests/compiled.test.mjs", "import { format } from '../dist/format.js';\ntest('label', () => expect(format(' x ')).toBe('x'));\n");
+  const cold = await buildRepositoryEvidenceIndex(root, { cacheDirectory });
+  const warm = await buildRepositoryEvidenceIndex(root, { cacheDirectory });
+  assert.equal(warm.reuse.rebuiltFiles, 0);
+  const changes = [{ file: "packages/labels/src/format.ts", lines: [1] }];
+  const impact = traceRepositoryImpact(cold, changes);
+  assert.deepEqual(traceRepositoryImpact(warm, changes), impact);
+  const reached = impact.paths.find(entry => entry.evidence.at(-1).file.endsWith("compiled.test.mjs"));
+  assert.ok(reached);
+  assert.ok(reached.evidence.some(step => step.file === "packages/labels/tsconfig.json" && step.relation === "compiler-mapping"));
+  assert.ok(impact.boundaries.some(gap => gap.module === "../dist/format.js" && gap.reason === "compiled-output-not-verified"));
+  assert.equal(impact.execution, "not-run");
+  await put("packages/labels/src/format.ts", "export function format(value: string) { return value.toUpperCase(); }\n");
+  const changed = await buildRepositoryEvidenceIndex(root, { cacheDirectory });
+  assert.ok(changed.reuse.affectedFiles.includes("packages/labels/tests/compiled.test.mjs"));
+});
+
+test("compiled mappings preserve extension compatibility and stop on overlapping build configurations", async (t) => {
+  const { root, put } = await fixture(t);
+  await put("tsconfig.json", { compilerOptions: { rootDir: "src", outDir: "dist", jsx: "preserve" } });
+  for (const file of ["src/item.ts", "src/view.tsx", "src/esm.mts", "src/common.cts", "src/types.d.ts"]) await put(file, "export const value = 1;\n");
+  const index = await buildRepositoryEvidenceIndex(root, { cacheDirectory: false });
+  const resolve = createRepositoryModuleResolver(index.blocks);
+  for (const [output, source] of [["item.js", "item.ts"], ["view.jsx", "view.tsx"], ["esm.mjs", "esm.mts"], ["common.cjs", "common.cts"]]) {
+    assert.deepEqual(resolve("test/check.mjs", `../dist/${output}`), { candidates: [`src/${source}`], compiler: "tsconfig.json" });
+  }
+  assert.equal(resolve("test/check.mjs", "../dist/common.js").candidates.length, 0);
+  assert.equal(resolve("test/check.mjs", "../dist/types.d.js").candidates.length, 0);
+  await put("tsconfig.build.json", { compilerOptions: { rootDir: "other", outDir: "dist" } });
+  await put("other/item.ts", "export const value = 2;");
+  const overlap = await buildRepositoryEvidenceIndex(root, { cacheDirectory: false });
+  assert.equal(createRepositoryModuleResolver(overlap.blocks)("test/check.mjs", "../dist/item.js").reason, "ambiguous-compiler-output");
+});
+
+test("unsupported compiler settings never manufacture a compiled test path", async (t) => {
+  const { root, put, cacheDirectory } = await fixture(t);
+  await put("src/value.ts", "export const value = 1;\n");
+  for (const extra of [
+    { extends: "./base.json" }, { references: [{ path: "./other" }] }, { files: ["src/value.ts"] },
+    { include: ["src/selected/**/*.ts"] }, { exclude: ["src/value.ts"] },
+    { compilerOptions: { noEmit: true } }, { compilerOptions: { emitDeclarationOnly: true } },
+    { compilerOptions: { outFile: "bundle.js" } }, { compilerOptions: { rootDirs: ["src", "generated"] } },
+    { compilerOptions: { allowJs: true } },
+  ]) {
+    await put("tsconfig.json", { ...extra, compilerOptions: { rootDir: "src", outDir: "dist", ...extra.compilerOptions } });
+    const index = await buildRepositoryEvidenceIndex(root, { cacheDirectory });
+    assert.equal(createRepositoryModuleResolver(index.blocks)("test/check.mjs", "../dist/value.js").reason, "unsupported-compiler-output", JSON.stringify(extra));
+  }
+  await put("tsconfig.json", { compilerOptions: { outDir: "dist" } });
+  const implicit = await buildRepositoryEvidenceIndex(root, { cacheDirectory });
+  assert.equal(createRepositoryModuleResolver(implicit.blocks)("test/check.mjs", "../dist/value.js").reason, "unresolved-relative-module");
+});
+
+test("import boundaries retain actual exclusion causes for direct and compiled source targets", async (t) => {
+  const { root, put } = await fixture(t);
+  await put("tsconfig.json", { compilerOptions: { rootDir: "src", outDir: "dist" }, include: ["src/**/*.ts"] });
+  await put("src/large.ts", `export const large = '${"x".repeat(300_000)}';`);
+  await put("src/value.generated.ts", "export const value = 1;");
+  await put("test/limits.test.mjs", "import { large } from '../dist/large.js';\nimport { value } from '../src/value.generated.ts';\nexport function check() { return large + value; }");
+  const index = await buildRepositoryEvidenceIndex(root, { cacheDirectory: false });
+  const impact = traceRepositoryImpact(index, [{ file: "test/limits.test.mjs", lines: [3] }]);
+  for (const [module, target, reason] of [
+    ["../dist/large.js", "src/large.ts", "index-excluded-oversized"],
+    ["../src/value.generated.ts", "src/value.generated.ts", "index-excluded-generated"],
+  ]) assert.ok(impact.boundaries.some(gap => gap.module === module && gap.target === target && gap.reason === reason), reason);
+  const resolve = createRepositoryModuleResolver(index.blocks, index.coverage.skipped);
+  assert.equal(resolve("test/limits.test.mjs", "../src/missing").reason, "unresolved-relative-module");
+  assert.equal(impact.execution, "not-run");
+});
+
+test("excluded alternatives stop unique-source claims and preserve alias and package diagnostics", async (t) => {
+  const { root, put } = await fixture(t);
+  await put("src/item.ts", "export const item = 1;");
+  await put("src/item.tsx", "x".repeat(300_001));
+  await put("tsconfig.json", { compilerOptions: { paths: { "@item": ["src/item"] } } });
+  await put("package.json", { name: "@sample/item", exports: "./src/item.tsx" });
+  await put("test/ambiguous.test.mjs", "import { item } from '../src/item';\ntest('item', () => expect(item).toBe(1));");
+  const index = await buildRepositoryEvidenceIndex(root, { cacheDirectory: false });
+  const resolve = createRepositoryModuleResolver(index.blocks, index.coverage.skipped);
+  for (const module of ["../src/item", "@item", "@sample/item"]) {
+    const result = resolve("test/check.mjs", module);
+    assert.equal(result.reason, "index-excluded-module");
+    assert.deepEqual(result.excluded, [{ path: "src/item.tsx", reason: "oversized" }]);
+  }
+  const synthetic = createRepositoryModuleResolver(index.blocks, [{ path: "src/nested", reason: "nested-repository" }]);
+  assert.equal(synthetic("test/check.mjs", "../src/nested/item").excluded[0].reason, "nested-repository");
+  const impact = traceRepositoryImpact(index, [{ file: "src/item.ts", lines: [1] }]);
+  assert.equal(impact.paths.length, 0);
+  assert.ok(impact.boundaries.some(gap => gap.file === "test/ambiguous.test.mjs" && gap.target === "src/item.tsx" && gap.reason === "index-excluded-oversized"));
+});
+
 test("Node runtime boundaries retain module locations across cold and warm indexes", async (t) => {
   const { root, put, cacheDirectory } = await fixture(t);
   const file = "apps/web/tests/route.test.ts";
