@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { preserveTestExecutable } from "./helpers/executable-path.mjs";
 import {
   analyzeVerificationManifestContext,
   buildDoctorResult,
@@ -2348,6 +2349,7 @@ test("generateQaDraft replaces an unavailable Python wrapper without executing t
   const fakeBin = await mkdtemp(path.join(tmpdir(), "qamap-python-path-"));
   const executionMarker = path.join(fakeBin, "python-was-executed");
   context.after(() => rm(fakeBin, { recursive: true, force: true }));
+  await preserveTestExecutable("git", fakeBin);
   await initGitRepo(root);
   await mkdir(path.join(root, "src"), { recursive: true });
   await mkdir(path.join(root, "tests"), { recursive: true });
@@ -2418,6 +2420,7 @@ test("generateQaDraft blocks an unavailable Python wrapper without framework evi
   const fakeBin = await mkdtemp(path.join(tmpdir(), "qamap-python-blocked-path-"));
   const executionMarker = path.join(fakeBin, "python-was-executed");
   context.after(() => rm(fakeBin, { recursive: true, force: true }));
+  await preserveTestExecutable("git", fakeBin);
   await initGitRepo(root);
   await mkdir(path.join(root, "src"), { recursive: true });
   await mkdir(path.join(root, "tests"), { recursive: true });
@@ -2479,8 +2482,8 @@ test("generateQaDraft falls back from an unavailable compose runtime to declared
   const root = await makeTempRepo();
   const fakeBin = await mkdtemp(path.join(tmpdir(), "qamap-compose-path-"));
   const executionMarker = path.join(fakeBin, "python-was-executed");
-  const gitExecutable = await executablePathForTest("git");
   context.after(() => rm(fakeBin, { recursive: true, force: true }));
+  await preserveTestExecutable("git", fakeBin);
   await initGitRepo(root);
   await mkdir(path.join(root, "src"), { recursive: true });
   await mkdir(path.join(root, "tests"), { recursive: true });
@@ -2544,13 +2547,7 @@ test("generateQaDraft falls back from an unavailable compose runtime to declared
     fakePython,
     `#!/bin/sh\nprintf touched > "${executionMarker}"\nexit 0\n`,
   );
-  const fakeGit = path.join(fakeBin, "git");
-  await writeFile(
-    fakeGit,
-    `#!/bin/sh\nexec ${JSON.stringify(gitExecutable)} "$@"\n`,
-  );
   await chmod(fakePython, 0o755);
-  await chmod(fakeGit, 0o755);
   const previousPath = process.env.PATH;
   process.env.PATH = fakeBin;
   try {
@@ -2569,20 +2566,6 @@ test("generateQaDraft falls back from an unavailable compose runtime to declared
     process.env.PATH = previousPath;
   }
 });
-
-async function executablePathForTest(command) {
-  for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
-    if (!directory) continue;
-    const candidate = path.join(directory, command);
-    try {
-      const candidateStat = await stat(candidate);
-      if (candidateStat.isFile()) return candidate;
-    } catch {
-      // Continue through the current test process PATH.
-    }
-  }
-  throw new Error(`Could not locate ${command} for the isolated PATH fixture.`);
-}
 
 test("generateQaDraft scopes supported JavaScript runners to changed test evidence", async (context) => {
   const cases = [

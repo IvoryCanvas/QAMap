@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { preserveTestExecutable } from "./helpers/executable-path.mjs";
 import {
   formatAgentQaDraft,
   formatMarkdownQaValidation,
@@ -805,6 +806,8 @@ async function makePythonComposeValidationFixture() {
 
 async function makeFakeDockerRuntime(context, probeExitCode) {
   const bin = await mkdtemp(path.join(os.tmpdir(), "qamap-fake-docker-"));
+  context.after(() => rm(bin, { recursive: true, force: true }));
+  await preserveTestExecutable("git", bin);
   const log = path.join(bin, "invocations.log");
   const executable = path.join(bin, "docker");
   await writeFile(
@@ -822,7 +825,6 @@ async function makeFakeDockerRuntime(context, probeExitCode) {
     ].join("\n"),
   );
   await chmod(executable, 0o755);
-  context.after(() => rm(bin, { recursive: true, force: true }));
   return { bin, log };
 }
 

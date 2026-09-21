@@ -47,6 +47,15 @@ production-code contract. Equivalent source/endpoint pairs share one excerpt
 slot; distinct symbols and contract locations remain separate. Omitted paths
 remain in the full report with their original indexes.
 
+For a changed declaration, `line` remains its declaration location. When an
+added diff line lies within that declaration, `changedLine` records the earliest
+such line and centers the excerpt there instead of showing only the function's
+opening. Unchanged endpoints remain anchored at their reference location.
+Deletion-only changes and paths without added-line evidence retain the original
+anchor. A seven-line excerpt can still omit other changes in the same function;
+it is not a complete diff. Invalid anchors produce `invalid-changed-line` and
+fall back to the reference without borrowing another declaration's code.
+
 Module gaps retain the specifier, line, symbol and full-report pointer when
 available. Explicit `node:` builtins recognized by the running Node version are
 marked `node-builtin-outside-repository`, not unresolved local code. Their runtime
@@ -102,11 +111,20 @@ new caller handoff. Version numbers and published plugins have not changed yet.
 
 - Implemented: local one-response delivery, bounded excerpts, recovery pointers,
   save-only compatibility, and consent-aware packaged instructions.
-- Still to verify: real-host skill discovery, consent/refusal behavior and
-  process waiting. Skill text alone cannot enforce every host's behavior.
+- Verified locally: an isolated Codex host discovered the enabled project skill,
+  and a fresh package install preserved the skill and report recovery pointers.
+  This does not verify implicit invocation or the Desktop interface.
+- Still to verify: consent/refusal behavior, process waiting and targeted
+  follow-up reading in a real review. Skill text cannot enforce every host.
 - Still to measure: total invocation, consent, interpretation and further-review
   tokens on isolated matched-quality comparisons, including regressions.
 - Still required: release-wide checks and explicit release approval.
+
+A local caller pilot was excluded after a required Git command failed inside
+the host's login shell and the reviewer worked around it. Its usage was retained,
+but the QAMap comparison arm was not started. No savings conclusion is available
+from that attempt. Prerequisites must pass through the actual host execution
+path, not only an absolute-path subprocess check.
 
 The design aims to reduce duplicated evidence gathering while preserving review
 quality. It does not promise lower model usage, replace independent reasoning,

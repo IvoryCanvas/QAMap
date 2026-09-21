@@ -82,6 +82,63 @@ test("source changes after indexing are disclosed instead of reusing stale excer
   } finally { await fs.writeFile(file, original); }
 });
 
+test("real added diff lines focus long-function excerpts while keeping the original declaration and contract", async () => {
+  const { collectReviewEvidence } = await import("../dist/qa-handoff.js");
+  const isolated = await materializeFixtureRepo({
+    fixtureRoot: fileURLToPath(new URL("./benchmarks/repository-agent-quality/", import.meta.url)),
+    commits: [{ dir: "shared", message: "feat: normalize profile names" }],
+  });
+  try {
+    const filename = "packages/rules/normalize.mjs";
+    const file = path.join(isolated.repositoryRoot, filename);
+    const original = ["export function normalize(value) {", "  const text = value.trim();",
+      ...Array.from({ length: 20 }, () => "  // Existing normalization context."),
+      "  return text;", "}", "export const unrelated = 'unchanged';", ""].join("\n");
+    await fs.writeFile(file, original);
+    await exec("git", ["add", filename], { cwd: isolated.repositoryRoot });
+    await exec("git", ["commit", "-m", "test: preserve long normalization contract"], { cwd: isolated.repositoryRoot });
+    const content = original.replace("return text;", "return text.toLowerCase();");
+    await fs.writeFile(file, content);
+    const changed = await generateQaDraft(isolated.repositoryRoot, { base: "HEAD", head: "HEAD", includeWorkingTree: true });
+    const evidence = await collectReviewEvidence(changed);
+    const pair = evidence.paths.find(entry => entry.source.file === filename);
+    assert.ok(pair);
+    assert.equal(pair.source.line, 1);
+    assert.equal(pair.source.changedLine, 23);
+    assert.equal(pair.source.lines.find(line => line.text.includes("toLowerCase")).line, 23);
+    assert.equal(pair.source.sourceHash, createHash("sha256").update(content).digest("hex"));
+    assert.ok(pair.source.lines.length <= 7);
+    assert.match(JSON.stringify(pair.contract), /HELLO/);
+    assert.equal(changed.repositoryImpact.paths[Number(pair.pointer.split("/").at(-1))].evidence[0].changedLine, 23);
+    assert.ok(Buffer.byteLength(JSON.stringify(evidence)) <= 3072);
+
+    // Deletion-only changes have no head-side added line to use as an anchor.
+    await fs.writeFile(file, original.replace("  const text = value.trim();\n", ""));
+    const deletion = await generateQaDraft(isolated.repositoryRoot, { base: "HEAD", head: "HEAD", includeWorkingTree: true });
+    const fallback = await collectReviewEvidence(deletion);
+    assert.ok(fallback.paths.length > 0);
+    assert.ok(fallback.paths.every(entry => entry.source.changedLine === undefined));
+    assert.equal(fallback.complete, false);
+  } finally { await isolated.cleanup(); }
+});
+
+test("invalid changed-line metadata cannot move an excerpt outside the changed declaration", async () => {
+  const { collectReviewEvidence } = await import("../dist/qa-handoff.js");
+  for (const changedLine of [0, -1, 1.5, NaN, 999999]) {
+    const invalid = structuredClone(result);
+    invalid.repositoryImpact.paths[0].evidence[0].changedLine = changedLine;
+    const evidence = await collectReviewEvidence(invalid);
+    assert.ok(evidence.gaps.some(gap => gap.reason === "invalid-changed-line"));
+    assert.equal(evidence.paths[0].source.changedLine, undefined);
+    assert.match(JSON.stringify(evidence.paths[0].source), /toLowerCase/);
+  }
+  const wrongKind = structuredClone(result);
+  wrongKind.repositoryImpact.paths[0].evidence.at(-1).changedLine = 5;
+  const evidence = await collectReviewEvidence(wrongKind);
+  assert.ok(evidence.gaps.some(gap => gap.reason === "invalid-changed-line"));
+  assert.equal(evidence.paths[0].contract.changedLine, undefined);
+});
+
 test("source-to-test evidence precedes test-internal references and keeps original pointers", async () => {
   const { collectReviewEvidence } = await import("../dist/qa-handoff.js");
   const ranked = structuredClone(result);

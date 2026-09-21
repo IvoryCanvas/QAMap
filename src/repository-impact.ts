@@ -13,6 +13,7 @@ export interface ImpactStep {
   file: string;
   line: number;
   symbol: string;
+  changedLine?: number;
   relation: "changed-declaration" | "reference" | "export" | "import" | "reexport" | "test-reference" | "registration-candidate" | "compiler-mapping";
 }
 export interface RepositoryImpact {
@@ -188,11 +189,16 @@ export function traceRepositoryImpact(
   for (const change of [...changes].sort((a, b) => Number(blocks.get(a.file)?.kind === "test") - Number(blocks.get(b.file)?.kind === "test") || comparePaths(a.file, b.file))) {
     const block = blocks.get(change.file);
     if (!block) { boundary({ file: change.file, reason: "changed-file-not-indexed" }); continue; }
-    const declarations = block.declarations.filter((entry) => !change.lines || change.lines.some((line) => line >= entry.line && line <= entry.endLine));
+    const changedLines = change.lines?.filter(line => Number.isSafeInteger(line) && line > 0).sort((a, b) => a - b);
+    const declarations = block.declarations.filter((entry) => !changedLines || changedLines.some((line) => line >= entry.line && line <= entry.endLine));
     if (!declarations.length) boundary({ file: change.file, reason: "changed-symbol-not-resolved" });
-    for (const declaration of declarations) enqueue({ file: change.file, symbol: declaration.name, exported: false,
-      origin: { file: change.file, symbol: declaration.name },
-      evidence: [{ file: change.file, line: declaration.line, symbol: declaration.name, relation: "changed-declaration" }] });
+    for (const declaration of declarations) {
+      const changedLine = changedLines?.find(line => line >= declaration.line && line <= declaration.endLine);
+      enqueue({ file: change.file, symbol: declaration.name, exported: false,
+        origin: { file: change.file, symbol: declaration.name },
+        evidence: [{ file: change.file, line: declaration.line, symbol: declaration.name, relation: "changed-declaration",
+          ...(changedLine !== undefined ? { changedLine } : {}) }] });
+    }
   }
   const pathKeys = new Set<string>();
   const exportOrigins = (file: string, symbol: string, visited = new Set<string>(), depth = 0): { origins: Set<string>; unresolved: boolean } => {

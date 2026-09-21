@@ -33,6 +33,12 @@ intermediate import, export and reference. `unresolved` prioritizes a boundary o
 that path. `boundaryCount`, `pathCount`, and optional `omittedPathCount` disclose
 the bounded result and any paths that exceeded traversal limits.
 
+The changed step keeps its declaration `line` and may include `changedLine`, the
+earliest head-side added diff line inside that declaration. Bounded review
+excerpts prefer that anchor after checking the indexed declaration and file
+hash. No anchor is inferred for deletion-only changes or unavailable line data.
+This selects one location, not every changed branch in a function.
+
 Compiled test imports can connect to TypeScript source when an indexed compiler
 configuration explicitly declares `rootDir` and `outDir`. A `compiler-mapping`
 step cites that configuration. The `compiled-output-not-verified` boundary means

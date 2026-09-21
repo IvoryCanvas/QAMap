@@ -137,11 +137,20 @@ try {
   assert.deepEqual(handoff.recovery.repository, ["/repositoryIndex", "/repositoryImpact"]);
   assert.ok(Buffer.byteLength(handoffOutput.stdout) <= 8192);
   assert.deepEqual(JSON.parse(await readFile(handoff.files.summary, "utf8")), handoff.summary);
+  const full = JSON.parse(await readFile(handoff.files.full, "utf8"));
+  for (const pointer of Object.values(handoff.recovery).flat()) {
+    assert.notEqual(pointer.split("/").slice(1).reduce((value, key) => value?.[key], full), undefined,
+      `fresh-install recovery pointer is missing: ${pointer}`);
+  }
+  const installedSkill = await readFile(path.join(harness,
+    "node_modules/@ivorycanvas/qamap/skills/qamap-pr-qa/SKILL.md"), "utf8");
+  assert.equal(installedSkill, await readFile(path.join(repositoryRoot, "skills/qamap-pr-qa/SKILL.md"), "utf8"));
 
   const agentProject = path.join(tempRoot, "agent-project");
   await mkdir(agentProject);
   await run(binary, ["init", agentProject, "--agent"], agentProject);
   for (const host of [".agents", ".claude"]) {
+    assert.equal(await readFile(path.join(agentProject, host, "skills/qamap-pr-qa/SKILL.md"), "utf8"), installedSkill);
     assert.match(await readFile(path.join(agentProject, host, "skills/qamap-pr-qa/references/advanced-workflow.md"), "utf8"),
       /execution\.gitState/);
   }

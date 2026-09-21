@@ -66,7 +66,15 @@ API. Pin the CLI version and reject changed formats instead of estimating usage.
 The helper does not judge review quality, detect every tool failure, select a
 model, approve spending, or grant execution permissions. The experiment runner
 must still pin inputs, preflight tool access, enforce isolation, inspect failures
-and preserve receipts. Unit tests and a synthetic local child-process test run
+and preserve receipts. Test prerequisites through the host's actual shell and
+sandbox path, including login-shell initialization and executable resolution.
+A successful absolute-path subprocess probe does not prove that the model's
+shell command can find the same Git, search utility, or QAMap executable.
+If a prerequisite fails and the model works around it, retain the usage and
+answer as diagnostic evidence, but exclude the run from a savings comparison.
+Do not subtract an estimated failure cost or automatically retry the model.
+
+Unit tests and a synthetic local child-process test run
 without a model, credentials or network access:
 
 ```sh

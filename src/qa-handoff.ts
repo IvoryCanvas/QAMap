@@ -11,6 +11,7 @@ type EvidenceGap = { file: string; reason: string; line?: number; symbol?: strin
 interface SourceExcerpt {
   file: string;
   line: number;
+  changedLine?: number;
   lines?: Array<{ line: number; text: string }>;
   sourceHash?: string;
   truncated?: boolean;
@@ -96,7 +97,17 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
     if (text === undefined) return ref;
     const lines = text.split(/\r?\n/);
     if (step.line > lines.length) { gap(step.file, "source-line-unavailable"); return ref; }
-    const start = Math.max(0, step.line - 2);
+    let anchor = step.line;
+    if (step.changedLine !== undefined) {
+      const declaration = block.declarations.find(entry => entry.name === step.symbol && entry.line === step.line);
+      if (step.relation === "changed-declaration" && Number.isSafeInteger(step.changedLine)
+        && declaration && step.changedLine >= declaration.line && step.changedLine <= declaration.endLine
+        && step.changedLine <= lines.length) {
+        anchor = step.changedLine;
+        ref.changedLine = anchor;
+      } else gap(step.file, "invalid-changed-line");
+    }
+    const start = Math.max(0, anchor - 2);
     const selected = lines.slice(start, start + limits.excerptLines);
     if (isInstructionLikeRepositoryText(selected.join("\n"))) {
       gap(step.file, "instruction-like-source"); return ref;

@@ -62,6 +62,28 @@ test("namespace members do not pull an unrelated export into a test", async (t) 
   assert.equal(reached[0].evidence.at(-1).line, 2);
 });
 
+test("changed declarations retain their own earliest added line without moving the declaration reference", async (t) => {
+  const { root, put, cacheDirectory } = await fixture(t);
+  await put("packages/labels/src/format.ts", [
+    "export function format(value: string) {", "  const text = value.trim();",
+    ...Array.from({ length: 20 }, () => "  // Existing formatting context."),
+    "  return text.toLowerCase();", "}", "export const unrelated = true;",
+  ].join("\n"));
+  const index = await buildRepositoryEvidenceIndex(root, { cacheDirectory });
+  const lines = [25, 24, 23, 23, -1, 1.5, NaN];
+  const impact = traceRepositoryImpact(index, [{ file: "packages/labels/src/format.ts", lines }]);
+  const step = impact.paths.find(entry => entry.changedSymbol === "format").evidence[0];
+  assert.equal(step.line, 1);
+  assert.equal(step.changedLine, 23);
+  assert.deepEqual(traceRepositoryImpact(index, [{ file: step.file, lines: lines.toReversed() }]), impact);
+  assert.deepEqual(traceRepositoryImpact(await buildRepositoryEvidenceIndex(root, { cacheDirectory }), [{ file: step.file, lines }]), impact);
+  assert.equal(traceRepositoryImpact(index, [{ file: step.file, lines: [25] }]).paths.some(entry => entry.changedSymbol === "format"), false);
+  const unknown = traceRepositoryImpact(index, [{ file: step.file }]);
+  assert.ok(unknown.paths.length > 0);
+  assert.ok(unknown.paths.every(entry => entry.evidence[0].changedLine === undefined));
+  assert.equal(traceRepositoryImpact(index, [{ file: step.file, lines: [NaN, -1, 1.5] }]).paths.length, 0);
+});
+
 test("explicit compiler output mappings connect compiled test imports without claiming a fresh build", async (t) => {
   const { root, put, cacheDirectory } = await fixture(t);
   await put("packages/labels/tsconfig.json", { compilerOptions: { rootDir: "src", outDir: "dist" }, include: ["src/**/*.ts"] });
