@@ -559,6 +559,8 @@ async function generateQaDraftWithIndex(rootInput: string, options: QaDraftOptio
   const repositoryImpact = traceRepositoryImpact(repositoryIndex, (indexMatchesChange ? changedFiles : []).map((file) => ({
     file: repositoryPrefix ? `${repositoryPrefix}/${file}` : file,
     ...(addedDiffEvidence[file]?.some((hunk) => hunk.lines.length) ? { lines: addedDiffEvidence[file].flatMap((hunk) => hunk.lines.map((entry) => entry.line)) } : {}),
+    ...(addedDiffEvidence[file]?.some((hunk) => !hunk.lines.length && hunk.removedLines?.length)
+      ? { deletionLines: addedDiffEvidence[file].filter((hunk) => !hunk.lines.length && hunk.removedLines?.length).map((hunk) => hunk.startLine) } : {}),
   })));
   if (!indexMatchesChange) repositoryImpact.boundaries.push({ file: repositoryPrefix || ".", reason: "repository-snapshot-mismatch" });
   const result: QaDraftResult = {

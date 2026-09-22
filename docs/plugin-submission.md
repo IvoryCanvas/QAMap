@@ -17,7 +17,10 @@ replacement passes review.
 
 ## Product Boundary
 
-- The first action is the read-only `qamap qa --format agent` analysis.
+- The candidate workflow offers report-based review, respects refusal, and uses
+  `qamap qa report --handoff` only after consent or an explicit saved preference.
+- That command reads source and writes private local report artifacts. It does
+  not change source or execute tests. Save-only requests omit `--handoff`.
 - QAMap reads the checked-out repository locally and does not upload source code.
 - QAMap does not make an additional LLM request. The calling OpenAI product still uses its own model tokens to invoke the skill and interpret the result.
 - A one-off invocation may download the pinned npm package. The skill discloses that network action and follows the host approval policy.
@@ -25,6 +28,12 @@ replacement passes review.
 - The plugin is intended for an OpenAI surface that can access a checked-out repository and local shell. A web-only chat without repository access cannot perform this workflow.
 
 ## Submission Sources
+
+The local `0.5.0-rc.1` bundle is an unpublished validation candidate, not ready
+for directory submission. Do not pair it with the released 0.4.17 CLI. After
+publication approval, verify the exact matching package from npm first. A host
+may send returned source excerpts to its own model; the local-analysis guarantee
+does not mean those excerpts stay outside the host's context.
 
 | Artifact | Purpose |
 | --- | --- |

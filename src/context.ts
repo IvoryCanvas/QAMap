@@ -1,6 +1,8 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { pathExists } from "./fs.js";
+import { buildAgentQaSection } from "./agent-instructions.js";
+import { VERSION } from "./version.js";
 
 interface ProjectSnapshot {
   packageManager?: string;
@@ -53,13 +55,7 @@ export async function generateAgentContext(rootInput: string): Promise<string> {
     lines.push(`- Run \`${snapshot.lintCommand}\` when changing formatting or lint-sensitive code.`);
   }
   lines.push("");
-  lines.push("## Pre-PR QA");
-  lines.push("");
-  lines.push(`- Before opening a pull request, run \`${dlxCommandFor(snapshot.packageManager)} qa . --base origin/main --head HEAD --format agent\` and address the required evidence and bootstrap items it reports.`);
-  lines.push("- Treat the output as QA planning evidence, not as proof that browser, device, or manual QA passed.");
-  lines.push(`- If \`route.nextAction\` is \`run-repository-command\` and execution policy permits it, use \`${dlxCommandFor(snapshot.packageManager)} qa run . --base origin/main --head HEAD --format agent\`; do not repeat the command when \`execution.performed\` is true.`);
-  lines.push("- After `qa run`, inspect `execution.gitState`; a passing command with `changed: true` still requires review of the reported Git-observable paths.");
-  lines.push("- For UI-affecting changes, review the suggested E2E draft before handing the pull request to a human.");
+  lines.push(buildAgentQaSection(dlxCommandFor(snapshot.packageManager)));
   lines.push("");
   lines.push("## Repository Boundaries");
   lines.push("");
@@ -122,16 +118,17 @@ export async function detectDlxCommand(rootInput: string): Promise<string> {
 
 function dlxCommandFor(packageManager: string | undefined): string {
   const normalized = packageManager?.split("@")[0];
+  const packageName = `@ivorycanvas/qamap@${VERSION}`;
   if (normalized === "pnpm") {
-    return "pnpm dlx @ivorycanvas/qamap";
+    return `pnpm dlx ${packageName}`;
   }
   if (normalized === "yarn") {
-    return "yarn dlx @ivorycanvas/qamap";
+    return `yarn dlx ${packageName}`;
   }
   if (normalized === "bun") {
-    return "bunx @ivorycanvas/qamap";
+    return `bunx ${packageName}`;
   }
-  return "npx @ivorycanvas/qamap";
+  return `npx ${packageName}`;
 }
 
 function commandPrefixFor(packageManager: string | undefined): string {

@@ -11,6 +11,20 @@ const count = (total, last = total) => ({ type: "event_msg", payload: { type: "t
 } } });
 const createGuard = (options = {}) => createCodexSessionGuard({ tokenLimit: 1000, requestLimit: 10, ...options });
 
+test("explicitly unbounded tokens still reconcile usage and enforce request limits", () => {
+  const values = usage(300000, 100000, 1200);
+  const guard = createGuard({ tokenLimit: null });
+  assert.equal(guard.observe([turn("one"), count(values)]), null);
+  const result = guard.finish({ exitCode: 0, turnUsage: values });
+  assert.equal(result.usageComplete, true);
+  assert.equal(result.sessionUsage.total_tokens, 301200);
+  assert.equal(result.budget.tokenLimit, null);
+  assert.equal(result.budget.overrunTokens, 0);
+  const bounded = createGuard({ tokenLimit: null, requestLimit: 1 });
+  assert.equal(bounded.observe([turn("one"), count(values)]), "session-request-limit");
+  for (const tokenLimit of [undefined, 0, -1, Infinity]) assert.throws(() => createGuard({ tokenLimit }));
+});
+
 test("usage spans resumed CLI counters without adding cache or reasoning subsets", () => {
   const offer = usage(100, 20, 10);
   const review = { ...usage(80, 60, 8), reasoning_output_tokens: 5, total_tokens: 88 };
@@ -68,6 +82,47 @@ test("a resumed stage reconciles its own receipt and retains the offer cost", ()
   assert.equal(result.usageComplete, true);
   assert.equal(result.sessionUsage.total_tokens, 198);
   assert.equal(result.stageUsage.total_tokens, 88);
+});
+
+test("a resumed cumulative receipt must match both the final counter and the complete ledger", () => {
+  const initialRows = [turn("offer"), count(usage(100, 20, 10))];
+  const total = usage(180, 80, 18);
+  const guard = createGuard({ initialRows });
+  guard.observe([...initialRows, turn("review"), count(total, usage(80, 60, 8))]);
+  const result = guard.finish({ exitCode: 0, turnUsage: total });
+  assert.equal(result.usageComplete, true);
+  assert.equal(result.receiptScope, "session");
+  assert.equal(result.sessionUsage.total_tokens, 198);
+  assert.equal(result.stageUsage.total_tokens, 88);
+  assert.equal(result.sessionUsage.requests, 2);
+  assert.equal(result.stageUsage.requests, 1);
+});
+
+test("a reset counter cannot be relabeled as a cumulative receipt to bypass reconciliation", () => {
+  const initialRows = [turn("offer"), count(usage(100, 20, 10))];
+  for (const claimed of [usage(180, 80, 18), usage(100, 20, 10), usage(180, 79, 18)]) {
+    const guard = createGuard({ initialRows });
+    guard.observe([...initialRows, turn("review"), count(usage(80, 60, 8))]);
+    const result = guard.finish({ exitCode: 0, turnUsage: claimed });
+    assert.equal(result.usageComplete, false);
+    assert.equal(result.stopReason, "usage-unreconciled");
+    assert.equal(result.receiptScope, null);
+  }
+});
+
+test("cumulative completion does not waive limits, missing requests or process failures", () => {
+  const initialRows = [turn("offer"), count(usage(100, 20, 10))];
+  const total = usage(180, 80, 18);
+  for (const scenario of ["limit", "failed", "missing", "blocked"]) {
+    const guard = createGuard({ initialRows, tokenLimit: scenario === "limit" ? 190 : 1000 });
+    if (scenario !== "missing") guard.observe([...initialRows, turn("review"), count(total, usage(80, 60, 8))]);
+    if (scenario === "blocked") guard.fail("sandbox-infrastructure-failure");
+    const result = guard.finish({ exitCode: scenario === "failed" ? 1 : 0,
+      turnUsage: scenario === "missing" ? usage(100, 20, 10) : total });
+    assert.equal(result.usageComplete, false, scenario);
+    assert.equal(result.sessionUsage, null, scenario);
+    assert.equal(result.stageUsage, null, scenario);
+  }
 });
 
 test("the observed pilot overrun is detected even though resumed totals are below the limit", () => {

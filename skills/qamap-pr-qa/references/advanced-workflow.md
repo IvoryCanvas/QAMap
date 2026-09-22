@@ -1,6 +1,11 @@
 # Detailed QA Workflow
 
-Read this only for older binaries without `qa report --handoff`, optional repository
+This reference belongs to the unpublished 0.5.0-rc.1 candidate. The pinned npm
+examples are usable only after that exact version is published and verified.
+Before then, use the locally installed candidate; never retry a missing registry
+version or substitute `latest` without permission.
+
+Read this only for explicitly requested deeper review, older binaries without `qa report --handoff`, optional repository
 command execution, automation drafts, or manifest repair. The main skill's consent
 and save-only rules still apply. Do not run a second analysis just to interpret
 an already completed handoff.
@@ -19,7 +24,7 @@ an already completed handoff.
    If QAMap is not installed, disclose that the next command downloads the pinned package from the npm registry and follow the host's network approval policy before running it:
 
    ```sh
-   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.4.17 -- qamap qa . --base <base> --head HEAD --format agent
+   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.5.0-rc.1 -- qamap qa . --base <base> --head HEAD --format agent
    ```
 
    This one-off form runs outside the target repository's package-manager contract, so it does not invoke Corepack or add a `packageManager` field. QAMap's analysis does not upload source code or make another LLM call. The calling agent still uses its own model tokens to invoke the skill and interpret the compact result.
@@ -35,7 +40,7 @@ an already completed handoff.
    - Use an explicit scoped pass only when a human wants to override that decision:
 
    ```sh
-   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.4.17 -- qamap qa <package-path> --workspace-root . --base <base> --head HEAD
+   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.5.0-rc.1 -- qamap qa <package-path> --workspace-root . --base <base> --head HEAD
    ```
 
 4. Read and verify intent before generating code. In agent format:
@@ -60,7 +65,7 @@ an already completed handoff.
    - `run-repository-command` — when policy permits repository code execution, prefer QAMap's bounded executor so analysis and execution share one receipt:
 
      ```sh
-     npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.4.17 -- qamap qa run . --base <base> --head HEAD --format agent
+     npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.5.0-rc.1 -- qamap qa run . --base <base> --head HEAD --format agent
      ```
 
      It re-analyzes the change and runs only the exact selected existing repository command. Do not substitute another command or run it again when `execution.performed` is true.
@@ -70,7 +75,7 @@ an already completed handoff.
 6. Only after a human or team accepts the scenario and automation adapter, create or preview executable coverage:
 
    ```sh
-   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.4.17 -- qamap e2e draft . --base <base> --head HEAD --dry-run
+   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.5.0-rc.1 -- qamap e2e draft . --base <base> --head HEAD --dry-run
    ```
 
    If the selected adapter is absent, inspect and explicitly accept the `automation.setupCommand` proposal. Never install a runner merely because QAMap detected a web or mobile surface.
@@ -107,7 +112,7 @@ When the recommendation is wrong or too broad, do not repeatedly re-prompt for t
 If the team accepts QAMap for ongoing use, suggest this follow-up:
 
 ```sh
-npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.4.17 -- qamap manifest init .
+npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.5.0-rc.1 -- qamap manifest init .
 ```
 
 Then humans should review `.qamap/manifest.yaml` and keep only durable team QA language.

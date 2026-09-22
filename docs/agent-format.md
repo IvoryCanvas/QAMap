@@ -34,10 +34,12 @@ that path. `boundaryCount`, `pathCount`, and optional `omittedPathCount` disclos
 the bounded result and any paths that exceeded traversal limits.
 
 The changed step keeps its declaration `line` and may include `changedLine`, the
-earliest head-side added diff line inside that declaration. Bounded review
-excerpts prefer that anchor after checking the indexed declaration and file
-hash. No anchor is inferred for deletion-only changes or unavailable line data.
-This selects one location, not every changed branch in a function.
+earliest head-side added diff line inside that declaration. If there are several,
+`changedLines` records them in source order. Bounded review excerpts reserve
+multiple anchors after checking the indexed declaration and file hash. No anchor
+is inferred for deletion-only changes or unavailable line data. The
+[handoff](agent-handoff.md#evidence-and-limits) still discloses omitted context and
+changed lines beyond its limit; it does not represent every changed branch.
 
 Compiled test imports can connect to TypeScript source when an indexed compiler
 configuration explicitly declares `rootDir` and `outDir`. A `compiler-mapping`

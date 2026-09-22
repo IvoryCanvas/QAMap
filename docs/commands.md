@@ -43,7 +43,7 @@ Interactive terminal reports are colorized. Files written with `--output`, pipes
 
 ### Save A Report Without Reading It
 
-**Development command, not available in 0.4.17.** Use a local build that lists
+**Local 0.5.0-rc.1 candidate command, not published or available in 0.4.17.** Use a build that lists
 `qa report` in `qamap qa --help`:
 
 ```sh
@@ -80,6 +80,23 @@ still use the host model's tokens; this mode avoids returning the full analysis
 automatically, not all agent token usage. Local paths work only where those files
 are accessible, not automatically in web chat. `analysis: complete` always keeps
 `execution.status: not-run` in this mode and does not imply passing QA.
+
+### Return Evidence In One Call
+
+For a consented report-based review, use the local 0.5.0-rc.1 candidate:
+
+```sh
+qamap qa report . --base origin/main --head HEAD --handoff
+```
+
+It saves the same files and returns a separate `qamap.qa.handoff` v1 response,
+at most 16,384 UTF-8 bytes including the newline. The nested summary still has
+its own 4,096-byte limit. Source/test excerpts preserve supported declaration
+and binding context; omitted context, paths and unresolved modules stay explicit.
+The caller reads that response only, not another source scan. More investigation
+is a separate scope, not a hidden fallback. See [the handoff contract](agent-handoff.md).
+
+### Routing And Execution
 
 Scenario routing and draft mapping answer different questions. Routing explains what the changed behavior should prove before merge. **Draft Mapping And Context Gaps** explains why an optional generated artifact may still need a selector, fixture, runner, or repository fact. Those draft gaps do not invalidate the runner-independent QA judgment and are not automatically PR merge requirements.
 
@@ -135,6 +152,8 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `qamap test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
 | `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. A single supported changed package is selected automatically, including an independent nested package. |
+| `qamap qa report . --base origin/main --head HEAD` | Save local reports and return paths without their contents; candidate only. |
+| `qamap qa report . --base origin/main --head HEAD --handoff` | Save reports and return bounded source/test evidence once; candidate only. |
 | `qamap qa run . --base origin/main --head HEAD` | Re-analyze the change and execute only the exact existing repository validation command selected by the canonical route. Additional required commands are reported but not executed. Returns pass, fail, timeout, or blocked evidence; it never installs a runner or runs a proposed product E2E draft. |
 | `qamap qa . --base origin/main --head HEAD --format agent` | The same decision content as one compact JSON line for coding agents — a versioned contract documented in [docs/agent-format.md](agent-format.md). |
 | `qamap e2e plan . --base origin/main --head HEAD` | Derive change intent and QA scenarios, then map them to coverage, test evidence, testability gaps, and an automation adapter. |
@@ -161,10 +180,17 @@ interpreter. A Compose command also requires the Docker executable to be present
 when it is missing, QAMap prefers the same repository-declared Python validation
 through an available local wrapper, runner, or interpreter. Otherwise the QA route
 reports that a repository command is needed.
+
+### Setup And Workspace Commands
+
+| Command | Purpose |
+| --- | --- |
 | `qamap doctor services/listing --workspace-root .` | Scan a monorepo package while using root guardrails. |
 | `qamap context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `qamap init .` | Create a starter `qamap.config.json`. |
 | `qamap init --agent .` | One-command agent onboarding: add a marked QAMap Pre-PR QA section to `AGENTS.md`, install the same packaged skill to the portable `.agents/skills/qamap-pr-qa/SKILL.md` path and the Claude-compatible `.claude/skills/qamap-pr-qa/SKILL.md` path, and create `qamap.config.json` if missing. Idempotent; existing instructions and locally modified skills are preserved. |
+| `qamap init --agent . --review-mode report` | Explicitly choose report-based review for this project; preserves user instructions and requires a compatible candidate binary. |
+| `qamap init --agent . --review-mode ask` | Restore offer-first review. An omitted option preserves an existing saved choice. |
 | `qamap init --scripts .` | Add collision-safe `qa`, `qa:local`, `qa:run`, and `qa:e2e` package scripts for repeat use in a JavaScript repository. |
 
 For monorepos, run `qamap qa` at the repository root first. When every changed file belongs to exactly one recognized package declared by `workspaces` or `pnpm-workspace.yaml`, `qa` automatically analyzes that package and reports `automatic-package` as its analysis scope. Package-local routes, scripts, fixtures, and runner settings are used while repo-level guardrails remain available. If multiple packages changed, a root file is also part of the diff, or the package type is unknown, QAMap keeps repository-wide scope and lists the package candidates rather than silently choosing one.

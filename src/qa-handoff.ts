@@ -1,17 +1,25 @@
 import { createHash } from "node:crypto";
+import ts from "typescript";
 import type { QaDraftResult } from "./qa.js";
 import type { LocalQaReportReceipt } from "./qa-report.js";
 import type { ImpactStep } from "./repository-impact.js";
 import { createRepositoryTextReader, type DiscoveryGap } from "./repository-discovery.js";
 import { isInstructionLikeRepositoryText } from "./qa-contract.js";
 import { safeModule, safeSymbol } from "./source-structure.js";
+import { createTestExpectationReader } from "./test-expectation-evidence.js";
 
-const limits = { paths: 2, excerptLines: 7, excerptBytes: 1200, evidenceBytes: 3072, responseBytes: 8192 } as const;
+const limits = { paths: 32, excerptLines: 14, excerptBytes: 1200, evidenceBytes: 15360, responseBytes: 16384 } as const;
 type EvidenceGap = { file: string; reason: string; line?: number; symbol?: string; module?: string; target?: string; pointer?: string };
 interface SourceExcerpt {
   file: string;
   line: number;
   changedLine?: number;
+  changedLines?: number[];
+  deletionLines?: number[];
+  anchorLines?: number[];
+  contextLines?: number[];
+  omittedChangedLineCount?: number;
+  excerptRef?: string;
   lines?: Array<{ line: number; text: string }>;
   sourceHash?: string;
   truncated?: boolean;
@@ -24,9 +32,10 @@ export interface ReviewEvidence {
   pathCount: number;
   omittedPathCount: number;
   paths: Array<{ pointer: string; sourceKind: "source" | "test" | "unknown";
-    source: SourceExcerpt; contract: SourceExcerpt; endpoint: string }>;
+    source: SourceExcerpt; contract: SourceExcerpt; via?: SourceExcerpt[]; endpoint: string }>;
   gaps: EvidenceGap[];
   omittedGapCount: number;
+  sourceDigest?: { algorithm: "sha256"; fileCount: number; value: string };
   limits: typeof limits;
 }
 export interface LocalQaHandoffReceipt extends Omit<LocalQaReportReceipt, "schema"> {
@@ -43,11 +52,23 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
   const priority = (entry: typeof allPaths[number]): number => entry.endpoint === "test-reference"
     ? blocks.get(entry.evidence[0]?.file ?? "")?.kind === "source" ? 2 : 1
     : 0;
-  const paths = allPaths.map((entry, index) => ({ entry, index }))
-    .sort((a, b) => priority(b.entry) - priority(a.entry));
+  const groupCounts = new Map<string, number>();
+  const pairKeys = new Set<string>();
+  const paths = allPaths.flatMap((entry, index) => {
+    const key = JSON.stringify([entry.changedFile, entry.changedSymbol, entry.endpoint,
+      entry.evidence.filter((step, i) => i === 0 || i === entry.evidence.length - 1 || step.relation === "reference")]);
+    if (pairKeys.has(key)) return [];
+    pairKeys.add(key);
+    const group = JSON.stringify([entry.changedFile, entry.changedSymbol, priority(entry)]);
+    const round = groupCounts.get(group) ?? 0;
+    groupCounts.set(group, round + 1);
+    return [{ entry, index, round }];
+  }).sort((a, b) => priority(b.entry) - priority(a.entry) || a.round - b.round);
   const skipped: DiscoveryGap[] = [];
   const read = createRepositoryTextReader(result.analysisScope.workspaceRoot, skipped, 300_000);
   const texts = new Map<string, string | undefined>();
+  const expectations = new Map<string, ReturnType<typeof createTestExpectationReader>>();
+  const statements = new Map<string, ts.SourceFile>();
   const moduleLocations = new Set<string>();
   const gapRank = (reason: string): number => reason === "node-builtin-outside-repository" ? 3
     : reason === "compiled-output-not-verified" ? 2 : reason === "index-excluded-module" ? 1 : 0;
@@ -77,7 +98,7 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
     if (gaps.length < 8) gaps.push({ file: safeFile(file) ? file : "<unsupported-path>", reason });
     else evidence.omittedGapCount++;
   };
-  const excerpt = async (step: ImpactStep): Promise<SourceExcerpt> => {
+  const excerpt = async (step: ImpactStep, window = 7, bindings: ImpactStep[] = []): Promise<SourceExcerpt> => {
     const ref: SourceExcerpt = { file: safeFile(step.file) ? step.file : "<unsupported-path>", line: step.line };
     const block = blocks.get(step.file);
     if (!safeFile(step.file) || !Number.isSafeInteger(step.line) || step.line < 1
@@ -97,44 +118,118 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
     if (text === undefined) return ref;
     const lines = text.split(/\r?\n/);
     if (step.line > lines.length) { gap(step.file, "source-line-unavailable"); return ref; }
-    let anchor = step.line;
-    if (step.changedLine !== undefined) {
+    let anchors = [step.line];
+    if (step.changedLine !== undefined || step.changedLines !== undefined) {
       const declaration = block.declarations.find(entry => entry.name === step.symbol && entry.line === step.line);
-      if (step.relation === "changed-declaration" && Number.isSafeInteger(step.changedLine)
-        && declaration && step.changedLine >= declaration.line && step.changedLine <= declaration.endLine
-        && step.changedLine <= lines.length) {
-        anchor = step.changedLine;
-        ref.changedLine = anchor;
+      const candidates = step.changedLines ?? [step.changedLine!];
+      if (step.relation === "changed-declaration" && candidates.length > 0 && declaration
+        && candidates[0] === step.changedLine
+        && candidates.every(line => Number.isSafeInteger(line) && line >= declaration.line
+          && line <= declaration.endLine && line <= lines.length)) {
+        const unique = [...new Set(candidates)].sort((a, b) => a - b);
+        anchors = unique.slice(0, limits.excerptLines);
+        ref.changedLine = anchors[0];
+        if (anchors.length > 1) ref.changedLines = anchors;
+        if (unique.length > anchors.length) {
+          ref.omittedChangedLineCount = unique.length - anchors.length;
+          gap(step.file, "changed-line-limit");
+        }
       } else gap(step.file, "invalid-changed-line");
     }
-    const start = Math.max(0, anchor - 2);
-    const selected = lines.slice(start, start + limits.excerptLines);
-    if (isInstructionLikeRepositoryText(selected.join("\n"))) {
+    if (step.deletionLines !== undefined) {
+      const declaration = block.declarations.find(entry => entry.name === step.symbol && entry.line === step.line);
+      if (step.relation === "changed-declaration" && declaration && step.deletionLines.length
+        && step.deletionLines.every(line => Number.isSafeInteger(line) && line > declaration.line && line <= declaration.endLine && line <= lines.length)) {
+        ref.deletionLines = [...new Set(step.deletionLines)].sort((a, b) => a - b);
+        anchors = step.changedLine === undefined ? ref.deletionLines : [...new Set([...anchors, ...ref.deletionLines])];
+      } else gap(step.file, "invalid-deletion-line");
+    }
+    if (step.relation === "test-reference" && block.kind === "test") {
+      if (!expectations.has(step.file)) expectations.set(step.file, createTestExpectationReader(step.file, text));
+      const assertions = expectations.get(step.file)!(step.line, step.symbol);
+      if (assertions.length) anchors = [...new Set([...anchors, ...assertions])].sort((a, b) => a - b);
+      else gap(step.file, "test-expectation-not-linked");
+    }
+    if (anchors.length > limits.excerptLines) gap(step.file, "required-line-limit");
+    anchors = anchors.slice(0, limits.excerptLines);
+    if (step.deletionLines || (step.relation === "test-reference" && (anchors.length > 1 || anchors[0] !== step.line))) ref.anchorLines = anchors;
+    // Preserve an interpretable unit, not just a changed return or an assertion.
+    const context = new Set<number>();
+    const declaration = block.declarations.find(entry => entry.name === step.symbol
+      && entry.line <= step.line && entry.endLine >= step.line);
+    if (declaration && ["changed-declaration", "reference", "export"].includes(step.relation)) {
+      context.add(declaration.line);
+      if (declaration.endLine - declaration.line < limits.excerptLines) {
+        for (let line = declaration.line; line <= declaration.endLine; line++) context.add(line);
+      } else gap(step.file, "declaration-context-partial");
+    }
+    if (bindings.length) {
+      if (!statements.has(step.file)) statements.set(step.file, ts.createSourceFile(step.file, text, ts.ScriptTarget.Latest, true));
+      const syntax = statements.get(step.file)!;
+      for (const binding of bindings) {
+        const statement = syntax.statements.find(item => syntax.getLineAndCharacterOfPosition(item.getStart(syntax)).line + 1 === binding.line);
+        if (!statement) { gap(step.file, "binding-context-unavailable"); continue; }
+        const end = ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)
+          ? syntax.getLineAndCharacterOfPosition(statement.end).line + 1 : binding.line;
+        for (let line = binding.line; line <= end; line++) context.add(line);
+      }
+    }
+    if (context.size) ref.contextLines = [...context].sort((a, b) => a - b);
+    let required = [...new Set([...anchors, ...context])];
+    if (required.length > limits.excerptLines) {
+      gap(step.file, "review-context-line-limit");
+      required = required.slice(0, limits.excerptLines);
+      ref.contextLines = ref.contextLines?.filter(line => required.includes(line));
+    }
+    // Reserve every changed region before filling nearby context in round-robin order.
+    const selected = new Set(required);
+    for (let offset = -1; offset < window - 1; offset++) for (const anchor of anchors) {
+      const line = anchor + offset;
+      if (line > 0 && line <= lines.length && selected.size < limits.excerptLines) selected.add(line);
+    }
+    let numbered = [...selected].sort((a, b) => a - b).map(line => ({ line, text: lines[line - 1] }));
+    if (isInstructionLikeRepositoryText(numbered.map(item => item.text).join("\n"))) {
       gap(step.file, "instruction-like-source"); return ref;
     }
-    const numbered = selected.map((line, index) => ({ line: start + index + 1, text: line }));
     if (Buffer.byteLength(JSON.stringify(numbered)) > limits.excerptBytes) {
-      gap(step.file, "excerpt-byte-limit"); return { ...ref, truncated: true };
+      numbered = numbered.filter(item => required.includes(item.line));
+    }
+    if (Buffer.byteLength(JSON.stringify(numbered)) > limits.excerptBytes) {
+      numbered = numbered.filter(item => anchors.includes(item.line));
+      delete ref.contextLines;
+      if (Buffer.byteLength(JSON.stringify(numbered)) > limits.excerptBytes) {
+        gap(step.file, "excerpt-byte-limit"); return { ...ref, truncated: true };
+      }
+      gap(step.file, "review-context-byte-limit");
     }
     return { ...ref, sourceHash: block.hash, lines: numbered,
-      truncated: start > 0 || start + selected.length < lines.length };
+      truncated: numbered.length < lines.length };
   };
-  const selectedPairs = new Set<string>();
   for (const { entry, index } of paths) {
     if (evidence.paths.length >= limits.paths) break;
     const source = entry.evidence[0];
     const contract = entry.evidence.at(-1);
     if (!source || !contract) { gap(entry.changedFile, "missing-path-endpoint"); continue; }
-    const pair = JSON.stringify([entry.changedFile, entry.changedSymbol, entry.endpoint,
-      source.file, source.line, source.symbol, source.relation, contract.file, contract.line, contract.symbol, contract.relation]);
-    if (selectedPairs.has(pair)) continue;
-    selectedPairs.add(pair);
     const kind = blocks.get(source.file)?.kind;
+    const via: SourceExcerpt[] = [];
+    const bindings = entry.evidence.filter(step => ["import", "reexport", "export"].includes(step.relation));
+    const forFile = (file: string): ImpactStep[] => bindings.filter(step => step.file === file);
+    const coveredFiles = new Set([source.file, contract.file, ...entry.evidence.filter(step => step.relation === "reference").map(step => step.file)]);
+    const locations = new Set([JSON.stringify([source.file, source.line]), JSON.stringify([contract.file, contract.line])]);
+    for (const step of entry.evidence.slice(1, -1)) {
+      const location = JSON.stringify([step.file, step.line]);
+      if (locations.has(location) || step.relation !== "reference"
+        && (!bindings.includes(step) || coveredFiles.has(step.file))) continue;
+      locations.add(location);
+      via.push(await excerpt(step, 3, forFile(step.file)));
+      coveredFiles.add(step.file);
+    }
     evidence.paths.push({ pointer: `/repositoryImpact/paths/${index}`, endpoint: entry.endpoint,
       sourceKind: kind === "source" || kind === "test" ? kind : "unknown",
-      source: await excerpt(source), contract: await excerpt(contract) });
+      source: await excerpt(source, 7, forFile(source.file)), contract: await excerpt(contract, 7, forFile(contract.file)), ...(via.length ? { via } : {}) });
     evidence.omittedPathCount--;
   }
+  deduplicateExcerpts(evidence);
   // Keep complete endpoint pairs together; truncation must never silently become no impact.
   trimEvidence(evidence, () => Buffer.byteLength(JSON.stringify(evidence)) > limits.evidenceBytes);
   return evidence;
@@ -160,16 +255,76 @@ export async function buildLocalQaHandoff(
     },
   };
   const oversized = (): boolean => Buffer.byteLength(JSON.stringify(handoff)) + 1 > limits.responseBytes;
-  trimEvidence(handoff.reviewEvidence, oversized);
+  if (oversized()) {
+    const omitted = new Set(["project", "runner", "manifest", "context", "capabilities", "readiness", "scenarioCoverage",
+      "evidenceSummary", "traceCount", "omittedTraceCount", "traces", "testSuite", "testContracts", "intentCount", "omittedIntentCount",
+      "intents", "automation", "flowCount", "omittedFlowCount", "flows", "requiredEvidence", "recommendedEvidenceCount",
+      "requiredBootstrap", "prChecklist", "commands", "repository", "compaction", "manifestCorrection"]);
+    const compact = { ...Object.fromEntries(Object.entries(summary).filter(([key]) => !omitted.has(key))),
+      compaction: { mode: "review-evidence-first", omittedFieldCount: Object.keys(summary).filter(key => omitted.has(key)).length,
+        fullReport: receipt.files.full } };
+    if (Buffer.byteLength(JSON.stringify(compact)) < Buffer.byteLength(JSON.stringify(summary))) handoff.summary = compact;
+  }
+  trimEvidence(handoff.reviewEvidence, oversized, new Map(result.repositoryIndex?.blocks.map(block => [block.file, block.hash])));
   if (oversized()) throw new Error("QA handoff exceeds its output limit; use a shorter report output path.");
   return handoff;
 }
 
-function trimEvidence(evidence: ReviewEvidence, oversized: () => boolean): void {
-  // Keep the strongest pair when it fits alone; omitted diagnostics remain recoverable.
-  while (oversized() && evidence.paths.length > 1) { evidence.paths.pop(); evidence.omittedPathCount++; }
+function trimEvidence(evidence: ReviewEvidence, oversized: () => boolean, hashes = new Map<string, string>()): void {
+  const excerpts = (): SourceExcerpt[] => evidence.paths.flatMap(entry => [entry.source, entry.contract, ...(entry.via ?? [])]);
+  for (const excerpt of excerpts()) if (excerpt.sourceHash) hashes.set(excerpt.file, excerpt.sourceHash);
+  const digest = (): void => {
+    const files = [...new Set(excerpts().filter(excerpt => excerpt.lines).map(excerpt => excerpt.file))].sort();
+    if (!files.length) { delete evidence.sourceDigest; return; }
+    if (files.some(file => !hashes.has(file))) return;
+    const value = createHash("sha256").update(JSON.stringify(files.map(file => [file, hashes.get(file)]))).digest("hex");
+    evidence.sourceDigest = { algorithm: "sha256", fileCount: files.length, value };
+    for (const excerpt of excerpts()) delete excerpt.sourceHash;
+  };
+  if (excerpts().filter(excerpt => excerpt.sourceHash).length > 8) digest();
+  // Remove context, not changed lines or call sites, before discarding an entire path.
+  const context = evidence.paths.flatMap(entry => [entry.source, entry.contract, ...(entry.via ?? [])])
+    .flatMap(excerpt => {
+      const anchors = [...(excerpt.anchorLines ?? excerpt.changedLines ?? [excerpt.changedLine ?? excerpt.line]), ...(excerpt.contextLines ?? [])];
+      return (excerpt.lines ?? []).filter(item => !anchors.includes(item.line)).map(item => ({ excerpt, item,
+        distance: Math.min(...anchors.map(line => Math.abs(line - item.line))),
+        empty: /^[\s{}();]*$/.test(item.text) }));
+    }).sort((a, b) => Number(b.empty) - Number(a.empty) || b.distance - a.distance);
+  for (const { excerpt, item } of context) {
+    if (!oversized()) break;
+    excerpt.lines = excerpt.lines!.filter(line => line !== item);
+    excerpt.truncated = true;
+  }
+  // One digest binds the same full-file identities without repeating opaque hashes.
+  if (oversized() && excerpts().filter(excerpt => excerpt.sourceHash).length > 1) digest();
+  // Preserve one concrete uncertainty alongside the leading path when both fit.
+  while (oversized() && evidence.gaps.length > 1) { evidence.gaps.pop(); evidence.omittedGapCount++; }
+  const removePath = (): void => {
+    evidence.paths.pop(); evidence.omittedPathCount++;
+    if (evidence.sourceDigest) digest();
+  };
+  while (oversized() && evidence.paths.length > 1) removePath();
   while (oversized() && evidence.gaps.length) { evidence.gaps.pop(); evidence.omittedGapCount++; }
-  while (oversized() && evidence.paths.length) { evidence.paths.pop(); evidence.omittedPathCount++; }
+  while (oversized() && evidence.paths.length) removePath();
+}
+
+function deduplicateExcerpts(evidence: ReviewEvidence): void {
+  const seen = new Map<string, string>();
+  evidence.paths.forEach((entry, index) => {
+    const items: Array<[string, SourceExcerpt]> = [["source", entry.source], ["contract", entry.contract],
+      ...(entry.via ?? []).map((excerpt, i): [string, SourceExcerpt] => [`via/${i}`, excerpt])];
+    for (const [field, excerpt] of items) {
+      if (!excerpt.lines) continue;
+      const key = JSON.stringify(excerpt);
+      const previous = seen.get(key);
+      if (!previous) { seen.set(key, `/reviewEvidence/paths/${index}/${field}`); continue; }
+      // References only point backward. Removing trailing paths cannot orphan them.
+      delete excerpt.lines;
+      delete excerpt.sourceHash;
+      delete excerpt.truncated;
+      excerpt.excerptRef = previous;
+    }
+  });
 }
 
 function safeFile(file: string): boolean {

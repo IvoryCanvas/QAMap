@@ -1,9 +1,14 @@
 # QAMap As A Local QA Skill
 
 QAMap can gather local evidence inside a coding agent's ordinary PR review.
-The development build supports a [one-call review handoff](agent-handoff.md):
-offer QAMap, obtain consent, then return the summary and selected code evidence
-without an extra report-reading round trip. This mode is not in 0.4.17.
+The unpublished 0.5.0-rc.1 candidate supports a [one-call review handoff](agent-handoff.md):
+offer QAMap, obtain consent, then interpret only the returned summary and code
+evidence. Do not add source searches or read the report again. Missing evidence
+stays unknown; deeper inspection requires a separate request. This mode is not
+in 0.4.17. A [six-pair synthetic comparison](report-only-validation.md#completion-wait-follow-up)
+preserved its predefined finding criteria with 33.47% lower aggregate total
+tokens after a completion-wait fix. This is not a general savings or equal-coverage
+guarantee; earlier failures and remaining evidence gaps are documented.
 
 The goal is not to replace a reviewer or claim QA passed. The goal is to remove the repeated setup question:
 
@@ -27,6 +32,25 @@ It performs four idempotent steps:
 - creates a starter `qamap.config.json` when the repository has none
 
 Both skill copies preserve local changes unless you explicitly pass `--force`. After setup, agents that read `AGENTS.md` or either project-skill location can discover the same QA workflow without receiving a different prompt contract. The rest of this document explains what that pass does and how to wire it manually on other agent surfaces.
+
+The development `qamap context` command uses the same report-review section as
+`init --agent`; it generates instructions but does not install the skill files.
+
+With the compatible **local candidate**, explicitly choose report-based review
+for this project to avoid repeated consent exchanges:
+
+```sh
+qamap init --agent . --review-mode report
+```
+
+This updates only QAMap's marked instruction section. The host can invoke the
+installed binary directly using those instructions; a host that requires skill
+loading may still read the skill. Existing setup runs preserve the choice. Use
+`--review-mode ask` to restore the default offer-first behavior. Installation
+alone does not opt in, and explicit requests for independent review still win.
+This setting does not authorize tests, edits, installations or model calls by
+QAMap. Compare configured use separately from first-use discovery and consent;
+fewer exchanges do not by themselves prove token savings or equal quality.
 
 The development skill also includes `references/advanced-workflow.md` for
 optional execution and legacy use. Installation is an explicit setup action,
@@ -132,7 +156,8 @@ Use `Change Intent Evidence` and the `PR Comment Draft` as review context:
 - optional automation adapter selected only after QA design
 - PR checklist items
 
-The host agent must choose one `route.nextAction`, verify that it matches `action.id`, apply the declared approval and preconditions, verify the strongest source first, and inspect `execution` before acting. Static `qa` output begins as `not-run`; explicit `qa run` can return a repository-command receipt. When `execution.performed` is true, the agent must not repeat `route.command`.
+In report-only review, describe these fields without executing their suggestions.
+For explicitly requested execution, choose one `route.nextAction`, verify that it matches `action.id`, apply the declared approval and preconditions, verify the strongest source first, and inspect `execution` before acting. Static `qa` output begins as `not-run`; explicit `qa run` can return a repository-command receipt. When `execution.performed` is true, the agent must not repeat `route.command`.
 
 If the command says a generated recommendation is wrong, do not keep re-prompting the agent with the same context. Update the repo-local manifest after human review:
 
@@ -142,10 +167,10 @@ pnpm exec qamap manifest init .
 
 Then edit `.qamap/manifest.yaml` so future branches can reuse the corrected team QA language.
 
-## Minimal Agent Instruction
+## Minimal Legacy Agent Instruction
 
 ```txt
-Before finalizing a PR, run:
+When the user chooses QAMap with a version without --handoff, run:
 npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@latest -- qamap qa . --base origin/main --head HEAD --format agent
 
 Paste the affected flow, suggested E2E/checklist, missing evidence, and PR checklist into the PR body or review note.

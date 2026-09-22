@@ -4,6 +4,9 @@ import { fileURLToPath } from "node:url";
 import { detectDlxCommand } from "./context.js";
 import { pathExists } from "./fs.js";
 import { writeDefaultConfig } from "./config.js";
+import { AGENT_SECTION_START as SECTION_START, AGENT_SECTION_END as SECTION_END, REPORT_REVIEW_MARKER, buildAgentQaSection, type AgentReviewMode } from "./agent-instructions.js";
+
+export { buildAgentQaSection } from "./agent-instructions.js";
 
 export type AgentInitFileStatus = "created" | "updated" | "unchanged" | "skipped";
 
@@ -19,8 +22,6 @@ export interface AgentInitResult {
   nextCommand: string;
 }
 
-const SECTION_START = "<!-- qamap:agent:start -->";
-const SECTION_END = "<!-- qamap:agent:end -->";
 const SKILL_RELATIVE_ROOT = path.join("skills", "qamap-pr-qa");
 const SKILL_BUNDLE_FILES = [
   "SKILL.md",
@@ -32,13 +33,14 @@ const SKILL_TARGET_RELATIVE_PATHS = [
   path.join(".claude", "skills", "qamap-pr-qa"),
 ];
 
-export async function initAgentSetup(rootInput: string, options: { force?: boolean } = {}): Promise<AgentInitResult> {
+export async function initAgentSetup(rootInput: string, options: { force?: boolean; reviewMode?: AgentReviewMode } = {}): Promise<AgentInitResult> {
+  if (options.reviewMode !== undefined && options.reviewMode !== "ask" && options.reviewMode !== "report") throw new Error("Invalid review mode");
   const root = path.resolve(rootInput);
   const dlxCommand = await detectDlxCommand(root);
   const nextCommand = `${dlxCommand} qa report . --base origin/main --head HEAD --handoff`;
 
   const files: AgentInitFile[] = [];
-  files.push(await upsertAgentsSection(root, dlxCommand));
+  files.push(await upsertAgentsSection(root, dlxCommand, options.reviewMode));
   for (const targetPath of SKILL_TARGET_RELATIVE_PATHS) {
     files.push(await copyPackagedSkill(root, targetPath, options.force ?? false));
   }
@@ -47,36 +49,10 @@ export async function initAgentSetup(rootInput: string, options: { force?: boole
   return { root, files, nextCommand };
 }
 
-export function buildAgentQaSection(dlxCommand: string): string {
-  return [
-    SECTION_START,
-    "## Pre-PR QA (QAMap)",
-    "",
-    "For PR bug review or test planning, offer optional local QAMap analysis once.",
-    "Respect explicit user/project choices; a refusal means ordinary review. Installation is not blanket consent.",
-    "QAMap analysis makes no LLM call; invocation and interpretation still use model tokens. Savings are not guaranteed.",
-    "After consent, use an installed version that supports --handoff (check qa --help once per version):",
-    "Prefer its local binary. The package-runner example below may download a package; get approval before installing or upgrading.",
-    "",
-    "```sh",
-    `${dlxCommand} qa report . --base origin/main --head HEAD --handoff`,
-    "```",
-    "",
-    "- Use the actual PR base; include working-tree changes only when requested.",
-    "- Await one command completion through the host tool; do not poll with repeated model calls.",
-    "- Read attached `summary` and `reviewEvidence` first. Do not reread the summary file or rerun analysis.",
-    "- Follow `recovery` pointers into `files.full` only for relevant omitted evidence; broaden review when needed.",
-    "- Tests stay `not-run`; suggested commands, edits and automation need separate authorization.",
-    "- For save-only requests, omit --handoff and stop after returning paths without reading report contents.",
-    "- The full workflow lives in `.agents/skills/qamap-pr-qa/SKILL.md`; Claude Code also receives `.claude/skills/qamap-pr-qa/SKILL.md`.",
-    SECTION_END,
-  ].join("\n");
-}
-
-async function upsertAgentsSection(root: string, dlxCommand: string): Promise<AgentInitFile> {
+async function upsertAgentsSection(root: string, dlxCommand: string, reviewMode?: AgentReviewMode): Promise<AgentInitFile> {
   const agentsPath = path.join(root, "AGENTS.md");
   const relativePath = "AGENTS.md";
-  const section = buildAgentQaSection(dlxCommand);
+  let section = buildAgentQaSection(dlxCommand, reviewMode);
 
   if (!(await pathExists(agentsPath))) {
     const content = `# Agent Instructions\n\n${section}\n`;
@@ -89,6 +65,7 @@ async function upsertAgentsSection(root: string, dlxCommand: string): Promise<Ag
   const endIndex = existing.indexOf(SECTION_END);
 
   if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+    if (reviewMode === undefined && existing.slice(startIndex, endIndex).includes(REPORT_REVIEW_MARKER)) section = buildAgentQaSection(dlxCommand, "report");
     const updated = existing.slice(0, startIndex) + section + existing.slice(endIndex + SECTION_END.length);
     if (updated === existing) {
       return { path: relativePath, status: "unchanged", detail: "QAMap section already up to date" };

@@ -14,6 +14,8 @@ export interface ImpactStep {
   line: number;
   symbol: string;
   changedLine?: number;
+  changedLines?: number[];
+  deletionLines?: number[];
   relation: "changed-declaration" | "reference" | "export" | "import" | "reexport" | "test-reference" | "registration-candidate" | "compiler-mapping";
 }
 export interface RepositoryImpact {
@@ -132,7 +134,7 @@ export function createRepositoryModuleResolver(
 }
 
 export function traceRepositoryImpact(
-  index: RepositoryEvidenceIndex, changes: Array<{ file: string; lines?: number[] }>,
+  index: RepositoryEvidenceIndex, changes: Array<{ file: string; lines?: number[]; deletionLines?: number[] }>,
   options: { maxStates?: number; maxPaths?: number; maxPathSteps?: number } = {},
 ): RepositoryImpact {
   const limits = { states: bounded(options.maxStates, 4000, 20000), paths: bounded(options.maxPaths, 128, 1024), pathSteps: bounded(options.maxPathSteps, 64, 256) };
@@ -190,14 +192,26 @@ export function traceRepositoryImpact(
     const block = blocks.get(change.file);
     if (!block) { boundary({ file: change.file, reason: "changed-file-not-indexed" }); continue; }
     const changedLines = change.lines?.filter(line => Number.isSafeInteger(line) && line > 0).sort((a, b) => a - b);
-    const declarations = block.declarations.filter((entry) => !changedLines || changedLines.some((line) => line >= entry.line && line <= entry.endLine));
+    const deletionLines = change.deletionLines?.filter(line => Number.isSafeInteger(line) && line >= 0);
+    // A deletion boundary belongs to a surviving declaration only when both sides are inside it.
+    const containsDeletion = (entry: typeof block.declarations[number], line: number): boolean => line >= entry.line && line < entry.endLine;
+    if (deletionLines?.some(line => !block.declarations.some(entry => containsDeletion(entry, line)))) {
+      boundary({ file: change.file, reason: "deletion-context-unresolved" });
+    }
+    const declarations = block.declarations.filter((entry) => (!changedLines && !deletionLines)
+      || changedLines?.some((line) => line >= entry.line && line <= entry.endLine)
+      || deletionLines?.some(line => containsDeletion(entry, line)));
     if (!declarations.length) boundary({ file: change.file, reason: "changed-symbol-not-resolved" });
     for (const declaration of declarations) {
-      const changedLine = changedLines?.find(line => line >= declaration.line && line <= declaration.endLine);
+      const declarationChanges = [...new Set(changedLines?.filter(line => line >= declaration.line && line <= declaration.endLine))];
+      const changedLine = declarationChanges[0];
       enqueue({ file: change.file, symbol: declaration.name, exported: false,
         origin: { file: change.file, symbol: declaration.name },
         evidence: [{ file: change.file, line: declaration.line, symbol: declaration.name, relation: "changed-declaration",
-          ...(changedLine !== undefined ? { changedLine } : {}) }] });
+          ...(changedLine !== undefined ? { changedLine } : {}),
+          ...(deletionLines?.some(line => containsDeletion(declaration, line))
+            ? { deletionLines: [...new Set(deletionLines.filter(line => containsDeletion(declaration, line)).map(line => line + 1))].sort((a, b) => a - b) } : {}),
+          ...(declarationChanges.length > 1 ? { changedLines: declarationChanges } : {}) }] });
     }
   }
   const pathKeys = new Set<string>();

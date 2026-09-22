@@ -1,6 +1,6 @@
 {
   "name": "qamap",
-  "version": "0.4.17",
+  "version": "0.5.0-rc.1",
   "description": "Turn PR changes into traceable local QA decisions and optional automation handoffs without an LLM call.",
   "author": {
     "name": "IvoryCanvas",
@@ -19,8 +19,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "QAMap",
-    "shortDescription": "Find what a PR needs to prove before merge.",
-    "longDescription": "Map commit and diff evidence to affected behavior, routed QA scenarios, and optional local automation without uploading source code.",
+    "shortDescription": "Trace PR risk before merge",
+    "longDescription": "Review PR changes with local source and test evidence, affected behavior, and suggested QA checks. QAMap makes no model calls. An agent can interpret its bounded report, but still uses model tokens; missing evidence stays explicit and tests do not run automatically.",
     "developerName": "IvoryCanvas",
     "category": "Developer Tools",
     "capabilities": [

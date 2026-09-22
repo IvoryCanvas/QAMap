@@ -27,6 +27,23 @@ async function fixture(t) {
   return { root, put, cacheDirectory: path.join(temp, "cache") };
 }
 
+test("deletion boundaries anchor only a surviving declaration, never a neighboring function", async t => {
+  const { root, put } = await fixture(t);
+  await put("src/transfer.mjs", "export function transfer(state) {\n  const note = 0;\n  state.completed = true;\n  return true;\n}\nexport function next() { return 1; }\n");
+  await put("test/transfer.test.mjs", "import { transfer, next } from '../src/transfer.mjs';\ntest('transfer', () => expect(transfer({})).toBe(false));\ntest('next', () => expect(next()).toBe(1));\n");
+  const index = await buildRepositoryEvidenceIndex(root, { cacheDirectory: false });
+  const internal = traceRepositoryImpact(index, [{ file: "src/transfer.mjs", deletionLines: [2] }]);
+  assert.ok(internal.paths.length);
+  assert.ok(internal.paths.every(item => item.changedSymbol === "transfer"));
+  assert.deepEqual(internal.paths[0].evidence[0].deletionLines, [3]);
+  assert.equal(internal.paths[0].evidence[0].changedLine, undefined);
+  for (const deletion of [0, 5, 6]) {
+    const unresolved = traceRepositoryImpact(index, [{ file: "src/transfer.mjs", deletionLines: [deletion] }]);
+    assert.deepEqual(unresolved.paths, []);
+    assert.ok(unresolved.boundaries.some(item => item.reason === "deletion-context-unresolved"));
+  }
+});
+
 test("named reexports and package declarations preserve symbol evidence to route and test references", async (t) => {
   const { root, cacheDirectory, put } = await fixture(t);
   const index = await buildRepositoryEvidenceIndex(root, { cacheDirectory });

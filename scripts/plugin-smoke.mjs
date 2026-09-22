@@ -135,7 +135,8 @@ try {
   assert.equal(handoff.summary.execution.status, "not-run");
   assert.equal(handoff.execution.performed, false);
   assert.deepEqual(handoff.recovery.repository, ["/repositoryIndex", "/repositoryImpact"]);
-  assert.ok(Buffer.byteLength(handoffOutput.stdout) <= 8192);
+  assert.equal(handoff.reviewEvidence.limits.responseBytes, 16384);
+  assert.ok(Buffer.byteLength(handoffOutput.stdout) <= 16384);
   assert.deepEqual(JSON.parse(await readFile(handoff.files.summary, "utf8")), handoff.summary);
   const full = JSON.parse(await readFile(handoff.files.full, "utf8"));
   for (const pointer of Object.values(handoff.recovery).flat()) {
@@ -154,7 +155,9 @@ try {
     assert.match(await readFile(path.join(agentProject, host, "skills/qamap-pr-qa/references/advanced-workflow.md"), "utf8"),
       /execution\.gitState/);
   }
-  assert.match(await readFile(path.join(agentProject, "AGENTS.md"), "utf8"), /--handoff/);
+  const instructions = await readFile(path.join(agentProject, "AGENTS.md"), "utf8");
+  assert.match(instructions, /--handoff/);
+  assert.ok(instructions.includes(`@ivorycanvas/qamap@${version} qa report`));
 
   const installedManifest = JSON.parse(
     await readFile(

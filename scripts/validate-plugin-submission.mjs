@@ -73,6 +73,9 @@ assert.equal("apps" in codexPlugin, false, "skills-only package must not declare
 const requiredCapabilities = new Set(["Interactive", "Write"]);
 assert.deepEqual(new Set(codexPlugin.interface.capabilities), requiredCapabilities);
 assert.equal(codexPlugin.interface.category, submission.listing.category);
+assert.equal(codexPlugin.interface.shortDescription, submission.listing.shortDescription);
+assert.equal(codexPlugin.interface.longDescription, submission.listing.longDescription);
+assert.ok(submission.listing.shortDescription.length <= 30, "listing subtitle must fit 30 characters");
 assert.equal(codexPlugin.interface.websiteURL, submission.listing.websiteURL);
 assert.equal(codexPlugin.interface.privacyPolicyURL, submission.listing.privacyPolicyURL);
 assert.equal(codexPlugin.interface.termsOfServiceURL, submission.listing.termsOfServiceURL);
@@ -146,6 +149,11 @@ await assertFile("skills/qamap-pr-qa/assets/qamap-logo.png");
 await assertFile("skills/qamap-pr-qa/assets/qamap-logo.svg");
 
 const pinnedPackage = `@ivorycanvas/qamap@${packageJson.version}`;
+const advancedWorkflow = await readText("skills/qamap-pr-qa/references/advanced-workflow.md");
+const advancedPins = [...advancedWorkflow.matchAll(/@ivorycanvas\/qamap@([^\s`]+)/g)];
+assert.ok(advancedPins.length > 0, "advanced workflow must pin the package");
+for (const [, version] of advancedPins) assert.equal(version, packageJson.version);
+assert.ok(submission.releaseNotes.includes(`QAMap ${packageJson.version} `), "release notes must name the candidate version");
 assert.match(skill, new RegExp(pinnedPackage.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 assert.doesNotMatch(skill, /@ivorycanvas\/qamap@latest/);
 assert.doesNotMatch(skill, /default markdown report is written for people/i);

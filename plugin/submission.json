@@ -3,8 +3,8 @@
   "submissionType": "skills-only",
   "listing": {
     "name": "QAMap",
-    "shortDescription": "Find what a code change needs to prove before merge.",
-    "longDescription": "QAMap runs a deterministic local analysis of the current branch, maps diff evidence to affected behavior and QA scenarios, and gives a coding agent one evidence-backed next action. It does not upload source code or make an additional LLM call. Repository validation and optional E2E drafts remain explicit, reviewable actions.",
+    "shortDescription": "Trace PR risk before merge",
+    "longDescription": "Review PR changes with local source and test evidence, affected behavior, and suggested QA checks. QAMap makes no model calls. An agent can interpret its bounded report, but still uses model tokens; missing evidence stays explicit and tests do not run automatically.",
     "category": "Developer Tools",
     "websiteURL": "https://github.com/IvoryCanvas/QAMap",
     "supportURL": "https://github.com/IvoryCanvas/QAMap/issues/new/choose",
@@ -79,5 +79,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "QAMap 0.4.17 preserves independent and diverged branch intents, adds schema-derived response provenance and Flutter validation evidence, selects runnable repository commands, and keeps changed test assertions visible in compact agent output."
+  "releaseNotes": "QAMap 0.5.0-rc.1 is an unpublished release candidate for reusable repository evidence, local saved reports, and opt-in one-call report review. It preserves declaration and import context, test expectations, explicit coverage gaps, and static execution state. General token savings and full review coverage are not guaranteed. Publish and verify the exact npm version before submitting this plugin."
 }

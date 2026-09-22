@@ -22,6 +22,10 @@ automation. It does not upload source code or make its own LLM call.
 
 ## Install And Run
 
+This branch prepares **0.5.0-rc.1**, an unpublished candidate. The `latest`
+package and the directory listing are separate releases. See the
+[candidate scope and remaining checks](docs/releases/0.5.0.md).
+
 ### Local CLI (Recommended)
 
 With Node.js 20 or newer, run this from the branch you want to review:

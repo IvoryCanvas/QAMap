@@ -4,7 +4,34 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
-## Unreleased - Repository Evidence
+## 0.5.0-rc.1 - Candidate Preparation (2026-09-22)
+
+**Unpublished. Stable 0.5.0 remains on hold.** Package, CLI, native plugin
+manifests and skill references now share the candidate version. No existing npm
+or directory release has been replaced. See the [remaining gates](releases/0.5.0.md).
+
+The current handoff envelope is capped at 16,384 bytes; its nested agent summary
+retains the separate 4,096-byte limit. It preserves supported declaration and
+module-binding context, distant expectations and deletion boundaries. Report
+review is consented or explicitly selected per project, never enabled merely by
+installation. Static analysis remains `not-run`.
+
+| Evidence | Status |
+| --- | --- |
+| Pre-version-change full tests | 733/733 passed |
+| Pre-version-change static QA contracts | 44/44 passed |
+| Pre-version-change evidence suites | 19 cases, 114 required lines retained, two repetitions; line retention is not general defect recall |
+| Actual report-review usage | Six known synthetic pairs: 303,747 standalone vs 202,091 candidate tokens, with predefined findings retained; sample-specific, not a cost or general quality guarantee |
+| Complete candidate release gate | Pending on the synchronized candidate |
+| Candidate registry smoke and directory approval | Not run; candidate not published |
+| Dynamic-policy and large-PR evidence completeness | Unresolved; stable release blocker |
+
+The [full measurement record](report-only-validation.md) preserves earlier
+failures, the first-use consent condition, cached and uncached usage, and
+author-reviewed quality limitations. Do not use a previous checkpoint or remote
+CI run to sign off later candidate changes.
+
+## Earlier Development Checkpoint - Repository Evidence
 
 The next candidate inventories supported repository metadata before QA analysis,
 reuses unchanged syntax blocks, and follows symbol references across declared
@@ -70,11 +97,11 @@ TypeScript is now a production dependency for syntax parsing. The isolated
 install checks that dependency is available; its installed directory adds
 approximately 23 MB in the measured local environment.
 
-Actual provider-token comparison, broader measured task quality, and the final
-0.4.18 release run remain open under #264. No provider call, version bump,
-publication, or fixed savings claim is implied by these offline receipts.
+At this earlier checkpoint, actual provider comparison and release validation
+were open under #264. The current candidate and later measurements are recorded
+above; these historical offline receipts are not token-savings measurements.
 
-## Unreleased - Lifecycle Contracts
+## Earlier Development Checkpoint - Lifecycle Contracts
 
 Changed tests can now connect to commit-backed product lifecycles, including
 Ruby Minitest contracts. Contract-bearing assertions strengthen the associated

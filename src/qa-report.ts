@@ -63,6 +63,9 @@ export async function writeLocalQaReport(
     };
     if (!options.handoff) return receipt;
     const handoff = await buildLocalQaHandoff(result, receipt, JSON.parse(summary));
+    if (JSON.stringify(handoff.summary) !== summary.trim()) {
+      await fs.writeFile(files.summary, `${JSON.stringify(handoff.summary)}\n`, { encoding: "utf8", mode: 0o600 });
+    }
     await fs.writeFile(path.join(directory, "handoff.json"), `${JSON.stringify(handoff)}\n`,
       { encoding: "utf8", flag: "wx", mode: 0o600 });
     return handoff;

@@ -1,9 +1,9 @@
 interface:
   display_name: "QAMap PR QA"
-  short_description: "Find what the current PR needs to prove before merge."
+  short_description: "Review PR evidence from a local QAMap report."
   icon_small: "./assets/qamap-logo.png"
   icon_large: "./assets/qamap-logo.svg"
   brand_color: "#0E7490"
-  default_prompt: "Use $qamap-pr-qa to analyze this branch and show what it must prove before merge."
+  default_prompt: "Use $qamap-pr-qa to analyze this branch and explain only the returned findings, evidence, and gaps."
 policy:
   allow_implicit_invocation: true

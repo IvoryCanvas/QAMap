@@ -1,10 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.5.0-rc.1 - Unreleased
+
+Release candidate only. npm and plugin publication are separate pending steps.
+See the [0.5.0 preparation checklist](docs/releases/0.5.0.md).
 
 ### Added
 
 - Opt-in `qa report --handoff` returns a bounded summary, hash-checked source/test excerpts and explicit full-report recovery pointers in one response, while preserving receipt-only reporting and static execution state.
+- `init --agent --review-mode report` saves an explicit project preference; `--review-mode ask` restores the offer-first behavior without replacing user-authored instructions.
+- Local `qa report` saves private Markdown and JSON artifacts with receipt-only output unless `--handoff` is requested.
 - Reusable repository evidence blocks for JS/TS declarations, references, tests, package entries, compiler aliases, API contract pointers and validation metadata, with explicit coverage and incremental refresh receipts.
 - Cross-package symbol paths to test references and registration candidates, with stop conditions for ambiguous exports, unsupported resolution and mismatched source snapshots.
 - Quality-gated cold, warm and incremental index benchmarks plus a self-contained exact-version package smoke.
@@ -12,6 +17,9 @@
 
 ### Fixed
 
+- Generated onboarding commands pin the running package version for npm, pnpm, Yarn and Bun, so prerelease-only commands do not resolve an incompatible stable binary.
+- Review evidence preserves short declaration bodies, relevant module bindings, deletion boundaries and distant test expectations. Truncated context remains an explicit gap within the 16,384-byte response limit.
+- Foreground completion-wait guidance reduces avoidable model polling without changing execution authority or hiding additional caller usage.
 - Module boundaries retain specifiers and locations, distinguish explicit Node builtins from unresolved dependencies, and remain recoverable when compact output omits them. Handoff excerpts avoid duplicate endpoint pairs and preserve the strongest pair under diagnostic pressure.
 - Local CLI experiment guards accumulate usage across resumed turns, retain observed overruns and reject incomplete or inconsistent receipts instead of reporting successful low-cost runs.
 - Changed test contracts stay within the PR comparison, excluding merged target-branch tests and restored baseline declarations. Recent-file priority uses current head locations instead of stale commit coordinates.
@@ -24,6 +32,7 @@
 
 ### Measurement
 
+- Six known synthetic pairs met predefined finding and execution-state criteria with 303,747 standalone versus 202,091 report-review tokens. The 33.47% aggregate reduction is sample-specific, not a general quality, cost or savings guarantee. Prior failures and dynamic-policy and large-change gaps remain documented.
 - Offline benchmark success is reported separately from measured agent quality. Missing provider usage cannot produce a token or cost savings claim.
 - Repository runs record repeated direct file reads, post-handoff tool activity and setup-through-cleanup timing; diagnostic comparisons require matched passing quality and complete provider usage.
 

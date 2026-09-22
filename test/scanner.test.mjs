@@ -11123,6 +11123,7 @@ test("reviewProject uses workspace root guardrails for package branches", async 
 
 test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stays idempotent", async () => {
   const { initAgentSetup, formatAgentInitReport } = await import("../dist/agent-init.js");
+  const { VERSION } = await import("../dist/version.js");
   const root = await makeTempRepo();
   await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "smoke" }));
 
@@ -11130,7 +11131,7 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   assert.deepEqual(first.files.map((file) => file.status), ["created", "created", "created", "created"]);
   const agents = await readFile(path.join(root, "AGENTS.md"), "utf8");
   assert.match(agents, /<!-- qamap:agent:start -->/);
-  assert.match(agents, /npx @ivorycanvas\/qamap qa report \. --base origin\/main --head HEAD --handoff/);
+  assert.ok(agents.includes(`npx @ivorycanvas/qamap@${VERSION} qa report . --base origin/main --head HEAD --handoff`));
   assert.match(agents, /After consent/);
   assert.match(agents, /refusal means ordinary review/);
   assert.match(agents, /not blanket consent/);
@@ -11159,6 +11160,12 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   assert.match(portableSkill, /name: qamap-pr-qa/);
   assert.equal(claudeSkill, portableSkill);
   for (const host of [".agents", ".claude"]) {
+    for (const relative of ["SKILL.md", "agents/openai.yaml", "references/advanced-workflow.md"]) {
+      assert.equal(
+        await readFile(path.join(root, host, "skills/qamap-pr-qa", relative), "utf8"),
+        await readFile(path.join(repositoryRoot, "skills/qamap-pr-qa", relative), "utf8"),
+      );
+    }
     const advanced = await readFile(path.join(root, host, "skills/qamap-pr-qa/references/advanced-workflow.md"), "utf8");
     assert.match(advanced, /execution\.gitState/);
   }
@@ -11173,7 +11180,7 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   );
   const report = formatAgentInitReport(second);
   assert.match(report, /# QAMap Agent Setup/);
-  assert.match(report, /npx @ivorycanvas\/qamap qa report \./);
+  assert.ok(report.includes(`npx @ivorycanvas/qamap@${VERSION} qa report .`));
 });
 
 test("initAgentSetup appends to an existing AGENTS.md and refreshes only its own section", async () => {
@@ -11189,7 +11196,7 @@ test("initAgentSetup appends to an existing AGENTS.md and refreshes only its own
   assert.match(appended, /Never push to main/);
   assert.match(appended, /<!-- qamap:agent:end -->/);
 
-  await writeFile(path.join(root, "AGENTS.md"), appended.replace("optional local QAMap analysis", "OLD WORDING"));
+  await writeFile(path.join(root, "AGENTS.md"), appended.replace(/<!-- qamap:agent:start -->[\s\S]*?<!-- qamap:agent:end -->/, "<!-- qamap:agent:start -->\nOLD WORDING\n<!-- qamap:agent:end -->"));
   const refreshed = await initAgentSetup(root);
   assert.equal(refreshed.files[0].status, "updated");
   const current = await readFile(path.join(root, "AGENTS.md"), "utf8");
@@ -11261,10 +11268,12 @@ test("generateAgentContext reflects npm scripts and repository boundaries", asyn
   assert.match(context, /Never create or suggest branches with a `codex\/` prefix/);
   assert.match(context, /Use `feat\/`, `fix\/`, `refactor\/`, `style\/`, `hotfix\/`, `chore\/`, or `docs\/` branch prefixes/);
   assert.match(context, /## Pre-PR QA/);
-  assert.match(context, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
-  assert.match(context, /QA planning evidence, not as proof/);
-  assert.match(context, /npx @ivorycanvas\/qamap qa run \. --base origin\/main --head HEAD --format agent/);
-  assert.match(context, /inspect `execution\.gitState`/);
+  const { initAgentSetup } = await import("../dist/agent-init.js");
+  await initAgentSetup(root);
+  const installed = await readFile(path.join(root, "AGENTS.md"), "utf8");
+  const section = /<!-- qamap:agent:start -->[\s\S]*?<!-- qamap:agent:end -->/;
+  assert.ok(context.match(section));
+  assert.equal(context.match(section)[0], installed.match(section)[0]);
 });
 
 // Minimal JSON Schema (draft-07 subset) checker used to keep

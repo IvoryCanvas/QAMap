@@ -96,6 +96,7 @@ interface ParsedOptions {
   recordHistory?: boolean;
   dryRun?: boolean;
   agent?: boolean;
+  reviewMode?: "ask" | "report";
   handoff?: boolean;
   scripts?: boolean;
   timeoutMs?: number;
@@ -574,12 +575,13 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "init") {
-    const options = parseOptions(rest);
+    const options = parseOptions(rest, false, true);
+    if (options.reviewMode && !options.agent) throw new Error("--review-mode requires init --agent.");
     if (options.agent && options.scripts) {
       throw new Error("Choose either --agent or --scripts for one init run.");
     }
     if (options.agent) {
-      const result = await initAgentSetup(options.path, { force: options.force });
+      const result = await initAgentSetup(options.path, { force: options.force, reviewMode: options.reviewMode });
       await printOrWrite(formatAgentInitReport(result));
       return 0;
     }
@@ -596,7 +598,7 @@ async function main(argv: string[]): Promise<number> {
   throw new Error(`Unknown command: ${command}`);
 }
 
-function parseOptions(args: string[], allowHandoff = false): ParsedOptions {
+function parseOptions(args: string[], allowHandoff = false, allowReviewMode = false): ParsedOptions {
   const options: ParsedOptions = {
     path: ".",
     json: false,
@@ -606,6 +608,14 @@ function parseOptions(args: string[], allowHandoff = false): ParsedOptions {
   let sawPath = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+
+    if (arg === "--review-mode") {
+      if (!allowReviewMode) throw new Error("--review-mode is only available with init --agent.");
+      const value = args[++index];
+      if (value !== "ask" && value !== "report") throw new Error("--review-mode must be ask or report.");
+      options.reviewMode = value;
+      continue;
+    }
 
     if (arg === "--handoff") {
       if (!allowHandoff) throw new Error("--handoff is only available with qa report.");
@@ -1203,7 +1213,7 @@ Usage:
   qamap history init [path]
   qamap context [path] [--write [file]] [--force]
   qamap init [path] [--write <file>] [--force]
-  qamap init --agent [path] [--force]
+  qamap init --agent [path] [--review-mode ask|report] [--force]
   qamap init --scripts [path] [--force]
 
 Severities:

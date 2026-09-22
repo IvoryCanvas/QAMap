@@ -62,7 +62,7 @@ function positiveInteger(value, name) {
 }
 
 export function createCodexSessionGuard({ tokenLimit, requestLimit, initialRows = [] }) {
-  positiveInteger(tokenLimit, "tokenLimit");
+  if (tokenLimit !== null) positiveInteger(tokenLimit, "tokenLimit");
   positiveInteger(requestLimit, "requestLimit");
   let known = measureCodexSession(initialRows);
   const initial = known;
@@ -70,7 +70,7 @@ export function createCodexSessionGuard({ tokenLimit, requestLimit, initialRows 
   let usageError = false;
   const stop = (reason) => { stopReason ??= reason; };
   function checkLimits() {
-    if (known.total_tokens >= tokenLimit) stop("session-token-limit");
+    if (tokenLimit !== null && known.total_tokens >= tokenLimit) stop("session-token-limit");
     if (known.requests.length >= requestLimit) stop("session-request-limit");
   }
   checkLimits();
@@ -95,25 +95,33 @@ export function createCodexSessionGuard({ tokenLimit, requestLimit, initialRows 
       stop(reason);
     },
     finish({ exitCode, turnUsage }) {
-      let reconciled = false;
+      let receiptScope = null;
       try {
         const current = usageValue(turnUsage);
-        reconciled = fields.every((field) => known[field] - initial[field] === current[field]);
+        if (fields.every((field) => known[field] - initial[field] === current[field])) {
+          receiptScope = "stage";
+        } else if (initial.requests.length > 0 && fields.every((field) =>
+          current[field] === known[field] && current[field] === known.requests.at(-1)?.total[field])) {
+          // Resumed CLI receipts may cover the session, but must match both the
+          // request ledger and the final counter, not an assumed cumulative sum.
+          receiptScope = "session";
+        }
       } catch { /* A missing provider receipt is unavailable, not zero usage. */ }
+      const reconciled = receiptScope !== null;
       if (!reconciled) stop("usage-unreconciled");
       if (known.requests.length === initial.requests.length) stop("usage-missing");
       if (exitCode !== 0) stop("process-failed");
       const usageComplete = !usageError && reconciled && exitCode === 0 && stopReason === null;
       const observedUsage = { ...Object.fromEntries(fields.map((field) => [field, known[field]])),
         total_tokens: known.total_tokens, requests: known.requests.length };
-      return { usageComplete, stopReason,
+      return { usageComplete, stopReason, receiptScope,
         sessionUsage: usageComplete ? observedUsage : null,
         observedUsage,
         stageUsage: usageComplete ? { ...Object.fromEntries(fields.map((field) => [field, known[field] - initial[field]])),
           total_tokens: known.total_tokens - initial.total_tokens,
           requests: known.requests.length - initial.requests.length } : null,
-        budget: { tokenLimit, requestLimit, enforcement: "observed-usage-soft-stop",
-          overrunTokens: Math.max(0, known.total_tokens - tokenLimit) } };
+        budget: { tokenLimit, requestLimit, enforcement: tokenLimit === null ? "request-limit-only" : "observed-usage-soft-stop",
+          overrunTokens: tokenLimit === null ? 0 : Math.max(0, known.total_tokens - tokenLimit) } };
     },
   };
 }
