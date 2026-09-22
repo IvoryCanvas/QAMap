@@ -18,11 +18,16 @@ installation. Static analysis remains `not-run`.
 
 | Evidence | Status |
 | --- | --- |
-| Pre-version-change full tests | 733/733 passed |
-| Pre-version-change static QA contracts | 44/44 passed |
+| Candidate full tests | 737/737 passed on clean revision `bfc77df`; no skipped or cancelled tests |
+| Candidate coverage | Lines 91.87%, branches 89.04%, functions 96.21%; all existing thresholds retained |
+| Candidate static QA contracts | 44/44 passed |
+| Candidate repository and context checks | 11/11 repository checks, including all seven quality cases; 10/10 context checks |
+| Candidate execution benchmark | 3/3 contracts passed; all three seeded regressions caught and their fixes passed |
+| Candidate production install | 251-file tarball installed in isolation as 0.5.0-rc.1 and returned located evidence; generated agent commands retain the exact package version |
+| Candidate setup regressions | npm, pnpm, Yarn and Bun command generation passed; these checks do not independently install all four package managers |
 | Pre-version-change evidence suites | 19 cases, 114 required lines retained, two repetitions; line retention is not general defect recall |
 | Actual report-review usage | Six known synthetic pairs: 303,747 standalone vs 202,091 candidate tokens, with predefined findings retained; sample-specific, not a cost or general quality guarantee |
-| Complete candidate release gate | Pending on the synchronized candidate |
+| Complete local candidate release gate | Passed on clean revision `bfc77df`, including scan, plugin metadata, install smoke, offline harness, coverage and package preview; final remote CI remains a separate gate |
 | Candidate registry smoke and directory approval | Not run; candidate not published |
 | Dynamic-policy and large-PR evidence completeness | Unresolved; stable release blocker |
 
@@ -30,6 +35,12 @@ The [full measurement record](report-only-validation.md) preserves earlier
 failures, the first-use consent condition, cached and uncached usage, and
 author-reviewed quality limitations. Do not use a previous checkpoint or remote
 CI run to sign off later candidate changes.
+
+The real-model measurements preceded candidate version synchronization and the
+package-pin fix. They were not repeated on this exact artifact. The current
+release gate made no model calls; its offline harness checks infrastructure,
+not model answer quality or token savings. A subsequent documentation-only
+receipt update does not change the tested runtime implementation.
 
 ## Earlier Development Checkpoint - Repository Evidence
 
