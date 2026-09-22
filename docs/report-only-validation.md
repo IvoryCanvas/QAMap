@@ -1,5 +1,12 @@
 # Report-Only Review Validation
 
+**Latest status:** literal-policy and large-change evidence are retained in the
+strengthened regression cases. The actual paged-reader comparison also preserved
+their predefined findings, but the large case used 401,557 tokens versus 76,822
+standalone. The efficiency gate failed and stable publication remains blocked.
+See [the complete follow-up results](release-validation.md#paged-delivery-follow-up).
+Earlier passing samples below do not supersede this failure.
+
 The gate tests whether the returned evidence is sufficient for a predefined
 review, before spending model tokens. It does not judge a model or estimate
 token savings. A truthful coverage warning is necessary, but cannot compensate

@@ -42,12 +42,40 @@ The baseline identified all 160 mismatches. **This pair failed the quality gate;
 its lower token count is not an accepted savings result.** All failed evidence
 and usage receipts remain preserved; no automatic retry was performed.
 
-The follow-up adds bounded report pagination rather than increasing a hidden
-output limit. It needs new actual-usage and quality validation including every
-page read. Earlier measured savings do not validate this changed workflow.
-Stable publication and plugin submission remain blocked pending that check and
-exact-final-head CI. The following preparation receipts are historical, not
-sign-off of these runtime changes.
+### Paged Delivery Follow-Up
+
+The bounded reader passed the complete local release gate on the working tree
+subsequently committed as `63c918c`: 754 tests, 44 static contracts, 11 repository
+checks, 10 context checks and all 3 execution contracts. Coverage was 91.91% lines,
+89.14% branches and 96.12% functions. The isolated 257-file package install passed.
+
+Four new attempts used the same two synthetic changes, model and command limits.
+Request increments, cumulative usage and final completion receipts reconciled.
+The candidate read every byte of the large report through eight untruncated,
+contiguous model-visible pages. Both reviewers identified all 160 independent
+implementation/assertion mismatches with correct locations and retained product
+policy uncertainty and `not-run`. The policy case retained its concrete module
+without inventing a defect. This is known-case review parity, not general recall.
+
+| Case | Standalone total tokens | Report-review total tokens | Verdict |
+| --- | ---: | ---: | --- |
+| Literal runtime policy | 46,000 | 40,557 | Required evidence retained; 11.83% fewer total tokens |
+| 160 independent changes | 76,822 | 401,557 | Required evidence retained; 5.23 times the total tokens, efficiency gate failed |
+
+The paged experiment used 564,936 tokens in 22 provider requests. Together with
+the preceding failed archive-read experiment, the two new protocols used 814,664
+tokens in 38 requests. Cached input is a subset, not an additional token count.
+Parent engineering conversation usage is excluded; monetary cost was not measured.
+Both protocols used an explicit, preselected report-review preference, not first
+consent. All attempts are preserved and no automatic retry was performed.
+
+**Stable publication and plugin submission remain blocked.** Saving and delivering
+complete evidence does not establish efficiency. Sequential page reads increased
+the measured caller input substantially; reducing repeated model context without
+dropping independent evidence is the remaining large-change release blocker.
+Do not average it away with the smaller passing case or earlier comparisons.
+Exact-final-head CI is also required. The following preparation receipts are
+historical, not sign-off of these runtime changes.
 
 The current handoff envelope is capped at 16,384 bytes; its nested agent summary
 retains the separate 4,096-byte limit. It preserves supported declaration and

@@ -184,7 +184,8 @@ the host should not retry or rerun merely to summarize a completed response.
 ## Before 0.5.0
 
 The proposed minor release groups repository-wide evidence discovery with the
-new caller handoff. Version numbers and published plugins have not changed yet.
+new caller handoff. The local candidate is versioned separately; published
+packages and plugins have not changed.
 
 - Implemented: local one-response delivery, bounded excerpts, recovery pointers,
   save-only compatibility, and consent-aware packaged instructions.
@@ -258,8 +259,12 @@ finding criteria with fewer total tokens: 303,747 standalone versus 202,091 with
 QAMap (33.47% lower in aggregate). These are known synthetic cases, including
 three repetitions of one normal refactor, not broad review-quality parity.
 These measurements predate literal-policy linking and the overflow archive.
-The follow-up addresses those evidence losses locally; the archive-aware caller
-workflow still needs measured quality and usage validation before stable release.
+The follow-up addresses those evidence losses locally. A subsequent paged-reader
+comparison delivered all required large-change evidence and matched its expected
+findings, but used 401,557 tokens versus 76,822 for standalone review. It failed
+the efficiency gate. The smaller literal-policy pair used 40,557 versus 46,000.
+Both results are retained in [release validation](release-validation.md#paged-delivery-follow-up);
+stable publication remains blocked. Complete delivery is not a savings guarantee.
 
 The design aims to remove duplicated evidence gathering without concealing
 missing coverage. QAMap analysis uses no model calls; the caller still consumes
