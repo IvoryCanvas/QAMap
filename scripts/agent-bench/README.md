@@ -40,6 +40,47 @@ Saved JSON preserves these receipts. The report pins an implementation digest,
 prompts, fixtures, limits and model so a version label alone cannot conceal a
 different local build. Save notifications use stderr to keep JSON stdout valid.
 
+## Local CLI Experiment Guard
+
+`codex-session-guard.mjs` is a runner helper for separately controlled local CLI
+experiments, not another provider option in `agent-bench.mjs` and not part of
+QAMap's runtime. Importing it does not start a model or read account settings.
+Rollout parsing is checked against recorded CLI output, not a stable telemetry
+API. Pin the CLI version and reject changed formats instead of estimating usage.
+
+- Before launching a resumed process, load its full session history into
+  `createCodexSessionGuard` and reject a non-null `stopReason`.
+- Attach `watchCodexSession` to the runner's rollout reader and process-group
+  cancellation callback. Call and await `finish()` after process exit to capture
+  usage that arrived between polls. Reads are serialized, not concurrent.
+- Sum validated request increments across turns, including the consent stage.
+  Resumed CLI cumulative counters may reset. Cached input stays a subset;
+  reasoning output is not added a second time.
+- Reconcile the new stage against its CLI completion receipt. Missing, corrupt,
+  truncated or changed history, failed processes and stopped runs cannot produce
+  complete-run usage. Preserve `observedUsage` for diagnostics instead.
+- Token and request thresholds are **observed-usage soft stops**, not hard API
+  or spending caps. Already in-flight requests can exceed them; preserve
+  `budget.overrunTokens`. Deny subsequent stages once either threshold is met.
+
+The helper does not judge review quality, detect every tool failure, select a
+model, approve spending, or grant execution permissions. The experiment runner
+must still pin inputs, preflight tool access, enforce isolation, inspect failures
+and preserve receipts. Test prerequisites through the host's actual shell and
+sandbox path, including login-shell initialization and executable resolution.
+A successful absolute-path subprocess probe does not prove that the model's
+shell command can find the same Git, search utility, or QAMap executable.
+If a prerequisite fails and the model works around it, retain the usage and
+answer as diagnostic evidence, but exclude the run from a savings comparison.
+Do not subtract an estimated failure cost or automatically retry the model.
+
+Unit tests and a synthetic local child-process test run
+without a model, credentials or network access:
+
+```sh
+node --test test/codex-session-guard.test.mjs
+```
+
 ## Cache Treatment
 
 - Every task/arm/run owns a temporary fixture repository plus isolated home,

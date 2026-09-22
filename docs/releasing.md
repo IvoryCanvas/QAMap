@@ -10,9 +10,18 @@ QAMap keeps major and minor changes deliberately rare during `0.x` development.
 - Minor is reserved for a new product-level capability, an incompatible CLI or manifest contract, or a meaningful change to default execution and safety behavior.
 - Risky minor work should ship through `alpha`, `beta`, and `rc` prereleases before the final minor.
 - Do not pre-allocate a minor version to every roadmap phase. Define the next minor release bar and continue compatible work as patches until that bar is met.
-- Do not schedule `0.5.x` by date or implementation count. Continue `0.4.x` patches until external repository evidence shows that static QA design and automation drafts are dependable enough to support a new execution contract.
+- Do not schedule `0.5.x` by date or implementation count. A new default workflow requires its own quality and safety evidence, not just a larger change set.
 
-Version `0.4.0` is earned by the first commit-to-intent-to-scenario vertical slice: behavior-bearing commits and diff symbols become an evidence-backed lifecycle and concrete runner-independent QA, then existing Playwright, Maestro, or manual adapters compile the result. The next minor remains unscheduled and is reserved for explicit temporary execution and normalized evidence without modifying the target repository. That capability must be proven across unrelated repositories before a `0.5.0` candidate is cut.
+Version `0.4.0` introduced the first commit-to-intent-to-scenario vertical slice. Version `0.5.0` combines repository-wide evidence discovery with a consent-aware review handoff. QAMap remains local and deterministic; the caller interprets the returned evidence. This is not autonomous model review or automatic product-test execution. The [report-only readiness record](report-only-validation.md#050-readiness) preserves failed and passing gates. See the [0.5.0 release record](releases/0.5.0.md). Temporary product-scenario execution remains a separate longer-term goal.
+
+### Prerelease Safety
+
+Versions with an `alpha`, `beta` or `rc` suffix must stay off `latest`.
+After the exact revision passes its gates and publication is
+approved, use `npm publish --access public --tag next`. The corresponding GitHub
+Release must be marked as a prerelease. Do not submit the plugin until that exact
+package version is available and passes the public-registry smoke. Preparing an
+archive or changing a version string does not satisfy those gates.
 
 Version `1.0.0` requires a stable public contract and external adoption, not implementation volume alone. CLI commands, exit codes, machine output, manifest migration, adapter compatibility, no-LLM/no-upload guarantees, and release operations must be dependable. Repository stars are useful social proof, but repeated use in unrelated repositories and reported QA value are stronger release evidence.
 
@@ -46,6 +55,7 @@ The gate must pass:
 - `pnpm plugin:check`
 - `pnpm plugin:smoke`
 - `pnpm bench:ci`
+- `pnpm bench:repository`
 - `pnpm bench:agent --dry-run --assert` (scripted harness smoke, not measured task quality)
 - `pnpm bench:context`
 - `pnpm bench:execution`
@@ -182,12 +192,14 @@ Wall-clock samples use `performance.now()` and are diagnostic only: fixed order,
 
 ### Provider Comparison
 
-Before the 0.4.18 release decision, use the
+For broader repository-index measurements, use the
 [six-task measurement runbook](../scripts/agent-bench/README.md) to compare
 generic, cold and warm arms. Offline assertions verify the harness only.
 An actual measurement needs an explicitly chosen provider, exact model, locally
 configured key and approved spending limit. Start with one task, then repeat
-the full suite at least three times per arm if the pilot is valid.
+the full suite at least three times per arm if the pilot is valid. This is separate
+from the [measured report-review comparisons](report-only-validation.md#context-and-preference-follow-up)
+used during 0.5.0 preparation. Do not pool their different tasks or protocols.
 
 Save the report with its implementation, fixture and prompt digests. Report
 failed or incomplete tasks alongside successes. Require evidence precision,

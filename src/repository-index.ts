@@ -6,7 +6,7 @@ import ts from "typescript";
 import { parseDocument } from "yaml";
 import { openLocalIndexCache } from "./import-index-cache.js";
 import { comparePaths, createRepositoryTextReader, discoverRepositoryPaths } from "./repository-discovery.js";
-import { collectSourceStructure, safeModule, safeSymbol, structureLimit, structurePolicy } from "./source-structure.js";
+import { collectSourceStructure, safeModule, safeRuntimeModule, safeSymbol, structureLimit, structurePolicy } from "./source-structure.js";
 import type { SourceStructure } from "./source-structure.js";
 import { createRepositoryModuleResolver } from "./repository-impact.js";
 
@@ -25,6 +25,7 @@ export interface RepositoryIndexBlock extends SourceStructure {
   contracts: Array<{ pointer: string; kind: "operation" | "response" | "schema" }>;
   validation: Array<{ name: string; hash: string }>;
   modules: Array<{ specifier: string; target: string }>;
+  outputs: Array<{ specifier: string; target: string }>;
 }
 interface RepositorySnapshot { schema: 1; context: string; blocks: RepositoryIndexBlock[] }
 export interface RepositoryEvidenceIndex {
@@ -81,14 +82,14 @@ function metadata(file: string, text: string, kind: RepositoryIndexBlock["kind"]
   try { return parseMetadata(file, text, kind); }
   catch {
     return { file, hash: digest(text), kind, declarations: [], imports: [], exports: [], references: [], tests: [], routes: [],
-      contracts: [], validation: [], modules: [], gaps: [{ line: 1, kind: "parse-error" }, { line: 1, kind: "metadata-parser-failure" }] };
+      contracts: [], validation: [], modules: [], outputs: [], gaps: [{ line: 1, kind: "parse-error" }, { line: 1, kind: "metadata-parser-failure" }] };
   }
 }
 
 function parseMetadata(file: string, text: string, kind: RepositoryIndexBlock["kind"]): RepositoryIndexBlock {
   const structure = kind === "source" || kind === "test" ? collectSourceStructure(file, text)
     : { declarations: [], imports: [], exports: [], references: [], tests: [], routes: [], gaps: [] };
-  const block: RepositoryIndexBlock = { file, hash: digest(text), kind, ...structure, contracts: [], validation: [], modules: [] };
+  const block: RepositoryIndexBlock = { file, hash: digest(text), kind, ...structure, contracts: [], validation: [], modules: [], outputs: [] };
   if (kind !== "configuration" && kind !== "contract") return block;
   let value: unknown;
   try {
@@ -136,6 +137,7 @@ function parseMetadata(file: string, text: string, kind: RepositoryIndexBlock["k
     }
   } else if (/(?:^|\/)[jt]sconfig/.test(file)) {
     if (value.extends) block.gaps.push({ line: 1, kind: "extended-compiler-config" });
+    collectCompilerOutputs(block, value);
     if (isRecord(value.compilerOptions) && isRecord(value.compilerOptions.paths)) {
       const base = typeof value.compilerOptions.baseUrl === "string" ? value.compilerOptions.baseUrl : ".";
       for (const [specifier, targets] of Object.entries(value.compilerOptions.paths)) {
@@ -169,7 +171,7 @@ function parseMetadata(file: string, text: string, kind: RepositoryIndexBlock["k
     } else if (typeof value.$schema === "string") block.contracts.push({ pointer: "", kind: "schema" });
     else block.gaps.push({ line: 1, kind: "unrecognized-contract" });
   }
-  for (const field of ["contracts", "validation", "modules"] as const) if (block[field].length > structureLimit) {
+  for (const field of ["contracts", "validation", "modules", "outputs"] as const) if (block[field].length > structureLimit) {
     block[field].splice(structureLimit);
     block.gaps.push({ line: 1, kind: `metadata-limit:${field}` });
   }
@@ -179,21 +181,68 @@ function parseMetadata(file: string, text: string, kind: RepositoryIndexBlock["k
   return block;
 }
 
+function collectCompilerOutputs(block: RepositoryIndexBlock, config: Record<string, unknown>): void {
+  const options = config.compilerOptions;
+  if (!isRecord(options) || typeof options.rootDir !== "string" || typeof options.outDir !== "string") return;
+  const directory = path.posix.dirname(block.file);
+  const root = path.posix.normalize(path.posix.join(directory, options.rootDir));
+  const output = path.posix.normalize(path.posix.join(directory, options.outDir));
+  if (![options.rootDir, options.outDir].every((value) => /^[\w./-]+$/.test(value) && !path.posix.isAbsolute(value))
+    || (root !== "." && !safePath(root)) || !safePath(output)) {
+    block.gaps.push({ line: 1, kind: "unsupported-compiler-output" }); return;
+  }
+  const extensions = ["ts", "tsx", "mts", "cts"];
+  const includes = config.include;
+  const selected = new Set<string>();
+  let unsupported = Boolean(config.extends || config.references || config.files || options.rootDirs || options.outFile
+    || options.noEmit || options.emitDeclarationOnly || options.allowJs || options.noResolve);
+  unsupported ||= ts.convertCompilerOptionsFromJson(options, directory).errors.length > 0;
+  unsupported ||= config.exclude !== undefined && (!Array.isArray(config.exclude) || config.exclude.length > 0);
+  if (includes === undefined) extensions.forEach((extension) => selected.add(extension));
+  else if (Array.isArray(includes)) {
+    for (const include of includes) {
+      if (typeof include !== "string" || !/^[\w./*-]+$/.test(include) || path.posix.isAbsolute(include)) { unsupported = true; continue; }
+      const normalized = path.posix.normalize(path.posix.join(directory, include));
+      if (normalized === root || normalized === path.posix.join(root, "**/*")) extensions.forEach((extension) => selected.add(extension));
+      else {
+        const extension = extensions.find((suffix) => normalized === path.posix.join(root, `**/*.${suffix}`));
+        if (extension) selected.add(extension); else unsupported = true;
+      }
+    }
+  } else unsupported = true;
+  // Only whole source-tree includes are modeled. Filters and inherited build settings remain explicit boundaries.
+  if (unsupported) {
+    block.gaps.push({ line: 1, kind: "unsupported-compiler-output" });
+    extensions.forEach((extension) => selected.add(extension));
+  }
+  for (const extension of selected) {
+    const emitted = extension === "mts" ? "mjs" : extension === "cts" ? "cjs"
+      : extension === "tsx" && options.jsx === "preserve" ? "jsx" : "js";
+    block.outputs.push({ specifier: path.posix.join(output, `*.${emitted}`), target: path.posix.join(root, `*.${extension}`) });
+  }
+}
+
 function validSnapshot(value: unknown): value is RepositorySnapshot {
   if (!isRecord(value) || Object.keys(value).sort().join(",") !== "blocks,context,schema" || value.schema !== 1
     || typeof value.context !== "string" || !/^[a-f0-9]{64}$/.test(value.context) || !Array.isArray(value.blocks) || value.blocks.length > limits.files) return false;
   const files = new Set<string>();
   const fields: Record<string, Record<string, (value: unknown) => boolean>> = {
-    declarations: { name: symbol, line: lineNumber, endLine: lineNumber, kind: enumOf("function", "variable", "class", "type") },
+    declarations: { name: symbol, line: lineNumber, endLine: lineNumber, kind: enumOf("function", "variable", "class", "type"),
+      "runtimeLoads?": value => Array.isArray(value) && value.length > 0 && value.length <= 16 && value.every(entry => isRecord(entry)
+        && Object.keys(entry).sort().join(",") === "line,parameter" && lineNumber(entry.line)
+        && Number.isInteger(entry.parameter) && Number(entry.parameter) >= 0 && Number(entry.parameter) < 16) },
     imports: { module: moduleName, imported: symbol, local: symbol, line: lineNumber },
     exports: { local: symbol, exported: symbol, line: lineNumber, "module?": moduleName },
-    references: { name: symbol, line: lineNumber, owner: symbol, "member?": symbol, "registration?": (entry) => entry === true },
+    references: { name: symbol, line: lineNumber, owner: symbol, "member?": symbol, "registration?": (entry) => entry === true,
+      "callArguments?": value => Array.isArray(value) && value.length <= 16
+        && value.every(entry => entry === null || typeof entry === "string" && safeRuntimeModule(entry)) },
     tests: { line: lineNumber, kind: enumOf("assertion", "test-declaration") },
     routes: { line: lineNumber, kind: enumOf(...["get", "post", "put", "patch", "delete", "options", "head", "all", "use"].map((name) => `registration-candidate:${name}`)), "handler?": symbol },
     gaps: { line: lineNumber, kind: (entry) => typeof entry === "string" && /^[a-z-]+(?::[a-z]+)?$/.test(entry) && entry.length < 80 },
     contracts: { pointer: (entry) => typeof entry === "string" && entry.length <= 4096 && !/[\u0000-\u001f]/.test(entry), kind: enumOf("operation", "response", "schema") },
     validation: { name: (entry) => typeof entry === "string" && /^[\w:-]{1,160}$/.test(entry), hash: hashValue },
     modules: { specifier: (entry) => typeof entry === "string" && /^[\w@./*-]{1,512}$/.test(entry), target: (entry) => typeof entry === "string" && safePath(entry) },
+    outputs: { specifier: (entry) => typeof entry === "string" && safePath(entry), target: (entry) => typeof entry === "string" && safePath(entry) },
   };
   for (const block of value.blocks) {
     if (!isRecord(block) || Object.keys(block).sort().join(",") !== [...Object.keys(fields), "file", "hash", "kind"].sort().join(",")
@@ -228,7 +277,7 @@ export async function buildRepositoryEvidenceIndex(rootInput: string, options: {
   const read = createRepositoryTextReader(root, readerGaps, limits.fileBytes);
   const skipped: RepositoryEvidenceIndex["coverage"]["skipped"] = [];
   const classifications: Record<string, number> = {};
-  const context = digest(JSON.stringify({ structurePolicy, limits, policy: "repository-metadata-v1" }));
+  const context = digest(JSON.stringify({ structurePolicy, limits, policy: "repository-metadata-v2" }));
   const cache = await openLocalIndexCache(root, "repository", validSnapshot,
     process.env.QAMAP_REPOSITORY_CACHE === "off" ? false : options.cacheDirectory, inventory.inventoryComplete && inventory.discovery !== "unavailable");
   const previous = cache.previous;

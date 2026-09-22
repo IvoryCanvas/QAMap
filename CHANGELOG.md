@@ -1,9 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-09-22
+
+npm and plugin publication are separate steps.
+See the [0.5.0 release record](docs/releases/0.5.0.md).
 
 ### Added
 
+- Opt-in `qa report --handoff` returns a bounded summary, hash-checked source/test excerpts and explicit full-report recovery pointers in one response, while preserving receipt-only reporting and static execution state.
+- `init --agent --review-mode report` saves an explicit project preference; `--review-mode ask` restores the offer-first behavior without replacing user-authored instructions.
+- Local `qa report` saves private Markdown and JSON artifacts with receipt-only output unless `--handoff` is requested.
 - Reusable repository evidence blocks for JS/TS declarations, references, tests, package entries, compiler aliases, API contract pointers and validation metadata, with explicit coverage and incremental refresh receipts.
 - Cross-package symbol paths to test references and registration candidates, with stop conditions for ambiguous exports, unsupported resolution and mismatched source snapshots.
 - Quality-gated cold, warm and incremental index benchmarks plus a self-contained exact-version package smoke.
@@ -11,6 +17,16 @@
 
 ### Fixed
 
+- Direct test calls with literal local module filenames retain the selected policy's indexed export declarations without resolving unknown runtime choices or executing imports.
+- Graph-preview overflow remains in a checked local archive. A deduplicated text view preserves its code lines and endpoints; report-review callers must read it when the bounded response is insufficient. Real retention and host-context limits remain explicit.
+- `qa read` verifies saved evidence against its receipt and returns bounded, UTF-8-safe pages without repeating analysis. Callers must follow every offset before treating the report as read.
+- Repeated review evidence can use a lossless inline text table within the handoff limit. Every differing row, source location and uncertainty survives reconstruction; irregular or oversized evidence retains checked archive recovery.
+- Complete inline evidence may use up to 32,768 bytes to avoid duplicate preview and archive reads for mixed contracts. Smaller responses keep the 16,384-byte limit, as do ordinary previews and reader pages.
+- Generated onboarding commands pin the running package version for npm, pnpm, Yarn and Bun, so prerelease-only commands do not resolve an incompatible stable binary.
+- Review evidence preserves short declaration bodies, relevant module bindings, deletion boundaries and distant test expectations. Truncated context remains explicit; ordinary previews stay within 16,384 bytes.
+- Foreground completion-wait guidance reduces avoidable model polling without changing execution authority or hiding additional caller usage.
+- Module boundaries retain specifiers and locations, distinguish explicit Node builtins from unresolved dependencies, and remain recoverable when compact output omits them. Handoff excerpts avoid duplicate endpoint pairs and preserve the strongest pair under diagnostic pressure.
+- Local CLI experiment guards accumulate usage across resumed turns, retain observed overruns and reject incomplete or inconsistent receipts instead of reporting successful low-cost runs.
 - Changed test contracts stay within the PR comparison, excluding merged target-branch tests and restored baseline declarations. Recent-file priority uses current head locations instead of stale commit coordinates.
 - Analysis-rule scenarios and risk explanations require direct changed-line evidence; file-level analyzer context no longer turns read instrumentation into a rule change.
 - Computational calls, comments and string contents no longer become product behavior solely through matching vocabulary; real file and network actions remain visible.
@@ -21,6 +37,9 @@
 
 ### Measurement
 
+- Six known synthetic pairs met predefined finding and execution-state criteria with 303,747 standalone versus 202,091 report-review tokens. The 33.47% aggregate reduction is sample-specific, not a general quality, cost or savings guarantee. Prior failures and dynamic-policy and large-change gaps remain documented.
+- A separate two-case inline-delivery follow-up retained required findings with 46,301 versus 41,300 total tokens for a concrete runtime policy and 84,518 versus 30,563 for 160 repeated-structure changes. Prior paging failures remain in the measurement record; heterogeneous large changes and monetary savings remain unproven.
+- Two mixed-contract follow-ups retained the six predefined findings in each architecture with 79,571 versus 48,180 and 86,521 versus 62,922 total tokens. The second candidate includes first-use consent. Earlier mixed-delivery failure remains documented; these known synthetic cases do not establish general savings or exhaustive review parity.
 - Offline benchmark success is reported separately from measured agent quality. Missing provider usage cannot produce a token or cost savings claim.
 - Repository runs record repeated direct file reads, post-handoff tool activity and setup-through-cleanup timing; diagnostic comparisons require matched passing quality and complete provider usage.
 

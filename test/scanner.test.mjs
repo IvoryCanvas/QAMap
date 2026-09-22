@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { preserveTestExecutable } from "./helpers/executable-path.mjs";
 import {
   analyzeVerificationManifestContext,
   buildDoctorResult,
@@ -2348,6 +2349,7 @@ test("generateQaDraft replaces an unavailable Python wrapper without executing t
   const fakeBin = await mkdtemp(path.join(tmpdir(), "qamap-python-path-"));
   const executionMarker = path.join(fakeBin, "python-was-executed");
   context.after(() => rm(fakeBin, { recursive: true, force: true }));
+  await preserveTestExecutable("git", fakeBin);
   await initGitRepo(root);
   await mkdir(path.join(root, "src"), { recursive: true });
   await mkdir(path.join(root, "tests"), { recursive: true });
@@ -2418,6 +2420,7 @@ test("generateQaDraft blocks an unavailable Python wrapper without framework evi
   const fakeBin = await mkdtemp(path.join(tmpdir(), "qamap-python-blocked-path-"));
   const executionMarker = path.join(fakeBin, "python-was-executed");
   context.after(() => rm(fakeBin, { recursive: true, force: true }));
+  await preserveTestExecutable("git", fakeBin);
   await initGitRepo(root);
   await mkdir(path.join(root, "src"), { recursive: true });
   await mkdir(path.join(root, "tests"), { recursive: true });
@@ -2479,8 +2482,8 @@ test("generateQaDraft falls back from an unavailable compose runtime to declared
   const root = await makeTempRepo();
   const fakeBin = await mkdtemp(path.join(tmpdir(), "qamap-compose-path-"));
   const executionMarker = path.join(fakeBin, "python-was-executed");
-  const gitExecutable = await executablePathForTest("git");
   context.after(() => rm(fakeBin, { recursive: true, force: true }));
+  await preserveTestExecutable("git", fakeBin);
   await initGitRepo(root);
   await mkdir(path.join(root, "src"), { recursive: true });
   await mkdir(path.join(root, "tests"), { recursive: true });
@@ -2544,13 +2547,7 @@ test("generateQaDraft falls back from an unavailable compose runtime to declared
     fakePython,
     `#!/bin/sh\nprintf touched > "${executionMarker}"\nexit 0\n`,
   );
-  const fakeGit = path.join(fakeBin, "git");
-  await writeFile(
-    fakeGit,
-    `#!/bin/sh\nexec ${JSON.stringify(gitExecutable)} "$@"\n`,
-  );
   await chmod(fakePython, 0o755);
-  await chmod(fakeGit, 0o755);
   const previousPath = process.env.PATH;
   process.env.PATH = fakeBin;
   try {
@@ -2569,20 +2566,6 @@ test("generateQaDraft falls back from an unavailable compose runtime to declared
     process.env.PATH = previousPath;
   }
 });
-
-async function executablePathForTest(command) {
-  for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
-    if (!directory) continue;
-    const candidate = path.join(directory, command);
-    try {
-      const candidateStat = await stat(candidate);
-      if (candidateStat.isFile()) return candidate;
-    } catch {
-      // Continue through the current test process PATH.
-    }
-  }
-  throw new Error(`Could not locate ${command} for the isolated PATH fixture.`);
-}
 
 test("generateQaDraft scopes supported JavaScript runners to changed test evidence", async (context) => {
   const cases = [
@@ -10103,18 +10086,20 @@ test("generated drafts are not counted as test-suite evidence", async () => {
 test("package metadata includes the portable PR QA skill template", async () => {
   const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8"));
   const skillText = await readFile(path.join(repositoryRoot, "skills/qamap-pr-qa/SKILL.md"), "utf8");
+  const advancedText = await readFile(path.join(repositoryRoot, "skills/qamap-pr-qa/references/advanced-workflow.md"), "utf8");
 
   assert.ok(packageJson.files.includes("skills"));
   assert.match(skillText, /name: qamap-pr-qa/);
   assert.match(
-    skillText,
+    advancedText,
     new RegExp(
       `npm exec --yes --registry=https://registry\\.npmjs\\.org --package=@ivorycanvas/qamap@${packageJson.version.replaceAll(".", "\\.")} -- qamap qa`,
     ),
   );
-  assert.doesNotMatch(skillText, /@ivorycanvas\/qamap@latest/);
-  assert.doesNotMatch(skillText, /pnpm dlx/);
-  assert.match(skillText, /Manifest Repair/);
+  assert.doesNotMatch(skillText + advancedText, /@ivorycanvas\/qamap@latest/);
+  assert.doesNotMatch(skillText + advancedText, /pnpm dlx/);
+  assert.match(skillText, /\(references\/advanced-workflow\.md\)/);
+  assert.match(advancedText, /Manifest Repair/);
 });
 
 test("qa command keeps runner setup opt-in for testless repositories", async () => {
@@ -11138,6 +11123,7 @@ test("reviewProject uses workspace root guardrails for package branches", async 
 
 test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stays idempotent", async () => {
   const { initAgentSetup, formatAgentInitReport } = await import("../dist/agent-init.js");
+  const { VERSION } = await import("../dist/version.js");
   const root = await makeTempRepo();
   await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "smoke" }));
 
@@ -11145,13 +11131,13 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   assert.deepEqual(first.files.map((file) => file.status), ["created", "created", "created", "created"]);
   const agents = await readFile(path.join(root, "AGENTS.md"), "utf8");
   assert.match(agents, /<!-- qamap:agent:start -->/);
-  assert.match(agents, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
-  assert.match(agents, /npx @ivorycanvas\/qamap qa run \. --base origin\/main --head HEAD --format agent/);
-  assert.match(agents, /inspect `execution\.gitState`/);
-  assert.match(agents, /execution\.performed/);
-  assert.match(agents, /requiredEvidence/);
-  assert.match(agents, /intents\[\]\.scenarios\[\]\.sources/);
-  assert.match(agents, /Treat `automation` as opt-in/);
+  assert.ok(agents.includes(`npx @ivorycanvas/qamap@${VERSION} qa report . --base origin/main --head HEAD --handoff`));
+  assert.match(agents, /After consent/);
+  assert.match(agents, /refusal means ordinary review/);
+  assert.match(agents, /not blanket consent/);
+  assert.match(agents, /Savings are not guaranteed/);
+  assert.match(agents, /Tests stay `not-run`/);
+  assert.doesNotMatch(agents, /token-free QA pass|qa run \./);
   assert.match(agents, /\.agents\/skills\/qamap-pr-qa\/SKILL\.md/);
   assert.match(agents, /\.claude\/skills\/qamap-pr-qa\/SKILL\.md/);
   assert.doesNotMatch(agents, /firstDraftCommand/);
@@ -11173,6 +11159,16 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   );
   assert.match(portableSkill, /name: qamap-pr-qa/);
   assert.equal(claudeSkill, portableSkill);
+  for (const host of [".agents", ".claude"]) {
+    for (const relative of ["SKILL.md", "agents/openai.yaml", "references/advanced-workflow.md"]) {
+      assert.equal(
+        await readFile(path.join(root, host, "skills/qamap-pr-qa", relative), "utf8"),
+        await readFile(path.join(repositoryRoot, "skills/qamap-pr-qa", relative), "utf8"),
+      );
+    }
+    const advanced = await readFile(path.join(root, host, "skills/qamap-pr-qa/references/advanced-workflow.md"), "utf8");
+    assert.match(advanced, /execution\.gitState/);
+  }
   assert.match(portableMetadata, /display_name: ["']?QAMap PR QA["']?/);
   assert.equal(claudeMetadata, portableMetadata);
   await stat(path.join(root, "qamap.config.json"));
@@ -11184,7 +11180,7 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   );
   const report = formatAgentInitReport(second);
   assert.match(report, /# QAMap Agent Setup/);
-  assert.match(report, /npx @ivorycanvas\/qamap qa \./);
+  assert.ok(report.includes(`npx @ivorycanvas/qamap@${VERSION} qa report .`));
 });
 
 test("initAgentSetup appends to an existing AGENTS.md and refreshes only its own section", async () => {
@@ -11200,7 +11196,7 @@ test("initAgentSetup appends to an existing AGENTS.md and refreshes only its own
   assert.match(appended, /Never push to main/);
   assert.match(appended, /<!-- qamap:agent:end -->/);
 
-  await writeFile(path.join(root, "AGENTS.md"), appended.replace("token-free QA pass", "OLD WORDING"));
+  await writeFile(path.join(root, "AGENTS.md"), appended.replace(/<!-- qamap:agent:start -->[\s\S]*?<!-- qamap:agent:end -->/, "<!-- qamap:agent:start -->\nOLD WORDING\n<!-- qamap:agent:end -->"));
   const refreshed = await initAgentSetup(root);
   assert.equal(refreshed.files[0].status, "updated");
   const current = await readFile(path.join(root, "AGENTS.md"), "utf8");
@@ -11272,10 +11268,12 @@ test("generateAgentContext reflects npm scripts and repository boundaries", asyn
   assert.match(context, /Never create or suggest branches with a `codex\/` prefix/);
   assert.match(context, /Use `feat\/`, `fix\/`, `refactor\/`, `style\/`, `hotfix\/`, `chore\/`, or `docs\/` branch prefixes/);
   assert.match(context, /## Pre-PR QA/);
-  assert.match(context, /npx @ivorycanvas\/qamap qa \. --base origin\/main --head HEAD --format agent/);
-  assert.match(context, /QA planning evidence, not as proof/);
-  assert.match(context, /npx @ivorycanvas\/qamap qa run \. --base origin\/main --head HEAD --format agent/);
-  assert.match(context, /inspect `execution\.gitState`/);
+  const { initAgentSetup } = await import("../dist/agent-init.js");
+  await initAgentSetup(root);
+  const installed = await readFile(path.join(root, "AGENTS.md"), "utf8");
+  const section = /<!-- qamap:agent:start -->[\s\S]*?<!-- qamap:agent:end -->/;
+  assert.ok(context.match(section));
+  assert.equal(context.match(section)[0], installed.match(section)[0]);
 });
 
 // Minimal JSON Schema (draft-07 subset) checker used to keep

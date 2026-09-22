@@ -103,6 +103,21 @@ test("qa report defaults to a durable directory outside the repository", async (
   assert.ok(receipt.files.full.startsWith(path.join(await fs.realpath(home), "QAMap-reports")));
 });
 
+test("handoff returns planning evidence but never executes the suggested repository command", async () => {
+  const config = path.join(directory, "handoff-config.json");
+  await fs.writeFile(config, JSON.stringify({ validationCommands: ["node check.mjs"] }));
+  const testFile = path.join(root, "profile.test.mjs");
+  await fs.writeFile(testFile, 'import "./check.mjs";\nimport test from "node:test";\ntest("profile output", () => {});\n');
+  try {
+    const receipt = JSON.parse((await run(["--handoff", "--config", config, "--base", "HEAD",
+      "--include-working-tree", "--output", path.join(directory, "handoff")])).stdout);
+    assert.equal(receipt.schema.name, "qamap.qa.handoff");
+    assert.equal(receipt.summary.route.nextAction, "run-repository-command");
+    assert.equal(receipt.execution.performed, false);
+    await assert.rejects(fs.access(path.join(root, "MUST_NOT_RUN")));
+  } finally { await fs.unlink(testFile); }
+});
+
 test("qa report errors never print a success receipt or overwrite an existing file", async () => {
   const output = path.join(directory, "sentinel");
   await fs.writeFile(output, "keep");

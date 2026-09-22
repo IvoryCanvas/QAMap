@@ -63,6 +63,15 @@ invokes and interprets QAMap still uses that agent's own model tokens. The
 semantic and execution benchmarks remain the correctness gates for QA selection
 and generated automation.
 
+## Check Report Evidence First
+
+Before a report-only model comparison, run the
+[six-case evidence gate](report-only-validation.md). It freezes required source,
+consumer and assertion lines before analysis, verifies synthetic base/head tests,
+and checks that the bounded handoff retains those lines accurately. This is a
+separate development gate: its missing-evidence failures must not be confused
+with passing unit tests, measured model quality, or token savings.
+
 ## Run the agent token benchmark
 
 The agent benchmark measures what a coding agent spends to finish the same QA

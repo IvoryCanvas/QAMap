@@ -32,16 +32,19 @@ Before treating the next public release as ready, the golden demo must satisfy t
 - README demo shows the full loop: manifest-free PR QA draft, optional repo context baseline, PR mapping, E2E draft, and remaining validation gaps.
 - One manifest correction should improve future PR recommendations without another LLM prompt.
 
-## Now: 0.4.x
+## Now: 0.5.0 Preparation
 
-There is no fixed end date or patch count for `0.4.x`. QAMap will remain on compatible patch releases while real repositories still expose material gaps in change intent, affected-flow selection, scenario evidence, or automation-draft quality. `0.5.x` is not the next scheduled milestone; it is a release bar that must be earned by a stable, explicitly approved execution contract and evidence from repeated use outside the maintainer's repositories.
+The work originally planned as 0.4.18 now targets 0.5.0 because it adds a new
+opt-in repository-evidence and report-review workflow. Its [release record](releases/0.5.0.md)
+tracks measured gates and remaining limits. Readiness requires an explicit review
+scope and quality evidence, not implementation volume.
 
 ### Current Focus After 0.4.17
 
-#### 0.4.18 Delivery Order
+#### Delivery Status
 
-The release remains in preparation. Do not bump package or plugin versions until
-the required behavior and release checks pass. Existing inference boundaries
+Package and plugin metadata are synchronized for 0.5.0 validation.
+Do not publish until the applicable gates pass. Existing inference boundaries
 (#273) and concrete lifecycle evidence (#274, #275, #276; #261) are already merged.
 
 | Order | Issue | Development status |
@@ -50,7 +53,7 @@ the required behavior and release checks pass. Existing inference boundaries
 | 2 | [#260](https://github.com/IvoryCanvas/QAMap/issues/260) | Symbol-linked package and alias paths to test references and registration candidates. Ambiguous or unsupported paths remain boundaries. |
 | 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Structural gates distinguish operational evidence from comments, literals and computational vocabulary. Positive controls protect real actions. |
 | 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Repository evidence in the 4KB handoff, source/test priority, and complete bounded recovery. |
-| 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Offline quality checks and optional generic/cold/warm provider arms implemented. Actual provider usage and broader measured task quality remain open release prerequisites. |
+| 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Offline quality checks implemented. Separate report-review comparisons show sample-specific actual token reductions; broader quality and dynamic-policy/large-PR evidence gaps remain open. |
 | Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | Self-contained exact-version smoke implemented; repeat against the new published package after release. |
 
 Each delivery stays reviewable and independently tested. A unit-test pass is not
@@ -63,6 +66,7 @@ See [repository discovery](repository-discovery.md) for supported metadata,
 invalidation, working-tree alignment and explicit limits. This is not a complete
 runtime dependency model. Actual agent quality and provider usage require separate
 measured runs; offline read counts cannot establish token or billing savings.
+The [0.5.0 checklist](releases/0.5.0.md) tracks candidate scope and remaining gates.
 Use the [three-arm benchmark guide](../scripts/agent-bench/README.md) for the
 isolated experiment. The normal CI path remains offline and credential-free.
 
@@ -170,7 +174,7 @@ generalized work queue is:
 - Keep the `--format agent` output a stable, versioned contract that skills and MCP wrappers can rely on.
 - Continue expanding agent surface detection and real-host compatibility across popular coding-agent tools without making the public workflow depend on a single vendor.
 
-These items do not imply that the next completed item triggers a minor release. Analyzer improvements, new deterministic scenarios, stronger adapters, and additional benchmark fixtures continue as `0.4.x` patches when they preserve the public CLI, schema, and safety contracts. A `0.5.0` candidate should be considered only when policy-controlled execution is useful across unrelated repositories, the target repository remains unmodified by default, and normalized evidence is stable enough to document as a new public capability.
+These items do not imply that the next completed item triggers a minor release. Compatible analyzer and adapter improvements remain patch-sized work. The current `0.5.0` proposal instead groups repository evidence discovery with the new consent-aware report-only review workflow. Its [readiness criteria](report-only-validation.md#050-readiness), including measured usage at matching review quality, must pass before release. Broader product-scenario execution remains a separate longer-term goal, not an implicit part of that proposal.
 
 ## Later
 

@@ -559,6 +559,8 @@ async function generateQaDraftWithIndex(rootInput: string, options: QaDraftOptio
   const repositoryImpact = traceRepositoryImpact(repositoryIndex, (indexMatchesChange ? changedFiles : []).map((file) => ({
     file: repositoryPrefix ? `${repositoryPrefix}/${file}` : file,
     ...(addedDiffEvidence[file]?.some((hunk) => hunk.lines.length) ? { lines: addedDiffEvidence[file].flatMap((hunk) => hunk.lines.map((entry) => entry.line)) } : {}),
+    ...(addedDiffEvidence[file]?.some((hunk) => !hunk.lines.length && hunk.removedLines?.length)
+      ? { deletionLines: addedDiffEvidence[file].filter((hunk) => !hunk.lines.length && hunk.removedLines?.length).map((hunk) => hunk.startLine) } : {}),
   })));
   if (!indexMatchesChange) repositoryImpact.boundaries.push({ file: repositoryPrefix || ".", reason: "repository-snapshot-mismatch" });
   const result: QaDraftResult = {
@@ -1781,7 +1783,8 @@ function compactRepositoryEvidence(result: QaDraftResult): Record<string, unknow
   const boundaryScore = (entry: RepositoryImpact["boundaries"][number]): number =>
     (selectedFiles.has(entry.file) ? 100 : 0)
     + (/ambiguous|parse-error|runtime-module|limit/.test(entry.reason) ? 50 : 0)
-    - (/no-observable|changed-symbol-not-resolved|external-or-unresolved/.test(entry.reason) ? 50 : 0);
+    - (/no-observable|changed-symbol-not-resolved|external-or-unresolved/.test(entry.reason) ? 50 : 0)
+    - (entry.reason === "node-builtin-outside-repository" ? 200 : 0);
   const boundary = [...boundaries].sort((a, b) => boundaryScore(b) - boundaryScore(a))[0];
   const skipped = index.coverage.skipped.filter((entry) => !["non-source", "documentation", "generated", "excluded-directory"].includes(entry.reason));
   return {

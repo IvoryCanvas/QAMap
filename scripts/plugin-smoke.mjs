@@ -57,6 +57,7 @@ try {
     ".codex-plugin/plugin.json",
     "skills/qamap-pr-qa/SKILL.md",
     "skills/qamap-pr-qa/agents/openai.yaml",
+    "skills/qamap-pr-qa/references/advanced-workflow.md",
     "skills/qamap-pr-qa/assets/qamap-logo.png",
     "skills/qamap-pr-qa/assets/qamap-logo.svg",
     "plugin/submission.json",
@@ -126,6 +127,53 @@ try {
   );
   assert.ok(payload.route.nextAction, "fresh install must select one next action");
   assert.ok(Buffer.byteLength(analysis.stdout) <= 4 * 1024, "agent output must stay within 4 KiB");
+
+  const handoffOutput = await run(binary,
+    ["qa", "report", ".", "--base", "HEAD~1", "--handoff", "--output", path.join(tempRoot, "reports")], fixture);
+  const handoff = JSON.parse(handoffOutput.stdout);
+  assert.equal(handoff.schema.name, "qamap.qa.handoff");
+  assert.equal(handoff.summary.execution.status, "not-run");
+  assert.equal(handoff.execution.performed, false);
+  assert.deepEqual(handoff.recovery.repository, ["/repositoryIndex", "/repositoryImpact"]);
+  assert.equal(handoff.reviewEvidence.limits.responseBytes, 16384);
+  assert.ok(Buffer.byteLength(handoffOutput.stdout) <= 16384);
+  assert.deepEqual(JSON.parse(await readFile(handoff.files.summary, "utf8")), handoff.summary);
+  const full = JSON.parse(await readFile(handoff.files.full, "utf8"));
+  for (const pointer of Object.values(handoff.recovery).flat()) {
+    assert.notEqual(pointer.split("/").slice(1).reduce((value, key) => value?.[key], full), undefined,
+      `fresh-install recovery pointer is missing: ${pointer}`);
+  }
+  const installedSkill = await readFile(path.join(harness,
+    "node_modules/@ivorycanvas/qamap/skills/qamap-pr-qa/SKILL.md"), "utf8");
+  assert.equal(installedSkill, await readFile(path.join(repositoryRoot, "skills/qamap-pr-qa/SKILL.md"), "utf8"));
+
+  const agentProject = path.join(tempRoot, "agent-project");
+  await mkdir(agentProject);
+  const personalGuidance = "# Project guidance\nPreserve existing instructions.\n";
+  await writeFile(path.join(agentProject, "AGENTS.md"), personalGuidance);
+  await run(binary, ["init", agentProject, "--agent"], agentProject);
+  for (const host of [".agents", ".claude"]) {
+    assert.equal(await readFile(path.join(agentProject, host, "skills/qamap-pr-qa/SKILL.md"), "utf8"), installedSkill);
+    assert.match(await readFile(path.join(agentProject, host, "skills/qamap-pr-qa/references/advanced-workflow.md"), "utf8"),
+      /execution\.gitState/);
+  }
+  const instructions = await readFile(path.join(agentProject, "AGENTS.md"), "utf8");
+  assert.match(instructions, /--handoff/);
+  assert.ok(instructions.includes(`@ivorycanvas/qamap@${version} qa report`));
+  assert.ok(instructions.startsWith(personalGuidance));
+  assert.doesNotMatch(instructions, /qamap:review-mode:report/);
+  await run(binary, ["init", agentProject, "--agent", "--review-mode", "report"], agentProject);
+  const optedIn = await readFile(path.join(agentProject, "AGENTS.md"), "utf8");
+  assert.match(optedIn, /qamap:review-mode:report/);
+  assert.ok(optedIn.startsWith(personalGuidance));
+  await run(binary, ["init", agentProject, "--agent"], agentProject);
+  assert.equal(await readFile(path.join(agentProject, "AGENTS.md"), "utf8"), optedIn);
+  await run(binary, ["init", agentProject, "--agent", "--review-mode", "ask"], agentProject);
+  assert.equal(await readFile(path.join(agentProject, "AGENTS.md"), "utf8"), instructions);
+  await assert.rejects(run(binary, ["init", agentProject, "--agent", "--review-mode", "automatic"], agentProject), /review-mode/);
+  assert.equal(await readFile(path.join(agentProject, "AGENTS.md"), "utf8"), instructions);
+  await assert.rejects(run(binary, ["qa", "read", handoff.evidenceArchive.review.file,
+    "--sha256", "0".repeat(64), "--bytes", String(handoff.evidenceArchive.review.bytes)], fixture), /Review evidence no longer matches its receipt/);
 
   const installedManifest = JSON.parse(
     await readFile(

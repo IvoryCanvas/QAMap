@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { writeAgentRecoveryReport } from "./agent-report.js";
 import { formatLocalQaReportReceipt, writeLocalQaReport } from "./qa-report.js";
+import { readReviewEvidencePage } from "./qa-evidence-read.js";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { formatAgentInitReport, initAgentSetup } from "./agent-init.js";
 import { generateAgentContext } from "./context.js";
@@ -96,6 +97,8 @@ interface ParsedOptions {
   recordHistory?: boolean;
   dryRun?: boolean;
   agent?: boolean;
+  reviewMode?: "ask" | "report";
+  handoff?: boolean;
   scripts?: boolean;
   timeoutMs?: number;
   executor?: string;
@@ -313,6 +316,11 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "qa") {
+    if (rest[0] === "read") {
+      if (rest.includes("--help") || rest.includes("-h")) { printQaHelp(); return 0; }
+      process.stdout.write(await readReviewEvidencePage(rest.slice(1)));
+      return 0;
+    }
     const localReport = rest[0] === "report";
     if (rest[0] === "help" || rest[0] === "--help" || rest[0] === "-h" ||
       (localReport && rest.some((arg) => arg === "--help" || arg === "-h"))) {
@@ -320,9 +328,12 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
     const runValidation = rest[0] === "run";
-    const options = parseOptions(runValidation || localReport ? rest.slice(1) : rest);
+    const options = parseOptions(runValidation || localReport ? rest.slice(1) : rest, localReport);
     const format = options.format ?? (options.json ? "json" :
-      localReport && !process.stdout.isTTY ? "json" : "text");
+      options.handoff || localReport && !process.stdout.isTTY ? "json" : "text");
+    if (options.handoff && format !== "json" && format !== "agent") {
+      throw new Error("qa report --handoff supports json or agent output only.");
+    }
     if (localReport && format !== "text" && format !== "json" && format !== "agent") {
       throw new Error(`qa report supports text, json, or agent receipts, not ${format}`);
     }
@@ -353,6 +364,11 @@ async function main(argv: string[]): Promise<number> {
         })
       : await generateQaDraft(options.path, qaOptions);
     if (localReport) {
+      if (options.handoff) {
+        const handoff = await writeLocalQaReport(result, options.output, { handoff: true });
+        process.stdout.write(`${JSON.stringify(handoff)}\n`);
+        return 0;
+      }
       const receipt = await writeLocalQaReport(result, options.output);
       process.stdout.write(formatLocalQaReportReceipt(receipt, format === "text"));
       return 0;
@@ -565,12 +581,13 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "init") {
-    const options = parseOptions(rest);
+    const options = parseOptions(rest, false, true);
+    if (options.reviewMode && !options.agent) throw new Error("--review-mode requires init --agent.");
     if (options.agent && options.scripts) {
       throw new Error("Choose either --agent or --scripts for one init run.");
     }
     if (options.agent) {
-      const result = await initAgentSetup(options.path, { force: options.force });
+      const result = await initAgentSetup(options.path, { force: options.force, reviewMode: options.reviewMode });
       await printOrWrite(formatAgentInitReport(result));
       return 0;
     }
@@ -587,7 +604,7 @@ async function main(argv: string[]): Promise<number> {
   throw new Error(`Unknown command: ${command}`);
 }
 
-function parseOptions(args: string[]): ParsedOptions {
+function parseOptions(args: string[], allowHandoff = false, allowReviewMode = false): ParsedOptions {
   const options: ParsedOptions = {
     path: ".",
     json: false,
@@ -597,6 +614,20 @@ function parseOptions(args: string[]): ParsedOptions {
   let sawPath = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+
+    if (arg === "--review-mode") {
+      if (!allowReviewMode) throw new Error("--review-mode is only available with init --agent.");
+      const value = args[++index];
+      if (value !== "ask" && value !== "report") throw new Error("--review-mode must be ask or report.");
+      options.reviewMode = value;
+      continue;
+    }
+
+    if (arg === "--handoff") {
+      if (!allowHandoff) throw new Error("--handoff is only available with qa report.");
+      options.handoff = true;
+      continue;
+    }
 
     if (arg === "--json") {
       options.json = true;
@@ -1129,18 +1160,26 @@ Usage:
 
   qamap qa report [path] [--workspace-root <path>] [--manifest <file>]
     [--base <ref>] [--head <ref>] [--include-working-tree]
-    [--output <directory>] [--format text|json|agent]
+    [--output <directory>] [--format text|json|agent] [--handoff]
+
+  qamap qa read <report-file> --sha256 <receipt-hash> --bytes <receipt-bytes>
+    [--offset <nextOffset>]
 
 Behavior:
+  qa read verifies an existing report and returns one bounded evidence page.
+           Continue from nextOffset until null. No analysis or test execution.
   qa       maps diff -> affected behavior -> risk -> scenario -> evidence.
            Product QA and generated drafts remain marked not run.
   qa run   repeats the analysis, then executes only the selected existing
            repository command when the action contract permits it.
   qa report saves static analysis, full evidence, and a compact summary in
            ~/QAMap-reports/qa-* (or a new subdirectory of --output).
-           Prints only a completion receipt, never the analysis itself.
+           By default, prints only a completion receipt, not the analysis.
            Interactive terminals get a banner; pipes get JSON.
            Tests remain not-run. No LLM calls or automatic report reading.
+           --handoff opts into one JSON response containing that summary,
+           bounded source excerpts and full-report recovery pointers.
+           Analysis makes no LLM calls; caller token savings are not guaranteed.
 
 Common examples:
   qamap qa
@@ -1148,6 +1187,7 @@ Common examples:
   qamap qa --format markdown
   qamap qa --format agent
   qamap qa report --format agent
+  qamap qa report --handoff
   qamap qa run
 
 Use \`qamap help --all\` for every advanced and compatibility command.`);
@@ -1168,7 +1208,7 @@ Usage:
   qamap github-action [path] [--mode auto|scan|review] [--base <ref>] [--head <ref>] [--fail-on <severity>]
   qamap test-plan [path] [--workspace-root <path>] [--base <ref>] [--head <ref>] [--include-working-tree] [--format <format>] [--output <file>]
   qamap qa [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--runner maestro|playwright|manual] [--format <format>] [--output <file>]
-  qamap qa report [path] [--base <ref>] [--head <ref>] [--include-working-tree] [--output <directory>] [--format text|json|agent]
+  qamap qa report [path] [--base <ref>] [--head <ref>] [--include-working-tree] [--output <directory>] [--format text|json|agent] [--handoff]
   qamap qa run [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--timeout-ms <n>] [--format <format>] [--output <file>]
   qamap e2e plan [path] [--workspace-root <path>] [--manifest <file>] [--base <ref>] [--head <ref>] [--include-working-tree] [--record-history] [--format <format>]
   qamap e2e setup [path] [--workspace-root <path>] [--runner maestro|playwright] [--force]
@@ -1184,7 +1224,7 @@ Usage:
   qamap history init [path]
   qamap context [path] [--write [file]] [--force]
   qamap init [path] [--write <file>] [--force]
-  qamap init --agent [path] [--force]
+  qamap init --agent [path] [--review-mode ask|report] [--force]
   qamap init --scripts [path] [--force]
 
 Severities:

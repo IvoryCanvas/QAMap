@@ -5,6 +5,7 @@ export interface SymbolDeclaration {
   line: number;
   endLine: number;
   kind: "function" | "variable" | "class" | "type";
+  runtimeLoads?: Array<{ line: number; parameter: number }>;
 }
 export interface SymbolImport {
   module: string;
@@ -24,6 +25,7 @@ export interface SymbolReference {
   owner: string;
   member?: string;
   registration?: true;
+  callArguments?: Array<string | null>;
 }
 export interface StructuralLocation { line: number; kind: string }
 export interface SourceStructure {
@@ -36,10 +38,12 @@ export interface SourceStructure {
   gaps: StructuralLocation[];
 }
 
-export const structurePolicy = `typescript-${ts.version}-syntax-v2`;
+export const structurePolicy = `typescript-${ts.version}-syntax-v4`;
 export const structureLimit = 2048;
 export const safeSymbol = (value: string): boolean => value.length <= 160 && /^(?:[A-Za-z_$][\w$]*|\*|default|<module>)$/.test(value);
-export const safeModule = (value: string): boolean => value.length <= 512 && /^[\w@./-]+$/.test(value);
+export const safeModule = (value: string): boolean => value.length <= 512 && /^(?:node:)?[\w@./-]+$/.test(value);
+export const safeRuntimeModule = (value: string): boolean => safeModule(value)
+  && /^\.\.?\//.test(value) && /\.[cm]?[jt]sx?$/.test(value);
 
 // Parse syntax only. No compiler configuration, imports, or application code is executed.
 export function collectSourceStructure(file: string, text: string): SourceStructure {
@@ -163,11 +167,71 @@ function collectSourceStructureSyntax(file: string, text: string): SourceStructu
     return true;
   };
   const registrationHandlers = new Set<ts.Identifier>();
+  const assignedNames = new Set<string>();
+  const assigned = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) assignedNames.add(node.text);
+    ts.forEachChild(node, assigned);
+  };
+  const mutations = (node: ts.Node): void => {
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+      && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) assigned(node.left);
+    if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+      && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)) assigned(node.operand);
+    if ((ts.isForOfStatement(node) || ts.isForInStatement(node)) && !ts.isVariableDeclarationList(node.initializer)) assigned(node.initializer);
+    ts.forEachChild(node, mutations);
+  };
+  mutations(source);
+  // Only an unchanged plain parameter used directly by import() can carry a literal call argument.
+  for (const [node, name] of owners) {
+    const fn = ts.isFunctionDeclaration(node) ? node
+      : ts.isVariableDeclaration(node) && node.initializer
+        && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) ? node.initializer : undefined;
+    if (!fn?.body || assignedNames.has(name) || fn.parameters.length > 16) continue;
+    let dynamicScope = false;
+    const checkScope = (child: ts.Node): void => {
+      if (ts.isWithStatement(child) || ts.isCallExpression(child) && ts.isIdentifier(child.expression) && child.expression.text === "eval") dynamicScope = true;
+      ts.forEachChild(child, checkScope);
+    };
+    checkScope(fn.body);
+    const parameterNames = fn.parameters.map(parameter => ts.isIdentifier(parameter.name) ? parameter.name.text : undefined);
+    if (dynamicScope || new Set(parameterNames.filter(Boolean)).size !== parameterNames.filter(Boolean).length) continue;
+    const loads: Array<{ line: number; parameter: number }> = [];
+    fn.parameters.forEach((parameter, index) => {
+      if (!ts.isIdentifier(parameter.name) || parameter.initializer || parameter.dotDotDotToken) return;
+      const parameterName = parameter.name.text;
+      let unsupported = assignedNames.has(parameterName);
+      const candidates: Array<{ line: number; parameter: number }> = [];
+      const inspect = (child: ts.Node): void => {
+        if (ts.isIdentifier(child) && child.text === parameterName) {
+          const call = child.parent;
+          let nested = false;
+          for (let parent = child.parent; parent && parent !== fn; parent = parent.parent) {
+            if (ts.isFunctionLike(parent)) nested = true;
+          }
+          if (!nested && ts.isCallExpression(call) && call.expression.kind === ts.SyntaxKind.ImportKeyword
+            && call.arguments.length === 1 && call.arguments[0] === child) candidates.push({ line: line(call), parameter: index });
+          else unsupported = true;
+        }
+        ts.forEachChild(child, inspect);
+      };
+      inspect(fn.body!);
+      if (!unsupported) loads.push(...candidates);
+    });
+    const declaration = result.declarations.find(entry => entry.name === name && entry.line === line(node));
+    if (declaration && loads.length && loads.length <= 16) declaration.runtimeLoads = loads;
+  }
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && known.has(node.text) && visible(node, node.text) && referencePosition(node)) {
       const parent = node.parent;
       const member = ts.isPropertyAccessExpression(parent) && parent.expression === node ? nameOf(parent.name) : undefined;
+      const args = ts.isCallExpression(parent) && parent.expression === node && !assignedNames.has(node.text)
+        && parent.arguments.length <= 16 && !parent.arguments.some(ts.isSpreadElement)
+        ? parent.arguments.map(argument => {
+          const module = moduleOf(argument);
+          return module && safeRuntimeModule(module) ? module : null;
+        }) : undefined;
       result.references.push({ name: node.text, line: line(node), owner: ownerOf(node), ...(member ? { member } : {}),
+        ...(args?.some(argument => argument !== null) ? { callArguments: args } : {}),
         ...(registrationHandlers.has(node) ? { registration: true as const } : {}) });
     }
     if (ts.isCallExpression(node)) {

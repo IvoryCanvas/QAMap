@@ -4,7 +4,237 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
-## Unreleased - Repository Evidence
+## 0.5.0 - Release Validation (2026-09-22)
+
+The predefined policy, repeated-structure and mixed-contract follow-ups below
+retained their required findings with lower measured total tokens. The final
+mixed candidate passed the complete local gate: 763 tests, 44 static contracts,
+11 repository checks, 10 context checks, 3 execution contracts and the isolated
+260-file package installation. Coverage was 92.03% lines, 89.23% branches and
+96.21% functions. Setup preserves existing guidance, keeps explicit preferences,
+supports revocation and rejects a report whose digest no longer matches.
+
+These measurements used the unpublished candidate before final version pinning.
+Final version checks, exact-head CI, npm installation and publication receipts
+are tracked in [PR #287](https://github.com/IvoryCanvas/QAMap/pull/287) and
+[GitHub Releases](https://github.com/IvoryCanvas/QAMap/releases). Version strings
+alone do not prove publication or directory approval.
+
+**Limits remain:** known synthetic cases, one model, author-reviewed findings,
+no blanket full-repository coverage, and no measured monetary-cost claim.
+Historical source context is not included in the report. A report that cannot
+fit inline still requires checked reads, and its usage advantage is unproven.
+The development diff itself retained 71 archive paths but still required this
+fallback; no actual caller comparison was run on that diff.
+
+## 0.5.0-rc.1 - Candidate Preparation (2026-09-22)
+
+**Historical candidate receipts. The candidate was not published.** These
+checkpoints document the progression, including failed gates, before final
+0.5.0 version pinning. See the [release record](releases/0.5.0.md).
+
+### Evidence Recovery Follow-Up
+
+Literal-policy linking and large-change overflow recovery passed the full local
+release gate on the follow-up working tree: 749 tests, 44 static contracts,
+11 repository checks, 10 context checks and all 3 execution contracts.
+Coverage is 91.92% lines, 89.14% branches and 96.14% functions. The isolated
+254-file candidate installation, scan and package checks also passed.
+
+The new `completeness` evidence suite preserves the earlier frozen suites.
+Its explicit-policy case retains all four required lines, including the policy
+implementation. Its 160-independent-change case retains all 320 required source
+and assertion lines through the response and checked archive, twice each.
+The compact preview alone retains only 48 of those 320 lines. The extra text
+report is 106,791 bytes and must be read; it is not free model context.
+Base tests passed and head tests failed only on the 160 seeded regressions.
+The policy case remains an uncertainty case, not an invented defect.
+
+Local analysis of the integration change retained 4,240 discovered paths with
+zero archive path loss. The JSON archive was 10,019,023 bytes; the deduplicated
+text view was 738,845 bytes. This measures serialization, not token savings,
+complete code coverage, or the absence of defects. Unsupported syntax, excluded
+files, and unlinked assertions remain reported gaps.
+
+The first archive-aware comparison completed all four attempts with 249,728
+total tokens. The policy pair used 46,567 baseline versus 40,243 candidate tokens
+and retained its required evidence without inventing a defect. The 160-change
+pair used 85,532 baseline versus 77,386 candidate tokens, but the candidate's
+tool output was truncated and its answer explicitly reported incomplete review.
+The baseline identified all 160 mismatches. **This pair failed the quality gate;
+its lower token count is not an accepted savings result.** All failed evidence
+and usage receipts remain preserved; no automatic retry was performed.
+
+### Paged Delivery Follow-Up
+
+The bounded reader passed the complete local release gate on the working tree
+subsequently committed as `63c918c`: 754 tests, 44 static contracts, 11 repository
+checks, 10 context checks and all 3 execution contracts. Coverage was 91.91% lines,
+89.14% branches and 96.12% functions. The isolated 257-file package install passed.
+
+Four new attempts used the same two synthetic changes, model and command limits.
+Request increments, cumulative usage and final completion receipts reconciled.
+The candidate read every byte of the large report through eight untruncated,
+contiguous model-visible pages. Both reviewers identified all 160 independent
+implementation/assertion mismatches with correct locations and retained product
+policy uncertainty and `not-run`. The policy case retained its concrete module
+without inventing a defect. This is known-case review parity, not general recall.
+
+| Case | Standalone total tokens | Report-review total tokens | Verdict |
+| --- | ---: | ---: | --- |
+| Literal runtime policy | 46,000 | 40,557 | Required evidence retained; 11.83% fewer total tokens |
+| 160 independent changes | 76,822 | 401,557 | Required evidence retained; 5.23 times the total tokens, efficiency gate failed |
+
+The paged experiment used 564,936 tokens in 22 provider requests. Together with
+the preceding failed archive-read experiment, the two new protocols used 814,664
+tokens in 38 requests. Cached input is a subset, not an additional token count.
+Parent engineering conversation usage is excluded; monetary cost was not measured.
+Both protocols used an explicit, preselected report-review preference, not first
+consent. All attempts are preserved and no automatic retry was performed.
+
+**This checkpoint blocked stable publication and plugin submission.** Saving and delivering
+complete evidence does not establish efficiency. Sequential page reads increased
+the measured caller input substantially; reducing repeated model context without
+dropping independent evidence was the remaining large-change release blocker.
+Do not average it away with the smaller passing case or earlier comparisons.
+The separately measured follow-up below addresses this case. The following preparation receipts are
+historical, not sign-off of these runtime changes.
+
+### Lossless Inline Follow-Up
+
+Repeated evidence text now uses literal templates with every differing value
+retained as a row. It is not a representative sample or a semantic-equivalence
+claim. Exact reconstruction and a digest are checked before use. The full JSON
+archive retains individual file hashes. Irregular or oversized evidence keeps
+the checked-page fallback instead of silently losing evidence.
+
+The complete local release gate passed: 760 tests, 44 static contracts,
+11 repository checks, 10 context checks and all 3 execution contracts. Coverage
+was 91.95% lines, 89.22% branches and 96.18% functions. The completeness suite
+retained 4/4 policy lines and 320/320 large-change lines twice each.
+
+A separately frozen protocol used the same two synthetic changes, prompts,
+GPT-6 Astra at medium effort, tool limits and preselected report-review mode.
+All four attempts completed without retry. Provider request increments,
+cumulative usage and completion receipts reconciled.
+
+| Case | Standalone total tokens | Report-review total tokens | Reduction |
+| --- | ---: | ---: | ---: |
+| Literal runtime policy | 46,301 | 41,300 | 10.80% |
+| 160 independent changes | 84,518 | 30,563 | 63.84% |
+
+The actual model-visible large response was 13,055 bytes and reconstructed all
+83,900 bytes of digest-form evidence without truncation. Independent grading
+checked all 320 required lines against the frozen source. No extra archive read
+was needed. Both answers identified all 160 implementation/assertion mismatches,
+cited correct locations, preserved product-policy uncertainty and stayed
+`not-run`. The policy pair retained all four required lines without inventing a
+defect. These are the predeclared finding criteria, not equivalence of every
+observation: standalone review explained the previous implementation, whereas
+report review explicitly lacked that historical context.
+
+All attempts used 202,682 tokens in 14 provider requests, including skill reads
+and final answers. Parent engineering usage is excluded. In the large pair,
+uncached input increased from 14,041 to 21,314 despite fewer total tokens;
+monetary cost and subscription deductions were not measured. First-use consent
+was not part of this protocol. Earlier failed protocols remain above.
+
+**This fixes the measured repeated-structure case, not every large PR.** Known
+synthetic cases and author-reviewed findings are not blinded external validation.
+The heterogeneous implementation diff still needed the archive fallback.
+Broader quality/usage gates and exact-final-head CI remain required before
+stable publication. See the [measurement limits](report-only-validation.md#lossless-inline-follow-up).
+
+### Mixed-Contract Follow-Up
+
+The `release` suite adds 40 different operations, six seeded implementation/test
+disagreements and 34 passing named inputs. Direct and cross-package architectures
+share those contracts; they are not independent external repositories or a claim
+that the other operations are equivalent for every input. Valid unexpected
+findings must be checked, not discarded for falling outside the seed list.
+
+With the previous 16,384-byte limit, the direct pair retained all six findings
+but used 100,730 report-review versus 79,352 standalone tokens, a 26.94% increase.
+The candidate received a 15,795-byte preview and two checked pages containing all
+28,772 text bytes. Actual provider increments and final receipts reconciled.
+The package baseline used 83,883 tokens; its candidate failed at model capacity
+during consent, before review. Usage for that failed call is unknown, not zero.
+The three completed stages total 263,965 observed tokens. No automatic retry
+occurred. This protocol failed the release gate; earlier passing cases do not
+supersede it.
+
+The follow-up delivery change permits up to 32,768 bytes only for a complete
+lossless inline packet. Previews and pages stay at 16,384 bytes, and all records
+and known gaps remain. Regression tests failed before the change and passed
+afterward. The unchanged frozen suite retains 80/80 direct and 120/120
+cross-package anchors twice, with base tests passing and exactly the six named
+head tests failing. This is local evidence availability, not a caller-efficiency
+result. A separate actual model comparison then used the same frozen commits,
+prompts, oracle, model/effort and limits, changing only the delivery build and
+its production instructions. Both sides were rerun; no failed attempt was
+overwritten and no automatic retry was performed.
+
+| Case | Standalone total tokens | Report-review total tokens | Reduction |
+| --- | ---: | ---: | ---: |
+| Forty distinct direct contracts | 79,571 | 48,180 | 39.45% |
+| Forty cross-package contracts, with first-use consent | 86,521 | 62,922 | 27.28% |
+
+The package candidate includes 25,249 consent tokens within its cumulative
+62,922, not in addition. All five stages completed: 277,194 tokens in 17 provider
+requests. Both candidates ran QAMap once and received every required line in an
+untruncated inline response: 21,518 and 24,304 bytes, with no further report read.
+Each answer identified the same six mismatches with exact source/assertion
+locations, and the package case included its consumer locations. Product intent
+remained distinct from test disagreement; execution remained `not-run`.
+
+Standalone review additionally explained previous implementations and raised
+other unconfirmed input-contract questions. The candidate disclosed that prior
+implementation context was absent. Passing the predefined finding criteria is
+not equivalence of every observation. Direct-case uncached input rose from
+21,206 to 22,030; package-case uncached input fell from 25,187 to 23,295.
+Monetary cost and subscription deductions remain unmeasured.
+
+The two mixed protocols consumed at least 541,159 observed tokens in total,
+excluding unreported usage from the earlier capacity failure and the parent
+engineering conversation. Keep this failed-attempt cost separate from the
+successful paired comparison. Exact source, raw sessions, usage reconciliation,
+model-visible output, fixture bundles and cleanup receipts were preserved.
+
+### Initial Candidate Receipts
+
+At this initial checkpoint the handoff envelope was capped at 16,384 bytes; its nested agent summary
+retains the separate 4,096-byte limit. It preserves supported declaration and
+module-binding context, distant expectations and deletion boundaries. Report
+review is consented or explicitly selected per project, never enabled merely by
+installation. Static analysis remains `not-run`.
+
+| Evidence | Status |
+| --- | --- |
+| Candidate full tests | 737/737 passed on clean revision `bfc77df`; no skipped or cancelled tests |
+| Candidate coverage | Lines 91.87%, branches 89.04%, functions 96.21%; all existing thresholds retained |
+| Candidate static QA contracts | 44/44 passed |
+| Candidate repository and context checks | 11/11 repository checks, including all seven quality cases; 10/10 context checks |
+| Candidate execution benchmark | 3/3 contracts passed; all three seeded regressions caught and their fixes passed |
+| Candidate production install | 251-file tarball installed in isolation as 0.5.0-rc.1 and returned located evidence; generated agent commands retain the exact package version |
+| Candidate setup regressions | npm, pnpm, Yarn and Bun command generation passed; these checks do not independently install all four package managers |
+| Pre-version-change evidence suites | 19 cases, 114 required lines retained, two repetitions; line retention is not general defect recall |
+| Actual report-review usage | Six known synthetic pairs: 303,747 standalone vs 202,091 candidate tokens, with predefined findings retained; sample-specific, not a cost or general quality guarantee |
+| Complete local candidate release gate | Passed on clean revision `bfc77df`, including scan, plugin metadata, install smoke, offline harness, coverage and package preview; final remote CI remains a separate gate |
+| Candidate registry smoke and directory approval | Not run; candidate not published |
+| Dynamic-policy and large-PR evidence completeness | At that checkpoint unresolved; local follow-up above restores literal-policy and overflow evidence, with caller validation still pending |
+
+The [full measurement record](report-only-validation.md) preserves earlier
+failures, the first-use consent condition, cached and uncached usage, and
+author-reviewed quality limitations. Do not use a previous checkpoint or remote
+CI run to sign off later candidate changes.
+
+The real-model measurements preceded candidate version synchronization and the
+package-pin fix. They were not repeated on this exact artifact. The current
+release gate made no model calls; its offline harness checks infrastructure,
+not model answer quality or token savings. A subsequent documentation-only
+receipt update does not change the tested runtime implementation.
+
+## Earlier Development Checkpoint - Repository Evidence
 
 The next candidate inventories supported repository metadata before QA analysis,
 reuses unchanged syntax blocks, and follows symbol references across declared
@@ -70,11 +300,11 @@ TypeScript is now a production dependency for syntax parsing. The isolated
 install checks that dependency is available; its installed directory adds
 approximately 23 MB in the measured local environment.
 
-Actual provider-token comparison, broader measured task quality, and the final
-0.4.18 release run remain open under #264. No provider call, version bump,
-publication, or fixed savings claim is implied by these offline receipts.
+At this earlier checkpoint, actual provider comparison and release validation
+were open under #264. The current candidate and later measurements are recorded
+above; these historical offline receipts are not token-savings measurements.
 
-## Unreleased - Lifecycle Contracts
+## Earlier Development Checkpoint - Lifecycle Contracts
 
 Changed tests can now connect to commit-backed product lifecycles, including
 Ruby Minitest contracts. Contract-bearing assertions strengthen the associated

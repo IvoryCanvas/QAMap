@@ -22,6 +22,9 @@ automation. It does not upload source code or make its own LLM call.
 
 ## Install And Run
 
+The npm package and plugin directory update separately. For the 0.5.0
+report-review workflow and measured limits, see the [release notes](docs/releases/0.5.0.md).
+
 ### Local CLI (Recommended)
 
 With Node.js 20 or newer, run this from the branch you want to review:
@@ -47,6 +50,7 @@ during PR review or test planning.
 
 The host agent still uses its own model and permissions. QAMap provides the
 local, deterministic repository analysis inside that workflow.
+For QAMap 0.5.0 and newer, see the [one-call review handoff](docs/agent-handoff.md).
 
 ## Read The Result
 
