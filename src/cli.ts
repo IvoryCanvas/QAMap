@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { writeAgentRecoveryReport } from "./agent-report.js";
 import { formatLocalQaReportReceipt, writeLocalQaReport } from "./qa-report.js";
+import { readReviewEvidencePage } from "./qa-evidence-read.js";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { formatAgentInitReport, initAgentSetup } from "./agent-init.js";
 import { generateAgentContext } from "./context.js";
@@ -315,6 +316,11 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "qa") {
+    if (rest[0] === "read") {
+      if (rest.includes("--help") || rest.includes("-h")) { printQaHelp(); return 0; }
+      process.stdout.write(await readReviewEvidencePage(rest.slice(1)));
+      return 0;
+    }
     const localReport = rest[0] === "report";
     if (rest[0] === "help" || rest[0] === "--help" || rest[0] === "-h" ||
       (localReport && rest.some((arg) => arg === "--help" || arg === "-h"))) {
@@ -1156,7 +1162,12 @@ Usage:
     [--base <ref>] [--head <ref>] [--include-working-tree]
     [--output <directory>] [--format text|json|agent] [--handoff]
 
+  qamap qa read <report-file> --sha256 <receipt-hash> --bytes <receipt-bytes>
+    [--offset <nextOffset>]
+
 Behavior:
+  qa read verifies an existing report and returns one bounded evidence page.
+           Continue from nextOffset until null. No analysis or test execution.
   qa       maps diff -> affected behavior -> risk -> scenario -> evidence.
            Product QA and generated drafts remain marked not run.
   qa run   repeats the analysis, then executes only the selected existing

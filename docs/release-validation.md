@@ -33,8 +33,18 @@ text view was 738,845 bytes. This measures serialization, not token savings,
 complete code coverage, or the absence of defects. Unsupported syntax, excluded
 files, and unlinked assertions remain reported gaps.
 
-The archive-aware caller workflow needs a fresh actual-usage and quality check.
-Earlier measured savings below do not validate the new required report read.
+The first archive-aware comparison completed all four attempts with 249,728
+total tokens. The policy pair used 46,567 baseline versus 40,243 candidate tokens
+and retained its required evidence without inventing a defect. The 160-change
+pair used 85,532 baseline versus 77,386 candidate tokens, but the candidate's
+tool output was truncated and its answer explicitly reported incomplete review.
+The baseline identified all 160 mismatches. **This pair failed the quality gate;
+its lower token count is not an accepted savings result.** All failed evidence
+and usage receipts remain preserved; no automatic retry was performed.
+
+The follow-up adds bounded report pagination rather than increasing a hidden
+output limit. It needs new actual-usage and quality validation including every
+page read. Earlier measured savings do not validate this changed workflow.
 Stable publication and plugin submission remain blocked pending that check and
 exact-final-head CI. The following preparation receipts are historical, not
 sign-off of these runtime changes.

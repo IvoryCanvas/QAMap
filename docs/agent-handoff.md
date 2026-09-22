@@ -115,11 +115,16 @@ LLM-mediated review keeps all code on the device.
 
 Interpret the returned `summary` and `reviewEvidence`, citing the attached
 code lines. When `evidenceArchive.required` is true, also read its `review.file`
-and verify the supplied byte count and SHA-256. This generated text view merges
+with `qamap qa read <file> --sha256 <receipt-hash> --bytes <receipt-bytes>`.
+The reader verifies the entire file on each call and returns at most 16,384 bytes.
+Pass `--offset <nextOffset>` for each subsequent page until `nextOffset` is null.
+Keep pages in separate tool responses, allocate at least 8,192 output tokens when
+the host supports it, and reject truncated responses. Do not concatenate pages
+into a single output or stop after the first page. This generated text view merges
 repeated source lines and endpoint paths; the JSON archive preserves individual
 records and full-report pointers. This is still report review, not another source
 scan. If the report exceeds host reading or context limits, report an incomplete
-review and ask to narrow the change. Count this extra read in usage measurements.
+review and ask to narrow the change. Count every page read in usage measurements.
 Do not follow this with git commands or source searches. Missing evidence stays unknown: explain the limitation and ask
 before expanding the review. Recovery pointers are for that separately requested
 inspection, not an automatic second pass. The summary's `repository` corresponds

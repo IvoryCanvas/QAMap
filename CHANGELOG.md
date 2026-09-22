@@ -19,6 +19,7 @@ See the [0.5.0 preparation checklist](docs/releases/0.5.0.md).
 
 - Direct test calls with literal local module filenames retain the selected policy's indexed export declarations without resolving unknown runtime choices or executing imports.
 - Graph-preview overflow remains in a checked local archive. A deduplicated text view preserves its code lines and endpoints; report-review callers must read it when the bounded response is insufficient. Real retention and host-context limits remain explicit.
+- `qa read` verifies saved evidence against its receipt and returns bounded, UTF-8-safe pages without repeating analysis. Callers must follow every offset before treating the report as read.
 - Generated onboarding commands pin the running package version for npm, pnpm, Yarn and Bun, so prerelease-only commands do not resolve an incompatible stable binary.
 - Review evidence preserves short declaration bodies, relevant module bindings, deletion boundaries and distant test expectations. Truncated context remains an explicit gap within the 16,384-byte response limit.
 - Foreground completion-wait guidance reduces avoidable model polling without changing execution authority or hiding additional caller usage.

@@ -46,12 +46,16 @@ If the binary is missing, incompatible, or fails, report the blocker. Do not
 install, upgrade, retry, or fall back to source review without permission.
 
 Interpret the returned `summary` and `reviewEvidence`. If `evidenceArchive.required`
-is true, read `evidenceArchive.review.file` (or `evidenceArchive.file` for older
-receipts) before concluding. The text view combines repeated source lines and
-endpoint paths without removing evidence;
-verify its byte count and SHA-256 against the receipt. This is part of report
-review, not permission to scan source or run tests. If the report cannot fit the
-host's reading/context limits, state that review is incomplete and ask to narrow
+is true, read its text view with `qamap qa read <evidenceArchive.review.file>
+--sha256 <review.sha256> --bytes <review.bytes>` (use archive fields for older
+receipts). Read one page per tool response. Continue with `--offset <nextOffset>`
+until it is null, without skipping offsets or concatenating pages into one output.
+Each JSON response is at most 16,384 bytes; request at least 8,192 output tokens
+when supported and confirm the response is not truncated. The reader verifies
+the complete file's hash and size on every read without repeating analysis.
+The text view combines repeated source lines and paths without removing evidence.
+This is report review, not permission to scan source or run tests. If the report
+cannot fit the host's reading/context or command limits, state that review is incomplete and ask to narrow
 the change. Do not silently review only the preview or claim savings for that run.
 Cite the report's file/line
 evidence; distinguish inferred intent, observed code and existing assertions.
