@@ -42,6 +42,7 @@ completion, count that turn; never relaunch the analysis to check its status.
 | `reviewEvidence` | Selected source and test excerpts with file/line references |
 | `files` | Local report, summary, and full-evidence paths |
 | `recovery` | JSON pointers into `files.full` for specific omitted details |
+| `evidenceArchive` | Checked archive and deduplicated text view; `required` means the preview is insufficient |
 
 The default save-only command is unchanged. Without `--handoff`, `qa report`
 returns paths only and must not trigger automatic interpretation. Handoff mode
@@ -112,15 +113,34 @@ agent invokes it, the returned excerpts can enter that model's context. Follow
 your host and repository data policies; local analysis is not a promise that
 LLM-mediated review keeps all code on the device.
 
-Interpret only the returned `summary` and `reviewEvidence`, citing the attached
-code lines. Do not follow this with git commands, source searches, or another
-report read. Missing evidence stays unknown: explain the limitation and ask
+Interpret the returned `summary` and `reviewEvidence`, citing the attached
+code lines. When `evidenceArchive.required` is true, also read its `review.file`
+and verify the supplied byte count and SHA-256. This generated text view merges
+repeated source lines and endpoint paths; the JSON archive preserves individual
+records and full-report pointers. This is still report review, not another source
+scan. If the report exceeds host reading or context limits, report an incomplete
+review and ask to narrow the change. Count this extra read in usage measurements.
+Do not follow this with git commands or source searches. Missing evidence stays unknown: explain the limitation and ask
 before expanding the review. Recovery pointers are for that separately requested
 inspection, not an automatic second pass. The summary's `repository` corresponds
 to `/repositoryIndex` and `/repositoryImpact` in the full report.
 
 - The response is at most 16,384 UTF-8 bytes including its newline. This is a
   transport bound, not a token estimate or savings guarantee.
+- The graph preview retains up to 128 paths. Overflow endpoints are stored
+  separately, up to 8,192 additional paths or 16 MiB of graph records.
+  `discardedPaths` and `evidence-archive-limit` disclose actual retention loss;
+  `omittedPaths` counts preview omissions, including recoverable ones.
+  `review-evidence.json` preserves checked excerpts for both sets, up to 64 MiB.
+  Its excerpts allow up to 2,048 lines and 300,000 serialized bytes per location.
+  Exceeding the archive's total limit fails report creation instead of silently
+  discarding evidence. Traversal, indexing and syntax limits still apply.
+- Literal relative JS/TS module filenames passed directly to a supported loader
+  are linked as `runtime-module-candidate` evidence, relative to the loader file.
+  The plain parameter must flow unchanged into `import()`. Reassignment, spreads,
+  default values, shadows, indirect calls and unknown arguments are not resolved.
+  Only indexed, unambiguous local exports are included. Runtime-loading warnings
+  remain: this test-selected candidate does not identify every runtime choice.
 - The summary keeps its existing 4,096-byte bound. If necessary, handoff mode
   reduces optional summary detail first, recording `compaction.mode` as
   `review-evidence-first`, `omittedFieldCount` and the full-report path. Action
@@ -232,7 +252,9 @@ an explicit foreground completion wait. All six preserved the predeclared
 finding criteria with fewer total tokens: 303,747 standalone versus 202,091 with
 QAMap (33.47% lower in aggregate). These are known synthetic cases, including
 three repetitions of one normal refactor, not broad review-quality parity.
-The dynamic-policy and large-change evidence gaps remain unresolved.
+These measurements predate literal-policy linking and the overflow archive.
+The follow-up addresses those evidence losses locally; the archive-aware caller
+workflow still needs measured quality and usage validation before stable release.
 
 The design aims to remove duplicated evidence gathering without concealing
 missing coverage. QAMap analysis uses no model calls; the caller still consumes

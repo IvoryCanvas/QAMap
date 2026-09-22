@@ -36,7 +36,16 @@ export interface ReviewEvidence {
   gaps: EvidenceGap[];
   omittedGapCount: number;
   sourceDigest?: { algorithm: "sha256"; fileCount: number; value: string };
-  limits: typeof limits;
+  limits: { paths: number; excerptLines: number; excerptBytes: number; evidenceBytes: number; responseBytes: number };
+}
+export interface EvidenceArchive {
+  file: string;
+  sha256: string;
+  bytes: number;
+  pathCount: number;
+  omittedPathCount: number;
+  required: boolean;
+  review?: { file: string; sha256: string; bytes: number };
 }
 export interface LocalQaHandoffReceipt extends Omit<LocalQaReportReceipt, "schema"> {
   schema: { name: "qamap.qa.handoff"; version: 1 };
@@ -44,10 +53,14 @@ export interface LocalQaHandoffReceipt extends Omit<LocalQaReportReceipt, "schem
   summary: Record<string, unknown>;
   reviewEvidence: ReviewEvidence;
   recovery: Record<string, string[]>;
+  evidenceArchive?: EvidenceArchive;
 }
 
-export async function collectReviewEvidence(result: QaDraftResult): Promise<ReviewEvidence> {
-  const allPaths = result.repositoryImpact?.paths ?? [];
+export async function collectReviewEvidence(result: QaDraftResult, options: { archive?: boolean } = {}): Promise<ReviewEvidence> {
+  const evidenceLimits = options.archive
+    ? { ...limits, paths: 9216, excerptLines: 2048, excerptBytes: 300_000, evidenceBytes: 64 * 1024 * 1024 } : limits;
+  const mainPaths = result.repositoryImpact?.paths ?? [];
+  const allPaths = [...mainPaths, ...(options.archive ? result.repositoryImpact?.overflowPaths ?? [] : [])];
   const blocks = new Map(result.repositoryIndex?.blocks.map(block => [block.file, block]));
   const priority = (entry: typeof allPaths[number]): number => entry.endpoint === "test-reference"
     ? blocks.get(entry.evidence[0]?.file ?? "")?.kind === "source" ? 2 : 1
@@ -57,7 +70,7 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
   const paths = allPaths.flatMap((entry, index) => {
     const key = JSON.stringify([entry.changedFile, entry.changedSymbol, entry.endpoint,
       entry.evidence.filter((step, i) => i === 0 || i === entry.evidence.length - 1 || step.relation === "reference")]);
-    if (pairKeys.has(key)) return [];
+    if (!options.archive && pairKeys.has(key)) return [];
     pairKeys.add(key);
     const group = JSON.stringify([entry.changedFile, entry.changedSymbol, priority(entry)]);
     const round = groupCounts.get(group) ?? 0;
@@ -76,13 +89,14 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
     .sort((a, b) => gapRank(a.gap.reason) - gapRank(b.gap.reason)
       || Number(blocks.get(b.gap.file)?.kind === "source") - Number(blocks.get(a.gap.file)?.kind === "source"))
     .filter(({ gap }) => {
+      if (options.archive) return true;
       if (!gap.module || !Number.isSafeInteger(gap.line) || gap.line! < 1) return true;
       const key = JSON.stringify([gap.file, gap.line, gap.module, gap.reason, gap.target]);
       if (moduleLocations.has(key)) return false;
       moduleLocations.add(key);
       return true;
     })
-    .slice(0, 8)
+    .slice(0, options.archive ? undefined : 8)
     .map(({ gap, index }) => ({ file: safeFile(gap.file) ? gap.file : "<unsupported-path>", reason: gap.reason,
       ...(Number.isSafeInteger(gap.line) && gap.line! > 0 ? { line: gap.line } : {}),
       ...(gap.symbol && safeSymbol(gap.symbol) ? { symbol: gap.symbol } : {}),
@@ -91,11 +105,12 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
       pointer: `/repositoryImpact/boundaries/${index}` }));
   const evidence: ReviewEvidence = {
     pathBase: "workspace-root", basis: "indexed-working-tree", authority: "inferred-draft", complete: false,
-    pathCount: allPaths.length, omittedPathCount: allPaths.length + (result.repositoryImpact?.omittedPaths ?? 0),
-    paths: [], gaps, omittedGapCount: Math.max(0, (result.repositoryImpact?.boundaries.length ?? 0) - gaps.length), limits,
+    pathCount: allPaths.length, omittedPathCount: allPaths.length
+      + (options.archive ? result.repositoryImpact?.discardedPaths ?? result.repositoryImpact?.omittedPaths ?? 0 : result.repositoryImpact?.omittedPaths ?? 0),
+    paths: [], gaps, omittedGapCount: Math.max(0, (result.repositoryImpact?.boundaries.length ?? 0) - gaps.length), limits: evidenceLimits,
   };
   const gap = (file: string, reason: string): void => {
-    if (gaps.length < 8) gaps.push({ file: safeFile(file) ? file : "<unsupported-path>", reason });
+    if (options.archive || gaps.length < 8) gaps.push({ file: safeFile(file) ? file : "<unsupported-path>", reason });
     else evidence.omittedGapCount++;
   };
   const excerpt = async (step: ImpactStep, window = 7, bindings: ImpactStep[] = []): Promise<SourceExcerpt> => {
@@ -127,7 +142,7 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
         && candidates.every(line => Number.isSafeInteger(line) && line >= declaration.line
           && line <= declaration.endLine && line <= lines.length)) {
         const unique = [...new Set(candidates)].sort((a, b) => a - b);
-        anchors = unique.slice(0, limits.excerptLines);
+        anchors = unique.slice(0, evidenceLimits.excerptLines);
         ref.changedLine = anchors[0];
         if (anchors.length > 1) ref.changedLines = anchors;
         if (unique.length > anchors.length) {
@@ -150,16 +165,16 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
       if (assertions.length) anchors = [...new Set([...anchors, ...assertions])].sort((a, b) => a - b);
       else gap(step.file, "test-expectation-not-linked");
     }
-    if (anchors.length > limits.excerptLines) gap(step.file, "required-line-limit");
-    anchors = anchors.slice(0, limits.excerptLines);
+    if (anchors.length > evidenceLimits.excerptLines) gap(step.file, "required-line-limit");
+    anchors = anchors.slice(0, evidenceLimits.excerptLines);
     if (step.deletionLines || (step.relation === "test-reference" && (anchors.length > 1 || anchors[0] !== step.line))) ref.anchorLines = anchors;
     // Preserve an interpretable unit, not just a changed return or an assertion.
     const context = new Set<number>();
     const declaration = block.declarations.find(entry => entry.name === step.symbol
       && entry.line <= step.line && entry.endLine >= step.line);
-    if (declaration && ["changed-declaration", "reference", "export"].includes(step.relation)) {
+    if (declaration && ["changed-declaration", "reference", "export", "runtime-module-candidate"].includes(step.relation)) {
       context.add(declaration.line);
-      if (declaration.endLine - declaration.line < limits.excerptLines) {
+      if (declaration.endLine - declaration.line < evidenceLimits.excerptLines) {
         for (let line = declaration.line; line <= declaration.endLine; line++) context.add(line);
       } else gap(step.file, "declaration-context-partial");
     }
@@ -176,28 +191,28 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
     }
     if (context.size) ref.contextLines = [...context].sort((a, b) => a - b);
     let required = [...new Set([...anchors, ...context])];
-    if (required.length > limits.excerptLines) {
+    if (required.length > evidenceLimits.excerptLines) {
       gap(step.file, "review-context-line-limit");
-      required = required.slice(0, limits.excerptLines);
+      required = required.slice(0, evidenceLimits.excerptLines);
       ref.contextLines = ref.contextLines?.filter(line => required.includes(line));
     }
     // Reserve every changed region before filling nearby context in round-robin order.
     const selected = new Set(required);
     for (let offset = -1; offset < window - 1; offset++) for (const anchor of anchors) {
       const line = anchor + offset;
-      if (line > 0 && line <= lines.length && selected.size < limits.excerptLines) selected.add(line);
+      if (line > 0 && line <= lines.length && selected.size < evidenceLimits.excerptLines) selected.add(line);
     }
     let numbered = [...selected].sort((a, b) => a - b).map(line => ({ line, text: lines[line - 1] }));
     if (isInstructionLikeRepositoryText(numbered.map(item => item.text).join("\n"))) {
       gap(step.file, "instruction-like-source"); return ref;
     }
-    if (Buffer.byteLength(JSON.stringify(numbered)) > limits.excerptBytes) {
+    if (Buffer.byteLength(JSON.stringify(numbered)) > evidenceLimits.excerptBytes) {
       numbered = numbered.filter(item => required.includes(item.line));
     }
-    if (Buffer.byteLength(JSON.stringify(numbered)) > limits.excerptBytes) {
+    if (Buffer.byteLength(JSON.stringify(numbered)) > evidenceLimits.excerptBytes) {
       numbered = numbered.filter(item => anchors.includes(item.line));
       delete ref.contextLines;
-      if (Buffer.byteLength(JSON.stringify(numbered)) > limits.excerptBytes) {
+      if (Buffer.byteLength(JSON.stringify(numbered)) > evidenceLimits.excerptBytes) {
         gap(step.file, "excerpt-byte-limit"); return { ...ref, truncated: true };
       }
       gap(step.file, "review-context-byte-limit");
@@ -206,7 +221,7 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
       truncated: numbered.length < lines.length };
   };
   for (const { entry, index } of paths) {
-    if (evidence.paths.length >= limits.paths) break;
+    if (evidence.paths.length >= evidenceLimits.paths) break;
     const source = entry.evidence[0];
     const contract = entry.evidence.at(-1);
     if (!source || !contract) { gap(entry.changedFile, "missing-path-endpoint"); continue; }
@@ -218,20 +233,24 @@ export async function collectReviewEvidence(result: QaDraftResult): Promise<Revi
     const locations = new Set([JSON.stringify([source.file, source.line]), JSON.stringify([contract.file, contract.line])]);
     for (const step of entry.evidence.slice(1, -1)) {
       const location = JSON.stringify([step.file, step.line]);
-      if (locations.has(location) || step.relation !== "reference"
+      if (locations.has(location) || step.relation !== "reference" && step.relation !== "runtime-module-candidate"
         && (!bindings.includes(step) || coveredFiles.has(step.file))) continue;
       locations.add(location);
       via.push(await excerpt(step, 3, forFile(step.file)));
       coveredFiles.add(step.file);
     }
-    evidence.paths.push({ pointer: `/repositoryImpact/paths/${index}`, endpoint: entry.endpoint,
+    evidence.paths.push({ pointer: index < mainPaths.length ? `/repositoryImpact/paths/${index}`
+      : `/repositoryImpact/overflowPaths/${index - mainPaths.length}`, endpoint: entry.endpoint,
       sourceKind: kind === "source" || kind === "test" ? kind : "unknown",
       source: await excerpt(source, 7, forFile(source.file)), contract: await excerpt(contract, 7, forFile(contract.file)), ...(via.length ? { via } : {}) });
     evidence.omittedPathCount--;
   }
   deduplicateExcerpts(evidence);
   // Keep complete endpoint pairs together; truncation must never silently become no impact.
-  trimEvidence(evidence, () => Buffer.byteLength(JSON.stringify(evidence)) > limits.evidenceBytes);
+  if (!options.archive) trimEvidence(evidence, () => Buffer.byteLength(JSON.stringify(evidence)) > limits.evidenceBytes);
+  else if (Buffer.byteLength(JSON.stringify(evidence)) > evidenceLimits.evidenceBytes) {
+    throw new Error("Review evidence archive exceeds 64 MiB; analyze a smaller change range.");
+  }
   return evidence;
 }
 
@@ -239,6 +258,7 @@ export async function buildLocalQaHandoff(
   result: QaDraftResult,
   receipt: LocalQaReportReceipt,
   summary: Record<string, unknown>,
+  evidenceArchive?: EvidenceArchive,
 ): Promise<LocalQaHandoffReceipt> {
   const handoff: LocalQaHandoffReceipt = {
     ...receipt,
@@ -246,6 +266,7 @@ export async function buildLocalQaHandoff(
     usage: { analysisLlmCalls: 0, callerTokens: "not-measured" },
     summary,
     reviewEvidence: await collectReviewEvidence(result),
+    ...(evidenceArchive ? { evidenceArchive: { ...evidenceArchive } } : {}),
     recovery: {
       repository: ["/repositoryIndex", "/repositoryImpact"],
       testContracts: ["/testContracts/items"],
@@ -266,6 +287,9 @@ export async function buildLocalQaHandoff(
     if (Buffer.byteLength(JSON.stringify(compact)) < Buffer.byteLength(JSON.stringify(summary))) handoff.summary = compact;
   }
   trimEvidence(handoff.reviewEvidence, oversized, new Map(result.repositoryIndex?.blocks.map(block => [block.file, block.hash])));
+  if (handoff.evidenceArchive) handoff.evidenceArchive.required = handoff.reviewEvidence.omittedPathCount > 0
+    || handoff.reviewEvidence.omittedGapCount > 0 || handoff.reviewEvidence.gaps.some(gap =>
+      /(?:limit|partial|unavailable|source-changed|unreadable|instruction-like)/.test(gap.reason));
   if (oversized()) throw new Error("QA handoff exceeds its output limit; use a shorter report output path.");
   return handoff;
 }

@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { cases as regressionCases } from "../test/benchmarks/report-only-evidence/cases.mjs";
 import { cases as extendedCases } from "../test/benchmarks/report-only-evidence/extended-cases.mjs";
 import { cases as confirmationCases } from "../test/benchmarks/report-only-evidence/confirmation-cases.mjs";
+import { cases as completenessCases } from "../test/benchmarks/report-only-evidence/completeness-cases.mjs";
 import { materializeFixtureRepo } from "./lib/fixture-repo.mjs";
 import { gradeReportEvidence } from "./report-evidence-grade.mjs";
 
@@ -18,7 +19,7 @@ const cli = path.join(root, "dist/cli.js");
 const { values } = parseArgs({ options: { output: { type: "string" }, assert: { type: "boolean" },
   suite: { type: "string", default: "regression" } }, allowPositionals: false });
 assert.ok(values.output, "An external --output directory is required");
-const suites = { regression: regressionCases, extended: extendedCases, confirmation: confirmationCases };
+const suites = { regression: regressionCases, extended: extendedCases, confirmation: confirmationCases, completeness: completenessCases };
 assert.ok(Object.hasOwn(suites, values.suite), "Unknown suite");
 const cases = suites[values.suite];
 const output = path.resolve(values.output);
@@ -42,7 +43,7 @@ await write("protocol.json", { frozenAt: new Date().toISOString(), suite: values
   runnerDigest: sha(await fs.readFile(fileURLToPath(import.meta.url))),
   graderDigest: sha(await fs.readFile(new URL("./report-evidence-grade.mjs", import.meta.url))),
   modelCalls: 0, repetitions: 2, cases: cases.map(({ base, head, ...criteria }) => criteria),
-  gates: ["base passes; head fails only the named tests", "every required implementation, consumer and assertion line is returned",
+  gates: ["base passes; head fails only the named tests", "every required implementation, consumer and assertion line is available in the response or its required checked archive",
     "exact excerpt bytes and hashes", "static not-run and unknown coverage retained", "declared runtime gap visible", "repeat evidence stable"],
   boundary: "Evidence availability only. No model reasoning, semantic false-positive rate, token savings, production coverage, or universal correctness claim." });
 await write("frozen-cases.json", cases);
@@ -120,8 +121,41 @@ try {
         assert.equal(stderr, "");
         const handoff = JSON.parse(stdout);
         assert.equal(handoff.summary.base, base); assert.equal(handoff.summary.head, head);
-        const grade = gradeReportEvidence(handoff, files, entry, Buffer.byteLength(stdout));
+        const previewGrade = gradeReportEvidence(handoff, files, entry, Buffer.byteLength(stdout));
+        let reviewed = handoff;
+        let archiveBytesRead = 0;
+        let reviewBytesRead = 0;
+        if (handoff.evidenceArchive?.required) {
+          const archiveText = await fs.readFile(handoff.evidenceArchive.file, "utf8");
+          archiveBytesRead = Buffer.byteLength(archiveText);
+          assert.equal(archiveBytesRead, handoff.evidenceArchive.bytes);
+          assert.equal(sha(archiveText), handoff.evidenceArchive.sha256);
+          const archive = JSON.parse(archiveText);
+          assert.deepEqual(archive.schema, { name: "qamap.qa.review-evidence", version: 1 });
+          assert.deepEqual(archive.execution, handoff.execution);
+          reviewed = { ...handoff, reviewEvidence: archive.reviewEvidence };
+          if (handoff.evidenceArchive.review) {
+            const view = handoff.evidenceArchive.review;
+            const text = await fs.readFile(view.file, "utf8");
+            reviewBytesRead = Buffer.byteLength(text);
+            assert.equal(reviewBytesRead, view.bytes);
+            assert.equal(sha(text), view.sha256);
+            const retained = new Map();
+            let file;
+            for (const line of text.split("\n")) {
+              const header = line.match(/^FILE (".*") sha256=/);
+              if (header) file = JSON.parse(header[1]);
+              const numbered = line.match(/^(\d+)\|(.*)$/);
+              if (!numbered || !file) continue;
+              assert.equal(files[file]?.split("\n")[Number(numbered[1]) - 1], numbered[2]);
+              retained.set(`${file}:${numbered[1]}`, numbered[2]);
+            }
+            for (const anchor of entry.anchors) assert.equal(retained.get(`${anchor.file}:${anchor.line}`), anchor.text);
+          }
+        }
+        const grade = gradeReportEvidence(reviewed, files, entry, Buffer.byteLength(stdout));
         repeats.push({ grade, normalized: normalizePaths(handoff, reportRoot), bytes: Buffer.byteLength(stdout), files: handoff.files,
+          previewGrade, archiveBytesRead, reviewBytesRead, additionalReportReads: archiveBytesRead ? 1 : 0,
           responseFile, responseDigest: sha(stdout),
           durationMs, pathsReturned: handoff.reviewEvidence.paths.length,
           omittedPaths: handoff.reviewEvidence.omittedPathCount, omittedGaps: handoff.reviewEvidence.omittedGapCount });

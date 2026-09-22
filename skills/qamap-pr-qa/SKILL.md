@@ -45,12 +45,20 @@ model session, or model-driven polling.
 If the binary is missing, incompatible, or fails, report the blocker. Do not
 install, upgrade, retry, or fall back to source review without permission.
 
-Interpret only the returned `summary` and `reviewEvidence`. Cite their file/line
+Interpret the returned `summary` and `reviewEvidence`. If `evidenceArchive.required`
+is true, read `evidenceArchive.review.file` (or `evidenceArchive.file` for older
+receipts) before concluding. The text view combines repeated source lines and
+endpoint paths without removing evidence;
+verify its byte count and SHA-256 against the receipt. This is part of report
+review, not permission to scan source or run tests. If the report cannot fit the
+host's reading/context limits, state that review is incomplete and ask to narrow
+the change. Do not silently review only the preview or claim savings for that run.
+Cite the report's file/line
 evidence; distinguish inferred intent, observed code and existing assertions.
-Resolve `excerptRef` inside this response, not another file; `via` contains
+Resolve `excerptRef` within its own response or archive; `via` contains
 intermediate calls and module bindings. `contextLines` protects declaration and
 binding context. Nonconsecutive line numbers indicate omitted context.
-Do not run git, search source, reread summary files, or open full reports as a
+Do not run git, search source, reread summary files, or open unrelated reports as a
 second review. Missing, changed, truncated or omitted evidence remains unknown:
 name the gap and ask before expanding the scope. `complete: false` never means
 the PR is bug-free. Never hide a gap to make the answer cheaper.

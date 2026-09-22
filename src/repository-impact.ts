@@ -16,7 +16,7 @@ export interface ImpactStep {
   changedLine?: number;
   changedLines?: number[];
   deletionLines?: number[];
-  relation: "changed-declaration" | "reference" | "export" | "import" | "reexport" | "test-reference" | "registration-candidate" | "compiler-mapping";
+  relation: "changed-declaration" | "reference" | "export" | "import" | "reexport" | "test-reference" | "registration-candidate" | "compiler-mapping" | "runtime-module-candidate";
 }
 export interface RepositoryImpact {
   status: "draft";
@@ -26,6 +26,9 @@ export interface RepositoryImpact {
   visitedStates: number;
   limits: { states: number; paths: number; pathSteps: number };
   omittedPaths: number;
+  overflowPaths?: RepositoryImpact["paths"];
+  discardedPaths?: number;
+  archiveLimits?: { paths: number; bytes: number };
 }
 
 export function createRepositoryModuleResolver(
@@ -135,10 +138,13 @@ export function createRepositoryModuleResolver(
 
 export function traceRepositoryImpact(
   index: RepositoryEvidenceIndex, changes: Array<{ file: string; lines?: number[]; deletionLines?: number[] }>,
-  options: { maxStates?: number; maxPaths?: number; maxPathSteps?: number } = {},
+  options: { maxStates?: number; maxPaths?: number; maxPathSteps?: number; maxArchivePaths?: number; maxArchiveBytes?: number } = {},
 ): RepositoryImpact {
   const limits = { states: bounded(options.maxStates, 4000, 20000), paths: bounded(options.maxPaths, 128, 1024), pathSteps: bounded(options.maxPathSteps, 64, 256) };
-  const result: RepositoryImpact = { status: "draft", execution: "not-run", paths: [], boundaries: [], visitedStates: 0, limits, omittedPaths: 0 };
+  const result: RepositoryImpact = { status: "draft", execution: "not-run", paths: [], boundaries: [], visitedStates: 0, limits, omittedPaths: 0,
+    overflowPaths: [], discardedPaths: 0, archiveLimits: {
+      paths: bounded(options.maxArchivePaths, 8192, 8192), bytes: bounded(options.maxArchiveBytes, 16 * 1024 * 1024, 16 * 1024 * 1024) } };
+  let archiveBytes = 0;
   const blocks = new Map(index.blocks.map((block) => [block.file, block]));
   const resolve = createRepositoryModuleResolver(index.blocks, index.coverage.skipped);
   const incoming = new Map<string, Array<{ block: RepositoryIndexBlock; local: string; imported: string; line: number; reexport: boolean; compiler?: string }>>();
@@ -251,8 +257,23 @@ export function traceRepositoryImpact(
     const candidate = { changedFile: state.origin.file, changedSymbol: state.origin.symbol, endpoint: kind, evidence: [...state.evidence, step] };
     if (result.paths.length >= limits.paths) {
       result.omittedPaths++;
-      const lowest = result.paths.reduce((chosen, entry, index) => pathRank(entry) < pathRank(result.paths[chosen]) ? index : chosen, 0);
-      const omitted = pathRank(candidate) > pathRank(result.paths[lowest]) ? result.paths.splice(lowest, 1, candidate)[0] : candidate;
+      const groupKey = (entry: typeof candidate): string => JSON.stringify([entry.changedFile, entry.changedSymbol]);
+      const groups = new Map<string, number>();
+      for (const entry of result.paths) groups.set(groupKey(entry), (groups.get(groupKey(entry)) ?? 0) + 1);
+      const population = (entry: typeof candidate): number => groups.get(groupKey(entry)) ?? 0;
+      const lowest = result.paths.reduce((chosen, entry, index) => pathRank(entry) < pathRank(result.paths[chosen])
+        || pathRank(entry) === pathRank(result.paths[chosen]) && population(entry) > population(result.paths[chosen]) ? index : chosen, 0);
+      const replace = pathRank(candidate) > pathRank(result.paths[lowest])
+        || pathRank(candidate) === pathRank(result.paths[lowest]) && population(candidate) + 1 < population(result.paths[lowest]);
+      const omitted = replace ? result.paths.splice(lowest, 1, candidate)[0] : candidate;
+      const bytes = Buffer.byteLength(JSON.stringify(omitted));
+      if (result.overflowPaths!.length < result.archiveLimits!.paths && archiveBytes + bytes <= result.archiveLimits!.bytes) {
+        result.overflowPaths!.push(omitted);
+        archiveBytes += bytes;
+      } else {
+        result.discardedPaths!++;
+        boundary({ file: omitted.changedFile, symbol: omitted.changedSymbol, reason: "evidence-archive-limit" });
+      }
       const last = omitted.evidence.at(-1)!;
       boundary({ file: last.file, line: last.line, reason: "path-count-limit" });
       return;
@@ -295,7 +316,34 @@ export function traceRepositoryImpact(
         if (!reference.member) boundary({ file: block.file, line: reference.line, symbol: state.symbol, reason: "namespace-use-not-resolved" });
         continue;
       }
-      if (block.kind === "test") endpoint(state, { file: block.file, line: reference.line, symbol: state.symbol, relation: "test-reference" }, "test-reference");
+      if (block.kind === "test") {
+        const additions: ImpactStep[] = [];
+        // The import binding path must lead directly from the loader to this call.
+        const origin = blocks.get(state.origin.file);
+        const loader = origin?.declarations.find(entry => entry.name === state.origin.symbol);
+        if (reference.callArguments && !state.member && !state.evidence.some(step => step.relation === "reference")) {
+          for (const load of loader?.runtimeLoads ?? []) {
+            const module = reference.callArguments[load.parameter];
+            if (!module) continue;
+            const resolved = resolve(state.origin.file, module);
+            if (resolved.reason || resolved.candidates.length !== 1) {
+              boundary({ file: state.origin.file, line: load.line, module, reason: resolved.reason ?? "runtime-module-unresolved" });
+              continue;
+            }
+            const target = blocks.get(resolved.candidates[0])!;
+            boundary({ file: state.origin.file, line: load.line, module, target: target.file, reason: "runtime-module-candidate-not-executed" });
+            if (target.gaps.some(gap => gap.kind === "parse-error")) continue;
+            for (const declaration of target.declarations.filter(entry => target.exports.some(binding => !binding.module && binding.local === entry.name))) {
+              if (state.evidence.length + additions.length + 2 > limits.pathSteps) {
+                boundary({ file: target.file, reason: "runtime-module-evidence-limit" }); break;
+              }
+              additions.push({ file: target.file, line: declaration.line, symbol: declaration.name, relation: "runtime-module-candidate" });
+            }
+          }
+        }
+        endpoint({ ...state, evidence: [...state.evidence, ...additions] },
+          { file: block.file, line: reference.line, symbol: state.symbol, relation: "test-reference" }, "test-reference");
+      }
       if (reference.registration === true) {
         endpoint(state, { file: block.file, line: reference.line, symbol: state.symbol, relation: "registration-candidate" }, "registration-candidate");
       }
@@ -307,7 +355,7 @@ export function traceRepositoryImpact(
         evidence: [...state.evidence, { file: block.file, line: exported.line, symbol: exported.exported, relation: "export" }] });
     }
   }
-  for (const change of changes) if (!result.paths.some((entry) => entry.changedFile === change.file)) {
+  for (const change of changes) if (![...result.paths, ...result.overflowPaths!].some((entry) => entry.changedFile === change.file)) {
     boundary({ file: change.file, reason: "no-observable-contract-path" });
   }
   result.paths.sort((a, b) => pathRank(b) - pathRank(a));

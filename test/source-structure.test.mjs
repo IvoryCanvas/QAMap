@@ -177,7 +177,7 @@ test("traversal exceptions discard partial facts after successful parsing", () =
 });
 
 test("cache policy invalidates the previous structural metadata", () => {
-  assert.equal(structurePolicy, `typescript-${ts.version}-syntax-v3`);
+  assert.equal(structurePolicy, `typescript-${ts.version}-syntax-v4`);
 });
 
 test("explicit Node module specifiers retain import and reexport evidence without accepting URLs", () => {

@@ -6,7 +6,7 @@ import ts from "typescript";
 import { parseDocument } from "yaml";
 import { openLocalIndexCache } from "./import-index-cache.js";
 import { comparePaths, createRepositoryTextReader, discoverRepositoryPaths } from "./repository-discovery.js";
-import { collectSourceStructure, safeModule, safeSymbol, structureLimit, structurePolicy } from "./source-structure.js";
+import { collectSourceStructure, safeModule, safeRuntimeModule, safeSymbol, structureLimit, structurePolicy } from "./source-structure.js";
 import type { SourceStructure } from "./source-structure.js";
 import { createRepositoryModuleResolver } from "./repository-impact.js";
 
@@ -227,10 +227,15 @@ function validSnapshot(value: unknown): value is RepositorySnapshot {
     || typeof value.context !== "string" || !/^[a-f0-9]{64}$/.test(value.context) || !Array.isArray(value.blocks) || value.blocks.length > limits.files) return false;
   const files = new Set<string>();
   const fields: Record<string, Record<string, (value: unknown) => boolean>> = {
-    declarations: { name: symbol, line: lineNumber, endLine: lineNumber, kind: enumOf("function", "variable", "class", "type") },
+    declarations: { name: symbol, line: lineNumber, endLine: lineNumber, kind: enumOf("function", "variable", "class", "type"),
+      "runtimeLoads?": value => Array.isArray(value) && value.length > 0 && value.length <= 16 && value.every(entry => isRecord(entry)
+        && Object.keys(entry).sort().join(",") === "line,parameter" && lineNumber(entry.line)
+        && Number.isInteger(entry.parameter) && Number(entry.parameter) >= 0 && Number(entry.parameter) < 16) },
     imports: { module: moduleName, imported: symbol, local: symbol, line: lineNumber },
     exports: { local: symbol, exported: symbol, line: lineNumber, "module?": moduleName },
-    references: { name: symbol, line: lineNumber, owner: symbol, "member?": symbol, "registration?": (entry) => entry === true },
+    references: { name: symbol, line: lineNumber, owner: symbol, "member?": symbol, "registration?": (entry) => entry === true,
+      "callArguments?": value => Array.isArray(value) && value.length <= 16
+        && value.every(entry => entry === null || typeof entry === "string" && safeRuntimeModule(entry)) },
     tests: { line: lineNumber, kind: enumOf("assertion", "test-declaration") },
     routes: { line: lineNumber, kind: enumOf(...["get", "post", "put", "patch", "delete", "options", "head", "all", "use"].map((name) => `registration-candidate:${name}`)), "handler?": symbol },
     gaps: { line: lineNumber, kind: (entry) => typeof entry === "string" && /^[a-z-]+(?::[a-z]+)?$/.test(entry) && entry.length < 80 },

@@ -2,7 +2,9 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { buildLocalQaHandoff, type LocalQaHandoffReceipt } from "./qa-handoff.js";
+import { createHash } from "node:crypto";
+import { formatReviewEvidenceText } from "./qa-evidence-text.js";
+import { buildLocalQaHandoff, collectReviewEvidence, type LocalQaHandoffReceipt } from "./qa-handoff.js";
 import {
   formatAgentQaDraft,
   formatAgentQaFullReport,
@@ -62,7 +64,23 @@ export async function writeLocalQaReport(
       files,
     };
     if (!options.handoff) return receipt;
-    const handoff = await buildLocalQaHandoff(result, receipt, JSON.parse(summary));
+    const archive = {
+      schema: { name: "qamap.qa.review-evidence", version: 1 },
+      execution: receipt.execution,
+      reviewEvidence: await collectReviewEvidence(result, { archive: true }),
+    };
+    const archiveFile = path.join(directory, "review-evidence.json");
+    const archiveText = `${JSON.stringify(archive)}\n`;
+    await fs.writeFile(archiveFile, archiveText, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    const reviewFile = path.join(directory, "review-evidence.txt");
+    const reviewText = formatReviewEvidenceText(archive.reviewEvidence);
+    await fs.writeFile(reviewFile, reviewText, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    const handoff = await buildLocalQaHandoff(result, receipt, JSON.parse(summary), {
+      file: archiveFile, sha256: createHash("sha256").update(archiveText).digest("hex"),
+      bytes: Buffer.byteLength(archiveText), pathCount: archive.reviewEvidence.paths.length,
+      omittedPathCount: archive.reviewEvidence.omittedPathCount, required: true,
+      review: { file: reviewFile, bytes: Buffer.byteLength(reviewText), sha256: createHash("sha256").update(reviewText).digest("hex") },
+    });
     if (JSON.stringify(handoff.summary) !== summary.trim()) {
       await fs.writeFile(files.summary, `${JSON.stringify(handoff.summary)}\n`, { encoding: "utf8", mode: 0o600 });
     }

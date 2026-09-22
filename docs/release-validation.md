@@ -10,6 +10,35 @@
 manifests and skill references now share the candidate version. No existing npm
 or directory release has been replaced. See the [remaining gates](releases/0.5.0.md).
 
+### Evidence Recovery Follow-Up
+
+Literal-policy linking and large-change overflow recovery passed the full local
+release gate on the follow-up working tree: 749 tests, 44 static contracts,
+11 repository checks, 10 context checks and all 3 execution contracts.
+Coverage is 91.92% lines, 89.14% branches and 96.14% functions. The isolated
+254-file candidate installation, scan and package checks also passed.
+
+The new `completeness` evidence suite preserves the earlier frozen suites.
+Its explicit-policy case retains all four required lines, including the policy
+implementation. Its 160-independent-change case retains all 320 required source
+and assertion lines through the response and checked archive, twice each.
+The compact preview alone retains only 48 of those 320 lines. The extra text
+report is 106,791 bytes and must be read; it is not free model context.
+Base tests passed and head tests failed only on the 160 seeded regressions.
+The policy case remains an uncertainty case, not an invented defect.
+
+Local analysis of the integration change retained 4,240 discovered paths with
+zero archive path loss. The JSON archive was 10,019,023 bytes; the deduplicated
+text view was 738,845 bytes. This measures serialization, not token savings,
+complete code coverage, or the absence of defects. Unsupported syntax, excluded
+files, and unlinked assertions remain reported gaps.
+
+The archive-aware caller workflow needs a fresh actual-usage and quality check.
+Earlier measured savings below do not validate the new required report read.
+Stable publication and plugin submission remain blocked pending that check and
+exact-final-head CI. The following preparation receipts are historical, not
+sign-off of these runtime changes.
+
 The current handoff envelope is capped at 16,384 bytes; its nested agent summary
 retains the separate 4,096-byte limit. It preserves supported declaration and
 module-binding context, distant expectations and deletion boundaries. Report
@@ -29,7 +58,7 @@ installation. Static analysis remains `not-run`.
 | Actual report-review usage | Six known synthetic pairs: 303,747 standalone vs 202,091 candidate tokens, with predefined findings retained; sample-specific, not a cost or general quality guarantee |
 | Complete local candidate release gate | Passed on clean revision `bfc77df`, including scan, plugin metadata, install smoke, offline harness, coverage and package preview; final remote CI remains a separate gate |
 | Candidate registry smoke and directory approval | Not run; candidate not published |
-| Dynamic-policy and large-PR evidence completeness | Unresolved; stable release blocker |
+| Dynamic-policy and large-PR evidence completeness | At that checkpoint unresolved; local follow-up above restores literal-policy and overflow evidence, with caller validation still pending |
 
 The [full measurement record](report-only-validation.md) preserves earlier
 failures, the first-use consent condition, cached and uncached usage, and
