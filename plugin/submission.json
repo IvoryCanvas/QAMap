@@ -79,5 +79,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "QAMap 0.5.0-rc.1 is an unpublished release candidate for reusable repository evidence, local saved reports, and opt-in one-call report review. It preserves declaration and import context, test expectations, explicit coverage gaps, and static execution state. General token savings and full review coverage are not guaranteed. Publish and verify the exact npm version before submitting this plugin."
+  "releaseNotes": "QAMap 0.5.0 adds reusable repository evidence, local saved reports, and opt-in report review. It preserves source and test context, cross-package consumers, explicit coverage gaps, and static execution state. Lossless inline evidence reduces repeated report reads when it fits; larger reports retain checked recovery. General token savings and full review coverage are not guaranteed. Verify the exact npm version before submitting this plugin."
 }

@@ -12,12 +12,12 @@ QAMap keeps major and minor changes deliberately rare during `0.x` development.
 - Do not pre-allocate a minor version to every roadmap phase. Define the next minor release bar and continue compatible work as patches until that bar is met.
 - Do not schedule `0.5.x` by date or implementation count. A new default workflow requires its own quality and safety evidence, not just a larger change set.
 
-Version `0.4.0` introduced the first commit-to-intent-to-scenario vertical slice. The `0.5.0` candidate combines repository-wide evidence discovery with a consent-aware, one-call review handoff. QAMap remains local and deterministic; the caller interprets the returned evidence. This is not autonomous model review or automatic product-test execution. Candidate metadata may be synchronized for local packaging, but the [report-only readiness gate](report-only-validation.md#050-readiness) still blocks stable publication. See the [0.5.0 preparation checklist](releases/0.5.0.md). Temporary product-scenario execution remains a separate longer-term goal.
+Version `0.4.0` introduced the first commit-to-intent-to-scenario vertical slice. Version `0.5.0` combines repository-wide evidence discovery with a consent-aware review handoff. QAMap remains local and deterministic; the caller interprets the returned evidence. This is not autonomous model review or automatic product-test execution. The [report-only readiness record](report-only-validation.md#050-readiness) preserves failed and passing gates. See the [0.5.0 release record](releases/0.5.0.md). Temporary product-scenario execution remains a separate longer-term goal.
 
 ### Prerelease Safety
 
-The current local candidate is `0.5.0-rc.1`, not a published version. Keep it
-off `latest`. After the exact revision passes its gates and publication is
+Versions with an `alpha`, `beta` or `rc` suffix must stay off `latest`.
+After the exact revision passes its gates and publication is
 approved, use `npm publish --access public --tag next`. The corresponding GitHub
 Release must be marked as a prerelease. Do not submit the plugin until that exact
 package version is available and passes the public-registry smoke. Preparing an

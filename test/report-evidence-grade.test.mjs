@@ -34,6 +34,13 @@ test("inline tables are independently reconstructed and checked against every fr
   handoff.reviewEvidence.paths = [];
   const criteria = { anchors, requiredGap: gap };
   assert.equal(gradeReportEvidence(handoff, files, criteria, 12000).passed, true);
+  handoff.reviewEvidence.limits = { responseBytes: 32768 };
+  assert.equal(gradeReportEvidence(handoff, files, criteria, 32768).passed, true);
+  assert.equal(gradeReportEvidence(handoff, files, criteria, 32769).passed, false);
+  handoff.reviewEvidence.limits.responseBytes = 65536;
+  assert.equal(gradeReportEvidence(handoff, files, criteria, 32768).passed, false);
+  handoff.reviewEvidence.limits.responseBytes = 16384;
+  assert.equal(gradeReportEvidence(handoff, files, criteria, 16385).passed, false);
   for (const mutate of [
     packet => { packet.tables.pop(); },
     packet => { packet.tables.push(packet.tables[0]); },
@@ -92,6 +99,8 @@ test("execution claims, output overflow and absent runtime gaps cannot pass", ()
   assert.equal(gradeReportEvidence(handoff, files, criteria, 1024).passed, false);
   handoff.reviewEvidence.gaps.push(criteria.requiredGap);
   assert.equal(gradeReportEvidence(handoff, files, criteria, 1024).passed, true);
+  assert.equal(gradeReportEvidence(handoff, files, criteria, 16385).passed, false);
+  handoff.reviewEvidence.limits = { responseBytes: 32768 };
   assert.equal(gradeReportEvidence(handoff, files, criteria, 16385).passed, false);
   handoff.execution.status = "passed";
   assert.equal(gradeReportEvidence(handoff, files, criteria, 1024).passed, false);

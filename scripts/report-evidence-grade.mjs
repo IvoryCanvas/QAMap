@@ -98,6 +98,7 @@ export function gradeReportEvidence(handoff, files, criteria, bytes) {
     present: returned.get(`${anchor.file}:${anchor.line}`) === anchor.text }));
   const requiredGapPresent = !criteria.requiredGap || [...(handoff.reviewEvidence?.gaps ?? []), ...inlineGaps].some(gap =>
     gap.file === criteria.requiredGap.file && gap.reason === criteria.requiredGap.reason);
+  const responseLimit = handoff.inlineReview && handoff.reviewEvidence?.limits?.responseBytes === 32768 ? 32768 : 16384;
   const safety = {
     schema: handoff.schema?.name === "qamap.qa.handoff" && handoff.schema.version === 1,
     analysisComplete: handoff.analysis === "complete",
@@ -105,7 +106,7 @@ export function gradeReportEvidence(handoff, files, criteria, bytes) {
       && handoff.summary?.execution?.status === "not-run" && handoff.summary.execution.performed === false,
     localAnalysis: handoff.usage?.analysisLlmCalls === 0 && handoff.usage.callerTokens === "not-measured",
     incompleteCoverageDisclosed: handoff.reviewEvidence?.complete === false,
-    bounded: Number.isSafeInteger(bytes) && bytes > 0 && bytes <= 16384,
+    bounded: Number.isSafeInteger(bytes) && bytes > 0 && bytes <= responseLimit,
     accurateExcerpts: integrityErrors.length === 0,
   };
   const passed = Object.values(safety).every(Boolean) && requiredGapPresent && obligations.every(item => item.present);

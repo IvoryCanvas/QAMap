@@ -149,6 +149,8 @@ try {
 
   const agentProject = path.join(tempRoot, "agent-project");
   await mkdir(agentProject);
+  const personalGuidance = "# Project guidance\nPreserve existing instructions.\n";
+  await writeFile(path.join(agentProject, "AGENTS.md"), personalGuidance);
   await run(binary, ["init", agentProject, "--agent"], agentProject);
   for (const host of [".agents", ".claude"]) {
     assert.equal(await readFile(path.join(agentProject, host, "skills/qamap-pr-qa/SKILL.md"), "utf8"), installedSkill);
@@ -158,6 +160,20 @@ try {
   const instructions = await readFile(path.join(agentProject, "AGENTS.md"), "utf8");
   assert.match(instructions, /--handoff/);
   assert.ok(instructions.includes(`@ivorycanvas/qamap@${version} qa report`));
+  assert.ok(instructions.startsWith(personalGuidance));
+  assert.doesNotMatch(instructions, /qamap:review-mode:report/);
+  await run(binary, ["init", agentProject, "--agent", "--review-mode", "report"], agentProject);
+  const optedIn = await readFile(path.join(agentProject, "AGENTS.md"), "utf8");
+  assert.match(optedIn, /qamap:review-mode:report/);
+  assert.ok(optedIn.startsWith(personalGuidance));
+  await run(binary, ["init", agentProject, "--agent"], agentProject);
+  assert.equal(await readFile(path.join(agentProject, "AGENTS.md"), "utf8"), optedIn);
+  await run(binary, ["init", agentProject, "--agent", "--review-mode", "ask"], agentProject);
+  assert.equal(await readFile(path.join(agentProject, "AGENTS.md"), "utf8"), instructions);
+  await assert.rejects(run(binary, ["init", agentProject, "--agent", "--review-mode", "automatic"], agentProject), /review-mode/);
+  assert.equal(await readFile(path.join(agentProject, "AGENTS.md"), "utf8"), instructions);
+  await assert.rejects(run(binary, ["qa", "read", handoff.evidenceArchive.review.file,
+    "--sha256", "0".repeat(64), "--bytes", String(handoff.evidenceArchive.review.bytes)], fixture), /Review evidence no longer matches its receipt/);
 
   const installedManifest = JSON.parse(
     await readFile(

@@ -17,7 +17,7 @@ replacement passes review.
 
 ## Product Boundary
 
-- The candidate workflow offers report-based review, respects refusal, and uses
+- The 0.5.0 workflow offers report-based review, respects refusal, and uses
   `qamap qa report --handoff` only after consent or an explicit saved preference.
 - That command reads source and writes private local report artifacts. It does
   not change source or execute tests. Save-only requests omit `--handoff`.
@@ -29,9 +29,8 @@ replacement passes review.
 
 ## Submission Sources
 
-The local `0.5.0-rc.1` bundle is an unpublished validation candidate, not ready
-for directory submission. Do not pair it with the released 0.4.17 CLI. After
-publication approval, verify the exact matching package from npm first. A host
+The 0.5.0 bundle requires the matching 0.5.0 CLI. Do not pair it with 0.4.17.
+Before uploading, verify the exact matching package from npm first. A host
 may send returned source excerpts to its own model; the local-analysis guarantee
 does not mean those excerpts stay outside the host's context.
 

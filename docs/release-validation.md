@@ -4,11 +4,34 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
+## 0.5.0 - Release Validation (2026-09-22)
+
+The predefined policy, repeated-structure and mixed-contract follow-ups below
+retained their required findings with lower measured total tokens. The final
+mixed candidate passed the complete local gate: 763 tests, 44 static contracts,
+11 repository checks, 10 context checks, 3 execution contracts and the isolated
+260-file package installation. Coverage was 92.03% lines, 89.23% branches and
+96.21% functions. Setup preserves existing guidance, keeps explicit preferences,
+supports revocation and rejects a report whose digest no longer matches.
+
+These measurements used the unpublished candidate before final version pinning.
+Final version checks, exact-head CI, npm installation and publication receipts
+are tracked in [PR #287](https://github.com/IvoryCanvas/QAMap/pull/287) and
+[GitHub Releases](https://github.com/IvoryCanvas/QAMap/releases). Version strings
+alone do not prove publication or directory approval.
+
+**Limits remain:** known synthetic cases, one model, author-reviewed findings,
+no blanket full-repository coverage, and no measured monetary-cost claim.
+Historical source context is not included in the report. A report that cannot
+fit inline still requires checked reads, and its usage advantage is unproven.
+The development diff itself retained 71 archive paths but still required this
+fallback; no actual caller comparison was run on that diff.
+
 ## 0.5.0-rc.1 - Candidate Preparation (2026-09-22)
 
-**Unpublished. Stable 0.5.0 remains on hold.** Package, CLI, native plugin
-manifests and skill references now share the candidate version. No existing npm
-or directory release has been replaced. See the [remaining gates](releases/0.5.0.md).
+**Historical candidate receipts. The candidate was not published.** These
+checkpoints document the progression, including failed gates, before final
+0.5.0 version pinning. See the [release record](releases/0.5.0.md).
 
 ### Evidence Recovery Follow-Up
 
@@ -122,9 +145,64 @@ The heterogeneous implementation diff still needed the archive fallback.
 Broader quality/usage gates and exact-final-head CI remain required before
 stable publication. See the [measurement limits](report-only-validation.md#lossless-inline-follow-up).
 
+### Mixed-Contract Follow-Up
+
+The `release` suite adds 40 different operations, six seeded implementation/test
+disagreements and 34 passing named inputs. Direct and cross-package architectures
+share those contracts; they are not independent external repositories or a claim
+that the other operations are equivalent for every input. Valid unexpected
+findings must be checked, not discarded for falling outside the seed list.
+
+With the previous 16,384-byte limit, the direct pair retained all six findings
+but used 100,730 report-review versus 79,352 standalone tokens, a 26.94% increase.
+The candidate received a 15,795-byte preview and two checked pages containing all
+28,772 text bytes. Actual provider increments and final receipts reconciled.
+The package baseline used 83,883 tokens; its candidate failed at model capacity
+during consent, before review. Usage for that failed call is unknown, not zero.
+The three completed stages total 263,965 observed tokens. No automatic retry
+occurred. This protocol failed the release gate; earlier passing cases do not
+supersede it.
+
+The follow-up delivery change permits up to 32,768 bytes only for a complete
+lossless inline packet. Previews and pages stay at 16,384 bytes, and all records
+and known gaps remain. Regression tests failed before the change and passed
+afterward. The unchanged frozen suite retains 80/80 direct and 120/120
+cross-package anchors twice, with base tests passing and exactly the six named
+head tests failing. This is local evidence availability, not a caller-efficiency
+result. A separate actual model comparison then used the same frozen commits,
+prompts, oracle, model/effort and limits, changing only the delivery build and
+its production instructions. Both sides were rerun; no failed attempt was
+overwritten and no automatic retry was performed.
+
+| Case | Standalone total tokens | Report-review total tokens | Reduction |
+| --- | ---: | ---: | ---: |
+| Forty distinct direct contracts | 79,571 | 48,180 | 39.45% |
+| Forty cross-package contracts, with first-use consent | 86,521 | 62,922 | 27.28% |
+
+The package candidate includes 25,249 consent tokens within its cumulative
+62,922, not in addition. All five stages completed: 277,194 tokens in 17 provider
+requests. Both candidates ran QAMap once and received every required line in an
+untruncated inline response: 21,518 and 24,304 bytes, with no further report read.
+Each answer identified the same six mismatches with exact source/assertion
+locations, and the package case included its consumer locations. Product intent
+remained distinct from test disagreement; execution remained `not-run`.
+
+Standalone review additionally explained previous implementations and raised
+other unconfirmed input-contract questions. The candidate disclosed that prior
+implementation context was absent. Passing the predefined finding criteria is
+not equivalence of every observation. Direct-case uncached input rose from
+21,206 to 22,030; package-case uncached input fell from 25,187 to 23,295.
+Monetary cost and subscription deductions remain unmeasured.
+
+The two mixed protocols consumed at least 541,159 observed tokens in total,
+excluding unreported usage from the earlier capacity failure and the parent
+engineering conversation. Keep this failed-attempt cost separate from the
+successful paired comparison. Exact source, raw sessions, usage reconciliation,
+model-visible output, fixture bundles and cleanup receipts were preserved.
+
 ### Initial Candidate Receipts
 
-The current handoff envelope is capped at 16,384 bytes; its nested agent summary
+At this initial checkpoint the handoff envelope was capped at 16,384 bytes; its nested agent summary
 retains the separate 4,096-byte limit. It preserves supported declaration and
 module-binding context, distant expectations and deletion boundaries. Report
 review is consented or explicitly selected per project, never enabled merely by

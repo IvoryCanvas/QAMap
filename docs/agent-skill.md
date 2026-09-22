@@ -1,14 +1,14 @@
 # QAMap As A Local QA Skill
 
 QAMap can gather local evidence inside a coding agent's ordinary PR review.
-The unpublished 0.5.0-rc.1 candidate supports a [one-call review handoff](agent-handoff.md):
+Version 0.5.0 supports a [one-call review handoff](agent-handoff.md):
 offer QAMap, obtain consent, then interpret only the returned summary and code
 evidence. Do not add source searches or read the report again. Missing evidence
 stays unknown; deeper inspection requires a separate request. This mode is not
-in 0.4.17. A [six-pair synthetic comparison](report-only-validation.md#completion-wait-follow-up)
-preserved its predefined finding criteria with 33.47% lower aggregate total
-tokens after a completion-wait fix. This is not a general savings or equal-coverage
-guarantee; earlier failures and remaining evidence gaps are documented.
+in 0.4.17. [Synthetic comparisons](release-validation.md#mixed-contract-follow-up)
+preserved predefined finding criteria with lower total tokens, including one
+first-use consent case. This is not a general savings or equal-coverage guarantee;
+earlier failures and remaining evidence gaps are documented.
 
 The goal is not to replace a reviewer or claim QA passed. The goal is to remove the repeated setup question:
 
@@ -33,10 +33,10 @@ It performs four idempotent steps:
 
 Both skill copies preserve local changes unless you explicitly pass `--force`. After setup, agents that read `AGENTS.md` or either project-skill location can discover the same QA workflow without receiving a different prompt contract. The rest of this document explains what that pass does and how to wire it manually on other agent surfaces.
 
-The development `qamap context` command uses the same report-review section as
+The `qamap context` command uses the same report-review section as
 `init --agent`; it generates instructions but does not install the skill files.
 
-With the compatible **local candidate**, explicitly choose report-based review
+With **QAMap 0.5.0 or newer**, explicitly choose report-based review
 for this project to avoid repeated consent exchanges:
 
 ```sh
@@ -52,7 +52,7 @@ This setting does not authorize tests, edits, installations or model calls by
 QAMap. Compare configured use separately from first-use discovery and consent;
 fewer exchanges do not by themselves prove token savings or equal quality.
 
-The development skill also includes `references/advanced-workflow.md` for
+The skill also includes `references/advanced-workflow.md` for
 optional execution and legacy use. Installation is an explicit setup action,
 not blanket consent to analysis; no npm install hook edits other agent settings.
 

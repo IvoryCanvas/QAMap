@@ -2,7 +2,7 @@
 
 [한국어](ko/agent-handoff.md)
 
-**Available in the local 0.5.0-rc.1 candidate, not published or available in 0.4.17.**
+**Requires QAMap 0.5.0 or newer; not available in 0.4.17.**
 During setup, check that the local build supports `--handoff`. Once a compatible
 binary is known, the reviewer can invoke it directly without another help query.
 
@@ -115,7 +115,7 @@ LLM-mediated review keeps all code on the device.
 
 Interpret `summary` and, when present, `inlineReview`; otherwise use
 `reviewEvidence`. Cite original source lines. Large archives with more than 32
-paths can use `inlineReview` when exact text factoring fits the existing response
+paths can use `inlineReview` when exact text factoring fits the inline response
 limit. It contains all records of the archive's text view, not a representative
 sample. For each table row, concatenate string `parts` literally and replace
 numeric parts with that row's zero-based column. `at` preserves original record
@@ -132,7 +132,7 @@ with another command. The full saved artifacts remain available for a separate
 audit. If factoring is not smaller, exceeds the 1 MiB factoring-input bound, or
 does not fit the handoff, keep the original required archive read instead.
 
-Allocate at least 8,192 output tokens when supported and verify untruncated JSON.
+Allocate at least 16,384 output tokens for the handoff when supported and verify untruncated JSON.
 When `evidenceArchive.required` is true, also read its `review.file`
 with `qamap qa read <file> --sha256 <receipt-hash> --bytes <receipt-bytes>`.
 The reader verifies the entire file on each call and returns at most 16,384 bytes.
@@ -149,8 +149,11 @@ before expanding the review. Recovery pointers are for that separately requested
 inspection, not an automatic second pass. The summary's `repository` corresponds
 to `/repositoryIndex` and `/repositoryImpact` in the full report.
 
-- The response is at most 16,384 UTF-8 bytes including its newline. This is a
-  transport bound, not a token estimate or savings guarantee.
+- Ordinary preview responses are at most 16,384 UTF-8 bytes including the newline.
+  Complete lossless inline responses may use up to 32,768 bytes to avoid a
+  duplicate preview and archive reads. `reviewEvidence.limits.responseBytes`
+  declares the selected bound; it stays at 16,384 when that is sufficient.
+  These are transport bounds, not token estimates or savings guarantees.
 - The graph preview retains up to 128 paths. Overflow endpoints are stored
   separately, up to 8,192 additional paths or 16 MiB of graph records.
   `discardedPaths` and `evidence-archive-limit` disclose actual retention loss;
@@ -170,7 +173,7 @@ to `/repositoryIndex` and `/repositoryImpact` in the full report.
   `review-evidence-first`, `omittedFieldCount` and the full-report path. Action
   permissions, execution state and authority boundaries are retained.
   Excerpt evidence can use up to 15,360 bytes and 32 paths, not 32 guaranteed paths.
-  The complete response still cannot exceed 16,384 bytes.
+  The ordinary preview response still cannot exceed 16,384 bytes.
   `contextLines` protects short declaration bodies and the import/export bindings
   needed to understand an evidence path. Re-export-only files remain in `via`.
   Under pressure, it removes optional surrounding context, not these protected
@@ -266,7 +269,7 @@ report-only release remains on hold pending broader quality-matched validation;
 see the [readiness checklist](report-only-validation.md#050-readiness).
 
 A later [ten-pair comparison](report-only-validation.md#context-and-preference-follow-up)
-preserved declaration and binding context with the current 16 KiB response.
+preserved declaration and binding context with the then-current 16 KiB response.
 Nine pairs used fewer total tokens; one equivalent-refactor pair used more after
 an extra completion-wait request. The dynamic-policy case passed the frozen
 uncertainty checks but lacked a concrete policy file that standalone review read.
@@ -283,7 +286,13 @@ comparison delivered all required large-change evidence and matched its expected
 findings, but used 401,557 tokens versus 76,822 for standalone review. It failed
 the efficiency gate. The smaller literal-policy pair used 40,557 versus 46,000.
 Both results are retained in [release validation](release-validation.md#paged-delivery-follow-up);
-stable publication remains blocked. Complete delivery is not a savings guarantee.
+that checkpoint blocked publication. Complete delivery is not a savings guarantee.
+
+The later [lossless-inline and mixed-contract comparisons](release-validation.md#mixed-contract-follow-up)
+retained their predefined findings with lower total tokens, including first-use
+consent in the package case. Historical implementation context and unlinked
+consumers remain limitations; these known synthetic results are not a universal
+savings claim or independent external validation.
 
 The design aims to remove duplicated evidence gathering without concealing
 missing coverage. QAMap analysis uses no model calls; the caller still consumes

@@ -10,10 +10,30 @@ import { promisify } from "node:util";
 import { cases as regressionCases } from "./benchmarks/report-only-evidence/cases.mjs";
 import { cases as extendedCases } from "./benchmarks/report-only-evidence/extended-cases.mjs";
 import { cases as confirmationCases } from "./benchmarks/report-only-evidence/confirmation-cases.mjs";
+import { cases as releaseCases } from "./benchmarks/report-only-evidence/release-cases.mjs";
 
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL("../", import.meta.url));
 const runner = path.join(root, "scripts/report-evidence-bench.mjs");
+
+test("mixed release criteria preserve distinct operations, controls and package consumers", () => {
+  assert.equal(releaseCases.length, 2);
+  for (const entry of releaseCases) {
+    assert.equal(Object.keys(entry.head).length, 40);
+    assert.equal(new Set(Object.keys(entry.head).map(file => JSON.stringify([
+      entry.base[file].split("\n")[1], entry.head[file].split("\n")[1],
+    ]))).size, 40);
+    assert.equal(entry.contracts.filter(item => item.expectedDisagreement).length, 6);
+    assert.equal(entry.contracts.filter(item => !item.expectedDisagreement).length, 34);
+    assert.equal(entry.failingTests.length, 6);
+    const files = { ...entry.base, ...entry.head };
+    assert.equal(new Set(entry.anchors.map(item => item.id)).size, entry.anchors.length);
+    for (const anchor of entry.anchors) assert.equal(files[anchor.file].split("\n")[anchor.line - 1], anchor.text);
+  }
+  assert.equal(releaseCases[0].anchors.length, 80);
+  assert.equal(releaseCases[1].anchors.length, 120);
+  assert.equal(releaseCases[1].anchors.filter(item => item.role === "consumer").length, 40);
+});
 
 test("original evidence criteria remain unchanged when extending the suite", () => {
   assert.equal(createHash("sha256").update(JSON.stringify(regressionCases)).digest("hex"),

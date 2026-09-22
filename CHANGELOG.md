@@ -1,9 +1,9 @@
 # Changelog
 
-## 0.5.0-rc.1 - Unreleased
+## 0.5.0 - 2026-09-22
 
-Release candidate only. npm and plugin publication are separate pending steps.
-See the [0.5.0 preparation checklist](docs/releases/0.5.0.md).
+npm and plugin publication are separate steps.
+See the [0.5.0 release record](docs/releases/0.5.0.md).
 
 ### Added
 
@@ -21,8 +21,9 @@ See the [0.5.0 preparation checklist](docs/releases/0.5.0.md).
 - Graph-preview overflow remains in a checked local archive. A deduplicated text view preserves its code lines and endpoints; report-review callers must read it when the bounded response is insufficient. Real retention and host-context limits remain explicit.
 - `qa read` verifies saved evidence against its receipt and returns bounded, UTF-8-safe pages without repeating analysis. Callers must follow every offset before treating the report as read.
 - Repeated review evidence can use a lossless inline text table within the handoff limit. Every differing row, source location and uncertainty survives reconstruction; irregular or oversized evidence retains checked archive recovery.
+- Complete inline evidence may use up to 32,768 bytes to avoid duplicate preview and archive reads for mixed contracts. Smaller responses keep the 16,384-byte limit, as do ordinary previews and reader pages.
 - Generated onboarding commands pin the running package version for npm, pnpm, Yarn and Bun, so prerelease-only commands do not resolve an incompatible stable binary.
-- Review evidence preserves short declaration bodies, relevant module bindings, deletion boundaries and distant test expectations. Truncated context remains an explicit gap within the 16,384-byte response limit.
+- Review evidence preserves short declaration bodies, relevant module bindings, deletion boundaries and distant test expectations. Truncated context remains explicit; ordinary previews stay within 16,384 bytes.
 - Foreground completion-wait guidance reduces avoidable model polling without changing execution authority or hiding additional caller usage.
 - Module boundaries retain specifiers and locations, distinguish explicit Node builtins from unresolved dependencies, and remain recoverable when compact output omits them. Handoff excerpts avoid duplicate endpoint pairs and preserve the strongest pair under diagnostic pressure.
 - Local CLI experiment guards accumulate usage across resumed turns, retain observed overruns and reject incomplete or inconsistent receipts instead of reporting successful low-cost runs.
@@ -38,6 +39,7 @@ See the [0.5.0 preparation checklist](docs/releases/0.5.0.md).
 
 - Six known synthetic pairs met predefined finding and execution-state criteria with 303,747 standalone versus 202,091 report-review tokens. The 33.47% aggregate reduction is sample-specific, not a general quality, cost or savings guarantee. Prior failures and dynamic-policy and large-change gaps remain documented.
 - A separate two-case inline-delivery follow-up retained required findings with 46,301 versus 41,300 total tokens for a concrete runtime policy and 84,518 versus 30,563 for 160 repeated-structure changes. Prior paging failures remain in the measurement record; heterogeneous large changes and monetary savings remain unproven.
+- Two mixed-contract follow-ups retained the six predefined findings in each architecture with 79,571 versus 48,180 and 86,521 versus 62,922 total tokens. The second candidate includes first-use consent. Earlier mixed-delivery failure remains documented; these known synthetic cases do not establish general savings or exhaustive review parity.
 - Offline benchmark success is reported separately from measured agent quality. Missing provider usage cannot produce a token or cost savings claim.
 - Repository runs record repeated direct file reads, post-handoff tool activity and setup-through-cleanup timing; diagnostic comparisons require matched passing quality and complete provider usage.
 

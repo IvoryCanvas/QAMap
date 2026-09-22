@@ -10,6 +10,7 @@ import { createTestExpectationReader } from "./test-expectation-evidence.js";
 import type { PackedReviewText } from "./qa-evidence-pack.js";
 
 const limits = { paths: 32, excerptLines: 14, excerptBytes: 1200, evidenceBytes: 15360, responseBytes: 16384 } as const;
+const inlineResponseBytes = 32768;
 type EvidenceGap = { file: string; reason: string; line?: number; symbol?: string; module?: string; target?: string; pointer?: string };
 interface SourceExcerpt {
   file: string;
@@ -302,6 +303,10 @@ export async function buildLocalQaHandoff(
       evidenceArchive: { ...handoff.evidenceArchive, required: false } };
     delete inline.reviewEvidence.sourceDigest;
     if (Buffer.byteLength(JSON.stringify(inline)) + 1 <= limits.responseBytes) return inline;
+    // A complete inline view can cost less than the preview plus multiple reads.
+    // Do not expand the ordinary preview or paged-reader limits with it.
+    inline.reviewEvidence.limits = { ...inline.reviewEvidence.limits, responseBytes: inlineResponseBytes };
+    if (Buffer.byteLength(JSON.stringify(inline)) + 1 <= inlineResponseBytes) return inline;
   }
   if (oversized()) throw new Error("QA handoff exceeds its output limit; use a shorter report output path.");
   return handoff;

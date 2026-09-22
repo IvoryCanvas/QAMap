@@ -10,6 +10,7 @@ import { cases as regressionCases } from "../test/benchmarks/report-only-evidenc
 import { cases as extendedCases } from "../test/benchmarks/report-only-evidence/extended-cases.mjs";
 import { cases as confirmationCases } from "../test/benchmarks/report-only-evidence/confirmation-cases.mjs";
 import { cases as completenessCases } from "../test/benchmarks/report-only-evidence/completeness-cases.mjs";
+import { cases as releaseCases } from "../test/benchmarks/report-only-evidence/release-cases.mjs";
 import { materializeFixtureRepo } from "./lib/fixture-repo.mjs";
 import { gradeReportEvidence } from "./report-evidence-grade.mjs";
 
@@ -19,7 +20,7 @@ const cli = path.join(root, "dist/cli.js");
 const { values } = parseArgs({ options: { output: { type: "string" }, assert: { type: "boolean" },
   suite: { type: "string", default: "regression" } }, allowPositionals: false });
 assert.ok(values.output, "An external --output directory is required");
-const suites = { regression: regressionCases, extended: extendedCases, confirmation: confirmationCases, completeness: completenessCases };
+const suites = { regression: regressionCases, extended: extendedCases, confirmation: confirmationCases, completeness: completenessCases, release: releaseCases };
 assert.ok(Object.hasOwn(suites, values.suite), "Unknown suite");
 const cases = suites[values.suite];
 const output = path.resolve(values.output);

@@ -35,15 +35,15 @@ Before treating the next public release as ready, the golden demo must satisfy t
 ## Now: 0.5.0 Preparation
 
 The work originally planned as 0.4.18 now targets 0.5.0 because it adds a new
-opt-in repository-evidence and report-review workflow. The local candidate is
-`0.5.0-rc.1`; this is not a published release. Stable readiness still requires
-an explicit review scope and quality evidence, not implementation volume.
+opt-in repository-evidence and report-review workflow. Its [release record](releases/0.5.0.md)
+tracks measured gates and remaining limits. Readiness requires an explicit review
+scope and quality evidence, not implementation volume.
 
 ### Current Focus After 0.4.17
 
 #### Delivery Status
 
-Package and plugin metadata are synchronized for local candidate validation.
+Package and plugin metadata are synchronized for 0.5.0 validation.
 Do not publish until the applicable gates pass. Existing inference boundaries
 (#273) and concrete lifecycle evidence (#274, #275, #276; #261) are already merged.
 

@@ -27,7 +27,7 @@ The calling agent still uses its own model tokens. Savings are not guaranteed.
 
 Use the known installed QAMap binary from the repository root and the actual PR
 base. Ask for an unknown base instead of guessing. This skill is paired with
-`@ivorycanvas/qamap@0.5.0-rc.1`, currently an unpublished release candidate.
+`@ivorycanvas/qamap@0.5.0`.
 The released 0.4.17 binary does not support this command.
 
 ```sh
@@ -45,7 +45,7 @@ model session, or model-driven polling.
 If the binary is missing, incompatible, or fails, report the blocker. Do not
 install, upgrade, retry, or fall back to source review without permission.
 
-Allocate at least 8,192 output tokens for the handoff when supported and confirm
+Allocate at least 16,384 output tokens for the handoff when supported and confirm
 the JSON is untruncated. Interpret `summary` and `inlineReview` when present,
 otherwise `reviewEvidence`. `inlineReview` replaces the preview with every record
 of the archive text, factored into lossless tables. For each row, concatenate

@@ -13,6 +13,8 @@ import { formatReviewEvidenceText } from "../dist/qa-evidence-text.js";
 import { unpackReviewText } from "../dist/qa-evidence-pack.js";
 import { buildLocalQaHandoff } from "../dist/qa-handoff.js";
 import { cases } from "./benchmarks/report-only-evidence/extended-cases.mjs";
+import { cases as releaseCases } from "./benchmarks/report-only-evidence/release-cases.mjs";
+import { gradeReportEvidence } from "../scripts/report-evidence-grade.mjs";
 
 async function repository(t, base, head) {
   const staging = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-complete-evidence-"));
@@ -129,10 +131,12 @@ test("large changes preserve every discovered endpoint in the local evidence arc
   assert.equal(archive.reviewEvidence.omittedGapCount, 0);
   const fallback = await buildLocalQaHandoff(result, {
     analysis: receipt.analysis, execution: receipt.execution, noLlmToken: true, files: receipt.files,
-  }, receipt.summary, receipt.evidenceArchive, { ...receipt.inlineReview, instructions: "x".repeat(17000) });
+  }, receipt.summary, receipt.evidenceArchive, { ...receipt.inlineReview, instructions: "x".repeat(33000) });
   assert.equal(fallback.inlineReview, undefined);
   assert.equal(fallback.evidenceArchive.required, true);
   assert.ok(fallback.reviewEvidence.paths.length > 0);
+  assert.equal(fallback.reviewEvidence.limits.responseBytes, 16384);
+  assert.ok(Buffer.byteLength(JSON.stringify(fallback)) + 1 <= 16384);
   const bounded = traceRepositoryImpact(result.repositoryIndex,
     Object.keys(head).map(file => ({ file, lines: [1] })), { maxPaths: 2, maxArchivePaths: 3 });
   assert.equal(bounded.paths.length, 2);
@@ -145,6 +149,24 @@ test("large changes preserve every discovered endpoint in the local evidence arc
   assert.equal(byteLimited.overflowPaths.length, 0);
   assert.equal(byteLimited.discardedPaths, 158);
 });
+
+for (const scenario of releaseCases) {
+  test(`${scenario.id} delivers all distinct contracts in one bounded inline response`, async t => {
+    const { root, output } = await repository(t, scenario.base, scenario.head);
+    const result = await generateQaDraft(root, { base: "HEAD~1", head: "HEAD" });
+    const receipt = await writeLocalQaReport(result, output, { handoff: true });
+    const bytes = Buffer.byteLength(JSON.stringify(receipt)) + 1;
+    assert.ok(receipt.inlineReview, "Mixed contracts must not require duplicate preview and archive reads");
+    assert.equal(receipt.evidenceArchive.required, false);
+    assert.equal(receipt.reviewEvidence.limits.responseBytes, 32768);
+    assert.ok(bytes > 16384 && bytes <= 32768);
+    const archive = JSON.parse(await fs.readFile(receipt.evidenceArchive.file, "utf8"));
+    assert.equal(unpackReviewText(receipt.inlineReview), formatReviewEvidenceText(archive.reviewEvidence, { digest: true }));
+    const grade = gradeReportEvidence(receipt, { ...scenario.base, ...scenario.head }, scenario, bytes);
+    assert.equal(grade.passed, true, JSON.stringify(grade));
+    assert.equal(grade.retained, scenario.anchors.length);
+  });
+}
 
 test("text review resolves backward references and rejects conflicting source evidence", () => {
   const excerpt = { file: "src/value.mjs", line: 1, sourceHash: "a".repeat(64), lines: [{ line: 1, text: "export const value = 1;" }] };

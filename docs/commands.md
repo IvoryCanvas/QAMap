@@ -43,7 +43,7 @@ Interactive terminal reports are colorized. Files written with `--output`, pipes
 
 ### Save A Report Without Reading It
 
-**Local 0.5.0-rc.1 candidate command, not published or available in 0.4.17.** Use a build that lists
+**Requires QAMap 0.5.0 or newer; not available in 0.4.17.** Use a build that lists
 `qa report` in `qamap qa --help`:
 
 ```sh
@@ -83,14 +83,15 @@ are accessible, not automatically in web chat. `analysis: complete` always keeps
 
 ### Return Evidence In One Call
 
-For a consented report-based review, use the local 0.5.0-rc.1 candidate:
+For a consented report-based review with QAMap 0.5.0 or newer:
 
 ```sh
 qamap qa report . --base origin/main --head HEAD --handoff
 ```
 
 It saves the same files and returns a separate `qamap.qa.handoff` v1 response,
-at most 16,384 UTF-8 bytes including the newline. The nested summary still has
+at most 16,384 UTF-8 bytes for previews or 32,768 for complete lossless inline
+evidence, including the newline. The nested summary still has
 its own 4,096-byte limit. Source/test excerpts preserve supported declaration
 and binding context; omitted context, paths and unresolved modules stay explicit.
 The caller reads that response only, not another source scan. More investigation

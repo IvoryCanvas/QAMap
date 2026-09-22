@@ -1,11 +1,12 @@
 # Report-Only Review Validation
 
-**Latest status:** literal-policy and large-change evidence are retained in the
-strengthened regression cases. The actual paged-reader comparison also preserved
-their predefined findings, but the large case used 401,557 tokens versus 76,822
-standalone. The efficiency gate failed and stable publication remains blocked.
-See [the complete follow-up results](release-validation.md#paged-delivery-follow-up).
-Earlier passing samples below do not supersede this failure.
+**Latest measured status:** the mixed-contract follow-up retained its predefined
+findings with 79,571 versus 48,180 and 86,521 versus 62,922 total tokens. The second
+candidate includes first-use consent. The earlier 100,730-token failure and
+capacity-blocked attempt remain documented. These are known synthetic cases,
+not a general review-quality or savings guarantee.
+See [the mixed follow-up](release-validation.md#mixed-contract-follow-up).
+All earlier failures and passing samples remain below.
 
 The gate tests whether the returned evidence is sufficient for a predefined
 review, before spending model tokens. It does not judge a model or estimate
@@ -28,6 +29,7 @@ Run a built checkout without any provider credentials:
 node scripts/report-evidence-bench.mjs --output /tmp/qamap-evidence-results --assert
 node scripts/report-evidence-bench.mjs --suite extended --output /tmp/qamap-extended-evidence-results --assert
 node scripts/report-evidence-bench.mjs --suite confirmation --output /tmp/qamap-confirmation-evidence-results --assert
+node scripts/report-evidence-bench.mjs --suite release --output /tmp/qamap-mixed-evidence-results --assert
 ```
 
 Use a fresh output directory outside the repository. Before analysis, the runner
@@ -38,7 +40,8 @@ QAMap execution: each analysis must still report `not-run`.
 Every case must retain all declared implementation, consumer and assertion
 lines with exact file references and matching content hashes. Runtime module
 choice must retain its explicit gap. Both analysis repetitions must preserve
-the same response except generated report paths, stay within 16,384 bytes, and
+the same response except generated report paths, stay within the declared bound
+(16,384 bytes for previews, 32,768 for complete lossless inline evidence), and
 leave source unchanged. There is no weighted score that can hide a critical
 miss. `--assert` fails on insufficient evidence; this candidate gate is not
 silently added to the existing CI baseline. Raw reports, test receipts and Git
@@ -151,13 +154,14 @@ use new directories and preserve all previous attempts.
 
 ### 0.5.0 Readiness
 
-**Stable release remains on hold; local candidate packaging is allowed.**
-The package target is now `0.5.0-rc.1`. Version synchronization is preparation,
-not a publication or quality verdict. See the [remaining gates](releases/0.5.0.md#remaining-gates).
-The six-pair completion-wait follow-up below provides sample-specific token
-reductions, but does not resolve dynamic-policy or large-PR evidence gaps.
+The release target is `0.5.0`. Version synchronization alone is not a publication
+or quality verdict. The later policy, lossless-inline and mixed-contract
+[follow-ups](release-validation.md) address the reproduced blockers and pass
+their predefined finding and actual-usage criteria. Final delivery follows the
+[release procedure](releases/0.5.0.md#publication).
 Neither a total pass percentage nor a small-case result compensates for missing
-critical evidence.
+critical evidence; unsupported runtime choices and oversized reports remain
+explicit limits.
 
 - Implemented and checked: deletion-boundary selection, distant expectations,
   negative binding tests and preservation of all extended-suite obligations.
