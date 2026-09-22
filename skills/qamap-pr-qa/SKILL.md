@@ -45,7 +45,19 @@ model session, or model-driven polling.
 If the binary is missing, incompatible, or fails, report the blocker. Do not
 install, upgrade, retry, or fall back to source review without permission.
 
-Interpret the returned `summary` and `reviewEvidence`. If `evidenceArchive.required`
+Allocate at least 8,192 output tokens for the handoff when supported and confirm
+the JSON is untruncated. Interpret `summary` and `inlineReview` when present,
+otherwise `reviewEvidence`. `inlineReview` replaces the preview with every record
+of the archive text, factored into lossless tables. For each row, concatenate
+literal string `parts`; a numeric part inserts that row's zero-based column.
+`at` gives original record order, either an index list or consecutive start/count.
+Inspect every row, including exceptional values. FILE names and original source
+line numbers remain exact; this is not a claim that similar code behaves alike.
+Do not expand the tables with another command or reread the archive. Its file
+hashes are retained on disk and bound by a combined digest in the inline text.
+Any omitted paths/gaps disclosed in that text remain unknown.
+
+If `evidenceArchive.required`
 is true, read its text view with `qamap qa read <evidenceArchive.review.file>
 --sha256 <review.sha256> --bytes <review.bytes>` (use archive fields for older
 receipts). Read one page per tool response. Continue with `--offset <nextOffset>`

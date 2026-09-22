@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { gradeReportEvidence } from "../scripts/report-evidence-grade.mjs";
 import { cases } from "./benchmarks/report-only-evidence/cases.mjs";
+import { formatReviewEvidenceText } from "../dist/qa-evidence-text.js";
+import { packReviewText } from "../dist/qa-evidence-pack.js";
 
 function example() {
   const files = { "src/a.mjs": "return changed;\n", "test/a.mjs": "assert.equal(result, expected);\n" };
@@ -16,6 +18,40 @@ function example() {
     reviewEvidence: { complete: false, paths: [{ source: excerpt("src/a.mjs"), contract: excerpt("test/a.mjs") }], gaps: [] } };
   return { files, criteria, handoff };
 }
+
+test("inline tables are independently reconstructed and checked against every frozen file", () => {
+  const { handoff } = example();
+  const files = {}, anchors = [], paths = [];
+  for (let i = 0; i < 40; i++) {
+    const file = `src/item-${i}.mjs`, text = `export const item${i} = ${i * 3};`;
+    files[file] = `${text}\n`;
+    anchors.push({ id: file, file, line: 1, text });
+    const excerpt = { file, line: 1, sourceHash: createHash("sha256").update(files[file]).digest("hex"), lines: [{ line: 1, text }] };
+    paths.push({ source: excerpt, contract: excerpt, endpoint: "test-reference" });
+  }
+  const gap = { file: "src/item-0.mjs", reason: "runtime-module-loading" };
+  handoff.inlineReview = packReviewText(formatReviewEvidenceText({ paths, gaps: [gap], omittedPathCount: 0, omittedGapCount: 0 }, { digest: true }));
+  handoff.reviewEvidence.paths = [];
+  const criteria = { anchors, requiredGap: gap };
+  assert.equal(gradeReportEvidence(handoff, files, criteria, 12000).passed, true);
+  for (const mutate of [
+    packet => { packet.tables.pop(); },
+    packet => { packet.tables.push(packet.tables[0]); },
+    packet => { packet.tables[0].rows.push([]); },
+    packet => { packet.tables[0].parts.push(99); },
+    packet => { packet.sha256 = "bad"; },
+    packet => { packet.encoding = "unsupported"; },
+    packet => { packet.bytes++; },
+  ]) {
+    const changed = structuredClone(handoff);
+    mutate(changed.inlineReview);
+    assert.equal(gradeReportEvidence(changed, files, criteria, 12000).passed, false);
+  }
+  assert.equal(gradeReportEvidence(handoff, { ...files, "src/item-0.mjs": "different;\n" }, criteria, 12000).passed, false);
+  assert.equal(gradeReportEvidence(handoff, { ...files, "src/item-0.mjs": files["src/item-0.mjs"] + "// unseen edit\n" }, criteria, 12000).passed, false);
+  const unknown = { ...files }; delete unknown["src/item-0.mjs"];
+  assert.equal(gradeReportEvidence(handoff, unknown, criteria, 12000).passed, false);
+});
 
 test("evidence gate accepts exact anchors without claiming model quality or token savings", () => {
   const { files, criteria, handoff } = example();

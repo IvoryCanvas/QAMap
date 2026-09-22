@@ -7,6 +7,7 @@ import { createRepositoryTextReader, type DiscoveryGap } from "./repository-disc
 import { isInstructionLikeRepositoryText } from "./qa-contract.js";
 import { safeModule, safeSymbol } from "./source-structure.js";
 import { createTestExpectationReader } from "./test-expectation-evidence.js";
+import type { PackedReviewText } from "./qa-evidence-pack.js";
 
 const limits = { paths: 32, excerptLines: 14, excerptBytes: 1200, evidenceBytes: 15360, responseBytes: 16384 } as const;
 type EvidenceGap = { file: string; reason: string; line?: number; symbol?: string; module?: string; target?: string; pointer?: string };
@@ -54,6 +55,7 @@ export interface LocalQaHandoffReceipt extends Omit<LocalQaReportReceipt, "schem
   reviewEvidence: ReviewEvidence;
   recovery: Record<string, string[]>;
   evidenceArchive?: EvidenceArchive;
+  inlineReview?: PackedReviewText;
 }
 
 export async function collectReviewEvidence(result: QaDraftResult, options: { archive?: boolean } = {}): Promise<ReviewEvidence> {
@@ -259,6 +261,7 @@ export async function buildLocalQaHandoff(
   receipt: LocalQaReportReceipt,
   summary: Record<string, unknown>,
   evidenceArchive?: EvidenceArchive,
+  inlineReview?: PackedReviewText,
 ): Promise<LocalQaHandoffReceipt> {
   const handoff: LocalQaHandoffReceipt = {
     ...receipt,
@@ -290,6 +293,16 @@ export async function buildLocalQaHandoff(
   if (handoff.evidenceArchive) handoff.evidenceArchive.required = handoff.reviewEvidence.omittedPathCount > 0
     || handoff.reviewEvidence.omittedGapCount > 0 || handoff.reviewEvidence.gaps.some(gap =>
       /(?:limit|partial|unavailable|source-changed|unreadable|instruction-like)/.test(gap.reason));
+  if (handoff.evidenceArchive?.required && handoff.evidenceArchive.pathCount > limits.paths && inlineReview) {
+    // The complete text view replaces the insufficient preview, not its evidence.
+    const inline = { ...handoff, inlineReview,
+      reviewEvidence: { ...handoff.reviewEvidence, paths: [], gaps: [],
+        omittedPathCount: handoff.reviewEvidence.omittedPathCount + handoff.reviewEvidence.paths.length,
+        omittedGapCount: handoff.reviewEvidence.omittedGapCount + handoff.reviewEvidence.gaps.length },
+      evidenceArchive: { ...handoff.evidenceArchive, required: false } };
+    delete inline.reviewEvidence.sourceDigest;
+    if (Buffer.byteLength(JSON.stringify(inline)) + 1 <= limits.responseBytes) return inline;
+  }
   if (oversized()) throw new Error("QA handoff exceeds its output limit; use a shorter report output path.");
   return handoff;
 }

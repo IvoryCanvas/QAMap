@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { formatReviewEvidenceText } from "./qa-evidence-text.js";
+import { packReviewText } from "./qa-evidence-pack.js";
 import { buildLocalQaHandoff, collectReviewEvidence, type LocalQaHandoffReceipt } from "./qa-handoff.js";
 import {
   formatAgentQaDraft,
@@ -80,7 +81,7 @@ export async function writeLocalQaReport(
       bytes: Buffer.byteLength(archiveText), pathCount: archive.reviewEvidence.paths.length,
       omittedPathCount: archive.reviewEvidence.omittedPathCount, required: true,
       review: { file: reviewFile, bytes: Buffer.byteLength(reviewText), sha256: createHash("sha256").update(reviewText).digest("hex") },
-    });
+    }, packReviewText(formatReviewEvidenceText(archive.reviewEvidence, { digest: true })));
     if (JSON.stringify(handoff.summary) !== summary.trim()) {
       await fs.writeFile(files.summary, `${JSON.stringify(handoff.summary)}\n`, { encoding: "utf8", mode: 0o600 });
     }

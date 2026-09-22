@@ -20,6 +20,7 @@ See the [0.5.0 preparation checklist](docs/releases/0.5.0.md).
 - Direct test calls with literal local module filenames retain the selected policy's indexed export declarations without resolving unknown runtime choices or executing imports.
 - Graph-preview overflow remains in a checked local archive. A deduplicated text view preserves its code lines and endpoints; report-review callers must read it when the bounded response is insufficient. Real retention and host-context limits remain explicit.
 - `qa read` verifies saved evidence against its receipt and returns bounded, UTF-8-safe pages without repeating analysis. Callers must follow every offset before treating the report as read.
+- Repeated review evidence can use a lossless inline text table within the handoff limit. Every differing row, source location and uncertainty survives reconstruction; irregular or oversized evidence retains checked archive recovery.
 - Generated onboarding commands pin the running package version for npm, pnpm, Yarn and Bun, so prerelease-only commands do not resolve an incompatible stable binary.
 - Review evidence preserves short declaration bodies, relevant module bindings, deletion boundaries and distant test expectations. Truncated context remains an explicit gap within the 16,384-byte response limit.
 - Foreground completion-wait guidance reduces avoidable model polling without changing execution authority or hiding additional caller usage.
@@ -36,6 +37,7 @@ See the [0.5.0 preparation checklist](docs/releases/0.5.0.md).
 ### Measurement
 
 - Six known synthetic pairs met predefined finding and execution-state criteria with 303,747 standalone versus 202,091 report-review tokens. The 33.47% aggregate reduction is sample-specific, not a general quality, cost or savings guarantee. Prior failures and dynamic-policy and large-change gaps remain documented.
+- A separate two-case inline-delivery follow-up retained required findings with 46,301 versus 41,300 total tokens for a concrete runtime policy and 84,518 versus 30,563 for 160 repeated-structure changes. Prior paging failures remain in the measurement record; heterogeneous large changes and monetary savings remain unproven.
 - Offline benchmark success is reported separately from measured agent quality. Missing provider usage cannot produce a token or cost savings claim.
 - Repository runs record repeated direct file reads, post-handoff tool activity and setup-through-cleanup timing; diagnostic comparisons require matched passing quality and complete provider usage.
 

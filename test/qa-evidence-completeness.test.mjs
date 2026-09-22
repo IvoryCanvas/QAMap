@@ -10,6 +10,8 @@ import { writeLocalQaReport } from "../dist/qa-report.js";
 import { buildRepositoryEvidenceIndex } from "../dist/repository-index.js";
 import { traceRepositoryImpact } from "../dist/repository-impact.js";
 import { formatReviewEvidenceText } from "../dist/qa-evidence-text.js";
+import { unpackReviewText } from "../dist/qa-evidence-pack.js";
+import { buildLocalQaHandoff } from "../dist/qa-handoff.js";
 import { cases } from "./benchmarks/report-only-evidence/extended-cases.mjs";
 
 async function repository(t, base, head) {
@@ -90,12 +92,14 @@ test("large changes preserve every discovered endpoint in the local evidence arc
   assert.ok(Buffer.byteLength(JSON.stringify(receipt)) + 1 <= 16384);
   assert.equal(result.repositoryImpact.discardedPaths, 0);
   assert.equal(result.repositoryImpact.paths.length + result.repositoryImpact.overflowPaths.length, count);
-  assert.ok(receipt.evidenceArchive.required);
+  assert.equal(receipt.evidenceArchive.required, false);
+  assert.ok(receipt.inlineReview);
   const archiveText = await fs.readFile(receipt.evidenceArchive.file, "utf8");
   assert.equal(receipt.evidenceArchive.bytes, Buffer.byteLength(archiveText));
   assert.equal(receipt.evidenceArchive.sha256, createHash("sha256").update(archiveText).digest("hex"));
   assert.equal((await fs.stat(receipt.evidenceArchive.file)).mode & 0o777, 0o600);
   const archive = JSON.parse(archiveText);
+  assert.equal(unpackReviewText(receipt.inlineReview), formatReviewEvidenceText(archive.reviewEvidence, { digest: true }));
   const review = await fs.readFile(receipt.evidenceArchive.review.file, "utf8");
   assert.equal(receipt.evidenceArchive.review.bytes, Buffer.byteLength(review));
   assert.equal(receipt.evidenceArchive.review.sha256, createHash("sha256").update(review).digest("hex"));
@@ -123,6 +127,12 @@ test("large changes preserve every discovered endpoint in the local evidence arc
   }
   assert.equal(new Set(archive.reviewEvidence.paths.map(entry => entry.source.file)).size, count);
   assert.equal(archive.reviewEvidence.omittedGapCount, 0);
+  const fallback = await buildLocalQaHandoff(result, {
+    analysis: receipt.analysis, execution: receipt.execution, noLlmToken: true, files: receipt.files,
+  }, receipt.summary, receipt.evidenceArchive, { ...receipt.inlineReview, instructions: "x".repeat(17000) });
+  assert.equal(fallback.inlineReview, undefined);
+  assert.equal(fallback.evidenceArchive.required, true);
+  assert.ok(fallback.reviewEvidence.paths.length > 0);
   const bounded = traceRepositoryImpact(result.repositoryIndex,
     Object.keys(head).map(file => ({ file, lines: [1] })), { maxPaths: 2, maxArchivePaths: 3 });
   assert.equal(bounded.paths.length, 2);

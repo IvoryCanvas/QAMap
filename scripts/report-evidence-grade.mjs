@@ -5,6 +5,53 @@ export function gradeReportEvidence(handoff, files, criteria, bytes) {
   const returned = new Map();
   const excerpts = new Map();
   const checkedFiles = new Map();
+  const inlineGaps = [];
+  if (handoff.inlineReview) {
+    // Deliberately independent of the production decoder: validate every table,
+    // reconstruct numbered lines, and compare to the frozen fixture, not itself.
+    try {
+      const packet = handoff.inlineReview;
+      if (packet.encoding !== "lossless-text-tables-v1") throw Error("encoding");
+      const records = new Map();
+      for (const table of packet.tables) {
+        const positions = Array.isArray(table.at) ? table.at
+          : Array.from({ length: table.at.count }, (_, i) => table.at.start + i);
+        if (positions.length !== table.rows.length) throw Error("rows");
+        for (let i = 0; i < positions.length; i++) {
+          const position = positions[i];
+          if (!Number.isSafeInteger(position) || position < 0 || position >= packet.records || records.has(position)) throw Error("record");
+          records.set(position, table.parts.map(part => {
+            if (typeof part === "string") return part;
+            if (!Number.isSafeInteger(part) || part < 0 || typeof table.rows[i][part] !== "string") throw Error("column");
+            return table.rows[i][part];
+          }).join(""));
+        }
+      }
+      if (records.size !== packet.records) throw Error("missing-record");
+      const text = [...records].sort(([a], [b]) => a - b).map(([, text]) => text).join("");
+      if (Buffer.byteLength(text) !== packet.bytes || createHash("sha256").update(text).digest("hex") !== packet.sha256) throw Error("digest");
+      const digest = text.match(/^Source identities: sha256=([a-f0-9]{64}); files=(\d+)\./m);
+      const identities = new Map();
+      let file;
+      for (const line of text.split("\n")) {
+        const header = line.match(/^FILE (".*")$/);
+        if (header) {
+          file = JSON.parse(header[1]);
+          if (typeof files[file] !== "string") throw Error(`unknown-file:${file}`);
+          identities.set(file, createHash("sha256").update(files[file]).digest("hex"));
+        }
+        const numbered = line.match(/^(\d+)\|(.*)$/);
+        if (numbered && file) {
+          if (files[file].split(/\r?\n/)[Number(numbered[1]) - 1] !== numbered[2]) throw Error(`incorrect-line:${file}:${numbered[1]}`);
+          returned.set(`${file}:${numbered[1]}`, numbered[2]);
+        }
+        const gap = line.match(/^(\[.*\]) count=/);
+        if (gap) { const [file, reason] = JSON.parse(gap[1]); inlineGaps.push({ file, reason }); }
+      }
+      if (!digest || Number(digest[2]) !== identities.size || digest[1] !== createHash("sha256")
+        .update(JSON.stringify([...identities].sort())).digest("hex")) throw Error("source-digest");
+    } catch (error) { integrityErrors.push(`inline-review:${error.message}`); }
+  }
   for (const [index, pair] of (handoff.reviewEvidence?.paths ?? []).entries()) {
     const fields = [["source", pair.source], ["contract", pair.contract],
       ...(pair.via ?? []).map((excerpt, i) => [`via/${i}`, excerpt])];
@@ -49,7 +96,7 @@ export function gradeReportEvidence(handoff, files, criteria, bytes) {
   }
   const obligations = criteria.anchors.map(anchor => ({ ...anchor,
     present: returned.get(`${anchor.file}:${anchor.line}`) === anchor.text }));
-  const requiredGapPresent = !criteria.requiredGap || (handoff.reviewEvidence?.gaps ?? []).some(gap =>
+  const requiredGapPresent = !criteria.requiredGap || [...(handoff.reviewEvidence?.gaps ?? []), ...inlineGaps].some(gap =>
     gap.file === criteria.requiredGap.file && gap.reason === criteria.requiredGap.reason);
   const safety = {
     schema: handoff.schema?.name === "qamap.qa.handoff" && handoff.schema.version === 1,

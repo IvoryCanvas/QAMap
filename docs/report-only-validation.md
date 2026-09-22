@@ -314,6 +314,35 @@ not a blind independent judge. The runtime-policy evidence gap and large-PR
 omissions remain unresolved. The supported examples demonstrate a lower-token
 path, not unconditional quality parity or readiness for a default-only release.
 
+### Lossless Inline Follow-Up
+
+The subsequent completeness and caller experiments are recorded in
+[Release validation](release-validation.md#lossless-inline-follow-up), including
+the truncated archive attempt and the 401,557-token paging failure. Those
+failures are retained rather than subtracted from usage or relabeled as savings.
+
+The new, separately frozen two-pair run retained all required lines and findings
+with 46,301 versus 41,300 tokens for the concrete dynamic policy and 84,518 versus
+30,563 for 160 independent changes. All four attempts completed without retry.
+Actual model-visible output, rather than only saved files, was audited for
+truncation, exact source lines and lossless reconstruction. Both conditions kept
+execution `not-run`; the candidate made no independent source-reading pass.
+
+The implementation factors repeated literal text and keeps every differing row.
+This is neither lossy summarization nor semantic grouping. It fits this large
+synthetic report into one 13,055-byte response and removes eight archive reads.
+Irregular evidence that does not fit keeps the checked-page fallback. No actual
+token result is available for that heterogeneous fallback on the new build.
+
+This run used the same model at medium effort and preselected report mode, not
+first-use consent. Its 202,682 total tokens cover all 14 requests and final
+answers, but exclude the parent engineering conversation. The large candidate's
+uncached input rose from 14,041 to 21,314; total-token savings do not establish
+lower monetary cost. Quality passes refer to frozen findings and citations, not
+identical explanation: the candidate reported missing historical context that
+standalone review read directly. Independent external quality, mixed-structure
+large PRs and repeated-run reliability remain unproven.
+
 ## Subsequent Model Comparison
 
 Only after evidence readiness, separately approve a model budget. Freeze the

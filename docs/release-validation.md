@@ -69,13 +69,60 @@ Parent engineering conversation usage is excluded; monetary cost was not measure
 Both protocols used an explicit, preselected report-review preference, not first
 consent. All attempts are preserved and no automatic retry was performed.
 
-**Stable publication and plugin submission remain blocked.** Saving and delivering
+**This checkpoint blocked stable publication and plugin submission.** Saving and delivering
 complete evidence does not establish efficiency. Sequential page reads increased
 the measured caller input substantially; reducing repeated model context without
-dropping independent evidence is the remaining large-change release blocker.
+dropping independent evidence was the remaining large-change release blocker.
 Do not average it away with the smaller passing case or earlier comparisons.
-Exact-final-head CI is also required. The following preparation receipts are
+The separately measured follow-up below addresses this case. The following preparation receipts are
 historical, not sign-off of these runtime changes.
+
+### Lossless Inline Follow-Up
+
+Repeated evidence text now uses literal templates with every differing value
+retained as a row. It is not a representative sample or a semantic-equivalence
+claim. Exact reconstruction and a digest are checked before use. The full JSON
+archive retains individual file hashes. Irregular or oversized evidence keeps
+the checked-page fallback instead of silently losing evidence.
+
+The complete local release gate passed: 760 tests, 44 static contracts,
+11 repository checks, 10 context checks and all 3 execution contracts. Coverage
+was 91.95% lines, 89.22% branches and 96.18% functions. The completeness suite
+retained 4/4 policy lines and 320/320 large-change lines twice each.
+
+A separately frozen protocol used the same two synthetic changes, prompts,
+GPT-6 Astra at medium effort, tool limits and preselected report-review mode.
+All four attempts completed without retry. Provider request increments,
+cumulative usage and completion receipts reconciled.
+
+| Case | Standalone total tokens | Report-review total tokens | Reduction |
+| --- | ---: | ---: | ---: |
+| Literal runtime policy | 46,301 | 41,300 | 10.80% |
+| 160 independent changes | 84,518 | 30,563 | 63.84% |
+
+The actual model-visible large response was 13,055 bytes and reconstructed all
+83,900 bytes of digest-form evidence without truncation. Independent grading
+checked all 320 required lines against the frozen source. No extra archive read
+was needed. Both answers identified all 160 implementation/assertion mismatches,
+cited correct locations, preserved product-policy uncertainty and stayed
+`not-run`. The policy pair retained all four required lines without inventing a
+defect. These are the predeclared finding criteria, not equivalence of every
+observation: standalone review explained the previous implementation, whereas
+report review explicitly lacked that historical context.
+
+All attempts used 202,682 tokens in 14 provider requests, including skill reads
+and final answers. Parent engineering usage is excluded. In the large pair,
+uncached input increased from 14,041 to 21,314 despite fewer total tokens;
+monetary cost and subscription deductions were not measured. First-use consent
+was not part of this protocol. Earlier failed protocols remain above.
+
+**This fixes the measured repeated-structure case, not every large PR.** Known
+synthetic cases and author-reviewed findings are not blinded external validation.
+The heterogeneous implementation diff still needed the archive fallback.
+Broader quality/usage gates and exact-final-head CI remain required before
+stable publication. See the [measurement limits](report-only-validation.md#lossless-inline-follow-up).
+
+### Initial Candidate Receipts
 
 The current handoff envelope is capped at 16,384 bytes; its nested agent summary
 retains the separate 4,096-byte limit. It preserves supported declaration and

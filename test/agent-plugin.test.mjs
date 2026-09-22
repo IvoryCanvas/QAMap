@@ -44,7 +44,9 @@ test("native agent plugin manifests expose one shared QAMap skill", async () => 
   assert.match(reference, /capabilities\[\]/);
   assert.match(reference, /execution\.gitState/);
   // Packaging checks preserve the stated boundaries, not proof of host behavior.
-  assert.match(skill, /Interpret the returned `summary` and `reviewEvidence`/);
+  assert.match(skill, /Interpret `summary` and `inlineReview`/);
+  assert.match(skill, /otherwise `reviewEvidence`/);
+  assert.match(skill, /Inspect every row, including exceptional values/);
   assert.match(skill, /evidenceArchive.required/);
   assert.match(skill, /qamap qa read/);
   assert.match(skill, /--sha256 <review.sha256> --bytes <review.bytes>/);

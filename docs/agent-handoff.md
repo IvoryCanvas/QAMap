@@ -113,8 +113,27 @@ agent invokes it, the returned excerpts can enter that model's context. Follow
 your host and repository data policies; local analysis is not a promise that
 LLM-mediated review keeps all code on the device.
 
-Interpret the returned `summary` and `reviewEvidence`, citing the attached
-code lines. When `evidenceArchive.required` is true, also read its `review.file`
+Interpret `summary` and, when present, `inlineReview`; otherwise use
+`reviewEvidence`. Cite original source lines. Large archives with more than 32
+paths can use `inlineReview` when exact text factoring fits the existing response
+limit. It contains all records of the archive's text view, not a representative
+sample. For each table row, concatenate string `parts` literally and replace
+numeric parts with that row's zero-based column. `at` preserves original record
+order as an index list or consecutive `start`/`count`. Different identifiers,
+values, operators and exceptional rows remain explicit. This does not assert
+semantic equivalence or exhaustive coverage.
+
+QAMap checks byte-exact round-trip recovery before returning the tables. Source
+identities use one digest; individual full-file hashes remain in the JSON archive.
+The partial `reviewEvidence` preview is empty in this mode, and its omission
+counts describe that preview, not lost inline records. Use the retained/omitted
+counts and gaps inside the inline text. Do not reread or expand the same evidence
+with another command. The full saved artifacts remain available for a separate
+audit. If factoring is not smaller, exceeds the 1 MiB factoring-input bound, or
+does not fit the handoff, keep the original required archive read instead.
+
+Allocate at least 8,192 output tokens when supported and verify untruncated JSON.
+When `evidenceArchive.required` is true, also read its `review.file`
 with `qamap qa read <file> --sha256 <receipt-hash> --bytes <receipt-bytes>`.
 The reader verifies the entire file on each call and returns at most 16,384 bytes.
 Pass `--offset <nextOffset>` for each subsequent page until `nextOffset` is null.
