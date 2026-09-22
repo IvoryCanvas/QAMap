@@ -153,8 +153,8 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `qamap test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
 | `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. A single supported changed package is selected automatically, including an independent nested package. |
-| `qamap qa report . --base origin/main --head HEAD` | Save local reports and return paths without their contents; candidate only. |
-| `qamap qa report . --base origin/main --head HEAD --handoff` | Save reports and return bounded source/test evidence once; candidate only. |
+| `qamap qa report . --base origin/main --head HEAD` | Save local reports and return paths without their contents; requires 0.5.0 or newer. |
+| `qamap qa report . --base origin/main --head HEAD --handoff` | Save reports and return bounded source/test evidence once; requires 0.5.0 or newer. |
 | `qamap qa run . --base origin/main --head HEAD` | Re-analyze the change and execute only the exact existing repository validation command selected by the canonical route. Additional required commands are reported but not executed. Returns pass, fail, timeout, or blocked evidence; it never installs a runner or runs a proposed product E2E draft. |
 | `qamap qa . --base origin/main --head HEAD --format agent` | The same decision content as one compact JSON line for coding agents — a versioned contract documented in [docs/agent-format.md](agent-format.md). |
 | `qamap e2e plan . --base origin/main --head HEAD` | Derive change intent and QA scenarios, then map them to coverage, test evidence, testability gaps, and an automation adapter. |
@@ -190,7 +190,7 @@ reports that a repository command is needed.
 | `qamap context . --write AGENTS.md` | Generate starter agent instructions for the repo. |
 | `qamap init .` | Create a starter `qamap.config.json`. |
 | `qamap init --agent .` | One-command agent onboarding: add a marked QAMap Pre-PR QA section to `AGENTS.md`, install the same packaged skill to the portable `.agents/skills/qamap-pr-qa/SKILL.md` path and the Claude-compatible `.claude/skills/qamap-pr-qa/SKILL.md` path, and create `qamap.config.json` if missing. Idempotent; existing instructions and locally modified skills are preserved. |
-| `qamap init --agent . --review-mode report` | Explicitly choose report-based review for this project; preserves user instructions and requires a compatible candidate binary. |
+| `qamap init --agent . --review-mode report` | Explicitly choose report-based review for this project; preserves user instructions and requires 0.5.0 or newer. |
 | `qamap init --agent . --review-mode ask` | Restore offer-first review. An omitted option preserves an existing saved choice. |
 | `qamap init --scripts .` | Add collision-safe `qa`, `qa:local`, `qa:run`, and `qa:e2e` package scripts for repeat use in a JavaScript repository. |
 

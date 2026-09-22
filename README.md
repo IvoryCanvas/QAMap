@@ -50,7 +50,7 @@ during PR review or test planning.
 
 The host agent still uses its own model and permissions. QAMap provides the
 local, deterministic repository analysis inside that workflow.
-For the development build, see the [one-call review handoff](docs/agent-handoff.md).
+For QAMap 0.5.0 and newer, see the [one-call review handoff](docs/agent-handoff.md).
 
 ## Read The Result
 

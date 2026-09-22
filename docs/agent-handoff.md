@@ -203,11 +203,11 @@ If files change after the response, flag the snapshot as stale and request a new
 analysis before relying on it. Repeated invocations remain separate analyses;
 the host should not retry or rerun merely to summarize a completed response.
 
-## Before 0.5.0
+## Validation And Limits
 
-The proposed minor release groups repository-wide evidence discovery with the
-new caller handoff. The local candidate is versioned separately; published
-packages and plugins have not changed.
+QAMap 0.5.0 groups repository-wide evidence discovery with the caller handoff.
+The npm package and plugin-directory releases update independently; verify the
+installed CLI and skill versions rather than assuming a directory update.
 
 - Implemented: local one-response delivery, bounded excerpts, recovery pointers,
   save-only compatibility, and consent-aware packaged instructions.
@@ -218,12 +218,13 @@ packages and plugins have not changed.
   This does not verify the Desktop interface.
 - Still to verify: refusal, runtime failures, and evidence gaps across more
   changes and hosts. Skill text cannot enforce every host.
-- Release gate: for each predeclared comparison case, equivalent verified
+- Measured comparisons: each passing predeclared case retained verified
   findings and uncertainty with lower measured total input plus output tokens.
   Include consent, invocation, interpretation, failures and any extra inspection;
   cached input is part of input, not another additive count. Missing usage or
   weaker findings cannot pass. One passing case is not a universal guarantee.
-- Still required: release-wide checks and explicit release approval.
+- See [release validation](release-validation.md) for passing and failed protocols,
+  and [the release record](releases/0.5.0.md) for publication checks and limits.
 
 A completed local pilot of the previous workflow used more total tokens with
 QAMap: the caller also inspected source independently. That negative result is
