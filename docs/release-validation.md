@@ -12,10 +12,10 @@ missed some of them. The 0.5.1 candidate replaces that workflow with one bounded
 `qamap qa brief` response. With the host, prompt, tools and cases fixed, it used
 74.1% fewer tokens by sum of per-case medians. It found every seeded regression
 in all 42 runs where the standalone host missed 2, and covered more of the
-expected QA plan. The final tree passed the complete local gate: 783 tests,
+expected QA plan. The final tree passed the complete local gate: 787 tests,
 44 static contracts, 11 repository checks, 10 context checks, 3 execution
-contracts, a clean scan, plugin checks and the packed 266-file plugin smoke.
-Coverage was 91.93% lines, 88.64% branches and 95.82% functions.
+contracts, a clean scan, plugin checks and the packed 269-file plugin smoke.
+Coverage was 91.96% lines, 88.66% branches and 95.86% functions.
 
 ### Protocol
 
@@ -94,6 +94,32 @@ development candidates are not release evidence.
   only" prompt in 14 of 57 runs; QAMap arms did so in none. This count classifies
   each shell command segment. An earlier count of 17 wrongly matched test file
   names passed to `grep` and `find`.
+
+### User-Level Consent Arm
+
+This arm measures QAMap with no repository setup and the unchanged review
+prompt. The packaged skill was installed at user level, as a plugin would be,
+and consent was recorded once with `qamap consent grant --global`. It ran two
+runs per case against the same 57 standalone runs; per-run results are in
+`test/benchmarks/review-host/results-0.5.1-consent.json`.
+
+| Measure | Standalone | QAMap, user-level consent |
+| --- | ---: | ---: |
+| Sum of per-case median total tokens | 9,752,041 | 2,881,446 (-70.5%) |
+| Runs that used QAMap | 0/57 | 38/38 |
+| Runs that found every seeded regression | 40/42 | 28/28 |
+| Mean QA-plan coverage, product fixtures | 0.731 | 0.944 |
+| Uncertainty kept | 1/3 | 2/2 |
+| Definite claims against safe contracts | 0 | 0 |
+| Runs that executed tests | 14 | 0 |
+
+The host opened the skill file in all 38 runs, which adds one model request.
+That is why this arm used more than the explicit project arm (2,526,116). In
+every case, the most expensive consent run still cost less than the cheapest
+standalone run. The measured package differed from the final tree only in how
+`init --agent --review-mode ask` resets the project section, which this arm
+does not use. Asking first remains the default; this arm shows the cost after
+the user has chosen "always".
 
 **Limits remain:**
 

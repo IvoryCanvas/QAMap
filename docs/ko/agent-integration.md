@@ -27,6 +27,21 @@ qamap init --agent . --review-mode report
 유지합니다. 이후 일반 설정 명령을 다시 실행해도 선택한 방식은 보존됩니다.
 매번 선택하도록 되돌리려면 `--review-mode ask`를 사용하세요.
 
+0.5.1부터는 설정만 바꾸는 `qamap consent` 명령도 제공합니다.
+
+```sh
+qamap consent grant            # 이 프로젝트: AGENTS.md의 QAMap 구간만 수정
+qamap consent grant --global   # 모든 저장소: Claude Code와 Codex 사용자 지침
+qamap consent revoke [--global]
+qamap consent status
+```
+
+`--global`은 `~/.claude/CLAUDE.md`와 `~/.codex/AGENTS.md`(또는
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`)에 표시된 구간을 추가합니다. 설정 디렉터리가
+있는 호스트에만 쓰고, 저장소는 건드리지 않습니다. `revoke --global`은 그
+구간만 지우고 나머지 내용은 그대로 둡니다. 프로젝트에서 `revoke`하면 "매번
+묻기"가 기록되어, 그 프로젝트에서는 사용자 전역 동의보다 우선합니다.
+
 설치만으로 이 설정이 켜지지는 않습니다. 독립적인 코드 검수를 명시적으로
 요청하면 그 요청을 우선하며, 테스트 실행이나 코드 수정 권한이 추가되는
 것도 아닙니다. 호스트가 스킬 읽기를 요구하면 해당 과정의 토큰은 여전히

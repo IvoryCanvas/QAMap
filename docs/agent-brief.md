@@ -53,6 +53,13 @@ for example `N = 0..9, 11..159`. No member is sampled or dropped.
 that the user chose QAMap review for this project; `--review-mode ask` restores
 the offer-first behavior. Installation alone is not consent.
 
+Agents ask before running QAMap unless the user recorded consent. When asked,
+the user can answer this time only, always, or not now; "always" is recorded with
+`qamap consent grant` for the project or `qamap consent grant --global` for every
+repository (Claude Code and Codex user instructions). `qamap consent revoke
+[--global]` returns to asking and `qamap consent status` shows both scopes. See
+[commands](commands.md#choose-whether-agents-ask-first).
+
 The instructions ask the agent to run the brief once, review from it, read
 source only to settle a specific open item, and report findings, then concrete
 checks for what to verify, then unknowns. Tests stay `not-run`: the brief is
@@ -91,7 +98,9 @@ regressions reverted from this repository's history.
 | Mean QA-plan coverage, product fixtures | 0.73 | 0.89 |
 
 In every case, the most expensive QAMap run cost less than the cheapest standalone
-run. These are known cases on one host and one model, not a general guarantee.
+run. With no repository setup, the unchanged prompt and consent recorded once with
+`qamap consent grant --global`, the host used QAMap in 38 of 38 runs and the sum of
+medians was 2,881,446 (-70.5%). These are known cases on one host and one model, not a general guarantee.
 The per-case table, sensitivity arms and limits are in the
 [0.5.1 release record](releases/0.5.1.md#measured-results) and the
 [validation record](release-validation.md).

@@ -97,6 +97,26 @@ behind removed lines, QA focus, and unknowns. The base is auto-selected unless
 `--base` is given. The full report is saved as with `qa report`, and execution
 stays `not-run`. See [the review brief](agent-brief.md).
 
+### Choose Whether Agents Ask First
+
+By default an agent offers QAMap and waits for an answer before each review.
+To let agents run it without asking, record consent (0.5.1 or newer):
+
+```sh
+qamap consent grant            # this project: edits QAMap's section of AGENTS.md
+qamap consent grant --global   # every repository: Claude Code and Codex user instructions
+qamap consent revoke [--global]
+qamap consent status
+```
+
+`--global` writes a marked section to `~/.claude/CLAUDE.md` and
+`~/.codex/AGENTS.md` (or `CLAUDE_CONFIG_DIR` and `CODEX_HOME`), only for hosts
+whose configuration directory exists, and never touches the repository.
+`revoke --global` removes that section and leaves the rest of each file as it
+was. A project revoke records "ask each time", which overrides user-level
+consent for that project. Consent covers the local analysis only, not tests,
+edits, installs or model calls by QAMap.
+
 ### Return Evidence In One Call
 
 For a consented report-based review with QAMap 0.5.0 or newer:
@@ -209,6 +229,8 @@ reports that a repository command is needed.
 | `qamap init --agent .` | One-command agent onboarding: add a marked QAMap Pre-PR QA section to `AGENTS.md`, install the same packaged skill to the portable `.agents/skills/qamap-pr-qa/SKILL.md` path and the Claude-compatible `.claude/skills/qamap-pr-qa/SKILL.md` path, and create `qamap.config.json` if missing. Idempotent; existing instructions and locally modified skills are preserved. |
 | `qamap init --agent . --review-mode report` | Explicitly choose report-based review for this project; preserves user instructions and requires 0.5.0 or newer. |
 | `qamap init --agent . --review-mode ask` | Restore offer-first review. An omitted option preserves an existing saved choice. |
+| `qamap consent grant\|revoke [path] [--global]` | Record or remove consent for agents to run QAMap review without asking, for one project or, with `--global`, in Claude Code and Codex user instructions; requires 0.5.1 or newer. |
+| `qamap consent status [path]` | Show project and user-level consent and whether agents ask first in this project. |
 | `qamap init --scripts .` | Add collision-safe `qa`, `qa:local`, `qa:run`, and `qa:e2e` package scripts for repeat use in a JavaScript repository. |
 
 For monorepos, run `qamap qa` at the repository root first. When every changed file belongs to exactly one recognized package declared by `workspaces` or `pnpm-workspace.yaml`, `qa` automatically analyzes that package and reports `automatic-package` as its analysis scope. Package-local routes, scripts, fixtures, and runner settings are used while repo-level guardrails remain available. If multiple packages changed, a root file is also part of the diff, or the package type is unknown, QAMap keeps repository-wide scope and lists the package candidates rather than silently choosing one.

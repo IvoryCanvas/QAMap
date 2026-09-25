@@ -48,6 +48,9 @@ installed binary directly using those instructions; a host that requires skill
 loading may still read the skill. Existing setup runs preserve the choice. Use
 `--review-mode ask` to restore the default offer-first behavior. Installation
 alone does not opt in, and explicit requests for independent review still win.
+From 0.5.1, `qamap consent grant|revoke [--global]` records or removes the same
+choice for one project or, with `--global`, in Claude Code and Codex user
+instructions for every repository; `qamap consent status` shows both scopes.
 This setting does not authorize tests, edits, installations or model calls by
 QAMap. Compare configured use separately from first-use discovery and consent;
 fewer exchanges do not by themselves prove token savings or equal quality.

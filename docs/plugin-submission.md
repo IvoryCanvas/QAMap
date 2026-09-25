@@ -18,7 +18,9 @@ replacement passes review.
 ## Product Boundary
 
 - The 0.5.1 workflow offers report-based review, respects refusal, and runs
-  `qamap qa brief` only after consent or an explicit saved preference.
+  `qamap qa brief` only after consent or an explicit saved preference. Users
+  record or remove a lasting preference with `qamap consent grant|revoke`
+  (project) or `--global` (user-level host instructions); asking is the default.
 - That command reads source and Git history and writes private local report
   artifacts. It does not change source or execute tests. The JSON
   `qa report --handoff` path remains for explicitly requested structured evidence.
