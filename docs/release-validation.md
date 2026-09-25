@@ -4,6 +4,109 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
+## 0.5.1 - Release Validation (2026-09-25)
+
+A real-host comparison showed that the published 0.5.0 review workflow cost more
+than the same agent reviewing alone on this repository's real regressions, and
+missed some of them. The 0.5.1 candidate replaces that workflow with one bounded
+`qamap qa brief` response. With the host, prompt, tools and cases fixed, it used
+74.1% fewer tokens by sum of per-case medians. It found every seeded regression
+in all 42 runs where the standalone host missed 2, and covered more of the
+expected QA plan. The final tree passed the complete local gate: 783 tests,
+44 static contracts, 11 repository checks, 10 context checks, 3 execution
+contracts, a clean scan, plugin checks and the packed 266-file plugin smoke.
+Coverage was 91.93% lines, 88.64% branches and 95.82% functions.
+
+### Protocol
+
+- Host: Claude Code CLI 2.1.282 in print mode, one fixed model for both arms.
+  Each run used a fresh fixture, home directory and session, no MCP servers,
+  and the same tools and prompt. Arm order alternated.
+- QAMap arm: the packed candidate ran `init --agent --review-mode report` in the
+  fixture, and the prompt began with "Use QAMap for this review." The configured
+  arm kept the same setup with the unchanged prompt.
+- Tokens are input, cache creation, cache read and output, summed across the
+  host's per-model usage receipt. That receipt includes forked skill contexts;
+  the top-level usage field does not and was not used.
+- Cases: 13 synthetic evidence cases, 3 product fixtures, and 3 real regressions
+  reverted from this repository (`rr-*`) with Git history up to the base commit.
+  Cases, oracles and harness are in `test/benchmarks/review-host/` and
+  `scripts/agent-bench/`.
+- Grading: a separate tool-less session on a different model graded each
+  answer against the frozen oracle, with tool and report names redacted.
+- Every run completed and was graded; none was excluded or retried. Per-run
+  results are in `test/benchmarks/review-host/results-0.5.1.json`.
+
+### 0.5.0 Baseline
+
+One run per case with the published 0.5.0 package. Repository-revert fixtures
+in this run held a two-commit snapshot (baseline and change) instead of history.
+
+| Measure | Standalone | QAMap 0.5.0 |
+| --- | ---: | ---: |
+| Total tokens, 19 runs | 10,382,206 | 8,517,248 |
+| `rr-contract-cap` | 848,305 | 1,372,609 |
+| `rr-contract-scope` | 1,139,722 | 1,821,435 |
+| `rr-analysis-rule` | 1,464,654 | 1,492,739 |
+| Runs that found every seeded regression | 14/14 | 11/14 |
+
+0.5.0 cost less on small synthetic cases and more on every real regression. It
+missed both `rr-contract-scope` regressions, the `rr-analysis-rule` regression
+and all 160 mismatches in `independent-160-contracts`. In `rr-contract-cap`,
+archive paging, 188 transitive paths and a direct test in a file too large for
+the syntax index drove the extra requests.
+
+### Candidate Progression
+
+Both candidates ran three times per case against the same 57 standalone runs.
+
+| Candidate | Sum of medians | All runs | Seeded, all found | QA-plan coverage | Uncertainty kept |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Standalone | 9,752,041 | 30,916,750 | 40/42 | 0.731 | 1/3 |
+| Brief without What to verify | 2,703,854 | 7,958,620 | 42/42 | 0.546 | 1/3 |
+| Final brief | 2,526,116 | 8,056,261 | 42/42 | 0.889 | 3/3 |
+
+The first candidate cut tokens but its QA-plan coverage fell below the
+standalone host, so it was not accepted. The final brief adds each inferred
+behavior flow and every critical check to verify. Its instructions ask for
+concrete checks, or a dismissal with a reason, for each one. Earlier one-run
+development candidates are not release evidence.
+
+### Final Arms
+
+| Arm | Runs | Total tokens | Seeded, all found | QA-plan coverage | Uncertainty kept |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Standalone | 57 | 30,916,750 | 40/42 | 0.731 | 1/3 |
+| QAMap, explicit prompt | 57 | 8,056,261 | 42/42 | 0.889 | 3/3 |
+| QAMap, unchanged prompt | 19 | 2,719,289 | 14/14 | 0.722 | 0/1 |
+| Standalone, `Skill` disabled | 19 | 7,410,441 | 14/14 | 0.583 | 1/1 |
+| QAMap, `Skill` disabled | 19 | 2,710,340 | 14/14 | 0.889 | 1/1 |
+
+- No arm made a definite claim against a safe contract.
+- In every case, the most expensive explicit QAMap run cost less than the
+  cheapest standalone run.
+- Uncached input (input plus cache creation) was 1,451,800 versus 610,424. The
+  host's list-price estimate was $13.99 versus $5.59; this is not billing.
+- The standalone host delegated to its built-in review skill in 53 of 57 runs.
+  Disabling `Skill` in both arms kept a 63.4% reduction.
+- With the unchanged prompt, the host used QAMap in 19 of 19 runs.
+- The standalone host started a test runner or script despite the "static review
+  only" prompt in 14 of 57 runs; QAMap arms did so in none. This count classifies
+  each shell command segment. An earlier count of 17 wrongly matched test file
+  names passed to `grep` and `find`.
+
+**Limits remain:**
+
+- One host and one model were measured. Codex and GPT hosts were not
+  re-measured, and their per-request overhead differs.
+- There were 19 known cases. The synthetic and product fixtures are
+  author-made, and the real regressions come from this repository only.
+- The unchanged-prompt arm kept the runtime-choice uncertainty in 0 of 1 run.
+- Name search with import checks is not a type checker.
+- These results do not guarantee general savings or exhaustive review.
+- npm publication, directory review and GitHub Releases are separate steps and
+  are not implied by these receipts.
+
 ## 0.5.0 - Release Validation (2026-09-22)
 
 The predefined policy, repeated-structure and mixed-contract follow-ups below

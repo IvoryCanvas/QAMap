@@ -32,43 +32,34 @@ Before treating the next public release as ready, the golden demo must satisfy t
 - README demo shows the full loop: manifest-free PR QA draft, optional repo context baseline, PR mapping, E2E draft, and remaining validation gaps.
 - One manifest correction should improve future PR recommendations without another LLM prompt.
 
-## Now: 0.5.0 Preparation
+## Now: 0.5.1 Review Brief
 
-The work originally planned as 0.4.18 now targets 0.5.0 because it adds a new
-opt-in repository-evidence and report-review workflow. Its [release record](releases/0.5.0.md)
-tracks measured gates and remaining limits. Readiness requires an explicit review
-scope and quality evidence, not implementation volume.
-
-### Current Focus After 0.4.17
+QAMap 0.5.0 was published to npm on 2026-09-22. A real-host comparison then
+showed that an agent using its paged JSON handoff could spend more tokens than
+the same agent reviewing alone on real repository changes. 0.5.1 replaces that
+agent path with one bounded [review brief](agent-brief.md) and records the
+measured comparison in its [release record](releases/0.5.1.md). Readiness still
+requires quality evidence, not implementation volume.
 
 #### Delivery Status
 
-Package and plugin metadata are synchronized for 0.5.0 validation.
-Do not publish until the applicable gates pass. Existing inference boundaries
-(#273) and concrete lifecycle evidence (#274, #275, #276; #261) are already merged.
-
-| Order | Issue | Development status |
+| Order | Issue | Status |
 | --- | --- | --- |
-| 1 | [#259](https://github.com/IvoryCanvas/QAMap/issues/259) | Reusable JS/TS syntax, test, contract and configuration metadata; changed-block refresh. Warm runs still read and hash files. |
-| 2 | [#260](https://github.com/IvoryCanvas/QAMap/issues/260) | Symbol-linked package and alias paths to test references and registration candidates. Ambiguous or unsupported paths remain boundaries. |
-| 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Structural gates distinguish operational evidence from comments, literals and computational vocabulary. Positive controls protect real actions. |
-| 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Repository evidence in the 4KB handoff, source/test priority, and complete bounded recovery. |
-| 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Offline quality checks implemented. Separate report-review comparisons show sample-specific actual token reductions; broader quality and dynamic-policy/large-PR evidence gaps remain open. |
-| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | Self-contained exact-version smoke implemented; repeat against the new published package after release. |
+| 1 | [#259](https://github.com/IvoryCanvas/QAMap/issues/259) | Delivered in 0.5.0: reusable JS/TS syntax, test, contract and configuration metadata. |
+| 2 | [#260](https://github.com/IvoryCanvas/QAMap/issues/260) | Delivered in 0.5.0: symbol-linked package and alias paths; ambiguous paths remain boundaries. |
+| 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Delivered in 0.5.0: structural gates separate operational evidence from vocabulary. |
+| 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Delivered in 0.5.0: repository evidence in the handoff with bounded recovery. |
+| 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Real-host measurement now covers standalone versus QAMap review on synthetic, product and real regressions with graded quality (0.5.1). The provider-API three-arm cold/warm comparison remains unmeasured. |
+| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | Exact-version smoke passed against the published 0.5.0 package; repeat for 0.5.1 after publication. |
 
 Each delivery stays reviewable and independently tested. A unit-test pass is not
-a product benchmark pass. Benchmarks must retain relevant evidence, reject
-unrelated controls, distinguish static plans from execution, and report missing
-provider measurements as unavailable. New public reproductions must be neutral,
-never copied from private repositories.
+a product benchmark pass. Token comparisons count only complete host receipts and
+graded answers; offline read counts cannot establish token or billing savings.
+New public reproductions must be neutral, never copied from private repositories.
 
-See [repository discovery](repository-discovery.md) for supported metadata,
-invalidation, working-tree alignment and explicit limits. This is not a complete
-runtime dependency model. Actual agent quality and provider usage require separate
-measured runs; offline read counts cannot establish token or billing savings.
-The [0.5.0 checklist](releases/0.5.0.md) tracks candidate scope and remaining gates.
-Use the [three-arm benchmark guide](../scripts/agent-bench/README.md) for the
-isolated experiment. The normal CI path remains offline and credential-free.
+See [repository discovery](repository-discovery.md) for supported metadata and
+limits, and [benchmarking](benchmarking.md#compare-a-review-host-with-and-without-qamap)
+for the review-host protocol. The normal CI path remains offline and credential-free.
 
 #### Generalized Work Queue
 

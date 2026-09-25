@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.1 - 2026-09-25
+
+npm and plugin publication are separate steps.
+See the [0.5.1 release record](docs/releases/0.5.1.md).
+
+### Added
+
+- `qamap qa brief` prints one bounded text review brief (24,000 bytes by default): the numbered diff, each changed declaration's tests and callers with the call, derived locals and assertions that use them, what new or removed code calls, the commits and tests behind removed lines, each inferred behavior flow with every critical check to verify, and unknowns. The base is auto-selected; an explicit subdirectory narrows the diff; the full report is still saved locally; execution stays `not-run`.
+- References are found with `git grep` across every tracked file at the compared head, including files too large for the syntax index, and confirmed through import bindings for JavaScript, TypeScript and Python. Same-named symbols from other modules are excluded; export and import aliases are followed.
+- Repeated change shapes that differ only in one number are shown once for a concrete member followed by the exact remaining values; nothing is sampled.
+- `scripts/agent-bench/review-host.mjs` and `review-judge.mjs` measure a real coding-agent host reviewing the same frozen cases with and without QAMap, grade redacted answers against frozen oracles, and aggregate per-model host usage.
+
+### Changed
+
+- `init --agent`, `qamap context` and the packaged `qamap-pr-qa` skill now route PR review through `qamap qa brief`: run once, review from it, read source only to settle a specific open item, and report findings, concrete checks (action and expected result, or a reasoned dismissal) and unknowns. Consent, refusal, review-mode preferences and `not-run` boundaries are unchanged. `qa report --handoff` and `qa read` remain available for structured JSON consumers.
+- The post-release smoke default now targets the published 0.5.0 package.
+
+### Measurement
+
+- Claude Code CLI with one fixed model reviewed 19 frozen cases, three runs per arm, with and without QAMap. The sum of per-case median total tokens fell from 9,752,041 to 2,526,116 (-74.1%); all 57 runs used 30,916,750 versus 8,056,261. In every case the most expensive QAMap run cost less than the cheapest standalone run. Runs finding every seeded regression rose from 40/42 to 42/42 and mean QA-plan coverage from 0.73 to 0.89, with no false definite claims in either arm.
+- With the host `Skill` tool disabled for both arms, totals were 7,410,441 versus 2,710,340 (-63.4%). With the unchanged review prompt and only the saved report preference, the host used QAMap in 19 of 19 runs.
+- The published 0.5.0 handoff workflow used more tokens than the standalone host on all three real regressions from this repository's history and missed two of them; that baseline is preserved in the validation record.
+- One host, one model and known author-made or repository-history cases; Codex and GPT hosts were not re-measured. Host cost figures are list-price estimates, not billing.
+
 ## 0.5.0 - 2026-09-22
 
 npm and plugin publication are separate steps.

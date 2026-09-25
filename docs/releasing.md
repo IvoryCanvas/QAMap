@@ -115,10 +115,10 @@ node scripts/release-smoke.mjs --version "$VERSION"
 
 The smoke installs that exact public npm version with lifecycle scripts disabled, creates a temporary generic Git fixture, initializes its own `.qamap/manifest.yaml`, and checks version, static QA, manifest validation/explanation, and draft dry-run without fixture writes. The checkout root does not need a manifest. The fixture, installed package, caches, and temporary reports are removed on success or failure.
 
-To reproduce the published `0.4.17` smoke specifically (not the current checkout build):
+To reproduce the published `0.5.0` smoke specifically (not the current checkout build):
 
 ```sh
-node scripts/release-smoke.mjs --version 0.4.17
+node scripts/release-smoke.mjs --version 0.5.0
 ```
 
 This downloads the public package and dependencies. It does not call a model, execute repository validation, or run browser/device QA. `execution.status: not-run` and a passing static smoke are compatible; a dry-run preview is not an executed E2E test. A generated fixture manifest is not reviewed production QA policy: a schema-valid `needs-work` manifest is reported as such, not promoted to reviewed coverage.
