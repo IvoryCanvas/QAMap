@@ -165,6 +165,42 @@ was executed. The optional suite also runs two bounded Node contract checks;
 those are independent judge executions, not browser QA. The execution benchmark
 below remains the gate for generated browser tests.
 
+## Compare a review host with and without QAMap
+
+The review-host comparison measures the question users actually pay for: when a
+coding agent reviews a pull request, does it spend fewer tokens with QAMap than
+without it, and does it still find the known problems?
+
+```sh
+pnpm build
+npm pack --pack-destination /tmp/qamap-engine && npm install -g --prefix /tmp/qamap-engine /tmp/qamap-engine/ivorycanvas-qamap-*.tgz
+pnpm bench:review-host --engine /tmp/qamap-engine --out /tmp/qamap-review-host --runs 3
+node scripts/agent-bench/review-judge.mjs --runs /tmp/qamap-review-host
+node scripts/agent-bench/review-judge.mjs --runs /tmp/qamap-review-host --summary /tmp/qamap-review-host/summary.json
+```
+
+The host is the Claude Code CLI in print mode. Every run gets a fresh fixture
+repository, home directory and session, no MCP servers, and the same allowed
+tools (`Bash`, `Read`, `Grep`, `Glob`, `Skill`; subagents and edits disabled).
+Both arms receive the same review prompt. The QAMap arm's fixture is initialized
+with `qamap init --agent --review-mode report`, and its prompt begins with
+"Use QAMap for this review." Arm order alternates per case and run.
+
+The frozen [case list](../test/benchmarks/review-host/cases.json) combines
+synthetic seeded regressions from the report-evidence suites, public product
+fixtures, and three real regressions: fixes merged into this repository are
+reverted on top of their own history, so the guarding tests fail at the head.
+Those cases need the full Git history of this repository.
+
+Token totals come from the host's per-model receipt: input, cache creation,
+cache read and output tokens, including forked skill contexts. A run without a
+complete receipt is ineligible, not zero. Cost figures are the host's list-price
+estimate, not billing. A separate host session with no tools grades each answer
+against the [frozen oracles](../test/benchmarks/review-host/oracles.json) after
+the arm is redacted from the text. `--dry-run` materializes every fixture without
+starting a host; the offline tests cover materialization, usage parsing, grading
+prompts and aggregation.
+
 ## Run the execution contract
 
 The static benchmark proves that QAMap selected and mapped the expected QA. The execution benchmark asks the harder question: can the generated test distinguish the fixed behavior from a known regression?

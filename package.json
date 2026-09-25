@@ -53,6 +53,7 @@
     "bench:ci:compiled": "node scripts/bench.mjs --config bench.config.json --assert",
     "bench:ci": "pnpm build && pnpm bench:ci:compiled",
     "bench:context:compiled": "node scripts/context-bench.mjs --assert",
+    "bench:review-host": "node scripts/agent-bench/review-host.mjs",
     "bench:context": "pnpm build && pnpm bench:context:compiled",
     "bench:repository:compiled": "node scripts/bench-repository-index.mjs --assert",
     "bench:repository": "pnpm build && pnpm bench:repository:compiled",

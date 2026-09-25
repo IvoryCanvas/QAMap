@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "prompt": "Review the changes on this branch (base: main, head: HEAD) as a QA reviewer. Find likely bugs, regressions or broken contracts, and list what must be verified. Cite file:line evidence. Static review only: do not run tests, install anything, or modify files.",
+  "qamapPrefix": "Use QAMap for this review.",
+  "cases": [
+    {
+      "id": "shared-capacity",
+      "kind": "evidence-case",
+      "suite": "regression"
+    },
+    {
+      "id": "independent-changes",
+      "kind": "evidence-case",
+      "suite": "regression"
+    },
+    {
+      "id": "async-recovery",
+      "kind": "evidence-case",
+      "suite": "regression"
+    },
+    {
+      "id": "equivalent-nullish-check",
+      "kind": "evidence-case",
+      "suite": "regression"
+    },
+    {
+      "id": "runtime-module-choice",
+      "kind": "evidence-case",
+      "suite": "regression"
+    },
+    {
+      "id": "shared-twelve-consumers",
+      "kind": "evidence-case",
+      "suite": "extended"
+    },
+    {
+      "id": "independent-12-files-40",
+      "kind": "evidence-case",
+      "suite": "extended"
+    },
+    {
+      "id": "independent-1-files-1200",
+      "kind": "evidence-case",
+      "suite": "extended"
+    },
+    {
+      "id": "distant-assertion",
+      "kind": "evidence-case",
+      "suite": "extended"
+    },
+    {
+      "id": "rounded-invoice-chain",
+      "kind": "evidence-case",
+      "suite": "confirmation"
+    },
+    {
+      "id": "independent-160-contracts",
+      "kind": "evidence-case",
+      "suite": "completeness"
+    },
+    {
+      "id": "mixed-direct-contracts",
+      "kind": "evidence-case",
+      "suite": "release"
+    },
+    {
+      "id": "mixed-package-contracts",
+      "kind": "evidence-case",
+      "suite": "release"
+    },
+    {
+      "id": "rr-contract-cap",
+      "kind": "repository-revert",
+      "baseCommit": "2a734a2",
+      "revertCommit": "2a734a2",
+      "revertPaths": [
+        "src/test-evidence.ts"
+      ],
+      "message": "perf: cap changed test contract collection"
+    },
+    {
+      "id": "rr-contract-scope",
+      "kind": "repository-revert",
+      "baseCommit": "1537a17",
+      "revertCommit": "1537a17",
+      "revertPaths": [
+        "src/qa.ts",
+        "src/test-plan.ts"
+      ],
+      "message": "refactor: simplify recent test contract collection"
+    },
+    {
+      "id": "rr-analysis-rule",
+      "kind": "repository-revert",
+      "baseCommit": "bcd31ba",
+      "revertCommit": "bcd31ba",
+      "revertPaths": [
+        "src/change-intent.ts",
+        "src/e2e.ts",
+        "src/qa-trace.ts"
+      ],
+      "message": "refactor: streamline analysis rule intent detection"
+    },
+    {
+      "id": "pf-calcom-signup",
+      "kind": "fixture",
+      "fixture": "test/benchmarks/public-calcom-signup-validation",
+      "message": "fix: defer email validation to after first blur on signup form"
+    },
+    {
+      "id": "pf-preferences",
+      "kind": "fixture",
+      "fixture": "test/benchmarks/web-preferences-lifecycle",
+      "message": "feat: submit notification preferences, persist the selected timezone, and show the saved state after the request completes"
+    },
+    {
+      "id": "pf-async-job",
+      "kind": "fixture",
+      "fixture": "test/benchmarks/api-async-job-lifecycle",
+      "message": "feat: persist the asynchronous job lifecycle"
+    }
+  ]
+}

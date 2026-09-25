@@ -1,0 +1,1189 @@
+{
+  "shared-capacity": {
+    "kind": "regression",
+    "commitMessage": "refactor: simplify remaining capacity",
+    "rationale": "The changed shared function and both distinct package consumers are review obligations.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"capacity never becomes negative\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S2",
+        "description": "At head, the existing test \"panel preserves zero available slots\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S3",
+        "description": "At head, the existing test \"queue preserves an empty batch\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "packages/capacity/capacity.mjs: return limit - used;"
+    ],
+    "implementationCount": 1,
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "independent-changes": {
+    "kind": "regression",
+    "commitMessage": "refactor: simplify workspace helpers",
+    "rationale": "Three independent regressions must not compete away each other's evidence in a two-path summary.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"member cannot remove a workspace\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S2",
+        "description": "At head, the existing test \"first retry waits one second\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S3",
+        "description": "At head, the existing test \"zero remains a valid next cursor\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "src/access.mjs: return role !== 'guest';",
+      "src/retry.mjs: return Math.max(1000 * 2 ** attempt, 8000);",
+      "src/cursor.mjs: return Boolean(cursor);"
+    ],
+    "implementationCount": 3,
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "async-recovery": {
+    "kind": "regression",
+    "commitMessage": "refactor: streamline synchronization",
+    "rationale": "The request failure and pending-state cleanup must both remain visible.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"failed request releases pending state\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "src/synchronize.mjs: state.value = await transport();",
+      "src/synchronize.mjs: state.pending = false;"
+    ],
+    "implementationCount": 2,
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "equivalent-nullish-check": {
+    "kind": "negative-control",
+    "commitMessage": "refactor: shorten nullish check",
+    "rationale": "Passing controls are not universal bug-free proofs. Both implementation and unchanged expectations must be provided without claiming executed QA.",
+    "seeded": [],
+    "changedImplementation": [
+      "src/present.mjs: return value != null;"
+    ],
+    "implementationCount": 1,
+    "negativeControl": true,
+    "uncertainty": null
+  },
+  "runtime-module-choice": {
+    "kind": "uncertainty",
+    "commitMessage": "feat: select formatter at runtime",
+    "rationale": "A passing example module cannot establish which module a production caller selects.",
+    "seeded": [],
+    "changedImplementation": [
+      "src/load.mjs: const selected = await import(moduleId);",
+      "src/load.mjs: return selected.format;"
+    ],
+    "implementationCount": 2,
+    "negativeControl": false,
+    "uncertainty": "A passing example module cannot establish which module a production caller selects."
+  },
+  "shared-twelve-consumers": {
+    "kind": "regression",
+    "commitMessage": "refactor: simplify shared charge calculation",
+    "rationale": "All declared consumer expectations matter; a truthful omitted count is not evidence for an omitted consumer.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"consumer 0 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S2",
+        "description": "At head, the existing test \"consumer 1 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S3",
+        "description": "At head, the existing test \"consumer 2 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S4",
+        "description": "At head, the existing test \"consumer 3 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S5",
+        "description": "At head, the existing test \"consumer 4 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S6",
+        "description": "At head, the existing test \"consumer 5 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S7",
+        "description": "At head, the existing test \"consumer 6 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S8",
+        "description": "At head, the existing test \"consumer 7 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S9",
+        "description": "At head, the existing test \"consumer 8 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S10",
+        "description": "At head, the existing test \"consumer 9 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S11",
+        "description": "At head, the existing test \"consumer 10 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S12",
+        "description": "At head, the existing test \"consumer 11 retains a nonnegative charge\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "src/charge.mjs: return value;"
+    ],
+    "implementationCount": 1,
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "independent-12-files-40": {
+    "kind": "regression",
+    "commitMessage": "refactor: streamline independent calculations",
+    "rationale": "Every independent changed contract remains required even when the repository or diff is large.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"calculation 0 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S2",
+        "description": "At head, the existing test \"calculation 1 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S3",
+        "description": "At head, the existing test \"calculation 2 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S4",
+        "description": "At head, the existing test \"calculation 3 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S5",
+        "description": "At head, the existing test \"calculation 4 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S6",
+        "description": "At head, the existing test \"calculation 5 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S7",
+        "description": "At head, the existing test \"calculation 6 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S8",
+        "description": "At head, the existing test \"calculation 7 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S9",
+        "description": "At head, the existing test \"calculation 8 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S10",
+        "description": "At head, the existing test \"calculation 9 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S11",
+        "description": "At head, the existing test \"calculation 10 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S12",
+        "description": "At head, the existing test \"calculation 11 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "src/calculation0.mjs: return value;",
+      "src/calculation1.mjs: return value;",
+      "src/calculation2.mjs: return value;",
+      "src/calculation3.mjs: return value;",
+      "src/calculation4.mjs: return value;",
+      "src/calculation5.mjs: return value;",
+      "src/calculation6.mjs: return value;",
+      "src/calculation7.mjs: return value;",
+      "src/calculation8.mjs: return value;",
+      "src/calculation9.mjs: return value;",
+      "src/calculation10.mjs: return value;",
+      "src/calculation11.mjs: return value;"
+    ],
+    "implementationCount": 12,
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "independent-1-files-1200": {
+    "kind": "regression",
+    "commitMessage": "refactor: streamline independent calculations",
+    "rationale": "Every independent changed contract remains required even when the repository or diff is large.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"calculation 0 keeps its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "src/calculation0.mjs: return value;"
+    ],
+    "implementationCount": 1,
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "distant-assertion": {
+    "kind": "regression",
+    "commitMessage": "refactor: adjust item total",
+    "rationale": "The test invocation is not the assertion; the expected value remains necessary even after intervening setup.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"total counts every item\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "src/total.mjs: return items.length + 1;"
+    ],
+    "implementationCount": 1,
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "rounded-invoice-chain": {
+    "kind": "regression",
+    "commitMessage": "refactor: simplify invoice rounding",
+    "rationale": "An unchanged consumer and a distant transformed expectation must survive together.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"invoice preserves nearest cent\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "src/cents.mjs: return Math.floor(amount * 100);"
+    ],
+    "implementationCount": 1,
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "independent-160-contracts": {
+    "kind": "regression",
+    "commitMessage": "refactor: simplify independent lower bounds",
+    "rationale": "Every distinct changed rule and assertion must remain recoverable beyond graph and response preview limits.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"rule 0 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S2",
+        "description": "At head, the existing test \"rule 1 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S3",
+        "description": "At head, the existing test \"rule 2 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S4",
+        "description": "At head, the existing test \"rule 3 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S5",
+        "description": "At head, the existing test \"rule 4 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S6",
+        "description": "At head, the existing test \"rule 5 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S7",
+        "description": "At head, the existing test \"rule 6 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S8",
+        "description": "At head, the existing test \"rule 7 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S9",
+        "description": "At head, the existing test \"rule 8 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S10",
+        "description": "At head, the existing test \"rule 9 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S11",
+        "description": "At head, the existing test \"rule 10 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S12",
+        "description": "At head, the existing test \"rule 11 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S13",
+        "description": "At head, the existing test \"rule 12 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S14",
+        "description": "At head, the existing test \"rule 13 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S15",
+        "description": "At head, the existing test \"rule 14 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S16",
+        "description": "At head, the existing test \"rule 15 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S17",
+        "description": "At head, the existing test \"rule 16 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S18",
+        "description": "At head, the existing test \"rule 17 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S19",
+        "description": "At head, the existing test \"rule 18 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S20",
+        "description": "At head, the existing test \"rule 19 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S21",
+        "description": "At head, the existing test \"rule 20 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S22",
+        "description": "At head, the existing test \"rule 21 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S23",
+        "description": "At head, the existing test \"rule 22 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S24",
+        "description": "At head, the existing test \"rule 23 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S25",
+        "description": "At head, the existing test \"rule 24 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S26",
+        "description": "At head, the existing test \"rule 25 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S27",
+        "description": "At head, the existing test \"rule 26 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S28",
+        "description": "At head, the existing test \"rule 27 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S29",
+        "description": "At head, the existing test \"rule 28 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S30",
+        "description": "At head, the existing test \"rule 29 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S31",
+        "description": "At head, the existing test \"rule 30 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S32",
+        "description": "At head, the existing test \"rule 31 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S33",
+        "description": "At head, the existing test \"rule 32 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S34",
+        "description": "At head, the existing test \"rule 33 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S35",
+        "description": "At head, the existing test \"rule 34 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S36",
+        "description": "At head, the existing test \"rule 35 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S37",
+        "description": "At head, the existing test \"rule 36 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S38",
+        "description": "At head, the existing test \"rule 37 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S39",
+        "description": "At head, the existing test \"rule 38 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S40",
+        "description": "At head, the existing test \"rule 39 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S41",
+        "description": "At head, the existing test \"rule 40 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S42",
+        "description": "At head, the existing test \"rule 41 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S43",
+        "description": "At head, the existing test \"rule 42 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S44",
+        "description": "At head, the existing test \"rule 43 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S45",
+        "description": "At head, the existing test \"rule 44 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S46",
+        "description": "At head, the existing test \"rule 45 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S47",
+        "description": "At head, the existing test \"rule 46 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S48",
+        "description": "At head, the existing test \"rule 47 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S49",
+        "description": "At head, the existing test \"rule 48 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S50",
+        "description": "At head, the existing test \"rule 49 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S51",
+        "description": "At head, the existing test \"rule 50 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S52",
+        "description": "At head, the existing test \"rule 51 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S53",
+        "description": "At head, the existing test \"rule 52 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S54",
+        "description": "At head, the existing test \"rule 53 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S55",
+        "description": "At head, the existing test \"rule 54 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S56",
+        "description": "At head, the existing test \"rule 55 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S57",
+        "description": "At head, the existing test \"rule 56 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S58",
+        "description": "At head, the existing test \"rule 57 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S59",
+        "description": "At head, the existing test \"rule 58 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S60",
+        "description": "At head, the existing test \"rule 59 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S61",
+        "description": "At head, the existing test \"rule 60 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S62",
+        "description": "At head, the existing test \"rule 61 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S63",
+        "description": "At head, the existing test \"rule 62 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S64",
+        "description": "At head, the existing test \"rule 63 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S65",
+        "description": "At head, the existing test \"rule 64 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S66",
+        "description": "At head, the existing test \"rule 65 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S67",
+        "description": "At head, the existing test \"rule 66 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S68",
+        "description": "At head, the existing test \"rule 67 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S69",
+        "description": "At head, the existing test \"rule 68 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S70",
+        "description": "At head, the existing test \"rule 69 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S71",
+        "description": "At head, the existing test \"rule 70 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S72",
+        "description": "At head, the existing test \"rule 71 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S73",
+        "description": "At head, the existing test \"rule 72 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S74",
+        "description": "At head, the existing test \"rule 73 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S75",
+        "description": "At head, the existing test \"rule 74 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S76",
+        "description": "At head, the existing test \"rule 75 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S77",
+        "description": "At head, the existing test \"rule 76 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S78",
+        "description": "At head, the existing test \"rule 77 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S79",
+        "description": "At head, the existing test \"rule 78 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S80",
+        "description": "At head, the existing test \"rule 79 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S81",
+        "description": "At head, the existing test \"rule 80 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S82",
+        "description": "At head, the existing test \"rule 81 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S83",
+        "description": "At head, the existing test \"rule 82 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S84",
+        "description": "At head, the existing test \"rule 83 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S85",
+        "description": "At head, the existing test \"rule 84 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S86",
+        "description": "At head, the existing test \"rule 85 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S87",
+        "description": "At head, the existing test \"rule 86 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S88",
+        "description": "At head, the existing test \"rule 87 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S89",
+        "description": "At head, the existing test \"rule 88 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S90",
+        "description": "At head, the existing test \"rule 89 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S91",
+        "description": "At head, the existing test \"rule 90 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S92",
+        "description": "At head, the existing test \"rule 91 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S93",
+        "description": "At head, the existing test \"rule 92 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S94",
+        "description": "At head, the existing test \"rule 93 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S95",
+        "description": "At head, the existing test \"rule 94 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S96",
+        "description": "At head, the existing test \"rule 95 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S97",
+        "description": "At head, the existing test \"rule 96 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S98",
+        "description": "At head, the existing test \"rule 97 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S99",
+        "description": "At head, the existing test \"rule 98 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S100",
+        "description": "At head, the existing test \"rule 99 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S101",
+        "description": "At head, the existing test \"rule 100 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S102",
+        "description": "At head, the existing test \"rule 101 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S103",
+        "description": "At head, the existing test \"rule 102 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S104",
+        "description": "At head, the existing test \"rule 103 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S105",
+        "description": "At head, the existing test \"rule 104 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S106",
+        "description": "At head, the existing test \"rule 105 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S107",
+        "description": "At head, the existing test \"rule 106 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S108",
+        "description": "At head, the existing test \"rule 107 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S109",
+        "description": "At head, the existing test \"rule 108 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S110",
+        "description": "At head, the existing test \"rule 109 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S111",
+        "description": "At head, the existing test \"rule 110 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S112",
+        "description": "At head, the existing test \"rule 111 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S113",
+        "description": "At head, the existing test \"rule 112 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S114",
+        "description": "At head, the existing test \"rule 113 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S115",
+        "description": "At head, the existing test \"rule 114 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S116",
+        "description": "At head, the existing test \"rule 115 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S117",
+        "description": "At head, the existing test \"rule 116 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S118",
+        "description": "At head, the existing test \"rule 117 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S119",
+        "description": "At head, the existing test \"rule 118 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S120",
+        "description": "At head, the existing test \"rule 119 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S121",
+        "description": "At head, the existing test \"rule 120 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S122",
+        "description": "At head, the existing test \"rule 121 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S123",
+        "description": "At head, the existing test \"rule 122 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S124",
+        "description": "At head, the existing test \"rule 123 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S125",
+        "description": "At head, the existing test \"rule 124 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S126",
+        "description": "At head, the existing test \"rule 125 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S127",
+        "description": "At head, the existing test \"rule 126 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S128",
+        "description": "At head, the existing test \"rule 127 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S129",
+        "description": "At head, the existing test \"rule 128 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S130",
+        "description": "At head, the existing test \"rule 129 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S131",
+        "description": "At head, the existing test \"rule 130 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S132",
+        "description": "At head, the existing test \"rule 131 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S133",
+        "description": "At head, the existing test \"rule 132 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S134",
+        "description": "At head, the existing test \"rule 133 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S135",
+        "description": "At head, the existing test \"rule 134 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S136",
+        "description": "At head, the existing test \"rule 135 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S137",
+        "description": "At head, the existing test \"rule 136 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S138",
+        "description": "At head, the existing test \"rule 137 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S139",
+        "description": "At head, the existing test \"rule 138 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S140",
+        "description": "At head, the existing test \"rule 139 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S141",
+        "description": "At head, the existing test \"rule 140 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S142",
+        "description": "At head, the existing test \"rule 141 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S143",
+        "description": "At head, the existing test \"rule 142 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S144",
+        "description": "At head, the existing test \"rule 143 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S145",
+        "description": "At head, the existing test \"rule 144 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S146",
+        "description": "At head, the existing test \"rule 145 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S147",
+        "description": "At head, the existing test \"rule 146 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S148",
+        "description": "At head, the existing test \"rule 147 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S149",
+        "description": "At head, the existing test \"rule 148 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S150",
+        "description": "At head, the existing test \"rule 149 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S151",
+        "description": "At head, the existing test \"rule 150 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S152",
+        "description": "At head, the existing test \"rule 151 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S153",
+        "description": "At head, the existing test \"rule 152 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S154",
+        "description": "At head, the existing test \"rule 153 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S155",
+        "description": "At head, the existing test \"rule 154 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S156",
+        "description": "At head, the existing test \"rule 155 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S157",
+        "description": "At head, the existing test \"rule 156 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S158",
+        "description": "At head, the existing test \"rule 157 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S159",
+        "description": "At head, the existing test \"rule 158 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S160",
+        "description": "At head, the existing test \"rule 159 preserves its lower bound\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "src/rule-0.mjs: export function check0(value) { return value; }",
+      "src/rule-1.mjs: export function check1(value) { return value; }",
+      "src/rule-2.mjs: export function check2(value) { return value; }",
+      "src/rule-3.mjs: export function check3(value) { return value; }",
+      "src/rule-4.mjs: export function check4(value) { return value; }",
+      "src/rule-5.mjs: export function check5(value) { return value; }",
+      "src/rule-6.mjs: export function check6(value) { return value; }",
+      "src/rule-7.mjs: export function check7(value) { return value; }",
+      "src/rule-8.mjs: export function check8(value) { return value; }",
+      "src/rule-9.mjs: export function check9(value) { return value; }",
+      "src/rule-10.mjs: export function check10(value) { return value; }",
+      "src/rule-11.mjs: export function check11(value) { return value; }"
+    ],
+    "implementationCount": 160,
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "mixed-direct-contracts": {
+    "kind": "mixed-regression",
+    "commitMessage": "refactor: simplify data helpers while preserving their callers",
+    "rationale": "Six seeded disagreements among forty distinct changed contracts; safe changes are negative controls, not inferred equivalent for every possible input.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"email preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S2",
+        "description": "At head, the existing test \"minimum preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S3",
+        "description": "At head, the existing test \"lastItem preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S4",
+        "description": "At head, the existing test \"enabled preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S5",
+        "description": "At head, the existing test \"pageCount preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S6",
+        "description": "At head, the existing test \"defaultPort preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "src/email.mjs: return v.toLowerCase();",
+      "src/minimum.mjs: return Math.abs(v);",
+      "src/lastItem.mjs: return v[0];",
+      "src/enabled.mjs: return Boolean(v);",
+      "src/pageCount.mjs: return Math.floor(v / 10);",
+      "src/defaultPort.mjs: return v || 8080;",
+      "src/slug.mjs: return v.trim().toLowerCase().replaceAll(' ', '-');",
+      "src/maximum.mjs: return v > 100 ? 100 : v;",
+      "src/firstItem.mjs: return v[0];",
+      "src/isEmpty.mjs: return !v.length;",
+      "src/uniqueItems.mjs: return [...new Set(v)];",
+      "src/positiveSum.mjs: return v.reduce((a, n) => n > 0 ? a + n : a, 0);"
+    ],
+    "implementationCount": 40,
+    "negativeControl": true,
+    "uncertainty": null,
+    "safeContracts": [
+      "slug",
+      "maximum",
+      "firstItem",
+      "isEmpty",
+      "uniqueItems",
+      "positiveSum",
+      "hasOwner",
+      "compact",
+      "descending",
+      "validDate",
+      "integer",
+      "extension",
+      "trimEnd",
+      "prefix",
+      "suffix",
+      "escapeHtml",
+      "statusClass",
+      "timeout",
+      "toPairs",
+      "toMap",
+      "findAdmin",
+      "allReady",
+      "containsNull",
+      "removeId",
+      "stripQuery",
+      "readQuery",
+      "queryFlag",
+      "milliseconds",
+      "percentage",
+      "between",
+      "roundCents",
+      "lowerBound",
+      "booleanText",
+      "parseCount"
+    ]
+  },
+  "mixed-package-contracts": {
+    "kind": "mixed-regression",
+    "commitMessage": "refactor: simplify data helpers while preserving their callers",
+    "rationale": "Six seeded disagreements among forty distinct changed contracts; safe changes are negative controls, not inferred equivalent for every possible input.",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "At head, the existing test \"email preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S2",
+        "description": "At head, the existing test \"minimum preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S3",
+        "description": "At head, the existing test \"lastItem preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S4",
+        "description": "At head, the existing test \"enabled preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S5",
+        "description": "At head, the existing test \"pageCount preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      },
+      {
+        "id": "S6",
+        "description": "At head, the existing test \"defaultPort preserves its caller contract\" fails because of the changed implementation. The reviewer must identify the behavior change that breaks this contract."
+      }
+    ],
+    "changedImplementation": [
+      "packages/core/src/email.mjs: return v.toLowerCase();",
+      "packages/core/src/minimum.mjs: return Math.abs(v);",
+      "packages/core/src/lastItem.mjs: return v[0];",
+      "packages/core/src/enabled.mjs: return Boolean(v);",
+      "packages/core/src/pageCount.mjs: return Math.floor(v / 10);",
+      "packages/core/src/defaultPort.mjs: return v || 8080;",
+      "packages/core/src/slug.mjs: return v.trim().toLowerCase().replaceAll(' ', '-');",
+      "packages/core/src/maximum.mjs: return v > 100 ? 100 : v;",
+      "packages/core/src/firstItem.mjs: return v[0];",
+      "packages/core/src/isEmpty.mjs: return !v.length;",
+      "packages/core/src/uniqueItems.mjs: return [...new Set(v)];",
+      "packages/core/src/positiveSum.mjs: return v.reduce((a, n) => n > 0 ? a + n : a, 0);"
+    ],
+    "implementationCount": 40,
+    "negativeControl": true,
+    "uncertainty": null,
+    "safeContracts": [
+      "slug",
+      "maximum",
+      "firstItem",
+      "isEmpty",
+      "uniqueItems",
+      "positiveSum",
+      "hasOwner",
+      "compact",
+      "descending",
+      "validDate",
+      "integer",
+      "extension",
+      "trimEnd",
+      "prefix",
+      "suffix",
+      "escapeHtml",
+      "statusClass",
+      "timeout",
+      "toPairs",
+      "toMap",
+      "findAdmin",
+      "allReady",
+      "containsNull",
+      "removeId",
+      "stripQuery",
+      "readQuery",
+      "queryFlag",
+      "milliseconds",
+      "percentage",
+      "between",
+      "roundCents",
+      "lowerBound",
+      "booleanText",
+      "parseCount"
+    ]
+  },
+  "rr-contract-cap": {
+    "kind": "real-seeded-regression",
+    "commitMessage": "perf: cap changed test contract collection",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "The change adds maxChangedTestContracts = 24 and .slice(0, maxChangedTestContracts) in collectChangedTestContracts, silently dropping every detected changed test contract after the first 24 (declarations/evidence lost). Existing tests \"collectChangedTestContracts preserves all declarations across 1/3 changed test files\" and \"mixed maintenance and product edits retain evidence in 4KB and recover the complete analysis\" fail."
+      }
+    ],
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "rr-contract-scope": {
+    "kind": "real-seeded-regression",
+    "commitMessage": "refactor: simplify recent test contract collection",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "collectLatestCommitContracts no longer filters latest-commit contracts to those inside the PR comparison, so tests from the merged target branch or restored baseline declarations can enter changedTestContracts (tests \"merged target tests do not become changed contracts, including in a changed file\" and \"restored baseline declarations do not enter changed contracts through latest-commit priority\" fail)."
+      },
+      {
+        "id": "S2",
+        "description": "mergePriorityDiffEvidence now diffs the priority commit against its own parent instead of the current base...head comparison, so prioritized evidence can carry stale line coordinates or files outside the PR (test \"priority evidence keeps current head locations after target-branch insertions\" fails)."
+      }
+    ],
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "rr-analysis-rule": {
+    "kind": "real-seeded-regression",
+    "commitMessage": "refactor: streamline analysis rule intent detection",
+    "seeded": [
+      {
+        "id": "S1",
+        "description": "The change removes the requirement that analysis-rule QA be backed by direct changed-line rule evidence (isDirectAnalysisRuleEvidence / rule-evaluation syntax check): any edit in a file whose role is analysis-rule (e.g. read instrumentation or a counter) is now treated as a rule change, creating false analysis-rule lifecycle/scenarios and citing a non-rule line. Tests \"analysis file context does not turn instrumentation into rule changes\" and \"mixed analysis and instrumentation changes cite the rule rather than a preceding counter\" fail."
+      }
+    ],
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "pf-calcom-signup": {
+    "kind": "qa-planning",
+    "commitMessage": "fix: defer email validation to after first blur on signup form",
+    "qaExpectations": [
+      "Initial typing must not show an invalid-email error",
+      "Leaving (blurring) an incomplete/invalid email must show the error",
+      "Correcting the value after the first blur must clear the error (revalidation stays responsive)",
+      "Form submission must still validate all fields"
+    ],
+    "seeded": [],
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "pf-preferences": {
+    "kind": "qa-planning",
+    "commitMessage": "feat: submit notification preferences, persist the selected timezone, and show the saved state after the request completes",
+    "qaExpectations": [
+      "Submitting preferences sends the request and the saved state is shown only after the request completes",
+      "The selected timezone is persisted and restored (reload / re-entry shows the stored value, stale state recovery)",
+      "Request failure, timeout or retry handling (no false saved state)"
+    ],
+    "seeded": [],
+    "negativeControl": false,
+    "uncertainty": null
+  },
+  "pf-async-job": {
+    "kind": "qa-planning",
+    "commitMessage": "feat: persist the asynchronous job lifecycle",
+    "qaExpectations": [
+      "Asynchronous lifecycle ordering: job state transitions are persisted in order (queued/running/completed or failed)",
+      "Result delivery: the final result/status is delivered/readable after completion, including failure state"
+    ],
+    "seeded": [],
+    "negativeControl": false,
+    "uncertainty": null
+  }
+}
