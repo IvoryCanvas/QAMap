@@ -431,3 +431,5 @@ export { buildRepositoryEvidenceIndex } from "./repository-index.js";
 export type { RepositoryEvidenceIndex, RepositoryIndexBlock } from "./repository-index.js";
 export { traceRepositoryImpact } from "./repository-impact.js";
 export type { RepositoryImpact, ImpactStep } from "./repository-impact.js";
+export { buildQaBrief, qaBriefDefaultBytes, qaBriefMinimumBytes } from "./qa-brief.js";
+export type { QaBriefOptions } from "./qa-brief.js";

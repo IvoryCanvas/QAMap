@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { writeAgentRecoveryReport } from "./agent-report.js";
 import { formatLocalQaReportReceipt, writeLocalQaReport } from "./qa-report.js";
+import { buildQaBrief, qaBriefMinimumBytes } from "./qa-brief.js";
 import { readReviewEvidencePage } from "./qa-evidence-read.js";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { formatAgentInitReport, initAgentSetup } from "./agent-init.js";
@@ -78,6 +79,7 @@ interface ParsedOptions {
   force: boolean;
   failOn?: Severity;
   maxFiles?: number;
+  maxBytes?: number;
   workspaceRoot?: string;
   base?: string;
   head?: string;
@@ -316,6 +318,24 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "qa") {
+    if (rest[0] === "brief") {
+      if (rest.includes("--help") || rest.includes("-h")) { printQaHelp(); return 0; }
+      const options = parseOptions(rest.slice(1));
+      const loadedConfig = await loadOptionsConfig(options);
+      const result = await generateQaDraft(options.path, {
+        base: options.base,
+        head: options.head,
+        workspaceRoot: options.workspaceRoot,
+        includeWorkingTree: options.includeWorkingTree,
+        validationCommands: loadedConfig.config.validationCommands,
+        runner: options.e2eRunner,
+        manifestPath: options.manifestPath,
+        config: loadedConfig.config,
+      });
+      const receipt = await writeLocalQaReport(result, options.output);
+      process.stdout.write(await buildQaBrief(result, { maxBytes: options.maxBytes, reportFile: receipt.files.report }));
+      return 0;
+    }
     if (rest[0] === "read") {
       if (rest.includes("--help") || rest.includes("-h")) { printQaHelp(); return 0; }
       process.stdout.write(await readReviewEvidencePage(rest.slice(1)));
@@ -797,6 +817,15 @@ function parseOptions(args: string[], allowHandoff = false, allowReviewMode = fa
       continue;
     }
 
+    if (arg === "--max-bytes") {
+      const value = Number.parseInt(readValue(args, ++index, arg), 10);
+      if (!Number.isFinite(value) || value < qaBriefMinimumBytes) {
+        throw new Error(`--max-bytes must be an integer of at least ${qaBriefMinimumBytes}`);
+      }
+      options.maxBytes = value;
+      continue;
+    }
+
     if (arg === "--max-files") {
       const value = Number.parseInt(readValue(args, ++index, arg), 10);
       if (!Number.isFinite(value) || value < 1) {
@@ -1162,10 +1191,18 @@ Usage:
     [--base <ref>] [--head <ref>] [--include-working-tree]
     [--output <directory>] [--format text|json|agent] [--handoff]
 
+  qamap qa brief [path] [--base <ref>] [--head <ref>] [--include-working-tree]
+    [--max-bytes <n>] [--output <directory>]
+
   qamap qa read <report-file> --sha256 <receipt-hash> --bytes <receipt-bytes>
     [--offset <nextOffset>]
 
 Behavior:
+  qa brief prints one bounded text brief for a reviewing agent or person: the
+           diff, changed declarations with the tests and callers that use them
+           (assertion lines included), QA focus, and unknowns. The base is
+           auto-selected unless --base is given. Default limit: 24000 bytes.
+           Saves the full report locally. Tests remain not-run; no LLM calls.
   qa read verifies an existing report and returns one bounded evidence page.
            Continue from nextOffset until null. No analysis or test execution.
   qa       maps diff -> affected behavior -> risk -> scenario -> evidence.
