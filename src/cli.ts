@@ -9,7 +9,7 @@ import { buildQaBrief, qaBriefMinimumBytes } from "./qa-brief.js";
 import { readReviewEvidencePage } from "./qa-evidence-read.js";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { formatAgentInitReport, initAgentSetup } from "./agent-init.js";
-import { formatConsentChange, formatConsentStatus, grantConsent, readConsentStatus, revokeConsent } from "./agent-consent.js";
+import { consentRoot, formatConsentChange, formatConsentRequired, formatConsentStatus, grantConsent, readConsentStatus, revokeConsent } from "./agent-consent.js";
 import { generateAgentContext } from "./context.js";
 import { defaultDomainManifestPath, writeDefaultDomainManifest } from "./domains.js";
 import { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
@@ -321,7 +321,16 @@ async function main(argv: string[]): Promise<number> {
   if (command === "qa") {
     if (rest[0] === "brief") {
       if (rest.includes("--help") || rest.includes("-h")) { printQaHelp(); return 0; }
-      const options = parseOptions(rest.slice(1));
+      const requireConsent = rest.includes("--require-consent");
+      const options = parseOptions(rest.slice(1).filter((arg) => arg !== "--require-consent"));
+      if (requireConsent) {
+        // Checked before any analysis, so an unconsented agent run reads nothing from the repository.
+        const status = await readConsentStatus(await consentRoot(options.path));
+        if (status.effective !== "automatic") {
+          process.stdout.write(formatConsentRequired(status));
+          return 0;
+        }
+      }
       const loadedConfig = await loadOptionsConfig(options);
       const result = await generateQaDraft(options.path, {
         base: options.base,
@@ -609,7 +618,7 @@ async function main(argv: string[]): Promise<number> {
     const unknown = paths.find((arg) => arg.startsWith("-"));
     if (unknown) throw new Error(`Unknown consent option: ${unknown}`);
     if (paths.length > 1) throw new Error("qamap consent accepts one path.");
-    const root = paths[0] ?? ".";
+    const root = await consentRoot(paths[0] ?? ".");
     if (action === "status") {
       if (global) throw new Error("qamap consent status reports both scopes; omit --global.");
       console.log(formatConsentStatus(await readConsentStatus(root)));
@@ -1212,7 +1221,7 @@ Usage:
     [--output <directory>] [--format text|json|agent] [--handoff]
 
   qamap qa brief [path] [--base <ref>] [--head <ref>] [--include-working-tree]
-    [--max-bytes <n>] [--output <directory>]
+    [--max-bytes <n>] [--output <directory>] [--require-consent]
 
   qamap qa read <report-file> --sha256 <receipt-hash> --bytes <receipt-bytes>
     [--offset <nextOffset>]
@@ -1223,6 +1232,8 @@ Behavior:
            (assertion lines included), QA focus, and unknowns. The base is
            auto-selected unless --base is given. Default limit: 24000 bytes.
            Saves the full report locally. Tests remain not-run; no LLM calls.
+           --require-consent prints a consent notice instead, without analysis,
+           unless QAMap review consent is recorded (see qamap consent status).
   qa read verifies an existing report and returns one bounded evidence page.
            Continue from nextOffset until null. No analysis or test execution.
   qa       maps diff -> affected behavior -> risk -> scenario -> evidence.

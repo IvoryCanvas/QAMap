@@ -5,18 +5,20 @@ description: PR bug review and test planning with QAMap. Run `qamap qa brief` on
 
 # QAMap PR Review
 
-Use this when the user asks for QAMap or a project or user-level preference
-selects it. For an ordinary PR review without that choice, offer it once;
-installation is not consent. Offer three answers: this time only; always (record
-it with `qamap consent grant`, or `qamap consent grant --global` for every
-repository); or not now. `qamap consent revoke [--global]` returns to asking.
-Respect a refusal or a request for independent review.
+Run step 1 as shown: `--require-consent` makes QAMap check the recorded
+project or user-level choice before analyzing anything. Drop the flag only when
+the user asked for QAMap in this conversation or answered "this time only". If
+the command prints that QAMap did not run, nothing was analyzed: offer QAMap once
+with three answers, this time only; always (`qamap consent grant`, or
+`qamap consent grant --global` for every repository); or not now, and stop;
+installation is not consent. `qamap consent revoke [--global]` returns to
+asking. Respect a refusal or a request for independent review.
 
 1. From the repository root, run once in the foreground and wait for completion
    (`exec_command`: `yield_time_ms: 30000`; short polling adds model turns):
 
    ```sh
-   qamap qa brief
+   qamap qa brief --require-consent
    ```
 
    The base is auto-selected. Add `--base <ref>` only for a known different PR

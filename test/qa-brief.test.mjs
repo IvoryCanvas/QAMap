@@ -216,6 +216,35 @@ test("qa brief turns inferred QA focus into concrete checks with the behavior fl
   assert.match(output, /\n {6}edge case: /);
 });
 
+test("qa brief --require-consent analyzes nothing until consent is recorded", async () => {
+  const { root, directory } = await repository({
+    "src/limit.mjs": "export function limit(value) {\n  return Math.max(0, value);\n}\n",
+  }, { "src/limit.mjs": "export function limit(value) {\n  return value;\n}\n" });
+  const home = path.join(directory, "home");
+  await fs.mkdir(path.join(home, ".claude"), { recursive: true });
+  const options = { env: { ...process.env, NO_COLOR: "1", HOME: home, CLAUDE_CONFIG_DIR: "", CODEX_HOME: "" } };
+  const reports = path.join(directory, "reports");
+
+  const refused = await brief(root, ["--require-consent"], options);
+  assert.match(refused, /^QAMap did not run: no consent is recorded/);
+  assert.match(refused, /this time only: run `qamap qa brief`/);
+  assert.match(refused, /Do not review from this output\./);
+  assert.doesNotMatch(refused, /== Changes ==/);
+  await assert.rejects(fs.access(reports), "no report is saved when nothing was analyzed");
+
+  // A subdirectory path uses the repository's consent.
+  await exec(process.execPath, [cli, "consent", "grant", root], options);
+  assert.match(await brief(path.join(root, "src"), ["--require-consent"], options), /^QAMap brief: main\.\.\.HEAD limited to src\//);
+  assert.match(await brief(root, ["--require-consent"], options), /== Changes ==/);
+
+  // A project that asks each time overrides user-level consent.
+  await exec(process.execPath, [cli, "consent", "revoke", root], options);
+  await exec(process.execPath, [cli, "consent", "grant", root, "--global"], options);
+  assert.match(await brief(root, ["--require-consent"], options), /\(this project asks each time\)/);
+  await exec(process.execPath, [cli, "init", root, "--agent", "--review-mode", "ask"], options);
+  assert.match(await brief(root, ["--require-consent"], options), /== Changes ==/);
+});
+
 test("qa brief help documents the bounded command", async () => {
   const { stdout } = await exec(process.execPath, [cli, "qa", "brief", "--help"]);
   assert.match(stdout, /qamap qa brief \[path\] \[--base <ref>\]/);
