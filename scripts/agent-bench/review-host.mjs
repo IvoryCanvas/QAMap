@@ -3,11 +3,12 @@
 // comes from the host's own per-model receipt. Nothing is estimated from bytes.
 //
 //   node scripts/agent-bench/review-host.mjs --engine <prefix with bin/qamap> --out <dir> [--runs 3]
-//     [--arms standalone,qamap] [--case <id>] [--model <id>] [--concurrency 4] [--dry-run]
+//     [--arms standalone,qamap] [--case <id>] [--model <id>] [--concurrency 4] [--disable-skills] [--dry-run]
 //
 // The host is the Claude Code CLI (`claude -p --output-format stream-json`). Provider
 // charges apply to real runs. --dry-run materializes every fixture and stops before
-// starting the host.
+// starting the host. --disable-skills removes the host's Skill tool from both arms, so
+// neither arm can load a built-in review skill or the packaged QAMap skill.
 import { spawn, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -126,12 +127,18 @@ export function summarizeHostRun(stdout) {
   };
 }
 
-function runHost({ cwd, home, pathPrefix, prompt, model, transcript, timeoutMs }) {
+export function toolArguments(disableSkills = false) {
+  const allowed = hostTools.allowed.filter((tool) => !disableSkills || tool !== "Skill");
+  const disallowed = disableSkills ? [...hostTools.disallowed, "Skill"] : hostTools.disallowed;
+  return ["--allowedTools", ...allowed, "--disallowedTools", ...disallowed];
+}
+
+function runHost({ cwd, home, pathPrefix, prompt, model, transcript, timeoutMs, disableSkills }) {
   const env = { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: "/dev/null" };
   for (const key of hostEnvironment) delete env[key];
   if (pathPrefix) env.PATH = `${pathPrefix}${path.delimiter}${process.env.PATH}`;
   const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", ...(model ? ["--model", model] : []), "--no-session-persistence",
-    "--strict-mcp-config", "--max-turns", "60", "--allowedTools", ...hostTools.allowed, "--disallowedTools", ...hostTools.disallowed];
+    "--strict-mcp-config", "--max-turns", "60", ...toolArguments(disableSkills)];
   return new Promise((resolve) => {
     const started = Date.now();
     const child = spawn("claude", args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
@@ -148,8 +155,8 @@ function runHost({ cwd, home, pathPrefix, prompt, model, transcript, timeoutMs }
   });
 }
 
-export async function runOne(entry, { suite, arm, run, engine, model, out, dryRun = false, timeoutMs = 900_000 }) {
-  const label = `${entry.id}.${arm}.run${run}`;
+export async function runOne(entry, { suite, arm, run, engine, model, out, dryRun = false, timeoutMs = 900_000, disableSkills = false }) {
+  const label = `${entry.id}.${arm}${disableSkills ? "-noskills" : ""}.run${run}`;
   const outDir = path.join(out, label);
   await fs.mkdir(outDir, { recursive: false });
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-review-host-"));
@@ -160,13 +167,13 @@ export async function runOne(entry, { suite, arm, run, engine, model, out, dryRu
     const { repo, base, head } = await materializeCase(entry, { directory, home, engineBin, arm });
     const prompt = arm === "qamap" ? `${suite.qamapPrefix} ${suite.prompt}` : suite.prompt;
     const record = { schema: { name: "qamap.review-host-run", version: 1 }, case: entry.id, arm, run, model, base, head,
-      promptSha256: createHash("sha256").update(prompt).digest("hex"), tools: hostTools };
+      promptSha256: createHash("sha256").update(prompt).digest("hex"), tools: toolArguments(disableSkills), disableSkills };
     if (dryRun) {
       await fs.writeFile(path.join(outDir, "result.json"), JSON.stringify({ ...record, status: "dry-run" }, null, 2));
       return { label, status: "dry-run" };
     }
     const host = await runHost({ cwd: repo, home, pathPrefix: arm === "qamap" ? engineBin : undefined, prompt, model,
-      transcript: path.join(outDir, "transcript.jsonl"), timeoutMs });
+      transcript: path.join(outDir, "transcript.jsonl"), timeoutMs, disableSkills });
     const summary = summarizeHostRun(host.stdout);
     const changed = execFileSync("git", ["status", "--porcelain"], { cwd: repo }).toString();
     const status = host.code === 0 && summary.completed && summary.totalTokens !== null ? "completed" : "ineligible";
@@ -182,7 +189,8 @@ export async function runOne(entry, { suite, arm, run, engine, model, out, dryRu
 async function main() {
   const { values } = parseArgs({ options: { engine: { type: "string" }, out: { type: "string" }, runs: { type: "string", default: "3" },
     arms: { type: "string", default: "standalone,qamap" }, case: { type: "string" }, model: { type: "string" },
-    concurrency: { type: "string", default: "4" }, "dry-run": { type: "boolean", default: false }, suite: { type: "string" } } });
+    concurrency: { type: "string", default: "4" }, "dry-run": { type: "boolean", default: false }, suite: { type: "string" },
+    "disable-skills": { type: "boolean", default: false } } });
   if (!values.engine || !values.out) throw new Error("--engine and --out are required");
   const out = path.resolve(values.out);
   const relative = path.relative(root, out);
@@ -202,7 +210,8 @@ async function main() {
     while (next < jobs.length) {
       const job = jobs[next++];
       let line;
-      try { line = await runOne(job.entry, { suite, arm: job.arm, run: job.run, engine: values.engine, model: values.model, out, dryRun: values["dry-run"] }); }
+      try { line = await runOne(job.entry, { suite, arm: job.arm, run: job.run, engine: values.engine, model: values.model, out,
+        dryRun: values["dry-run"], disableSkills: values["disable-skills"] }); }
       catch (error) { line = { label: `${job.entry.id}.${job.arm}.run${job.run}`, status: "harness-error", message: String(error.message ?? error) }; }
       await fs.appendFile(path.join(out, "runs.jsonl"), `${JSON.stringify(line)}\n`);
       process.stdout.write(`${JSON.stringify(line)}\n`);

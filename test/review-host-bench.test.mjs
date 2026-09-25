@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { loadSuite, materializeCase, summarizeHostRun } from "../scripts/agent-bench/review-host.mjs";
+import { loadSuite, materializeCase, summarizeHostRun, toolArguments } from "../scripts/agent-bench/review-host.mjs";
 import { aggregateRuns, gradingPrompt, redactArm, scoreVerdict } from "../scripts/agent-bench/review-judge.mjs";
 
 const exec = promisify(execFile);
@@ -41,6 +41,14 @@ test("host usage sums every model, including forked skill contexts, and counts d
   assert.equal(summary.requests, 2);
   assert.deepEqual(summary.tools, ["Skill", "Bash"]);
   assert.deepEqual(summary.models, ["main", "fork"]);
+});
+
+test("both arms share one tool list, and disabling skills removes Skill from both", () => {
+  assert.deepEqual(toolArguments(), ["--allowedTools", "Bash", "Read", "Grep", "Glob", "Skill",
+    "--disallowedTools", "Agent", "Task", "Write", "Edit", "NotebookEdit", "WebFetch", "WebSearch", "TodoWrite"]);
+  const disabled = toolArguments(true);
+  assert.ok(!disabled.slice(0, disabled.indexOf("--disallowedTools")).includes("Skill"));
+  assert.equal(disabled.at(-1), "Skill");
 });
 
 test("incomplete host receipts never become token totals", () => {

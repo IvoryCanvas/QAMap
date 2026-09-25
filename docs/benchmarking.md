@@ -184,7 +184,9 @@ repository, home directory and session, no MCP servers, and the same allowed
 tools (`Bash`, `Read`, `Grep`, `Glob`, `Skill`; subagents and edits disabled).
 Both arms receive the same review prompt. The QAMap arm's fixture is initialized
 with `qamap init --agent --review-mode report`, and its prompt begins with
-"Use QAMap for this review." Arm order alternates per case and run.
+"Use QAMap for this review." Arm order alternates per case and run. `--disable-skills` removes the
+host's `Skill` tool from both arms: the standalone host then cannot delegate to a
+built-in review skill, and the QAMap arm relies on its `AGENTS.md` instructions.
 
 The frozen [case list](../test/benchmarks/review-host/cases.json) combines
 synthetic seeded regressions from the report-evidence suites, public product
