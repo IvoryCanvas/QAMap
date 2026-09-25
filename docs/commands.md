@@ -109,6 +109,11 @@ qamap consent revoke [--global]
 qamap consent status
 ```
 
+Agents run `qamap qa brief --require-consent` unless the user asked for QAMap in
+the conversation. Without recorded consent, that command analyzes nothing and
+prints a notice that tells the agent to ask with three answers: this time only,
+always, or not now.
+
 `--global` writes a marked section to `~/.claude/CLAUDE.md` and
 `~/.codex/AGENTS.md` (or `CLAUDE_CONFIG_DIR` and `CODEX_HOME`), only for hosts
 whose configuration directory exists, and never touches the repository.
@@ -231,6 +236,7 @@ reports that a repository command is needed.
 | `qamap init --agent . --review-mode ask` | Restore offer-first review. An omitted option preserves an existing saved choice. |
 | `qamap consent grant\|revoke [path] [--global]` | Record or remove consent for agents to run QAMap review without asking, for one project or, with `--global`, in Claude Code and Codex user instructions; requires 0.5.1 or newer. |
 | `qamap consent status [path]` | Show project and user-level consent and whether agents ask first in this project. |
+| `qamap qa brief --require-consent` | Print the brief only when consent is recorded; otherwise analyze nothing and print a notice to ask the user first. Used by the packaged agent instructions. |
 | `qamap init --scripts .` | Add collision-safe `qa`, `qa:local`, `qa:run`, and `qa:e2e` package scripts for repeat use in a JavaScript repository. |
 
 For monorepos, run `qamap qa` at the repository root first. When every changed file belongs to exactly one recognized package declared by `workspaces` or `pnpm-workspace.yaml`, `qa` automatically analyzes that package and reports `automatic-package` as its analysis scope. Package-local routes, scripts, fixtures, and runner settings are used while repo-level guardrails remain available. If multiple packages changed, a root file is also part of the diff, or the package type is unknown, QAMap keeps repository-wide scope and lists the package candidates rather than silently choosing one.

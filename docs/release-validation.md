@@ -12,10 +12,10 @@ missed some of them. The 0.5.1 candidate replaces that workflow with one bounded
 `qamap qa brief` response. With the host, prompt, tools and cases fixed, it used
 74.1% fewer tokens by sum of per-case medians. It found every seeded regression
 in all 42 runs where the standalone host missed 2, and covered more of the
-expected QA plan. The final tree passed the complete local gate: 787 tests,
+expected QA plan. The final tree passed the complete local gate: 788 tests,
 44 static contracts, 11 repository checks, 10 context checks, 3 execution
 contracts, a clean scan, plugin checks and the packed 269-file plugin smoke.
-Coverage was 91.96% lines, 88.66% branches and 95.86% functions.
+Coverage was 91.92% lines, 88.57% branches and 95.86% functions.
 
 ### Protocol
 
@@ -120,6 +120,32 @@ standalone run. The measured package differed from the final tree only in how
 `init --agent --review-mode ask` resets the project section, which this arm
 does not use. Asking first remains the default; this arm shows the cost after
 the user has chosen "always".
+
+### Consent Gate
+
+A final real-host run added a condition with the user-level skill installed, no
+recorded consent and the unchanged prompt. With the package before the gate, the
+host ran `qamap qa brief` without asking in 4 of 19 runs. It checked
+`qamap consent status` and then asked in 10 runs, and asked without running
+anything in 5.
+
+`qa brief --require-consent` now reads the recorded choice before any analysis
+and prints a notice instead of a brief when consent is missing. The packaged
+instructions use it. With the gated package, one run per case, per-run results in
+`test/benchmarks/review-host/results-0.5.1-consent-gate.json`:
+
+| Condition | Total tokens (vs 9,752,041 standalone medians) | Analyzed without consent | Seeded, all found | QA-plan coverage | Uncertainty kept |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Project setup, explicit prompt | 2,954,875 (-69.7%) | - | 14/14 | 0.889 | 1/1 |
+| User-level consent, unchanged prompt | 2,828,345 (-71.0%) | - | 14/14 | 1.000 | 0/1 |
+| No consent, unchanged prompt | 2,137,210 | 0/19 | - | - | - |
+
+- In all 19 no-consent runs, the host ran only the gated command, analyzed
+  nothing and offered the three answers. None reviewed the change.
+- No run made a definite claim against a safe contract or executed tests.
+- No QAMap run cost more than the cheapest standalone run of its case.
+- The one user-level-consent run of the runtime-choice case did not keep its
+  uncertainty; the earlier two runs of that arm did.
 
 **Limits remain:**
 

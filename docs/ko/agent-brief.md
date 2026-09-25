@@ -57,7 +57,10 @@ QAMap 검수를 선택했다고 기록하고, `--review-mode ask`는 먼저 제�
 프로젝트 단위로 `qamap consent grant`, 모든 저장소에 대해서는
 `qamap consent grant --global`(Claude Code와 Codex 사용자 지침)로 기록합니다.
 `qamap consent revoke [--global]`는 다시 묻는 방식으로 되돌리고,
-`qamap consent status`는 두 범위의 상태를 보여줍니다.
+`qamap consent status`는 두 범위의 상태를 보여줍니다. 패키지에 포함된 지침은
+`qamap qa brief --require-consent`를 실행합니다. 동의가 기록되지 않았으면 이
+명령은 아무것도 분석하지 않고 먼저 물어보라는 안내만 출력하므로, 호스트가
+질문을 건너뛸 수 없습니다.
 
 지침은 에이전트에게 브리프를 한 번 실행해 그 내용으로 검수하고, 특정 미확인
 항목을 확인할 때만 소스를 읽도록 안내합니다. 결과는 발견한 문제, 구체적인 검증

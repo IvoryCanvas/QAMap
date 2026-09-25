@@ -57,7 +57,9 @@ Agents ask before running QAMap unless the user recorded consent. When asked,
 the user can answer this time only, always, or not now; "always" is recorded with
 `qamap consent grant` for the project or `qamap consent grant --global` for every
 repository (Claude Code and Codex user instructions). `qamap consent revoke
-[--global]` returns to asking and `qamap consent status` shows both scopes. See
+[--global]` returns to asking and `qamap consent status` shows both scopes. The
+packaged instructions run `qamap qa brief --require-consent`, which analyzes
+nothing without recorded consent, so a host cannot skip the question. See
 [commands](commands.md#choose-whether-agents-ask-first).
 
 The instructions ask the agent to run the brief once, review from it, read
