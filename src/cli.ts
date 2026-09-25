@@ -9,6 +9,7 @@ import { buildQaBrief, qaBriefMinimumBytes } from "./qa-brief.js";
 import { readReviewEvidencePage } from "./qa-evidence-read.js";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { formatAgentInitReport, initAgentSetup } from "./agent-init.js";
+import { formatConsentChange, formatConsentStatus, grantConsent, readConsentStatus, revokeConsent } from "./agent-consent.js";
 import { generateAgentContext } from "./context.js";
 import { defaultDomainManifestPath, writeDefaultDomainManifest } from "./domains.js";
 import { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
@@ -597,6 +598,25 @@ async function main(argv: string[]): Promise<number> {
     } else {
       console.log(context);
     }
+    return 0;
+  }
+
+  if (command === "consent") {
+    const [action, ...consentArgs] = rest;
+    if (action !== "status" && action !== "grant" && action !== "revoke") throw new Error("Usage: qamap consent status|grant|revoke [path] [--global]");
+    const global = consentArgs.includes("--global");
+    const paths = consentArgs.filter((arg) => arg !== "--global");
+    const unknown = paths.find((arg) => arg.startsWith("-"));
+    if (unknown) throw new Error(`Unknown consent option: ${unknown}`);
+    if (paths.length > 1) throw new Error("qamap consent accepts one path.");
+    const root = paths[0] ?? ".";
+    if (action === "status") {
+      if (global) throw new Error("qamap consent status reports both scopes; omit --global.");
+      console.log(formatConsentStatus(await readConsentStatus(root)));
+      return 0;
+    }
+    const change = action === "grant" ? await grantConsent(root, { global }) : await revokeConsent(root, { global });
+    console.log(formatConsentChange(change));
     return 0;
   }
 
@@ -1262,6 +1282,7 @@ Usage:
   qamap context [path] [--write [file]] [--force]
   qamap init [path] [--write <file>] [--force]
   qamap init --agent [path] [--review-mode ask|report] [--force]
+  qamap consent status|grant|revoke [path] [--global]
   qamap init --scripts [path] [--force]
 
 Severities:

@@ -5,8 +5,11 @@ description: PR bug review and test planning with QAMap. Run `qamap qa brief` on
 
 # QAMap PR Review
 
-Use this when the user asks for QAMap or a project preference selects it. For an
-ordinary PR review without that choice, offer it once; installation is not consent.
+Use this when the user asks for QAMap or a project or user-level preference
+selects it. For an ordinary PR review without that choice, offer it once;
+installation is not consent. Offer three answers: this time only; always (record
+it with `qamap consent grant`, or `qamap consent grant --global` for every
+repository); or not now. `qamap consent revoke [--global]` returns to asking.
 Respect a refusal or a request for independent review.
 
 1. From the repository root, run once in the foreground and wait for completion

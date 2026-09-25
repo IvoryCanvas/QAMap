@@ -1,4 +1,6 @@
-export { buildAgentQaSection, formatAgentInitReport, initAgentSetup } from "./agent-init.js";
+export { buildAgentQaSection, formatAgentInitReport, initAgentSetup, setProjectReviewMode } from "./agent-init.js";
+export { buildUserConsentSection, formatConsentChange, formatConsentStatus, grantConsent, readConsentStatus, revokeConsent, userConsentTargets } from "./agent-consent.js";
+export type { ConsentChange, ConsentStatus, ProjectConsent, UserConsentTarget } from "./agent-consent.js";
 export {
   agentContextSchemaVersion,
   buildAgentContextContract,

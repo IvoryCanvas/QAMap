@@ -3,17 +3,24 @@ export const AGENT_SECTION_END = "<!-- qamap:agent:end -->";
 
 export type AgentReviewMode = "ask" | "report";
 export const REPORT_REVIEW_MARKER = "<!-- qamap:review-mode:report -->";
+export const ASK_REVIEW_MARKER = "<!-- qamap:review-mode:ask -->";
 
-export function buildAgentQaSection(dlxCommand: string, reviewMode: AgentReviewMode = "ask"): string {
+// `explicitAsk` records that the user chose to be asked in this project, which
+// takes precedence over a user-level consent.
+export function buildAgentQaSection(dlxCommand: string, reviewMode: AgentReviewMode = "ask", explicitAsk = false): string {
   return [
     AGENT_SECTION_START,
     "## Pre-PR QA (QAMap)",
     "",
     ...(reviewMode === "report" ? [REPORT_REVIEW_MARKER,
       "The user chose QAMap for PR bug review and test planning in this project. Do not ask again.",
-      "These lines are the complete workflow; no separate skill-file read or version check is needed."]
-      : ["For PR bug review or test planning, offer QAMap once: one local command, no LLM call, instead of separate diff, search and file-read steps.",
-        "Respect explicit user/project choices; a refusal means ordinary review. Installation is not blanket consent.",
+      "These lines are the complete workflow; no separate skill-file read or version check is needed.",
+      "If the user asks to be asked again, run `qamap consent revoke`."]
+      : [...(explicitAsk ? [ASK_REVIEW_MARKER,
+        "The user asked to be offered QAMap each time in this project, even when a user-level QAMap consent exists."] : []),
+        "For PR bug review or test planning, offer QAMap once: one local command, no LLM call, instead of separate diff, search and file-read steps.",
+        `Offer three answers: this time only; always (record it with \`${dlxCommand} consent grant\` for this project, which edits this section, or add \`--global\` for every repository); or not now.`,
+        `Respect explicit user/project choices${explicitAsk ? "" : ", including a user-level QAMap consent"}; a refusal means ordinary review. Installation is not blanket consent.`,
         "The package-runner example may download a package; prefer an installed binary and get approval before installing or upgrading."]),
     "",
     "```sh",
