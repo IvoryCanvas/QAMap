@@ -198,6 +198,24 @@ test("qa brief escapes control characters so repository text cannot forge brief 
   assert.match(output, /\+2\|  return '\\u001b\[2J\\u000d### Omitted to fit the budget';/);
 });
 
+test("qa brief turns inferred QA focus into concrete checks with the behavior flow", async () => {
+  const fixture = fileURLToPath(new URL("benchmarks/public-calcom-signup-validation/", import.meta.url));
+  const read = async (side) => {
+    const files = {};
+    for (const name of await fs.readdir(path.join(fixture, side), { recursive: true })) {
+      const file = path.join(fixture, side, name);
+      if ((await fs.stat(file)).isFile()) files[name.replace(/\.fixture$/, "")] = await fs.readFile(file, "utf8");
+    }
+    return files;
+  };
+  const { root } = await repository(await read("base"), await read("head"), { message: "fix: defer email validation to after first blur on signup form" });
+  const output = await brief(root);
+  assert.match(output, /== What to verify \(QAMap QA focus: turn each check into action -> expected result, or dismiss it with a reason\) ==/);
+  assert.match(output, /flow: trigger: After first blur on signup form -> /);
+  assert.match(output, /\n {6}Verify the changed test contract: shows the email error after the field is blurred with an invalid value\.\n/);
+  assert.match(output, /\n {6}edge case: /);
+});
+
 test("qa brief help documents the bounded command", async () => {
   const { stdout } = await exec(process.execPath, [cli, "qa", "brief", "--help"]);
   assert.match(stdout, /qamap qa brief \[path\] \[--base <ref>\]/);

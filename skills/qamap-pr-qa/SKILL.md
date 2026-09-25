@@ -24,9 +24,11 @@ Respect a refusal or a request for independent review.
    it already shows.
 3. Read source only to settle a specific open item (Unknowns, Omitted, or an
    unclear call site), and say what you read. Do not start a second full review.
-4. Report findings with file:line, what to verify, and what remains unknown.
-   Tests stay `not-run`: the brief proves nothing was executed. Test runs, edits
-   and automation need separate approval.
+4. Report findings with file:line; then what to verify: turn each check under
+   "What to verify", and each behavior the diff changes, into a concrete check
+   (action -> expected observable result), or dismiss it with a reason; then what
+   remains unknown. Tests stay `not-run`: the brief proves nothing was executed.
+   Test runs, edits and automation need separate approval.
 
 `qa brief` ships with `@ivorycanvas/qamap@0.5.1`. If `qamap` is missing, rejects
 `brief`, or fails, report the blocker. Do not retry, install, upgrade or switch to

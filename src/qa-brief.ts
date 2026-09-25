@@ -1100,15 +1100,20 @@ function renderQaFocus(result: QaDraftResult, level: Level, shownTests: Set<stri
   const lines: string[] = [];
   const intents = result.changeAnalysis.intents.filter((intent) => intent.scenarios.length).slice(0, 3);
   if (intents.length) {
-    lines.push("== QA focus (QAMap inference from commits and diff; confirm against the code above) ==");
+    lines.push("== What to verify (QAMap QA focus: turn each check into action -> expected result, or dismiss it with a reason) ==");
     for (const intent of intents) {
-      lines.push(`- ${clip(intent.title, 140)} (${intent.confidence} confidence${intent.files.length ? `; ${summarizeFiles(intent.files.slice(0, 4))}` : ""})`);
+      lines.push(`- ${clip(intent.title, 160)} (${intent.confidence} confidence${intent.files.length ? `; ${summarizeFiles(intent.files.slice(0, 4))}` : ""})`);
+      const stages = [...new Map(intent.lifecycle.map((stage) => [stage.label, stage])).values()].slice(0, 6);
+      if (stages.length) lines.push(`  flow: ${stages.map((stage) => `${stage.kind}: ${clip(stage.label.replace(/\.$/, ""), 90)}`).join(" -> ")}`);
       const important = intent.scenarios.filter((scenario) => scenario.priority === "critical");
-      for (const scenario of (important.length ? important : intent.scenarios).slice(0, level.scenarios)) {
-        const check = scenario.assertions.find((assertion) => assertion && !/^Record the expected/.test(assertion));
-        lines.push(`  - [${scenario.priority}] ${clip(scenario.title, 140)}${check ? ` -> ${clip(check, 140)}` : ""}`);
+      const shown = (important.length ? important : intent.scenarios).slice(0, level.scenarios);
+      for (const scenario of shown) {
+        lines.push(`  - [${scenario.priority}] ${clip(scenario.title, 160)}`);
+        const checks = [...scenario.assertions.filter((check) => check && !/^Record the expected/.test(check)),
+          ...scenario.edgeCases.filter(Boolean).map((edge) => `edge case: ${edge}`)];
+        for (const check of checks.slice(0, 3)) lines.push(`      ${clip(check, 180)}`);
       }
-      const rest = intent.scenarios.length - Math.min(level.scenarios, (important.length ? important : intent.scenarios).length);
+      const rest = intent.scenarios.length - shown.length;
       if (rest > 0) lines.push(`  - ${rest} lower-priority scenarios in the full report`);
     }
     lines.push("");
