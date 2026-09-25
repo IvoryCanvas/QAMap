@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
-export const publishedSmokeVersion = "0.4.17";
+export const publishedSmokeVersion = "0.5.0";
 
 export async function runReleaseSmoke({ version = publishedSmokeVersion, cli, tempDirectory = os.tmpdir() } = {}) {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {

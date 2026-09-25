@@ -2,7 +2,9 @@
 
 [한국어](ko/agent-handoff.md)
 
-**Requires QAMap 0.5.0 or newer; not available in 0.4.17.**
+**Requires QAMap 0.5.0 or newer; not available in 0.4.17.** For agent review,
+0.5.1 and newer use the text [review brief](agent-brief.md) instead; this JSON
+envelope remains for tools that need structured, versioned evidence.
 During setup, check that the local build supports `--handoff`. Once a compatible
 binary is known, the reviewer can invoke it directly without another help query.
 

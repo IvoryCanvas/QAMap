@@ -22,7 +22,7 @@ test("report review preference is opt-in, persistent, reversible and confined to
     assert.ok(approved.startsWith(original));
     assert.match(approved, /qamap:review-mode:report/);
     assert.match(approved, /Do not ask again/);
-    assert.match(approved, /qamap qa report \. --base origin\/main --head HEAD --handoff/);
+    assert.match(approved, /\nqamap qa brief\n/);
     assert.match(approved, /Tests stay `not-run`/);
     assert.match(approved, /yield_time_ms: 30000/);
     assert.match(approved, /Short polling intervals add model turns/);

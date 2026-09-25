@@ -5,9 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { writeAgentRecoveryReport } from "./agent-report.js";
 import { formatLocalQaReportReceipt, writeLocalQaReport } from "./qa-report.js";
+import { buildQaBrief, qaBriefMinimumBytes } from "./qa-brief.js";
 import { readReviewEvidencePage } from "./qa-evidence-read.js";
 import { loadConfig, writeDefaultConfig } from "./config.js";
 import { formatAgentInitReport, initAgentSetup } from "./agent-init.js";
+import { consentRoot, formatConsentChange, formatConsentRequired, formatConsentStatus, grantConsent, readConsentStatus, revokeConsent } from "./agent-consent.js";
 import { generateAgentContext } from "./context.js";
 import { defaultDomainManifestPath, writeDefaultDomainManifest } from "./domains.js";
 import { buildDoctorResult, formatDoctorReport, formatMarkdownDoctorReport } from "./doctor.js";
@@ -78,6 +80,7 @@ interface ParsedOptions {
   force: boolean;
   failOn?: Severity;
   maxFiles?: number;
+  maxBytes?: number;
   workspaceRoot?: string;
   base?: string;
   head?: string;
@@ -316,6 +319,33 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "qa") {
+    if (rest[0] === "brief") {
+      if (rest.includes("--help") || rest.includes("-h")) { printQaHelp(); return 0; }
+      const requireConsent = rest.includes("--require-consent");
+      const options = parseOptions(rest.slice(1).filter((arg) => arg !== "--require-consent"));
+      if (requireConsent) {
+        // Checked before any analysis, so an unconsented agent run reads nothing from the repository.
+        const status = await readConsentStatus(await consentRoot(options.path));
+        if (status.effective !== "automatic") {
+          process.stdout.write(formatConsentRequired(status));
+          return 0;
+        }
+      }
+      const loadedConfig = await loadOptionsConfig(options);
+      const result = await generateQaDraft(options.path, {
+        base: options.base,
+        head: options.head,
+        workspaceRoot: options.workspaceRoot,
+        includeWorkingTree: options.includeWorkingTree,
+        validationCommands: loadedConfig.config.validationCommands,
+        runner: options.e2eRunner,
+        manifestPath: options.manifestPath,
+        config: loadedConfig.config,
+      });
+      const receipt = await writeLocalQaReport(result, options.output);
+      process.stdout.write(await buildQaBrief(result, { maxBytes: options.maxBytes, reportFile: receipt.files.report }));
+      return 0;
+    }
     if (rest[0] === "read") {
       if (rest.includes("--help") || rest.includes("-h")) { printQaHelp(); return 0; }
       process.stdout.write(await readReviewEvidencePage(rest.slice(1)));
@@ -580,6 +610,25 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
+  if (command === "consent") {
+    const [action, ...consentArgs] = rest;
+    if (action !== "status" && action !== "grant" && action !== "revoke") throw new Error("Usage: qamap consent status|grant|revoke [path] [--global]");
+    const global = consentArgs.includes("--global");
+    const paths = consentArgs.filter((arg) => arg !== "--global");
+    const unknown = paths.find((arg) => arg.startsWith("-"));
+    if (unknown) throw new Error(`Unknown consent option: ${unknown}`);
+    if (paths.length > 1) throw new Error("qamap consent accepts one path.");
+    const root = await consentRoot(paths[0] ?? ".");
+    if (action === "status") {
+      if (global) throw new Error("qamap consent status reports both scopes; omit --global.");
+      console.log(formatConsentStatus(await readConsentStatus(root)));
+      return 0;
+    }
+    const change = action === "grant" ? await grantConsent(root, { global }) : await revokeConsent(root, { global });
+    console.log(formatConsentChange(change));
+    return 0;
+  }
+
   if (command === "init") {
     const options = parseOptions(rest, false, true);
     if (options.reviewMode && !options.agent) throw new Error("--review-mode requires init --agent.");
@@ -794,6 +843,15 @@ function parseOptions(args: string[], allowHandoff = false, allowReviewMode = fa
 
     if (arg === "--record-history") {
       options.recordHistory = true;
+      continue;
+    }
+
+    if (arg === "--max-bytes") {
+      const value = Number.parseInt(readValue(args, ++index, arg), 10);
+      if (!Number.isFinite(value) || value < qaBriefMinimumBytes) {
+        throw new Error(`--max-bytes must be an integer of at least ${qaBriefMinimumBytes}`);
+      }
+      options.maxBytes = value;
       continue;
     }
 
@@ -1162,10 +1220,20 @@ Usage:
     [--base <ref>] [--head <ref>] [--include-working-tree]
     [--output <directory>] [--format text|json|agent] [--handoff]
 
+  qamap qa brief [path] [--base <ref>] [--head <ref>] [--include-working-tree]
+    [--max-bytes <n>] [--output <directory>] [--require-consent]
+
   qamap qa read <report-file> --sha256 <receipt-hash> --bytes <receipt-bytes>
     [--offset <nextOffset>]
 
 Behavior:
+  qa brief prints one bounded text brief for a reviewing agent or person: the
+           diff, changed declarations with the tests and callers that use them
+           (assertion lines included), QA focus, and unknowns. The base is
+           auto-selected unless --base is given. Default limit: 24000 bytes.
+           Saves the full report locally. Tests remain not-run; no LLM calls.
+           --require-consent prints a consent notice instead, without analysis,
+           unless QAMap review consent is recorded (see qamap consent status).
   qa read verifies an existing report and returns one bounded evidence page.
            Continue from nextOffset until null. No analysis or test execution.
   qa       maps diff -> affected behavior -> risk -> scenario -> evidence.
@@ -1225,6 +1293,7 @@ Usage:
   qamap context [path] [--write [file]] [--force]
   qamap init [path] [--write <file>] [--force]
   qamap init --agent [path] [--review-mode ask|report] [--force]
+  qamap consent status|grant|revoke [path] [--global]
   qamap init --scripts [path] [--force]
 
 Severities:

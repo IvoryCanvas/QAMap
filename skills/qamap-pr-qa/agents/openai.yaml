@@ -1,9 +1,9 @@
 interface:
   display_name: "QAMap PR QA"
-  short_description: "Review PR evidence from a local QAMap report."
+  short_description: "Review a PR from one bounded local QAMap brief."
   icon_small: "./assets/qamap-logo.png"
   icon_large: "./assets/qamap-logo.svg"
   brand_color: "#0E7490"
-  default_prompt: "Use $qamap-pr-qa to analyze this branch and explain only the returned findings, evidence, and gaps."
+  default_prompt: "Use $qamap-pr-qa to review this branch from its QAMap brief: findings, what to verify, and gaps."
 policy:
   allow_implicit_invocation: true

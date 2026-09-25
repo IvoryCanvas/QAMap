@@ -6,14 +6,12 @@ Codex, ChatGPT 또는 다른 코딩 에이전트에서 사용해도 QAMap은 같
 CLI를 실행합니다. 특정 에이전트에서만 동작하는 별도 분석 엔진을 두지
 않으며, 결과는 버전이 지정된 `qamap.qa` 형식으로 전달합니다.
 
-0.5.0부터는 [한 번의 호출로 요약과 코드 근거를 받는 방식](agent-handoff.md)도
-사용할 수 있습니다. 사용자의 동의 후 실행하고 LLM은 반환된 결과만 읽습니다.
-별도 소스 검색은 하지 않으며, 근거가 부족하면 알리고 추가 검수를 요청할지
-묻습니다. 기존 저장 전용 모드는 유지합니다. 이 기능은 0.4.17에는 없습니다.
-[합성 사례 실측](../release-validation.md#mixed-contract-follow-up)에서는 지정한
-결함 발견 기준을 지키며 총 토큰이 줄었고 최초 동의가 필요한 사례도 확인했습니다.
-아직 알 수 없는 동적 연결과 근거 한도가 있으므로 다른 작업에서도 같은
-품질과 절감 효과를 유지한다고 보장하지 않습니다.
+0.5.1부터 패키지의 검수 지침은 [검수 브리프](agent-brief.md)를 사용합니다. 사용자의
+동의 후 `qamap qa brief`를 한 번 실행하고, 줄 번호가 붙은 diff와 사용처, 이력,
+미확인 항목으로 검수합니다. 소스는 특정 미확인 항목을 확인할 때만 읽습니다.
+[Claude Code 실측](../release-validation.md)에 토큰과 품질 결과를 기록했지만,
+모든 저장소에서 같은 절감을 보장하지는 않습니다. 0.5.0의 JSON
+[한 번의 호출로 요약과 코드 근거를 받는 방식](agent-handoff.md)도 계속 사용할 수 있습니다.
 
 ## 프로젝트의 검수 방식 저장하기
 
@@ -28,6 +26,24 @@ qamap init --agent . --review-mode report
 `AGENTS.md`의 QAMap 전용 구간만 갱신하고, 사용자가 작성한 나머지 내용은
 유지합니다. 이후 일반 설정 명령을 다시 실행해도 선택한 방식은 보존됩니다.
 매번 선택하도록 되돌리려면 `--review-mode ask`를 사용하세요.
+
+0.5.1부터는 설정만 바꾸는 `qamap consent` 명령도 제공합니다.
+
+```sh
+qamap consent grant            # 이 프로젝트: AGENTS.md의 QAMap 구간만 수정
+qamap consent grant --global   # 모든 저장소: Claude Code와 Codex 사용자 지침
+qamap consent revoke [--global]
+qamap consent status
+```
+
+`--global`은 `~/.claude/CLAUDE.md`와 `~/.codex/AGENTS.md`(또는
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`)에 표시된 구간을 추가합니다. 설정 디렉터리가
+있는 호스트에만 쓰고, 저장소는 건드리지 않습니다. `revoke --global`은 그
+구간만 지우고 나머지 내용은 그대로 둡니다. 프로젝트에서 `revoke`하면 "매번
+묻기"가 기록되어, 그 프로젝트에서는 사용자 전역 동의보다 우선합니다.
+에이전트는 사용자가 대화에서 QAMap을 직접 요청하지 않은 한
+`qamap qa brief --require-consent`를 실행하며, 동의가 없으면 분석 없이 먼저
+물어보라는 안내만 받습니다.
 
 설치만으로 이 설정이 켜지지는 않습니다. 독립적인 코드 검수를 명시적으로
 요청하면 그 요청을 우선하며, 테스트 실행이나 코드 수정 권한이 추가되는
@@ -76,8 +92,7 @@ npx --yes @ivorycanvas/qamap@latest qa --format agent
 
 ## 결과를 읽지 않고 파일로만 저장하기
 
-**개발 중인 기능이며 0.4.17에는 없습니다.** 로컬 빌드의 `qamap qa --help`에
-`qa report`가 표시되는지 먼저 확인하세요.
+**QAMap 0.5.0 이상에서 지원합니다. 0.4.17에는 없습니다.**
 
 ```sh
 qamap qa report . --base origin/main --head HEAD --format agent

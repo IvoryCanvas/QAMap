@@ -11131,11 +11131,11 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   assert.deepEqual(first.files.map((file) => file.status), ["created", "created", "created", "created"]);
   const agents = await readFile(path.join(root, "AGENTS.md"), "utf8");
   assert.match(agents, /<!-- qamap:agent:start -->/);
-  assert.ok(agents.includes(`npx @ivorycanvas/qamap@${VERSION} qa report . --base origin/main --head HEAD --handoff`));
-  assert.match(agents, /After consent/);
+  assert.ok(agents.includes(`npx @ivorycanvas/qamap@${VERSION} qa brief`));
+  assert.match(agents, /offer QAMap once/);
   assert.match(agents, /refusal means ordinary review/);
   assert.match(agents, /not blanket consent/);
-  assert.match(agents, /Savings are not guaranteed/);
+  assert.match(agents, /savings are not guaranteed/);
   assert.match(agents, /Tests stay `not-run`/);
   assert.doesNotMatch(agents, /token-free QA pass|qa run \./);
   assert.match(agents, /\.agents\/skills\/qamap-pr-qa\/SKILL\.md/);
@@ -11180,7 +11180,7 @@ test("initAgentSetup creates AGENTS.md, installs portable agent skills, and stay
   );
   const report = formatAgentInitReport(second);
   assert.match(report, /# QAMap Agent Setup/);
-  assert.ok(report.includes(`npx @ivorycanvas/qamap@${VERSION} qa report .`));
+  assert.ok(report.includes(`npx @ivorycanvas/qamap@${VERSION} qa brief`));
 });
 
 test("initAgentSetup appends to an existing AGENTS.md and refreshes only its own section", async () => {

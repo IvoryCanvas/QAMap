@@ -14,6 +14,7 @@ when maintaining an older scanner, CI, manifest, or compatibility workflow.
 
 ```sh
 pnpm exec qamap qa . --base origin/main --head HEAD
+pnpm exec qamap qa brief
 pnpm exec qamap qa run . --base origin/main --head HEAD
 pnpm exec qamap qa . --base origin/main --head HEAD --format agent
 pnpm exec qamap qa . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD --output QAMAP_QA.md
@@ -80,6 +81,46 @@ still use the host model's tokens; this mode avoids returning the full analysis
 automatically, not all agent token usage. Local paths work only where those files
 are accessible, not automatically in web chat. `analysis: complete` always keeps
 `execution.status: not-run` in this mode and does not imply passing QA.
+
+### Review From One Brief
+
+For an agent or a person reviewing a pull request with QAMap 0.5.1 or newer:
+
+```sh
+qamap qa brief
+```
+
+It prints one bounded text brief (24,000 bytes by default, `--max-bytes` to
+change): the numbered diff, each changed declaration's tests and callers with
+their assertion lines, what new or removed code calls, the commits and tests
+behind removed lines, QA focus, and unknowns. The base is auto-selected unless
+`--base` is given. The full report is saved as with `qa report`, and execution
+stays `not-run`. See [the review brief](agent-brief.md).
+
+### Choose Whether Agents Ask First
+
+By default an agent offers QAMap and waits for an answer before each review.
+To let agents run it without asking, record consent (0.5.1 or newer):
+
+```sh
+qamap consent grant            # this project: edits QAMap's section of AGENTS.md
+qamap consent grant --global   # every repository: Claude Code and Codex user instructions
+qamap consent revoke [--global]
+qamap consent status
+```
+
+Agents run `qamap qa brief --require-consent` unless the user asked for QAMap in
+the conversation. Without recorded consent, that command analyzes nothing and
+prints a notice that tells the agent to ask with three answers: this time only,
+always, or not now.
+
+`--global` writes a marked section to `~/.claude/CLAUDE.md` and
+`~/.codex/AGENTS.md` (or `CLAUDE_CONFIG_DIR` and `CODEX_HOME`), only for hosts
+whose configuration directory exists, and never touches the repository.
+`revoke --global` removes that section and leaves the rest of each file as it
+was. A project revoke records "ask each time", which overrides user-level
+consent for that project. Consent covers the local analysis only, not tests,
+edits, installs or model calls by QAMap.
 
 ### Return Evidence In One Call
 
@@ -153,6 +194,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `qamap test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
 | `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. A single supported changed package is selected automatically, including an independent nested package. |
+| `qamap qa brief` | Print one bounded review brief: numbered diff, tests and callers of changed declarations, calls, history of removed lines, QA focus and unknowns; requires 0.5.1 or newer. |
 | `qamap qa report . --base origin/main --head HEAD` | Save local reports and return paths without their contents; requires 0.5.0 or newer. |
 | `qamap qa report . --base origin/main --head HEAD --handoff` | Save reports and return bounded source/test evidence once; requires 0.5.0 or newer. |
 | `qamap qa run . --base origin/main --head HEAD` | Re-analyze the change and execute only the exact existing repository validation command selected by the canonical route. Additional required commands are reported but not executed. Returns pass, fail, timeout, or blocked evidence; it never installs a runner or runs a proposed product E2E draft. |
@@ -192,6 +234,9 @@ reports that a repository command is needed.
 | `qamap init --agent .` | One-command agent onboarding: add a marked QAMap Pre-PR QA section to `AGENTS.md`, install the same packaged skill to the portable `.agents/skills/qamap-pr-qa/SKILL.md` path and the Claude-compatible `.claude/skills/qamap-pr-qa/SKILL.md` path, and create `qamap.config.json` if missing. Idempotent; existing instructions and locally modified skills are preserved. |
 | `qamap init --agent . --review-mode report` | Explicitly choose report-based review for this project; preserves user instructions and requires 0.5.0 or newer. |
 | `qamap init --agent . --review-mode ask` | Restore offer-first review. An omitted option preserves an existing saved choice. |
+| `qamap consent grant\|revoke [path] [--global]` | Record or remove consent for agents to run QAMap review without asking, for one project or, with `--global`, in Claude Code and Codex user instructions; requires 0.5.1 or newer. |
+| `qamap consent status [path]` | Show project and user-level consent and whether agents ask first in this project. |
+| `qamap qa brief --require-consent` | Print the brief only when consent is recorded; otherwise analyze nothing and print a notice to ask the user first. Used by the packaged agent instructions. |
 | `qamap init --scripts .` | Add collision-safe `qa`, `qa:local`, `qa:run`, and `qa:e2e` package scripts for repeat use in a JavaScript repository. |
 
 For monorepos, run `qamap qa` at the repository root first. When every changed file belongs to exactly one recognized package declared by `workspaces` or `pnpm-workspace.yaml`, `qa` automatically analyzes that package and reports `automatic-package` as its analysis scope. Package-local routes, scripts, fixtures, and runner settings are used while repo-level guardrails remain available. If multiple packages changed, a root file is also part of the diff, or the package type is unknown, QAMap keeps repository-wide scope and lists the package candidates rather than silently choosing one.

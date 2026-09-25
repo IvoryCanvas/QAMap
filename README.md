@@ -22,8 +22,8 @@ automation. It does not upload source code or make its own LLM call.
 
 ## Install And Run
 
-The npm package and plugin directory update separately. For the 0.5.0
-report-review workflow and measured limits, see the [release notes](docs/releases/0.5.0.md).
+The npm package and plugin directory update separately. For the 0.5.1
+review brief and its measured token results, see the [release notes](docs/releases/0.5.1.md).
 
 ### Local CLI (Recommended)
 
@@ -50,7 +50,8 @@ during PR review or test planning.
 
 The host agent still uses its own model and permissions. QAMap provides the
 local, deterministic repository analysis inside that workflow.
-For QAMap 0.5.0 and newer, see the [one-call review handoff](docs/agent-handoff.md).
+From QAMap 0.5.1, agents review from one bounded [review brief](docs/agent-brief.md)
+(`qamap qa brief`) instead of rebuilding the diff, searches and file reads themselves.
 
 ## Read The Result
 
@@ -66,8 +67,9 @@ only when you want to execute a selected repository command. Use
 `qamap e2e draft . --dry-run` to preview optional browser, mobile, API, CLI, or
 manual automation.
 
-On the development branch, `qamap qa report` saves reports locally and returns
-only their paths. [Save first, interpret later](docs/commands.md#save-a-report-without-reading-it).
+`qamap qa brief` prints the numbered diff, the tests and callers of changed code,
+and QA focus in one bounded response. `qamap qa report` saves reports locally and
+returns only their paths. [Save first, interpret later](docs/commands.md#save-a-report-without-reading-it).
 
 ## See A Real Run
 
@@ -94,7 +96,7 @@ Playwright, Maestro, selectors, fixtures, or a test runner does not hide an
 important scenario. When evidence is insufficient, QAMap stops instead of
 inventing a contract or a passing result.
 
-On the development branch, a reusable JS/TS evidence index connects declared
+A reusable JS/TS evidence index connects declared
 imports and exports to test references and registration candidates across
 packages. [Coverage and limits](docs/repository-discovery.md) remain explicit;
 this is not a complete runtime model or a measured token-savings guarantee.

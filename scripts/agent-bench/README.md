@@ -40,6 +40,18 @@ Saved JSON preserves these receipts. The report pins an implementation digest,
 prompts, fixtures, limits and model so a version label alone cannot conceal a
 different local build. Save notifications use stderr to keep JSON stdout valid.
 
+## Review Host Comparison
+
+`review-host.mjs` runs the same pull-request review through a real coding-agent
+host twice: once on its own and once with QAMap initialized in the fixture. It
+records the host's per-model usage receipt (input, cache creation, cache read,
+output), requests, tool calls and the final answer for every run.
+`review-judge.mjs` grades the redacted answers against frozen oracles in a
+separate tool-less session and aggregates medians, maxima and quality per case.
+See [Benchmarking](../../docs/benchmarking.md#compare-a-review-host-with-and-without-qamap)
+for the protocol and commands. Real runs incur provider charges; `--dry-run`
+only materializes fixtures.
+
 ## Local CLI Experiment Guard
 
 `codex-session-guard.mjs` is a runner helper for separately controlled local CLI

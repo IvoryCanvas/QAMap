@@ -1,6 +1,6 @@
 {
   "name": "@ivorycanvas/qamap",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Local zero-LLM PR QA designer that maps commit intent and diffs to traceable behavior lifecycles, QA scenarios, and optional automation drafts.",
   "type": "module",
   "main": "./dist/index.js",
@@ -53,6 +53,7 @@
     "bench:ci:compiled": "node scripts/bench.mjs --config bench.config.json --assert",
     "bench:ci": "pnpm build && pnpm bench:ci:compiled",
     "bench:context:compiled": "node scripts/context-bench.mjs --assert",
+    "bench:review-host": "node scripts/agent-bench/review-host.mjs",
     "bench:context": "pnpm build && pnpm bench:context:compiled",
     "bench:repository:compiled": "node scripts/bench-repository-index.mjs --assert",
     "bench:repository": "pnpm build && pnpm bench:repository:compiled",

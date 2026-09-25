@@ -1,0 +1,852 @@
+{
+ "schema": {
+  "name": "qamap.review-host-summary",
+  "version": 1
+ },
+ "host": "Claude Code CLI 2.1.282 (print mode)",
+ "models": "one fixed host model for both arms; a different model for blind grading",
+ "arms": {
+  "qamap-user-consent": "no project setup; packaged skill installed at user level; consent recorded with qamap consent grant --global; unchanged review prompt"
+ },
+ "comparedWith": "results-0.5.1.json standalone runs (same cases, host, model and prompt)",
+ "runs": [
+  {
+   "case": "async-recovery",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114444,
+   "requests": 3,
+   "costUsd": 0.0628988,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 114895,
+   "requests": 3,
+   "costUsd": 0.065519,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114221,
+   "requests": 3,
+   "costUsd": 0.060720399999999994,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 114098,
+   "requests": 3,
+   "costUsd": 0.059079599999999996,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114330,
+   "requests": 3,
+   "costUsd": 0.06163300000000001,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 114398,
+   "requests": 3,
+   "costUsd": 0.06280240000000001,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114054,
+   "requests": 3,
+   "costUsd": 0.059919799999999995,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 114274,
+   "requests": 3,
+   "costUsd": 0.0607162,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114760,
+   "requests": 3,
+   "costUsd": 0.0647126,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 153436,
+   "requests": 4,
+   "costUsd": 0.0729456,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Glob"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 154772,
+   "requests": 4,
+   "costUsd": 0.07992,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 154044,
+   "requests": 4,
+   "costUsd": 0.0770092,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 115979,
+   "requests": 3,
+   "costUsd": 0.07552539999999999,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 116354,
+   "requests": 3,
+   "costUsd": 0.0778422,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 164294,
+   "requests": 4,
+   "costUsd": 0.1496368,
+   "tools": [
+    "Glob",
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 126083,
+   "requests": 3,
+   "costUsd": 0.136419,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 130966,
+   "requests": 3,
+   "costUsd": 0.1658702,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 130909,
+   "requests": 3,
+   "costUsd": 0.1652402,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 156030,
+   "requests": 4,
+   "costUsd": 0.08931460000000001,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 196424,
+   "requests": 5,
+   "costUsd": 0.09834980000000001,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 117486,
+   "requests": 3,
+   "costUsd": 0.08503740000000001,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 156476,
+   "requests": 4,
+   "costUsd": 0.0845662,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 155415,
+   "requests": 4,
+   "costUsd": 0.08003679999999999,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.6666666666666666,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 156128,
+   "requests": 4,
+   "costUsd": 0.08567119999999999,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 153954,
+   "requests": 4,
+   "costUsd": 0.0766834,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 115142,
+   "requests": 3,
+   "costUsd": 0.06761640000000001,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 130421,
+   "requests": 3,
+   "costUsd": 0.1480164,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 293320,
+   "requests": 6,
+   "costUsd": 0.2074942,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Grep",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 206173,
+   "requests": 5,
+   "costUsd": 0.11779379999999999,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 207341,
+   "requests": 5,
+   "costUsd": 0.125289,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 227052,
+   "requests": 5,
+   "costUsd": 0.20094,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Grep",
+    "Read",
+    "Grep",
+    "Grep"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 365749,
+   "requests": 8,
+   "costUsd": 0.2232718,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Grep",
+    "Grep",
+    "Grep",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 195569,
+   "requests": 5,
+   "costUsd": 0.0985066,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": true
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 193947,
+   "requests": 5,
+   "costUsd": 0.0878754,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": true
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114873,
+   "requests": 3,
+   "costUsd": 0.0657274,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 114611,
+   "requests": 3,
+   "costUsd": 0.06351620000000001,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 115517,
+   "requests": 3,
+   "costUsd": 0.06651599999999999,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "qamap-user-consent",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 114952,
+   "requests": 3,
+   "costUsd": 0.0625114,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  }
+ ]
+}

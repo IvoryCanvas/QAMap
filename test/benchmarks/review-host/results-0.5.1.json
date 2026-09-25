@@ -1,0 +1,4758 @@
+{
+ "schema": {
+  "name": "qamap.review-host-summary",
+  "version": 1
+ },
+ "host": "Claude Code CLI 2.1.282 (print mode)",
+ "models": "one fixed host model for both arms; a different model for blind grading",
+ "arms": {
+  "standalone": "no QAMap",
+  "qamap-explicit": "project initialized with init --agent --review-mode report; prompt starts with 'Use QAMap for this review.'",
+  "qamap-configured": "same project setup; unchanged review prompt",
+  "*-noskills": "host Skill tool disabled in both arms"
+ },
+ "runs": [
+  {
+   "case": "async-recovery",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 404145,
+   "requests": 11,
+   "costUsd": 0.152138,
+   "uncachedInputTokens": 16149,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Read",
+    "Bash",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 334365,
+   "requests": 9,
+   "costUsd": 0.1380683,
+   "uncachedInputTokens": 15898,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 303589,
+   "requests": 8,
+   "costUsd": 0.135212,
+   "uncachedInputTokens": 15996,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Bash",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 333940,
+   "requests": 9,
+   "costUsd": 0.138103,
+   "uncachedInputTokens": 15949,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 307742,
+   "requests": 8,
+   "costUsd": 0.1277499,
+   "uncachedInputTokens": 15601,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Read",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 268634,
+   "requests": 7,
+   "costUsd": 0.1142842,
+   "uncachedInputTokens": 14836,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 270843,
+   "requests": 7,
+   "costUsd": 0.12401500000000001,
+   "uncachedInputTokens": 15475,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 343660,
+   "requests": 9,
+   "costUsd": 0.134247,
+   "uncachedInputTokens": 15376,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 237378,
+   "requests": 6,
+   "costUsd": 0.1084199,
+   "uncachedInputTokens": 14755,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 340032,
+   "requests": 9,
+   "costUsd": 0.13805910000000005,
+   "uncachedInputTokens": 15787,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Bash",
+    "Read",
+    "Read",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 342689,
+   "requests": 9,
+   "costUsd": 0.1401086,
+   "uncachedInputTokens": 17083,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 364790,
+   "requests": 10,
+   "costUsd": 0.1392706,
+   "uncachedInputTokens": 15638,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Read",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 275142,
+   "requests": 7,
+   "costUsd": 0.1113738,
+   "uncachedInputTokens": 10487,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 423121,
+   "requests": 11,
+   "costUsd": 0.19214340000000002,
+   "uncachedInputTokens": 20256,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Read",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 572093,
+   "requests": 15,
+   "costUsd": 0.23316989999999999,
+   "uncachedInputTokens": 23666,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 518749,
+   "requests": 14,
+   "costUsd": 0.20531660000000002,
+   "uncachedInputTokens": 22498,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 403221,
+   "requests": 10,
+   "costUsd": 0.1872069,
+   "uncachedInputTokens": 26601,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Glob",
+    "Read",
+    "Read",
+    "Bash",
+    "Grep",
+    "Glob",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 607895,
+   "requests": 16,
+   "costUsd": 0.23140489999999997,
+   "uncachedInputTokens": 24236,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 418874,
+   "requests": 11,
+   "costUsd": 0.1899741,
+   "uncachedInputTokens": 20832,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 456865,
+   "requests": 12,
+   "costUsd": 0.2146097,
+   "uncachedInputTokens": 21569,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 351273,
+   "requests": 9,
+   "costUsd": 0.1768437,
+   "uncachedInputTokens": 19099,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read",
+    "Read",
+    "Bash",
+    "ReportFindings",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 411890,
+   "requests": 9,
+   "costUsd": 0.3023561,
+   "uncachedInputTokens": 36891,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 403170,
+   "requests": 9,
+   "costUsd": 0.21929719999999997,
+   "uncachedInputTokens": 19226,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 497127,
+   "requests": 11,
+   "costUsd": 0.3344455,
+   "uncachedInputTokens": 38410,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 453144,
+   "requests": 10,
+   "costUsd": 0.2511771,
+   "uncachedInputTokens": 31451,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 585032,
+   "requests": 13,
+   "costUsd": 0.3052553,
+   "uncachedInputTokens": 35063,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 510003,
+   "requests": 11,
+   "costUsd": 0.32303950000000003,
+   "uncachedInputTokens": 38014,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 495298,
+   "requests": 13,
+   "costUsd": 0.25111900000000004,
+   "uncachedInputTokens": 21913,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 487688,
+   "requests": 13,
+   "costUsd": 0.24291570000000007,
+   "uncachedInputTokens": 18943,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.5,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 492815,
+   "requests": 13,
+   "costUsd": 0.2674683,
+   "uncachedInputTokens": 23633,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Read",
+    "Read",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 398058,
+   "requests": 10,
+   "costUsd": 0.17471399999999998,
+   "uncachedInputTokens": 10420,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 600785,
+   "requests": 16,
+   "costUsd": 0.2642354,
+   "uncachedInputTokens": 22668,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Grep",
+    "Glob",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "ReportFindings",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.25,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 492166,
+   "requests": 13,
+   "costUsd": 0.20180370000000003,
+   "uncachedInputTokens": 19561,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.5,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 447281,
+   "requests": 12,
+   "costUsd": 0.20775580000000002,
+   "uncachedInputTokens": 20116,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.3333333333333333,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 478642,
+   "requests": 13,
+   "costUsd": 0.2157919,
+   "uncachedInputTokens": 19936,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 426831,
+   "requests": 11,
+   "costUsd": 0.19404269999999998,
+   "uncachedInputTokens": 18718,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 444884,
+   "requests": 12,
+   "costUsd": 0.17751999999999998,
+   "uncachedInputTokens": 17299,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 405639,
+   "requests": 11,
+   "costUsd": 0.1610788,
+   "uncachedInputTokens": 17192,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 369701,
+   "requests": 10,
+   "costUsd": 0.14995889999999998,
+   "uncachedInputTokens": 17049,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 2401944,
+   "requests": 46,
+   "costUsd": 0.9151790000000002,
+   "uncachedInputTokens": 76551,
+   "tools": [
+    "Bash",
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Grep",
+    "Read",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Read",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 1478345,
+   "requests": 28,
+   "costUsd": 0.7192914,
+   "uncachedInputTokens": 62301,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 1564242,
+   "requests": 32,
+   "costUsd": 0.7101959999999998,
+   "uncachedInputTokens": 62772,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Read",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Read",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 458969,
+   "requests": 11,
+   "costUsd": 0.23665960000000003,
+   "uncachedInputTokens": 29532,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 961210,
+   "requests": 21,
+   "costUsd": 0.4193549,
+   "uncachedInputTokens": 46441,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 936524,
+   "requests": 22,
+   "costUsd": 0.3935365,
+   "uncachedInputTokens": 41044,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 754012,
+   "requests": 18,
+   "costUsd": 0.35722509999999996,
+   "uncachedInputTokens": 34910,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Grep",
+    "Read",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "ReportFindings",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 842637,
+   "requests": 17,
+   "costUsd": 0.3575144,
+   "uncachedInputTokens": 27593,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Grep",
+    "Read",
+    "Grep",
+    "Grep",
+    "Read",
+    "Bash",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 2023905,
+   "requests": 41,
+   "costUsd": 0.8112681999999999,
+   "uncachedInputTokens": 66168,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Read",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read",
+    "Read",
+    "Grep",
+    "Read",
+    "Bash",
+    "Bash",
+    "ReportFindings",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 342742,
+   "requests": 9,
+   "costUsd": 0.1548881,
+   "uncachedInputTokens": 16791,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": false
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 375193,
+   "requests": 10,
+   "costUsd": 0.18347660000000002,
+   "uncachedInputTokens": 18994,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": true
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 408803,
+   "requests": 11,
+   "costUsd": 0.18013079999999998,
+   "uncachedInputTokens": 18154,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": false
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 343451,
+   "requests": 9,
+   "costUsd": 0.1519409,
+   "uncachedInputTokens": 17107,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 483139,
+   "requests": 13,
+   "costUsd": 0.1910954,
+   "uncachedInputTokens": 19673,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Grep",
+    "Read",
+    "Read",
+    "Read",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Grep",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": true,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 295219,
+   "requests": 8,
+   "costUsd": 0.1213807,
+   "uncachedInputTokens": 15023,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "standalone",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 274731,
+   "requests": 7,
+   "costUsd": 0.17245520000000003,
+   "uncachedInputTokens": 38400,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Bash",
+    "Grep"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "standalone",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 313817,
+   "requests": 8,
+   "costUsd": 0.18292,
+   "uncachedInputTokens": 39405,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "standalone",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 378673,
+   "requests": 10,
+   "costUsd": 0.15128170000000002,
+   "uncachedInputTokens": 16651,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": true,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114022,
+   "requests": 3,
+   "costUsd": 0.0583052,
+   "uncachedInputTokens": 7027,
+   "tools": [
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 84065,
+   "requests": 2,
+   "costUsd": 0.0355352,
+   "uncachedInputTokens": 2577,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 154880,
+   "requests": 4,
+   "costUsd": 0.07655340000000001,
+   "uncachedInputTokens": 8282,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 115062,
+   "requests": 3,
+   "costUsd": 0.061722,
+   "uncachedInputTokens": 7678,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 115224,
+   "requests": 3,
+   "costUsd": 0.06323900000000002,
+   "uncachedInputTokens": 7687,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 75768,
+   "requests": 2,
+   "costUsd": 0.048591999999999996,
+   "uncachedInputTokens": 6656,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 83947,
+   "requests": 2,
+   "costUsd": 0.0351696,
+   "uncachedInputTokens": 2438,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114845,
+   "requests": 3,
+   "costUsd": 0.060255199999999995,
+   "uncachedInputTokens": 7551,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 114902,
+   "requests": 3,
+   "costUsd": 0.0607738,
+   "uncachedInputTokens": 7571,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 76259,
+   "requests": 2,
+   "costUsd": 0.052649600000000005,
+   "uncachedInputTokens": 6785,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 154237,
+   "requests": 4,
+   "costUsd": 0.07159800000000001,
+   "uncachedInputTokens": 8113,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 84039,
+   "requests": 2,
+   "costUsd": 0.035365799999999996,
+   "uncachedInputTokens": 2557,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 115310,
+   "requests": 3,
+   "costUsd": 0.0645172,
+   "uncachedInputTokens": 7632,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 115125,
+   "requests": 3,
+   "costUsd": 0.06269440000000001,
+   "uncachedInputTokens": 7634,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 75988,
+   "requests": 2,
+   "costUsd": 0.050356200000000004,
+   "uncachedInputTokens": 6727,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114975,
+   "requests": 3,
+   "costUsd": 0.0615342,
+   "uncachedInputTokens": 7579,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 83913,
+   "requests": 2,
+   "costUsd": 0.0344506,
+   "uncachedInputTokens": 2493,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 75939,
+   "requests": 2,
+   "costUsd": 0.0499328,
+   "uncachedInputTokens": 6711,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 115073,
+   "requests": 3,
+   "costUsd": 0.062141600000000005,
+   "uncachedInputTokens": 7597,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 75937,
+   "requests": 2,
+   "costUsd": 0.0499412,
+   "uncachedInputTokens": 6703,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 115213,
+   "requests": 3,
+   "costUsd": 0.0637588,
+   "uncachedInputTokens": 7600,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 84126,
+   "requests": 2,
+   "costUsd": 0.036359,
+   "uncachedInputTokens": 2543,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 76645,
+   "requests": 2,
+   "costUsd": 0.056753399999999996,
+   "uncachedInputTokens": 6746,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 76250,
+   "requests": 2,
+   "costUsd": 0.052954,
+   "uncachedInputTokens": 6716,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 115257,
+   "requests": 3,
+   "costUsd": 0.0670448,
+   "uncachedInputTokens": 7485,
+   "tools": [
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 154585,
+   "requests": 4,
+   "costUsd": 0.075244,
+   "uncachedInputTokens": 8118,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 127322,
+   "requests": 3,
+   "costUsd": 0.05348520000000001,
+   "uncachedInputTokens": 3341,
+   "tools": [
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 195010,
+   "requests": 5,
+   "costUsd": 0.0878622,
+   "uncachedInputTokens": 8822,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Grep"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 76214,
+   "requests": 2,
+   "costUsd": 0.052277000000000004,
+   "uncachedInputTokens": 6777,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 115752,
+   "requests": 3,
+   "costUsd": 0.068831,
+   "uncachedInputTokens": 7635,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 116419,
+   "requests": 3,
+   "costUsd": 0.07360320000000001,
+   "uncachedInputTokens": 7966,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 85318,
+   "requests": 2,
+   "costUsd": 0.0463334,
+   "uncachedInputTokens": 2864,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 116196,
+   "requests": 3,
+   "costUsd": 0.071261,
+   "uncachedInputTokens": 7970,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 77431,
+   "requests": 2,
+   "costUsd": 0.0625472,
+   "uncachedInputTokens": 7092,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 77339,
+   "requests": 2,
+   "costUsd": 0.0618606,
+   "uncachedInputTokens": 7058,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 89347,
+   "requests": 2,
+   "costUsd": 0.14055240000000002,
+   "uncachedInputTokens": 13974,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 96876,
+   "requests": 2,
+   "costUsd": 0.1211574,
+   "uncachedInputTokens": 9673,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 128843,
+   "requests": 3,
+   "costUsd": 0.15702580000000002,
+   "uncachedInputTokens": 14764,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 127573,
+   "requests": 3,
+   "costUsd": 0.1443586,
+   "uncachedInputTokens": 14752,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 126573,
+   "requests": 3,
+   "costUsd": 0.13403579999999998,
+   "uncachedInputTokens": 14796,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 129761,
+   "requests": 3,
+   "costUsd": 0.1487078,
+   "uncachedInputTokens": 17713,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 99539,
+   "requests": 2,
+   "costUsd": 0.1302146,
+   "uncachedInputTokens": 12592,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 130162,
+   "requests": 3,
+   "costUsd": 0.1522826,
+   "uncachedInputTokens": 17730,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 130544,
+   "requests": 3,
+   "costUsd": 0.15663180000000002,
+   "uncachedInputTokens": 17681,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 91323,
+   "requests": 2,
+   "costUsd": 0.1431188,
+   "uncachedInputTokens": 16820,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 197070,
+   "requests": 5,
+   "costUsd": 0.095699,
+   "uncachedInputTokens": 9146,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read",
+    "Grep"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.5,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 216968,
+   "requests": 5,
+   "costUsd": 0.0932026,
+   "uncachedInputTokens": 4280,
+   "tools": [
+    "Bash",
+    "Read",
+    "Read",
+    "Grep",
+    "Glob",
+    "Grep"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 158277,
+   "requests": 4,
+   "costUsd": 0.09825699999999998,
+   "uncachedInputTokens": 9464,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 156399,
+   "requests": 4,
+   "costUsd": 0.0868916,
+   "uncachedInputTokens": 8403,
+   "tools": [
+    "Bash",
+    "Read",
+    "Read",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 116761,
+   "requests": 3,
+   "costUsd": 0.074974,
+   "uncachedInputTokens": 7811,
+   "tools": [
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 159527,
+   "requests": 4,
+   "costUsd": 0.10005920000000001,
+   "uncachedInputTokens": 10445,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 219837,
+   "requests": 5,
+   "costUsd": 0.0927114,
+   "uncachedInputTokens": 5168,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 158972,
+   "requests": 4,
+   "costUsd": 0.0995922,
+   "uncachedInputTokens": 9557,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Grep"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 158231,
+   "requests": 4,
+   "costUsd": 0.09135099999999999,
+   "uncachedInputTokens": 9689,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 159970,
+   "requests": 4,
+   "costUsd": 0.10243479999999999,
+   "uncachedInputTokens": 10709,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 115907,
+   "requests": 3,
+   "costUsd": 0.066081,
+   "uncachedInputTokens": 7927,
+   "tools": [
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.6666666666666666,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 128510,
+   "requests": 3,
+   "costUsd": 0.056391399999999994,
+   "uncachedInputTokens": 3855,
+   "tools": [
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.6666666666666666,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 116141,
+   "requests": 3,
+   "costUsd": 0.067932,
+   "uncachedInputTokens": 7935,
+   "tools": [
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.6666666666666666,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 157135,
+   "requests": 4,
+   "costUsd": 0.088396,
+   "uncachedInputTokens": 9147,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.6666666666666666,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 156426,
+   "requests": 4,
+   "costUsd": 0.0819614,
+   "uncachedInputTokens": 9059,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.6666666666666666,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 154961,
+   "requests": 4,
+   "costUsd": 0.07578399999999999,
+   "uncachedInputTokens": 8524,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 127502,
+   "requests": 3,
+   "costUsd": 0.053127999999999995,
+   "uncachedInputTokens": 3645,
+   "tools": [
+    "Bash",
+    "Read",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 76445,
+   "requests": 2,
+   "costUsd": 0.0547992,
+   "uncachedInputTokens": 6740,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 155060,
+   "requests": 4,
+   "costUsd": 0.0782852,
+   "uncachedInputTokens": 8295,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 77037,
+   "requests": 2,
+   "costUsd": 0.060507000000000005,
+   "uncachedInputTokens": 6777,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 300001,
+   "requests": 6,
+   "costUsd": 0.2375954,
+   "uncachedInputTokens": 26835,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Read",
+    "Bash",
+    "Grep",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 335987,
+   "requests": 6,
+   "costUsd": 0.2350308,
+   "uncachedInputTokens": 22515,
+   "tools": [
+    "Bash",
+    "Grep",
+    "Read",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 244850,
+   "requests": 5,
+   "costUsd": 0.2346164,
+   "uncachedInputTokens": 25092,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 304570,
+   "requests": 6,
+   "costUsd": 0.2651082,
+   "uncachedInputTokens": 29074,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 293164,
+   "requests": 6,
+   "costUsd": 0.2180458,
+   "uncachedInputTokens": 25016,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Read",
+    "Grep"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 205434,
+   "requests": 5,
+   "costUsd": 0.10796539999999999,
+   "uncachedInputTokens": 12153,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 135180,
+   "requests": 3,
+   "costUsd": 0.08337259999999999,
+   "uncachedInputTokens": 6398,
+   "tools": [
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 207640,
+   "requests": 5,
+   "costUsd": 0.1230396,
+   "uncachedInputTokens": 13087,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 298884,
+   "requests": 7,
+   "costUsd": 0.15861619999999998,
+   "uncachedInputTokens": 15377,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 205483,
+   "requests": 5,
+   "costUsd": 0.1130144,
+   "uncachedInputTokens": 11875,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 173590,
+   "requests": 4,
+   "costUsd": 0.1578,
+   "uncachedInputTokens": 17671,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 331983,
+   "requests": 6,
+   "costUsd": 0.2527208,
+   "uncachedInputTokens": 22726,
+   "tools": [
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 452681,
+   "requests": 9,
+   "costUsd": 0.3139562,
+   "uncachedInputTokens": 26637,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 174367,
+   "requests": 4,
+   "costUsd": 0.1670932,
+   "uncachedInputTokens": 17538,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 178993,
+   "requests": 4,
+   "costUsd": 0.2043742,
+   "uncachedInputTokens": 19010,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 155907,
+   "requests": 4,
+   "costUsd": 0.08755439999999999,
+   "uncachedInputTokens": 8201,
+   "tools": [
+    "Bash",
+    "Grep",
+    "Read",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 1,
+    "uncertaintyRetained": false
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 215912,
+   "requests": 5,
+   "costUsd": 0.0901072,
+   "uncachedInputTokens": 4109,
+   "tools": [
+    "Bash",
+    "Grep",
+    "Read",
+    "Grep",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": true
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 196238,
+   "requests": 5,
+   "costUsd": 0.09455100000000001,
+   "uncachedInputTokens": 9094,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": true
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 156409,
+   "requests": 4,
+   "costUsd": 0.0897058,
+   "uncachedInputTokens": 8439,
+   "tools": [
+    "Bash",
+    "Grep",
+    "Read",
+    "Read",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": true
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 154833,
+   "requests": 4,
+   "costUsd": 0.07931379999999999,
+   "uncachedInputTokens": 8018,
+   "tools": [
+    "Bash",
+    "Read",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": true
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 115494,
+   "requests": 3,
+   "costUsd": 0.06559880000000001,
+   "uncachedInputTokens": 7778,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 84418,
+   "requests": 2,
+   "costUsd": 0.0384374,
+   "uncachedInputTokens": 2680,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 76439,
+   "requests": 2,
+   "costUsd": 0.0537208,
+   "uncachedInputTokens": 6913,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 76047,
+   "requests": 2,
+   "costUsd": 0.0497108,
+   "uncachedInputTokens": 6928,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 115335,
+   "requests": 3,
+   "costUsd": 0.06376480000000001,
+   "uncachedInputTokens": 7786,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "qamap-configured",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 77071,
+   "requests": 2,
+   "costUsd": 0.0547994,
+   "uncachedInputTokens": 7798,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "qamap-explicit-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 84898,
+   "requests": 2,
+   "costUsd": 0.0388492,
+   "uncachedInputTokens": 3413,
+   "tools": [
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "qamap-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 115981,
+   "requests": 3,
+   "costUsd": 0.06580340000000001,
+   "uncachedInputTokens": 8518,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "qamap-explicit",
+   "run": 2,
+   "status": "completed",
+   "totalTokens": 115896,
+   "requests": 3,
+   "costUsd": 0.0650694,
+   "uncachedInputTokens": 8515,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "qamap-explicit",
+   "run": 3,
+   "status": "completed",
+   "totalTokens": 115941,
+   "requests": 3,
+   "costUsd": 0.065417,
+   "uncachedInputTokens": 8519,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "usedQamap": true,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 250252,
+   "requests": 6,
+   "costUsd": 0.0786264,
+   "uncachedInputTokens": 3302,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 206991,
+   "requests": 5,
+   "costUsd": 0.0626398,
+   "uncachedInputTokens": 2748,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 292351,
+   "requests": 7,
+   "costUsd": 0.085149,
+   "uncachedInputTokens": 3464,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Glob",
+    "Glob",
+    "Read",
+    "Glob",
+    "Read",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 248048,
+   "requests": 6,
+   "costUsd": 0.0700726,
+   "uncachedInputTokens": 2637,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 259656,
+   "requests": 6,
+   "costUsd": 0.0904592,
+   "uncachedInputTokens": 5645,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Grep"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 361236,
+   "requests": 8,
+   "costUsd": 0.1241138,
+   "uncachedInputTokens": 7450,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 209229,
+   "requests": 5,
+   "costUsd": 0.22221680000000002,
+   "uncachedInputTokens": 42561,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 236085,
+   "requests": 5,
+   "costUsd": 0.1406802,
+   "uncachedInputTokens": 12013,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 603690,
+   "requests": 11,
+   "costUsd": 0.30089059999999995,
+   "uncachedInputTokens": 25414,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Grep",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 343350,
+   "requests": 8,
+   "costUsd": 0.1336318,
+   "uncachedInputTokens": 6401,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 299830,
+   "requests": 7,
+   "costUsd": 0.11863660000000001,
+   "uncachedInputTokens": 5059,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.75,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 252535,
+   "requests": 6,
+   "costUsd": 0.085542,
+   "uncachedInputTokens": 4063,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Read",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 249148,
+   "requests": 6,
+   "costUsd": 0.07750220000000001,
+   "uncachedInputTokens": 2925,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Bash",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 1317539,
+   "requests": 22,
+   "costUsd": 0.5773179999999999,
+   "uncachedInputTokens": 35147,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Grep",
+    "Grep",
+    "Grep",
+    "Grep",
+    "Read",
+    "Grep",
+    "Grep",
+    "Grep",
+    "Read",
+    "Read",
+    "Grep",
+    "Read",
+    "Read",
+    "Read"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 487581,
+   "requests": 10,
+   "costUsd": 0.223907,
+   "uncachedInputTokens": 17256,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 817390,
+   "requests": 15,
+   "costUsd": 0.3391576,
+   "uncachedInputTokens": 22196,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Read",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Bash",
+    "Read"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 252476,
+   "requests": 6,
+   "costUsd": 0.09602139999999999,
+   "uncachedInputTokens": 4428,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read",
+    "Read",
+    "Read",
+    "Read",
+    "Bash"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": true
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 380999,
+   "requests": 9,
+   "costUsd": 0.2678814,
+   "uncachedInputTokens": 44180,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Grep",
+    "Read",
+    "Read",
+    "Read",
+    "Grep",
+    "Bash",
+    "Read",
+    "Read",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "standalone-noskills",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 342055,
+   "requests": 8,
+   "costUsd": 0.1092654,
+   "uncachedInputTokens": 5710,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "ReportFindings"
+   ],
+   "usedQamap": false,
+   "ranTests": false,
+   "usedHostReviewSkill": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  }
+ ]
+}

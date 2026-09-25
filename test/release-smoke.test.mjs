@@ -13,7 +13,7 @@ test("release smoke supplies a manifest, stays static, and cleans up offline", a
   try {
     const { version } = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
     const report = await runReleaseSmoke({ cli: path.join(root, "dist/cli.js"), version, tempDirectory: temporary });
-    assert.equal(publishedSmokeVersion, "0.4.17");
+    assert.equal(publishedSmokeVersion, "0.5.0");
     assert.equal(report.source, "local-cli", "offline evidence must not claim a published-package smoke");
     assert.equal(report.status, "passed");
     assert.deepEqual(report.execution, { status: "not-run", performed: false });

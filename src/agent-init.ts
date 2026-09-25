@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { detectDlxCommand } from "./context.js";
 import { pathExists } from "./fs.js";
 import { writeDefaultConfig } from "./config.js";
-import { AGENT_SECTION_START as SECTION_START, AGENT_SECTION_END as SECTION_END, REPORT_REVIEW_MARKER, buildAgentQaSection, type AgentReviewMode } from "./agent-instructions.js";
+import { AGENT_SECTION_START as SECTION_START, AGENT_SECTION_END as SECTION_END, ASK_REVIEW_MARKER, REPORT_REVIEW_MARKER, buildAgentQaSection, type AgentReviewMode } from "./agent-instructions.js";
 
 export { buildAgentQaSection } from "./agent-instructions.js";
 
@@ -37,7 +37,7 @@ export async function initAgentSetup(rootInput: string, options: { force?: boole
   if (options.reviewMode !== undefined && options.reviewMode !== "ask" && options.reviewMode !== "report") throw new Error("Invalid review mode");
   const root = path.resolve(rootInput);
   const dlxCommand = await detectDlxCommand(root);
-  const nextCommand = `${dlxCommand} qa report . --base origin/main --head HEAD --handoff`;
+  const nextCommand = `${dlxCommand} qa brief`;
 
   const files: AgentInitFile[] = [];
   files.push(await upsertAgentsSection(root, dlxCommand, options.reviewMode));
@@ -49,10 +49,18 @@ export async function initAgentSetup(rootInput: string, options: { force?: boole
   return { root, files, nextCommand };
 }
 
-async function upsertAgentsSection(root: string, dlxCommand: string, reviewMode?: AgentReviewMode): Promise<AgentInitFile> {
+// Changes only the managed AGENTS.md section; skills and configuration are left as they are.
+// `explicitAsk` records "ask each time", which overrides a user-level consent.
+export async function setProjectReviewMode(rootInput: string, reviewMode: AgentReviewMode, explicitAsk = false): Promise<AgentInitFile> {
+  const root = path.resolve(rootInput);
+  return upsertAgentsSection(root, await detectDlxCommand(root), reviewMode, explicitAsk);
+}
+
+async function upsertAgentsSection(root: string, dlxCommand: string, reviewMode?: AgentReviewMode, explicitAsk = false): Promise<AgentInitFile> {
   const agentsPath = path.join(root, "AGENTS.md");
   const relativePath = "AGENTS.md";
-  let section = buildAgentQaSection(dlxCommand, reviewMode);
+  // A given mode replaces the section; without one, a previously recorded choice is kept.
+  let section = buildAgentQaSection(dlxCommand, reviewMode, explicitAsk);
 
   if (!(await pathExists(agentsPath))) {
     const content = `# Agent Instructions\n\n${section}\n`;
@@ -65,7 +73,9 @@ async function upsertAgentsSection(root: string, dlxCommand: string, reviewMode?
   const endIndex = existing.indexOf(SECTION_END);
 
   if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-    if (reviewMode === undefined && existing.slice(startIndex, endIndex).includes(REPORT_REVIEW_MARKER)) section = buildAgentQaSection(dlxCommand, "report");
+    const current = existing.slice(startIndex, endIndex);
+    if (reviewMode === undefined && current.includes(REPORT_REVIEW_MARKER)) section = buildAgentQaSection(dlxCommand, "report");
+    if (reviewMode === undefined && current.includes(ASK_REVIEW_MARKER)) section = buildAgentQaSection(dlxCommand, "ask", true);
     const updated = existing.slice(0, startIndex) + section + existing.slice(endIndex + SECTION_END.length);
     if (updated === existing) {
       return { path: relativePath, status: "unchanged", detail: "QAMap section already up to date" };
