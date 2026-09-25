@@ -14,6 +14,7 @@ when maintaining an older scanner, CI, manifest, or compatibility workflow.
 
 ```sh
 pnpm exec qamap qa . --base origin/main --head HEAD
+pnpm exec qamap qa brief
 pnpm exec qamap qa run . --base origin/main --head HEAD
 pnpm exec qamap qa . --base origin/main --head HEAD --format agent
 pnpm exec qamap qa . --manifest /tmp/qamap-manifest.yaml --base origin/main --head HEAD --output QAMAP_QA.md
@@ -80,6 +81,21 @@ still use the host model's tokens; this mode avoids returning the full analysis
 automatically, not all agent token usage. Local paths work only where those files
 are accessible, not automatically in web chat. `analysis: complete` always keeps
 `execution.status: not-run` in this mode and does not imply passing QA.
+
+### Review From One Brief
+
+For an agent or a person reviewing a pull request with QAMap 0.5.1 or newer:
+
+```sh
+qamap qa brief
+```
+
+It prints one bounded text brief (24,000 bytes by default, `--max-bytes` to
+change): the numbered diff, each changed declaration's tests and callers with
+their assertion lines, what new or removed code calls, the commits and tests
+behind removed lines, QA focus, and unknowns. The base is auto-selected unless
+`--base` is given. The full report is saved as with `qa report`, and execution
+stays `not-run`. See [the review brief](agent-brief.md).
 
 ### Return Evidence In One Call
 
@@ -153,6 +169,7 @@ That means QAMap is most valuable when it becomes the team's verification base: 
 | `qamap github-action . --mode review --base origin/main --head HEAD` | Generate GitHub Action annotations, step summary, and PR comment body. |
 | `qamap test-plan . --base origin/main --head HEAD --include-working-tree` | Suggest domain test scenarios for changed files. |
 | `qamap qa . --base origin/main --head HEAD` | One-command PR QA: change intent, behavior lifecycle, QA scenarios, affected flows, missing evidence, and optional automation drafts. A single supported changed package is selected automatically, including an independent nested package. |
+| `qamap qa brief` | Print one bounded review brief: numbered diff, tests and callers of changed declarations, calls, history of removed lines, QA focus and unknowns; requires 0.5.1 or newer. |
 | `qamap qa report . --base origin/main --head HEAD` | Save local reports and return paths without their contents; requires 0.5.0 or newer. |
 | `qamap qa report . --base origin/main --head HEAD --handoff` | Save reports and return bounded source/test evidence once; requires 0.5.0 or newer. |
 | `qamap qa run . --base origin/main --head HEAD` | Re-analyze the change and execute only the exact existing repository validation command selected by the canonical route. Additional required commands are reported but not executed. Returns pass, fail, timeout, or blocked evidence; it never installs a runner or runs a proposed product E2E draft. |

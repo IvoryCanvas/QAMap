@@ -1,14 +1,13 @@
 # QAMap As A Local QA Skill
 
 QAMap can gather local evidence inside a coding agent's ordinary PR review.
-Version 0.5.0 supports a [one-call review handoff](agent-handoff.md):
-offer QAMap, obtain consent, then interpret only the returned summary and code
-evidence. Do not add source searches or read the report again. Missing evidence
-stays unknown; deeper inspection requires a separate request. This mode is not
-in 0.4.17. [Synthetic comparisons](release-validation.md#mixed-contract-follow-up)
-preserved predefined finding criteria with lower total tokens, including one
-first-use consent case. This is not a general savings or equal-coverage guarantee;
-earlier failures and remaining evidence gaps are documented.
+From 0.5.1 the packaged workflow uses the [review brief](agent-brief.md): offer
+QAMap, obtain consent, run `qamap qa brief` once, and review from its numbered
+diff, references, history and unknowns. Source reads are limited to specific open
+items. [Measured Claude Code comparisons](release-validation.md) record the token
+and quality results; they are not a general savings guarantee. The JSON
+[one-call review handoff](agent-handoff.md) from 0.5.0 remains available for
+tools that need structured evidence.
 
 The goal is not to replace a reviewer or claim QA passed. The goal is to remove the repeated setup question:
 
@@ -37,7 +36,8 @@ The `qamap context` command uses the same report-review section as
 `init --agent`; it generates instructions but does not install the skill files.
 
 With **QAMap 0.5.0 or newer**, explicitly choose report-based review
-for this project to avoid repeated consent exchanges:
+for this project to avoid repeated consent exchanges (from 0.5.1 the recorded
+workflow runs `qamap qa brief`):
 
 ```sh
 qamap init --agent . --review-mode report
