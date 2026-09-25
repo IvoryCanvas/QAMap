@@ -37,7 +37,7 @@ export async function initAgentSetup(rootInput: string, options: { force?: boole
   if (options.reviewMode !== undefined && options.reviewMode !== "ask" && options.reviewMode !== "report") throw new Error("Invalid review mode");
   const root = path.resolve(rootInput);
   const dlxCommand = await detectDlxCommand(root);
-  const nextCommand = `${dlxCommand} qa report . --base origin/main --head HEAD --handoff`;
+  const nextCommand = `${dlxCommand} qa brief`;
 
   const files: AgentInitFile[] = [];
   files.push(await upsertAgentsSection(root, dlxCommand, options.reviewMode));

@@ -143,6 +143,11 @@ try {
     assert.notEqual(pointer.split("/").slice(1).reduce((value, key) => value?.[key], full), undefined,
       `fresh-install recovery pointer is missing: ${pointer}`);
   }
+  const briefOutput = await run(binary, ["qa", "brief", ".", "--base", "HEAD~1", "--output", path.join(tempRoot, "brief-reports")], fixture);
+  assert.match(briefOutput.stdout, /^QAMap brief: HEAD~1\.\.\.HEAD/);
+  assert.match(briefOutput.stdout, /no tests were run, no LLM was called/);
+  assert.match(briefOutput.stdout, /== Changes ==/);
+  assert.ok(Buffer.byteLength(briefOutput.stdout) <= 24000, "brief must stay within its default limit");
   const installedSkill = await readFile(path.join(harness,
     "node_modules/@ivorycanvas/qamap/skills/qamap-pr-qa/SKILL.md"), "utf8");
   assert.equal(installedSkill, await readFile(path.join(repositoryRoot, "skills/qamap-pr-qa/SKILL.md"), "utf8"));
@@ -158,8 +163,8 @@ try {
       /execution\.gitState/);
   }
   const instructions = await readFile(path.join(agentProject, "AGENTS.md"), "utf8");
-  assert.match(instructions, /--handoff/);
-  assert.ok(instructions.includes(`@ivorycanvas/qamap@${version} qa report`));
+  assert.match(instructions, /qa brief/);
+  assert.ok(instructions.includes(`@ivorycanvas/qamap@${version} qa brief`));
   assert.ok(instructions.startsWith(personalGuidance));
   assert.doesNotMatch(instructions, /qamap:review-mode:report/);
   await run(binary, ["init", agentProject, "--agent", "--review-mode", "report"], agentProject);

@@ -16,13 +16,13 @@ for (const [manager, prefix, lock] of [["npm", "npx", "package-lock.json"], ["pn
       const command = `${prefix} @ivorycanvas/qamap@${VERSION}`;
       assert.equal(await detectDlxCommand(root), command);
       const setup = await initAgentSetup(root);
-      assert.equal(setup.nextCommand, `${command} qa report . --base origin/main --head HEAD --handoff`);
-      assert.ok((await fs.readFile(path.join(root, "AGENTS.md"), "utf8")).includes(`${command} qa report`));
-      assert.ok((await generateAgentContext(root)).includes(`${command} qa report`));
+      assert.equal(setup.nextCommand, `${command} qa brief`);
+      assert.ok((await fs.readFile(path.join(root, "AGENTS.md"), "utf8")).includes(`${command} qa brief`));
+      assert.ok((await generateAgentContext(root)).includes(`${command} qa brief`));
       await initAgentSetup(root, { reviewMode: "report" });
       const selected = await fs.readFile(path.join(root, "AGENTS.md"), "utf8");
-      assert.match(selected, /\nqamap qa report/);
-      assert.ok(!selected.includes(`${command} qa report`), "saved review prefers the installed binary");
+      assert.match(selected, /\nqamap qa brief/);
+      assert.ok(!selected.includes(`${command} qa brief`), "saved review prefers the installed binary");
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
