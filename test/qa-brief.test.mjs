@@ -189,6 +189,29 @@ test("qa brief limits the reviewed diff to an explicit subdirectory", async () =
   assert.doesNotMatch(stdout, /packages\/lib/);
 });
 
+test("qa brief preserves subdirectory scope through repository and directory symlinks", async () => {
+  const { root, directory } = await repository({
+    "packages/app/src/main.mjs": "export function appMain() {\n  return 1;\n}\n",
+    "packages/lib/src/util.mjs": "export function libUtil() {\n  return 1;\n}\n",
+  }, {
+    "packages/app/src/main.mjs": "export function appMain() {\n  return 2;\n}\n",
+    "packages/lib/src/util.mjs": "export function libUtil() {\n  return 2;\n}\n",
+  });
+  const linkedRoot = path.join(directory, "linked-repo");
+  const linkedApp = path.join(directory, "linked-app");
+  await fs.symlink(root, linkedRoot, "junction");
+  await fs.symlink(path.join(root, "packages/app"), linkedApp, "junction");
+  for (const selected of [path.join(linkedRoot, "packages/app"), linkedApp]) {
+    const output = await brief(selected, [], { cwd: root });
+    assert.match(output, /^QAMap brief: main\.\.\.HEAD limited to packages\/app\/\n/);
+    assert.match(output, /### packages\/app\/src\/main\.mjs/);
+    assert.doesNotMatch(output, /packages\/lib/);
+  }
+  const wholeRepository = await brief(linkedRoot, [], { cwd: root });
+  assert.match(wholeRepository, /^QAMap brief: main\.\.\.HEAD\n/);
+  assert.match(wholeRepository, /### packages\/lib\/src\/util\.mjs/);
+});
+
 test("qa brief escapes control characters so repository text cannot forge brief structure", async () => {
   const { root } = await repository({
     "src/banner.mjs": "export function banner() {\n  return 'plain';\n}\n",

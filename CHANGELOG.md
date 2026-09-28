@@ -27,6 +27,10 @@ See the [0.5.1 release record](docs/releases/0.5.1.md).
 - The published 0.5.0 handoff workflow used more tokens than the standalone host on all three real regressions from this repository's history and missed two of them; that baseline is preserved in the validation record.
 - One host, one model and known author-made or repository-history cases; Codex and GPT hosts were not re-measured. Host cost figures are list-price estimates, not billing.
 
+### Fixed
+
+- `qa brief` preserves an explicit subdirectory scope when its path uses a directory symlink, including macOS temporary-directory aliases, instead of expanding the diff to the whole repository.
+
 ## 0.5.0 - 2026-09-22
 
 npm and plugin publication are separate steps.

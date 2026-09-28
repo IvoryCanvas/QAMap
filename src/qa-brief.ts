@@ -75,15 +75,18 @@ const bindingPattern = /^\s*(?:import\b|export\s*(?:\*|\{|type\s*\{)|from\s+['"]
 
 export async function buildQaBrief(result: QaDraftResult, options: QaBriefOptions = {}): Promise<string> {
   const maxBytes = Math.max(qaBriefMinimumBytes, Math.trunc(options.maxBytes ?? qaBriefDefaultBytes));
-  const top = (await git(result.root, ["rev-parse", "--show-toplevel"])).trim();
-  const workspacePrefix = toPosix(path.relative(top, result.analysisScope.workspaceRoot || result.root));
+  // Git resolves directory symlinks, so compare canonical paths on both sides.
+  const root = await fs.realpath(result.root);
+  const top = await fs.realpath((await git(root, ["rev-parse", "--show-toplevel"])).trim());
+  const workspace = await fs.realpath(result.analysisScope.workspaceRoot || root);
+  const workspacePrefix = toPosix(path.relative(top, workspace));
   const headSha = result.includeWorkingTree ? undefined : (await git(top, ["rev-parse", "--verify", `${result.head}^{commit}`])).trim();
   const range = result.includeWorkingTree
     ? [(await git(top, ["merge-base", result.base, result.head])).trim()]
     : [`${result.base}...${result.head}`];
   const reader = createReader(top, headSha);
   // An explicit subdirectory narrows the reviewed diff; references still span the repository.
-  const scope = toPosix(path.relative(top, result.root));
+  const scope = toPosix(path.relative(top, root));
   const scoped = scope && !scope.startsWith("..") ? scope : "";
   const files = await collectDiff(top, range, result.includeWorkingTree, async (file) => (await reader(file))?.length, scoped);
   const blocks = indexBlocks(result, workspacePrefix);
