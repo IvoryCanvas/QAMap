@@ -30,6 +30,7 @@ Version `1.0.0` requires a stable public contract and external adoption, not imp
 Before publishing, confirm:
 
 - `package.json` version matches the intended npm version.
+- Refresh `plugins/claude` with `node scripts/directory-plugin.mjs --write` after updating canonical skills, policies and manifests; update its README CLI pin as well. Follow the [Claude directory guide](claude-plugin-submission.md) for that separate submission.
 - The canonical release identifier is `vX.Y.Z` (for example, `v0.4.0`). The Git tag and GitHub Release title must match this identifier exactly.
 - `CHANGELOG.md` has a dated section for the version being published.
 - `README.md`, [adoption](adoption.md), [E2E examples](e2e-output-examples.md), and [release validation](release-validation.md) describe the current CLI behavior.
