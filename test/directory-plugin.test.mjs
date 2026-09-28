@@ -28,6 +28,22 @@ test("directory submission contains only the synchronized plugin files", async (
     "directory-only files must not change npm's packaging boundary");
 });
 
+test("directory listing preserves the display name and explicit documentation links", async () => {
+  const manifest = JSON.parse(await readFile(path.join(root, directoryPluginPath, ".claude-plugin/plugin.json"), "utf8"));
+  assert.equal(manifest.name, "qamap");
+  assert.equal(manifest.displayName, "QAMap");
+  const documents = {
+    privacyPolicyUrl: "PRIVACY.md",
+    termsOfServiceUrl: "TERMS.md",
+    supportUrl: "SUPPORT.md",
+    documentationUrl: "plugins/claude/README.md",
+  };
+  for (const [field, file] of Object.entries(documents)) {
+    assert.equal(manifest[field], `https://github.com/IvoryCanvas/QAMap/blob/main/${file}`);
+    assert.ok((await readFile(path.join(root, file), "utf8")).trim(), `${field} must target a maintained document`);
+  }
+});
+
 test("directory packaging rejects development files and install configuration", async t => {
   for (const file of ["scripts/provider.mjs", "package.json", "package-lock.json", ".npmrc"]) {
     await t.test(file, async t => {

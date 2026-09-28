@@ -45,13 +45,19 @@ copies. Update the CLI version in the dedicated README when preparing a release.
 node scripts/directory-plugin.mjs --write
 pnpm plugin:check
 node --test test/directory-plugin.test.mjs
-claude plugin validate --strict plugins/claude
+claude plugin validate plugins/claude
 ```
 
 The normal CI plugin check rejects extra files, symbolic links, oversized files,
 missing icons, version mismatches and drift from the shared skill or policies.
 The npm smoke also checks that this directory-only copy stays out of the npm
 package. Do not add ignore rules to conceal files from the directory scanner.
+
+Claude Code 2.1.247 recognizes `displayName` but warns that the four directory
+link fields listed below are unknown and ignores them at runtime. The submission
+portal reads those fields. Local validation passes with these four warnings;
+`--strict` fails because it treats warnings as errors. Inspect the reported
+fields rather than treating other validation warnings as expected.
 
 Local validation and an isolated installation verify packaging, not directory
 approval. Review any remaining portal warnings and policy holds on their
@@ -60,6 +66,16 @@ of credential disclosure or a final rejection. Do not mark a credential as
 required merely because unrelated development files triggered an earlier scan.
 
 ## Submission Details
+
+The manifest sets `displayName` to `QAMap` while keeping the installation name
+`qamap`. Its `privacyPolicyUrl`, `termsOfServiceUrl`, `supportUrl` and
+`documentationUrl` point directly to the maintained public documents. After
+changing these fields, re-validate the source and check the name and links in
+Listing details; marking a section "Looks right" does not refresh its contents.
+
+Select only Claude Code under Listed on until the workflow has been tested on
+the other surfaces. The skill requires access to a local checkout and terminal;
+the presence of a listing is not proof of execution support in every app.
 
 Use the current manifest's version and description. For data handling, explain
 that the plugin reads the selected local repository, writes local reports and
