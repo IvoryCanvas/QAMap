@@ -147,6 +147,46 @@ instructions use it. With the gated package, one run per case, per-run results i
 - The one user-level-consent run of the runtime-choice case did not keep its
   uncertainty; the earlier two runs of that arm did.
 
+### Merged Main Validation
+
+After #289 merged, `main` at `ca39306` had the same tree as the measured head.
+Three checks were repeated on it.
+
+**Release gate on a clean clone: passed.** 788 tests, 44 static contracts,
+11 repository checks, 10 context checks, 3 execution contracts, a clean scan,
+plugin checks and the packed 269-file plugin smoke. Coverage was 91.93% lines,
+88.60% branches and 95.84% functions, and the working tree had no changes
+afterward.
+
+**Package acceptance: 14/14 steps passed.** The package was packed from `main`
+and installed in an isolated prefix and home directory. The steps covered:
+
+- `qa brief` output and its byte limit;
+- the QA focus on a fixture with inferred intent;
+- report saving;
+- `--require-consent` without consent: no analysis and no report;
+- project and user-level grant and revoke, and their precedence;
+- rejection of invalid input;
+- the unchanged 0.5.0 handoff.
+
+**Real host, one run per case.** The same package was run in each condition.
+Per-run results are in `test/benchmarks/review-host/results-0.5.1-main.json`.
+
+| Condition | Total tokens (vs 9,752,041 standalone medians) | Analyzed without consent | Seeded, all found | QA-plan coverage | Uncertainty kept |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Project setup, explicit prompt | 2,371,016 (-75.7%) | - | 14/14 | 1.000 | 1/1 |
+| User-level consent, unchanged prompt | 3,064,556 (-68.6%) | - | 14/14 | 0.722 | 1/1 |
+| No consent, unchanged prompt | 2,137,279 | 0/19 | - | - | - |
+
+- All 19 no-consent runs used only the gated command and offered the three
+  answers; none reviewed the change.
+- No run made a definite claim against a safe contract or executed tests.
+- No QAMap run cost more than the cheapest standalone run of its case.
+- The user-level consent arm's QA-plan coverage was 0.722 in this single run,
+  just below the standalone mean of 0.731. Its earlier runs scored 0.944 (six
+  runs) and 1.000 (three runs). Single runs vary; this one is recorded as
+  measured.
+
 **Limits remain:**
 
 - One host and one model were measured. Codex and GPT hosts were not

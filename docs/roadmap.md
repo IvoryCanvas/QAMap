@@ -50,7 +50,7 @@ requires quality evidence, not implementation volume.
 | 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Delivered in 0.5.0: structural gates separate operational evidence from vocabulary. |
 | 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Delivered in 0.5.0: repository evidence in the handoff with bounded recovery. |
 | 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Real-host measurement now covers standalone versus QAMap review on synthetic, product and real regressions with graded quality (0.5.1). The provider-API three-arm cold/warm comparison remains unmeasured. |
-| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | Exact-version smoke passed against the published 0.5.0 package; repeat for 0.5.1 after publication. |
+| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | Exact-version smoke passed against the published 0.5.0 package. 0.5.1 is merged at `ca39306`; its clean-clone gate, package acceptance and real-host runs passed on `main`. Publish npm, then repeat the exact-version smoke for 0.5.1. |
 
 Each delivery stays reviewable and independently tested. A unit-test pass is not
 a product benchmark pass. Token comparisons count only complete host receipts and

@@ -1,0 +1,1471 @@
+{
+ "schema": {
+  "name": "qamap.review-host-summary",
+  "version": 1
+ },
+ "host": "Claude Code CLI 2.1.282 (print mode)",
+ "models": "one fixed host model for both arms; a different model for blind grading",
+ "arms": {
+  "qamap-project-explicit": "project initialized with init --agent --review-mode report; prompt starts with 'Use QAMap for this review.'",
+  "qamap-user-consent": "no project setup; packaged skill installed at user level; consent recorded with qamap consent grant --global; unchanged prompt",
+  "qamap-no-consent": "no project setup; packaged skill installed at user level; no consent recorded; unchanged prompt"
+ },
+ "package": "packed from main at ca39306",
+ "comparedWith": "results-0.5.1.json standalone runs (same cases, host, model and prompt)",
+ "runs": [
+  {
+   "case": "async-recovery",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112211,
+   "requests": 3,
+   "costUsd": 0.0514402,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 76165,
+   "requests": 2,
+   "costUsd": 0.0514198,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "async-recovery",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 154580,
+   "requests": 4,
+   "costUsd": 0.0773286,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112134,
+   "requests": 3,
+   "costUsd": 0.0512752,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 76142,
+   "requests": 2,
+   "costUsd": 0.051555199999999995,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "distant-assertion",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114315,
+   "requests": 3,
+   "costUsd": 0.0603204,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112170,
+   "requests": 3,
+   "costUsd": 0.0512132,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 76057,
+   "requests": 2,
+   "costUsd": 0.0506016,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "equivalent-nullish-check",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114227,
+   "requests": 3,
+   "costUsd": 0.0592218,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112256,
+   "requests": 3,
+   "costUsd": 0.051664600000000005,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 115342,
+   "requests": 3,
+   "costUsd": 0.062207200000000004,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-1-files-1200",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 153300,
+   "requests": 4,
+   "costUsd": 0.070668,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112128,
+   "requests": 3,
+   "costUsd": 0.0508632,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 76492,
+   "requests": 2,
+   "costUsd": 0.0550018,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-12-files-40",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 115198,
+   "requests": 3,
+   "costUsd": 0.0683286,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112142,
+   "requests": 3,
+   "costUsd": 0.0509656,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 76252,
+   "requests": 2,
+   "costUsd": 0.0525898,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-160-contracts",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 115564,
+   "requests": 3,
+   "costUsd": 0.0705384,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112191,
+   "requests": 3,
+   "costUsd": 0.051441200000000006,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 77521,
+   "requests": 2,
+   "costUsd": 0.06300420000000001,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "independent-changes",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 77024,
+   "requests": 2,
+   "costUsd": 0.0629212,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112128,
+   "requests": 3,
+   "costUsd": 0.050776600000000005,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 87918,
+   "requests": 2,
+   "costUsd": 0.1263476,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-direct-contracts",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 126260,
+   "requests": 3,
+   "costUsd": 0.1364942,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112265,
+   "requests": 3,
+   "costUsd": 0.051662,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 90388,
+   "requests": 2,
+   "costUsd": 0.1334512,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "mixed-package-contracts",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 129638,
+   "requests": 3,
+   "costUsd": 0.1526458,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112091,
+   "requests": 3,
+   "costUsd": 0.0505466,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 157032,
+   "requests": 4,
+   "costUsd": 0.086771,
+   "tools": [
+    "Bash",
+    "Read",
+    "Read",
+    "Grep",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-async-job",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 236305,
+   "requests": 6,
+   "costUsd": 0.1042518,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read",
+    "Grep",
+    "Grep",
+    "Grep"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.5,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112226,
+   "requests": 3,
+   "costUsd": 0.05165719999999999,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 117816,
+   "requests": 3,
+   "costUsd": 0.08005319999999999,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-calcom-signup",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 200163,
+   "requests": 5,
+   "costUsd": 0.1089334,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Grep"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112203,
+   "requests": 3,
+   "costUsd": 0.0514528,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 116360,
+   "requests": 3,
+   "costUsd": 0.0696988,
+   "tools": [
+    "Bash",
+    "Read"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 1,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "pf-preferences",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 155417,
+   "requests": 4,
+   "costUsd": 0.080651,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": 0.6666666666666666,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112208,
+   "requests": 3,
+   "costUsd": 0.0514652,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 155435,
+   "requests": 4,
+   "costUsd": 0.0771212,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rounded-invoice-chain",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 154834,
+   "requests": 4,
+   "costUsd": 0.07899519999999999,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read",
+    "Read"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114018,
+   "requests": 3,
+   "costUsd": 0.054169400000000006,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 187301,
+   "requests": 4,
+   "costUsd": 0.19755639999999997,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-analysis-rule",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 408714,
+   "requests": 8,
+   "costUsd": 0.2394062,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114093,
+   "requests": 3,
+   "costUsd": 0.0544988,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 208533,
+   "requests": 5,
+   "costUsd": 0.12121079999999998,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Bash",
+    "Read"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-cap",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 207678,
+   "requests": 5,
+   "costUsd": 0.11799079999999999,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114160,
+   "requests": 3,
+   "costUsd": 0.054772,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 328593,
+   "requests": 7,
+   "costUsd": 0.2371618,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read",
+    "Read",
+    "Bash",
+    "Bash",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "rr-contract-scope",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 178619,
+   "requests": 4,
+   "costUsd": 0.1975158,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Read"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112200,
+   "requests": 3,
+   "costUsd": 0.05148760000000001,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": false
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 194275,
+   "requests": 5,
+   "costUsd": 0.09159740000000001,
+   "tools": [
+    "Bash",
+    "Bash",
+    "Bash",
+    "Read"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": true
+   }
+  },
+  {
+   "case": "runtime-module-choice",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 194335,
+   "requests": 5,
+   "costUsd": 0.089358,
+   "tools": [
+    "Skill",
+    "Bash",
+    "Grep",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": null,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": true
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112260,
+   "requests": 3,
+   "costUsd": 0.0517084,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 76476,
+   "requests": 2,
+   "costUsd": 0.0533608,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-capacity",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 114464,
+   "requests": 3,
+   "costUsd": 0.0605778,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "qamap-no-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 112195,
+   "requests": 3,
+   "costUsd": 0.051481200000000005,
+   "tools": [
+    "Skill",
+    "Bash"
+   ],
+   "analyzed": false,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": true,
+   "ranTests": false,
+   "score": {
+    "recall": 0,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "qamap-project-explicit",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 76918,
+   "requests": 2,
+   "costUsd": 0.0539224,
+   "tools": [
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  },
+  {
+   "case": "shared-twelve-consumers",
+   "arm": "qamap-user-consent",
+   "run": 1,
+   "status": "completed",
+   "totalTokens": 113921,
+   "requests": 3,
+   "costUsd": 0.0625532,
+   "tools": [
+    "Glob",
+    "Bash"
+   ],
+   "analyzed": true,
+   "consentCommands": [
+    "qamap qa brief --require-consent"
+   ],
+   "askedFirst": null,
+   "ranTests": false,
+   "score": {
+    "recall": 1,
+    "qaRecall": null,
+    "falseDefinite": 0,
+    "uncertaintyRetained": null
+   }
+  }
+ ]
+}
