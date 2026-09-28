@@ -1,5 +1,6 @@
 {
   "name": "qamap",
+  "displayName": "QAMap",
   "version": "0.5.1",
   "description": "Turn PR changes into traceable local QA decisions and optional automation handoffs without an LLM call.",
   "author": {
@@ -7,6 +8,10 @@
     "url": "https://github.com/IvoryCanvas"
   },
   "homepage": "https://github.com/IvoryCanvas/QAMap#readme",
+  "privacyPolicyUrl": "https://github.com/IvoryCanvas/QAMap/blob/main/PRIVACY.md",
+  "termsOfServiceUrl": "https://github.com/IvoryCanvas/QAMap/blob/main/TERMS.md",
+  "supportUrl": "https://github.com/IvoryCanvas/QAMap/blob/main/SUPPORT.md",
+  "documentationUrl": "https://github.com/IvoryCanvas/QAMap/blob/main/plugins/claude/README.md",
   "repository": "https://github.com/IvoryCanvas/QAMap",
   "license": "MIT",
   "keywords": [
