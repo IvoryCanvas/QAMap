@@ -1,0 +1,57 @@
+{
+  "schema": { "name": "qamap.external-review-protocol", "version": 1 },
+  "registered": "2026-09-28",
+  "seed": "qamap-external-review-v1",
+  "cacheShallowSince": "2026-01-01",
+  "fixtureHistoryDays": 90,
+  "repositories": [
+    { "slug": "documenso/documenso", "pool": "typescript" },
+    { "slug": "formbricks/formbricks", "pool": "typescript" },
+    { "slug": "excalidraw/excalidraw", "pool": "typescript" },
+    { "slug": "outline/outline", "pool": "typescript" },
+    { "slug": "twentyhq/twenty", "pool": "typescript" },
+    { "slug": "immich-app/immich", "pool": "typescript" },
+    { "slug": "vitejs/vite", "pool": "typescript" },
+    { "slug": "withastro/astro", "pool": "typescript" },
+    { "slug": "pydantic/pydantic", "pool": "python" },
+    { "slug": "langchain-ai/langchain", "pool": "python" },
+    { "slug": "go-gitea/gitea", "pool": "go" },
+    { "slug": "caddyserver/caddy", "pool": "go" }
+  ],
+  "eligibility": {
+    "window": ["2026-07-01", "2026-09-20"],
+    "minCommits": 20,
+    "minSquashShare": 0.8
+  },
+  "paths": {
+    "source": "\\.(ts|tsx|js|jsx|mjs|cjs|vue|svelte|astro|py|go)$",
+    "test": "(^|/)(__tests__|__mocks__|tests?|spec|e2e|fixtures?|testdata)/|\\.(test|spec)\\.[a-z]+$|_test\\.go$|(^|/)test_[^/]+\\.py$",
+    "ignoredForSize": "(^|/)(package-lock\\.json|pnpm-lock\\.yaml|yarn\\.lock|bun\\.lockb?|go\\.sum|poetry\\.lock|uv\\.lock|Cargo\\.lock)$|\\.snap$|\\.min\\.(js|css)$|(^|/)(dist|vendor|locales?|i18n|translations?)/"
+  },
+  "excludedSubject": "^(revert\\b|chore\\((deps|release)|build\\(deps|docs?[(:!]|i18n|l10n|translation|release\\b|version packages|bump\\b)|\\[skip ci\\]",
+  "botAuthor": "\\[bot\\]|dependabot|renovate|github-actions",
+  "study1": {
+    "introWindow": ["2026-07-01", "2026-09-20"],
+    "fallbackIntroStart": "2026-04-01",
+    "minimumCases": 8,
+    "fixSubject": "\\bfix(e[sd])?\\b|\\bfix\\(",
+    "causeBefore": "(regress\\w*|introduced|caused|broke\\w*|broken)\\b[^#\\n]{0,60}#(\\d+)",
+    "causeAfter": "#(\\d+)[^#\\n]{0,60}\\b(regress\\w*|introduced|broke\\w*)",
+    "maxFiles": 40,
+    "maxLines": 2000,
+    "perRepository": 2,
+    "total": 12,
+    "runsPerArm": 2
+  },
+  "study2": {
+    "window": ["2026-08-01", "2026-09-20"],
+    "minFiles": 1,
+    "maxFiles": 30,
+    "minLines": 20,
+    "maxLines": 1500,
+    "perRepository": 2,
+    "runsPerArm": 1
+  },
+  "host": { "maxTurns": 100, "timeoutMinutes": 30, "concurrency": 4, "arms": ["standalone", "qamap"] },
+  "package": "@ivorycanvas/qamap@0.5.1"
+}

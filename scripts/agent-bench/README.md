@@ -52,6 +52,11 @@ See [Benchmarking](../../docs/benchmarking.md#compare-a-review-host-with-and-wit
 for the protocol and commands. Real runs incur provider charges; `--dry-run`
 only materializes fixtures.
 
+`external-review.mjs` runs the same comparison on public pull requests chosen
+by a fixed rule. It covers regressions that the project fixed later, and a
+seeded random sample. The rules were registered before selection in
+[the external protocol](../../test/benchmarks/review-host/external/PROTOCOL.md).
+
 ## Local CLI Experiment Guard
 
 `codex-session-guard.mjs` is a runner helper for separately controlled local CLI

@@ -133,12 +133,12 @@ export function toolArguments(disableSkills = false) {
   return ["--allowedTools", ...allowed, "--disallowedTools", ...disallowed];
 }
 
-function runHost({ cwd, home, pathPrefix, prompt, model, transcript, timeoutMs, disableSkills }) {
+export function runHost({ cwd, home, pathPrefix, prompt, model, transcript, timeoutMs, disableSkills, maxTurns = 60 }) {
   const env = { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: "/dev/null" };
   for (const key of hostEnvironment) delete env[key];
   if (pathPrefix) env.PATH = `${pathPrefix}${path.delimiter}${process.env.PATH}`;
   const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", ...(model ? ["--model", model] : []), "--no-session-persistence",
-    "--strict-mcp-config", "--max-turns", "60", ...toolArguments(disableSkills)];
+    "--strict-mcp-config", "--max-turns", String(maxTurns), ...toolArguments(disableSkills)];
   return new Promise((resolve) => {
     const started = Date.now();
     const child = spawn("claude", args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
