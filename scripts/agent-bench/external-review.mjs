@@ -4,6 +4,7 @@
 //   node scripts/agent-bench/external-review.mjs select --cache <dir> [--out cases.json]
 //   node scripts/agent-bench/external-review.mjs run --cache <dir> --engine <prefix> --out <dir> [--study 1|2] [--case <id>] [--model <id>] [--dry-run]
 //   node scripts/agent-bench/external-review.mjs judge --cache <dir> --runs <dir> [--model <id>]
+//   node scripts/agent-bench/external-review.mjs reanswer --runs <dir>
 //   node scripts/agent-bench/external-review.mjs summary --runs <dir> --summary <file.json>
 //
 // `select` needs Git access to github.com. `run` and `judge` start the Claude Code CLI;
@@ -28,7 +29,8 @@ export async function loadProtocol() {
   return JSON.parse(await fs.readFile(path.join(directory, "protocol.json"), "utf8"));
 }
 
-const git = (cwd, args, options = {}) => execFileSync("git", args, { cwd, maxBuffer: 512 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], ...options }).toString();
+// Standard input is an empty pipe, so no command can read unexpected input.
+const git = (cwd, args, options = {}) => execFileSync("git", args, { cwd, maxBuffer: 512 * 1024 * 1024, input: "", stdio: ["pipe", "pipe", "pipe"], ...options }).toString();
 const order = (seed, ...parts) => createHash("sha256").update([seed, ...parts].join(":")).digest("hex");
 const cachePath = (cache, slug) => path.join(cache, slug.replace("/", "__"));
 const inWindow = (date, [start, end]) => date >= `${start}T00:00:00Z` && date <= `${end}T23:59:59Z`;
@@ -172,7 +174,7 @@ export async function select({ cache, out }) {
 }
 
 function gitEnvironment(home) {
-  return { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
+  return { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"), GIT_CONFIG_NOSYSTEM: "1",
     GIT_COMMITTER_NAME: "Fixture Author", GIT_COMMITTER_EMAIL: "author@fixture.test", GIT_COMMITTER_DATE: "2026-09-22T00:00:00Z" };
 }
 
@@ -189,7 +191,7 @@ export async function materialize(entry, { cache, workspace, home, engineBin, ar
   run("fetch", "-q", "--no-tags", `--shallow-since=${since}`, cachePath(cache, entry.repository), entry.commit);
   run("checkout", "-q", "-B", "main", entry.parent);
   if (arm === "qamap") {
-    execFileSync(path.join(engineBin, "qamap"), ["init", "--agent", "--review-mode", "report"], { cwd: repo, env, stdio: ["ignore", "pipe", "pipe"] });
+    execFileSync(path.join(engineBin, "qamap"), ["init", "--agent", "--review-mode", "report"], { cwd: repo, env, input: "", stdio: ["pipe", "pipe", "pipe"] });
     run("add", "-A");
     if (run("status", "--porcelain").trim()) run("-c", "user.name=Fixture Author", "-c", "user.email=author@fixture.test", "commit", "-q", "-m", "chore: add QAMap agent setup");
   }
@@ -197,7 +199,8 @@ export async function materialize(entry, { cache, workspace, home, engineBin, ar
   run("cherry-pick", "--allow-empty", "--keep-redundant-commits", entry.commit);
   await fs.rm(path.join(repo, ".git", "FETCH_HEAD"), { force: true });
   run("reflog", "expire", "--expire=now", "--all");
-  run("gc", "-q", "--prune=now");
+  // Pruning only drops the unreferenced original commit, which matches the reviewed change.
+  try { run("gc", "-q", "--prune=now"); } catch { /* the reachability check below still applies */ }
   const later = run("rev-list", "--all").split("\n").filter(Boolean);
   if (later.includes(entry.fix?.commit)) throw new Error("fixture contains the later fix");
   return { repo, base: run("rev-parse", "main").trim(), head: run("rev-parse", "HEAD").trim() };
@@ -244,7 +247,7 @@ async function runCases({ cache, engine, out, study, only, model, dryRun, casesF
         } else {
           const host = await runHost({ cwd: repo, home, pathPrefix: arm === "qamap" ? engineBin : undefined, prompt, model,
             transcript: path.join(outDir, "transcript.jsonl"), timeoutMs: protocol.host.timeoutMinutes * 60_000, maxTurns: protocol.host.maxTurns });
-          const summary = summarizeHostRun(host.stdout);
+          const summary = { ...summarizeHostRun(host.stdout), answer: sessionAnswer(host.stdout) };
           const status = host.code === 0 && summary.completed ? "completed" : "stopped";
           await fs.writeFile(path.join(outDir, "result.json"), JSON.stringify({ ...record, status, exitCode: host.code, wallMs: host.wallMs,
             workingTreeChanged: git(repo, ["status", "--porcelain"]).length > 0, stderrTail: host.stderr, commands: bashCommands(host.stdout), ...summary }, null, 2));
@@ -264,6 +267,19 @@ async function runCases({ cache, engine, out, study, only, model, dryRun, casesF
   await Promise.all(Array.from({ length: protocol.host.concurrency }, worker));
 }
 
+// A host session can end more than one turn: a background task that finishes after the
+// review re-invokes the model, and the last turn may only acknowledge it. The answer is
+// every turn's final text in order; usage is already cumulative in the last receipt.
+export function sessionAnswer(stdout) {
+  const texts = [];
+  for (const line of stdout.split("\n")) {
+    let event;
+    try { event = JSON.parse(line); } catch { continue; }
+    if (event.type === "result" && typeof event.result === "string" && event.result.trim()) texts.push(event.result.trim());
+  }
+  return texts.join("\n\n");
+}
+
 export function bashCommands(stdout) {
   const commands = [];
   for (const line of stdout.split("\n")) {
@@ -276,15 +292,24 @@ export function bashCommands(stdout) {
 }
 
 // A segment counts when its command word starts a test runner or an install, not when a
-// test file name is only passed to grep or find.
+// test file name is only passed to grep or find. Quoted text is removed first, so a `|`
+// inside a grep pattern does not start a segment; `test -f` is the shell builtin.
+const segments = (command) => command.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, "''").split(/&&|\|\||;|\||\n/).map((segment) => segment.trim().replace(/^(?:\S+=\S+\s+)+/, ""));
+const testRunner = /^(?:(?:npx|pnpm(?:\s+(?:exec|dlx))?|yarn|bunx?|npm(?:\s+exec)?)\s+(?:run\s+)?(?:test|vitest|jest|playwright|mocha|ava)\b|(?:vitest|jest|mocha|ava|pytest)\b|playwright\s+test\b|node\s+--test\b|python3?\s+-m\s+(?:pytest|unittest)\b|(?:uv|poetry)\s+run\s+(?:pytest|python3?\s+-m\s+pytest)\b|go\s+test\b|make\s+test\b|cargo\s+test\b|(?:npm|pnpm|yarn|bun)\s+(?:i|install|ci|add)\b|pip3?\s+install\b|uv\s+(?:sync|pip\s+install)\b|poetry\s+install\b)/;
+
 export function executedTests(commands) {
-  const runner = /^(?:\S+=\S+\s+)*(?:npx\s+|pnpm\s+(?:exec\s+|dlx\s+)?|yarn\s+|bunx?\s+|npm\s+(?:exec\s+)?)?(?:(?:run\s+)?(?:test|vitest|jest|playwright|mocha|ava)\b|node\s+--test\b|pytest\b|python3?\s+-m\s+(?:pytest|unittest)\b|go\s+test\b|make\s+test\b|(?:npm|pnpm|yarn|bun)\s+(?:i|install|ci|add)\b|pip3?\s+install\b|uv\s+(?:sync|pip|run)\b|poetry\s+(?:install|run)\b)/;
-  return commands.some((command) => command.split(/&&|\|\||;|\||\n/).some((segment) => runner.test(segment.trim().replace(/^cd\s+\S+\s*$/, ""))));
+  return commands.some((command) => segments(command).some((segment) => testRunner.test(segment)));
+}
+
+// QAMap counts only as a command word, not as part of a temporary directory name.
+export function ranQamap(commands) {
+  return commands.some((command) => segments(command).some((segment) =>
+    /^(?:(?:npx|pnpm\s+dlx|bunx)\s+(?:-{1,2}\S+\s+)*)?(?:\S*\/)?(?:@ivorycanvas\/)?qamap(?:@\S+)?\s+[a-z]/.test(segment)));
 }
 
 async function host(prompt, { model, cwd, tools }) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-external-judge-"));
-  const env = { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: "/dev/null" };
+  const env = { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"), GIT_CONFIG_NOSYSTEM: "1" };
   for (const key of Object.keys(env)) if (/^CLAUDE_CODE_(?:SESSION_ID|REMOTE_SESSION_ID|MESSAGING_|CHILD_SESSION|SYNC_SESSION_REFS|TEE_SDK_STDOUT)|^CLAUDECODE$|^CLAUDE_PID$|^GH_TOKEN$|^GITHUB_TOKEN$/.test(key)) delete env[key];
   const toolArgs = tools
     ? ["--allowedTools", "Read", "Grep", "Glob", "Bash(git diff:*)", "Bash(git show:*)", "Bash(git log:*)",
@@ -293,7 +318,8 @@ async function host(prompt, { model, cwd, tools }) {
   try {
     const stdout = await new Promise((resolve) => {
       const child = spawn("claude", ["-p", prompt, "--output-format", "json", ...(model ? ["--model", model] : []), "--no-session-persistence",
-        "--strict-mcp-config", ...toolArgs], { cwd: cwd ?? home, env, stdio: ["ignore", "pipe", "pipe"] });
+        "--strict-mcp-config", ...toolArgs], { cwd: cwd ?? home, env, stdio: ["pipe", "pipe", "pipe"] });
+      child.stdin.end();
       let out = "";
       child.stdout.on("data", (chunk) => { out += chunk; });
       child.on("close", () => resolve(out));
@@ -370,6 +396,29 @@ ${second}
 >>>`;
 }
 
+// Rebuilds stored answers from transcripts and drops grades of answers that changed.
+export async function reanswer(runs) {
+  const changed = [];
+  for (const entry of await fs.readdir(runs, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const directory = path.join(runs, entry.name);
+    const stdout = await fs.readFile(path.join(directory, "transcript.jsonl"), "utf8").catch(() => undefined);
+    const result = await readRun(runs, entry.name);
+    if (stdout === undefined || !result) continue;
+    const answer = sessionAnswer(stdout);
+    if (answer === result.answer) continue;
+    await fs.writeFile(path.join(directory, "result.json"), JSON.stringify({ ...result, answer }, null, 2));
+    await fs.writeFile(path.join(directory, "answer.md"), answer);
+    await fs.rm(path.join(directory, "judge.json"), { force: true });
+    changed.push(entry.name);
+  }
+  for (const label of changed) {
+    const id = label.slice(0, label.indexOf("."));
+    await fs.rm(path.join(runs, `${id}.pair.json`), { force: true });
+  }
+  return changed;
+}
+
 const readRun = (runs, label) => fs.readFile(path.join(runs, label, "result.json"), "utf8").then(JSON.parse, () => undefined);
 const answerOf = (result) => (result?.status === "completed" ? redactArm(result.answer ?? "") : "");
 
@@ -441,9 +490,12 @@ export async function summarize({ runs, summary, casesFile }) {
         if (!result) continue;
         const graded = entry.study === 1 ? await fs.readFile(path.join(runs, label, "judge.json"), "utf8").then(JSON.parse, () => undefined) : undefined;
         const commands = result.commands ?? [];
+        const transcript = await fs.readFile(path.join(runs, label, "transcript.jsonl"), "utf8").catch(() => "");
         const record = { case: entry.id, study: entry.study, arm, run, status: result.status, totalTokens: result.totalTokens, requests: result.requests,
           uncachedInputTokens: result.uncachedInputTokens, costUsd: result.costUsd, wallMs: result.wallMs, turns: result.turns,
-          executedTests: executedTests(commands), usedQamap: commands.some((command) => /\bqamap\b/.test(command)),
+          executedTests: executedTests(commands), usedQamap: ranQamap(commands),
+          movedToBackground: transcript.includes("was moved to the background"),
+          endedTurns: transcript.split("\n").filter((line) => { try { return JSON.parse(line).type === "result"; } catch { return false; } }).length,
           verdict: graded?.verdict?.verdict ?? null };
         records.push(record);
         runRecords.push(record);
@@ -486,11 +538,14 @@ async function main() {
   } else if (command === "judge") {
     if (!values.cache || !values.runs) throw new Error("--cache and --runs are required");
     await judge({ cache: path.resolve(values.cache), runs: path.resolve(values.runs), model: values.model, casesFile: values.cases });
+  } else if (command === "reanswer") {
+    if (!values.runs) throw new Error("--runs is required");
+    process.stdout.write(`${JSON.stringify(await reanswer(path.resolve(values.runs)))}\n`);
   } else if (command === "summary") {
     if (!values.runs || !values.summary) throw new Error("--runs and --summary are required");
     await summarize({ runs: path.resolve(values.runs), summary: values.summary, casesFile: values.cases });
   } else {
-    throw new Error("Usage: external-review.mjs select|run|judge|summary");
+    throw new Error("Usage: external-review.mjs select|run|judge|reanswer|summary");
   }
 }
 

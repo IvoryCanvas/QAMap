@@ -4,7 +4,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { causes, changeSize, executedTests, loadProtocol, materialize, pairPrompt, parseLog } from "../scripts/agent-bench/external-review.mjs";
+import { causes, changeSize, executedTests, loadProtocol, materialize, pairPrompt, parseLog, ranQamap, sessionAnswer } from "../scripts/agent-bench/external-review.mjs";
 
 const protocol = await loadProtocol();
 const commit = (subject, message = "") => ({ subject, message: `${subject}\n\n${message}` });
@@ -42,6 +42,17 @@ test("test execution counts a command word, not a test file passed to grep or fi
   assert.equal(executedTests(["CI=1 npx vitest run"]), true);
   assert.equal(executedTests(["python -m pytest -q"]), true);
   assert.equal(executedTests(["npm install"]), true);
+  assert.equal(executedTests(["test -f ~/.claude/CLAUDE.md && echo exists"]), false);
+  assert.equal(executedTests(['grep -n "raises_for_ref\\|pytest.raises(Undefined" tests/test_tools.py']), false);
+  assert.equal(executedTests(["GITEA_UNSAFE=true go test ./services/..."]), true);
+  assert.equal(executedTests(["pip install -q pytest-timeout"]), true);
+});
+
+test("QAMap use counts the command word, not a temporary directory named after it", () => {
+  assert.equal(ranQamap(["qamap qa brief --require-consent"]), true);
+  assert.equal(ranQamap(["npx --yes @ivorycanvas/qamap@0.5.1 qa brief"]), true);
+  assert.equal(ranQamap(["git diff main...HEAD > /tmp/claude-0/-tmp-qamap-external-x/diff.txt"]), false);
+  assert.equal(ranQamap(["grep -rn foo /tmp/qamap-external-abc/repo/src"]), false);
 });
 
 test("pairwise grading keeps both reviews verbatim", () => {
@@ -55,7 +66,7 @@ test("a fixture holds the reviewed change and nothing merged after it", async ()
   try {
     const source = path.join(directory, "source");
     await fs.mkdir(source);
-    const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null", GIT_AUTHOR_NAME: "Maintainer",
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: path.join(directory, "gitconfig"), GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "Maintainer",
       GIT_AUTHOR_EMAIL: "maintainer@example.test", GIT_COMMITTER_NAME: "Maintainer", GIT_COMMITTER_EMAIL: "maintainer@example.test" };
     const git = (...args) => execFileSync("git", args, { cwd: source, env }).toString().trim();
     const change = async (file, text, subject, date) => {
@@ -92,4 +103,14 @@ test("a fixture holds the reviewed change and nothing merged after it", async ()
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
+});
+
+test("a session answer keeps every ended turn, so a late acknowledgement cannot replace the review", () => {
+  const stdout = [
+    JSON.stringify({ type: "result", subtype: "success", result: "Waiting for the report." }),
+    JSON.stringify({ type: "assistant", message: { content: [] } }),
+    JSON.stringify({ type: "result", subtype: "success", result: "## Review\nFinding 1" }),
+    JSON.stringify({ type: "result", subtype: "success", result: "That monitor was a leftover." }),
+  ].join("\n");
+  assert.equal(sessionAnswer(stdout), "Waiting for the report.\n\n## Review\nFinding 1\n\nThat monitor was a leftover.");
 });
