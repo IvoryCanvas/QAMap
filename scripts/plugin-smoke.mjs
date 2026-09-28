@@ -53,6 +53,8 @@ try {
   const packResult = JSON.parse(packed.stdout)[0];
   const tarball = path.join(packDirectory, packResult.filename);
   const packedFiles = new Set(packResult.files.map((entry) => entry.path));
+  assert.ok([...packedFiles].every(file => !file.startsWith("plugins/")),
+    "directory-only plugin copies must not enter the npm package");
   for (const required of [
     ".codex-plugin/plugin.json",
     "skills/qamap-pr-qa/SKILL.md",

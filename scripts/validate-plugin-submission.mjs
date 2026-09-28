@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { checkDirectoryPlugin } from "./directory-plugin.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -159,6 +160,9 @@ assert.doesNotMatch(skill, /@ivorycanvas\/qamap@latest/);
 assert.doesNotMatch(skill, /default markdown report is written for people/i);
 assert.match(skill, /does not upload source code or make another LLM call/i);
 assert.match(skill, /calling agent still uses its own model tokens/i);
+
+const directoryPlugin = await checkDirectoryPlugin(repositoryRoot);
+console.log(`Directory plugin valid: ${directoryPlugin.path}, ${directoryPlugin.files} files.`);
 
 console.log(
   `Plugin submission metadata valid: ${submission.positiveTests.length} positive, `

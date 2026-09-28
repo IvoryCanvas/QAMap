@@ -32,6 +32,7 @@ The first run does not require configuration.
 | --- | --- |
 | Compact agent JSON contract | [Agent format](agent-format.md) |
 | OpenAI skills-only plugin | [Plugin submission](plugin-submission.md) |
+| Claude directory package | [Claude submission](claude-plugin-submission.md) |
 | GitHub Actions and PR comments | [GitHub Action](github-action.md) |
 | Generated E2E and checklist examples | [E2E output examples](e2e-output-examples.md) |
 | Domain-neutral adoption boundaries | [Ecosystem](ecosystem.md) |
