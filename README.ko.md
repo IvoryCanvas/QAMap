@@ -48,7 +48,7 @@ npx --yes @ivorycanvas/qamap@latest qa
 
 ### Claude Code 플러그인
 
-심사가 승인되었습니다. 실제 공개 여부와 버전은 디렉터리에서 확인하세요.
+Claude Code용 플러그인이 디렉터리에 공개되었습니다.
 [Claude Code 설치 가이드](docs/ko/claude-code.md)에서 플러그인 설치,
 별도로 필요한 CLI와 첫 사용 동의 절차를 확인할 수 있습니다.
 

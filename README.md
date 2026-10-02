@@ -49,7 +49,7 @@ The host needs access to the local repository and terminal.
 
 ### Claude Code Plugin
 
-The submission is approved; confirm publication and version in the directory.
+QAMap is published in the Claude directory for Claude Code.
 The [Claude Code setup guide](docs/claude-code.md) covers plugin installation,
 the separately required CLI, and first-use consent.
 

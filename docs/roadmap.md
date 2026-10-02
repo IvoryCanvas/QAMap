@@ -45,9 +45,10 @@ agent path with one bounded [review brief](agent-brief.md) and records the
 measured comparison in its [release record](releases/0.5.1.md). Readiness still
 requires quality evidence, not implementation volume.
 
-The Claude Code submission was confirmed approved on 2026-10-02. Approval is
-not a public-installation receipt. [Claude setup](claude-code.md) explains how to
-check availability; npm, OpenAI and Claude versions remain independent.
+Claude Code publication was confirmed in the management portal on 2026-10-02.
+[Claude setup](claude-code.md) explains installation; publication alone does not
+establish successful use on every machine. npm, OpenAI and Claude versions
+remain independent.
 
 #### Delivery Status
 

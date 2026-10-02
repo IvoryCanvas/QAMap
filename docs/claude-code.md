@@ -9,15 +9,16 @@ cannot run this workflow. Support on Cowork or ordinary Claude chat is not claim
 
 ## Install The Plugin
 
-The maintainer confirmed approval of the Claude Code submission on 2026-10-02.
-Approval does not establish that a version is published. Check the public listing
-for availability, publisher **IvoryCanvas**, support for **Claude Code**, and version.
+The management portal showed the Claude Code plugin as published on 2026-10-02.
+Check the public listing for publisher **IvoryCanvas**, support for **Claude Code**
+and the served version. Publication does not establish a successful installation
+on every user's machine.
 
 1. Open the [Claude plugin directory](https://claude.com/marketplace/plugins) and
    search for **QAMap**.
 2. Use the installation action shown by that listing. If the listing is not yet
-   visible, use the project setup below instead; do not use a submission-management
-   URL as an installation link.
+   visible, refresh after directory updates propagate or use the project setup
+   below instead; do not use a submission-management URL as an installation link.
 3. Confirm that the plugin is enabled in Claude Code. In an interactive session,
    `/plugin` shows installed plugins. Account-enabled plugins sync into signed-in
    terminal sessions on Claude Code 2.1.273 or newer; this is a separate source

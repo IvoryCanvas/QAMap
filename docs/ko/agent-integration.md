@@ -82,8 +82,8 @@ ChatGPT 또는 Codex의 **Plugins**에서 **QAMap**을 검색하고 **+**를 누
 
 ## Claude Code 플러그인으로 설치하기
 
-Claude Code 제출은 2026-10-02에 승인 사실이 확인되었습니다. 승인만으로
-공개 완료를 판단하지는 않습니다. [Claude Code 설치 가이드](claude-code.md)에서
+Claude Code 플러그인은 2026-10-02에 관리 화면에서 공개 완료를 확인했습니다.
+[Claude Code 설치 가이드](claude-code.md)에서
 공개 목록 확인, 별도 CLI 설치와 첫 검수 요청을 순서대로 확인하세요.
 지원 안내는 로컬 저장소와 터미널을 사용할 수 있는 Claude Code에 한정합니다.
 

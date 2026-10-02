@@ -20,7 +20,7 @@ What user flow did this PR touch, what should be tested, and what evidence is mi
 | Path | Setup |
 | --- | --- |
 | ChatGPT or Codex plugin | Use the [public OpenAI listing](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629) on a host with repository and terminal access. |
-| Claude Code plugin | Follow [Claude Code setup](claude-code.md); the approved submission and public installation are separate states. |
+| Claude Code plugin | Use the published plugin with the [Claude Code setup guide](claude-code.md). |
 | Project skill | Use `qamap init --agent .` as described below; no directory install is needed. |
 
 Installing a skill or plugin does not install the CLI automatically or grant
@@ -170,8 +170,8 @@ pnpm plugin:smoke
 
 Public directory availability is not implied by a manifest or approval alone.
 QAMap is [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629).
-The Claude Code submission was confirmed approved on 2026-10-02; consult its
-public listing for installation availability and version. Neither directory is
+Claude Code publication was confirmed in the management portal on 2026-10-02;
+consult the public listing for the served version. Neither directory is
 updated by npm publication. `qamap init --agent` and portable skill installation
 remain vendor-neutral alternatives. Maintainer procedures are in
 [OpenAI submission](plugin-submission.md) and
