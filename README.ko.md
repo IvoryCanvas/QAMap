@@ -23,7 +23,7 @@ LLM을 호출하지는 않습니다.
 
 ## 설치하고 실행하기
 
-npm 패키지와 플러그인은 별도로 업데이트됩니다. 0.5.1의 검수 브리프와 실측 토큰
+npm 패키지, OpenAI 플러그인, Claude 플러그인은 별도로 업데이트됩니다. 0.5.1의 검수 브리프와 실측 토큰
 결과는 [릴리즈 문서](docs/releases/0.5.1.md)에서 확인할 수 있습니다.
 
 ### 로컬 CLI (권장)
@@ -40,17 +40,24 @@ npx --yes @ivorycanvas/qamap@latest qa
 
 ### ChatGPT와 Codex 플러그인
 
-PR 리뷰나 테스트 계획을 세울 때 에이전트가 같은 로컬 분석을 실행하도록
-하려면 공개 플러그인을 설치하세요.
-
 [![OpenAI 플러그인 디렉터리에서 QAMap 설치](docs/assets/openai-plugin-directory-badge.svg)](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629)
 
 [플러그인 설치 방법](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
 
-호스트 에이전트는 자체 모델과 권한을 사용합니다. QAMap은 그 과정에서
-저장소를 로컬의 일관된 규칙으로 분석하는 역할을 맡습니다.
-0.5.1부터 에이전트는 diff, 검색, 파일 읽기를 직접 반복하지 않고 한 번에 받은
-[검수 브리프](docs/ko/agent-brief.md)(`qamap qa brief`)로 검수합니다.
+사용하는 앱에서 로컬 저장소와 터미널에 접근할 수 있어야 합니다.
+
+### Claude Code 플러그인
+
+Claude Code용 플러그인이 디렉터리에 공개되었습니다.
+[Claude Code 설치 가이드](docs/ko/claude-code.md)에서 플러그인 설치,
+별도로 필요한 CLI와 첫 사용 동의 절차를 확인할 수 있습니다.
+
+설정을 마치면 **"이 PR에 버그가 없는지 확인해줘"**라고 요청할 수 있습니다.
+선택한 방식이 없으면 스킬이 QAMap 사용 여부를 묻습니다. 설치만으로 분석이나
+테스트 실행에 동의한 것으로 보지는 않습니다.
+
+**토큰 사용:** QAMap의 로컬 분석은 모델을 호출하지 않습니다. 다만 에이전트가
+실행을 요청하고 결과를 해석할 때는 모델 토큰을 사용하며, 절감을 보장하지는 않습니다.
 
 ## 결과 읽는 방법
 
@@ -105,6 +112,7 @@ export 연결에서 관련 테스트와 등록 지점의 후보를 찾습니다.
 | 브랜치 하나를 처음 분석하기 | [한국어 빠른 시작](docs/ko/quickstart.md) |
 | 팀에서 반복해서 사용하기 | [도입 가이드](docs/adoption.md) |
 | 에이전트와 함께 사용하기 | [한국어 에이전트 연동](docs/ko/agent-integration.md) |
+| Claude Code 플러그인 설치하기 | [Claude Code 설치 가이드](docs/ko/claude-code.md) |
 | 전체 명령 확인하기 | [명령어 안내](docs/commands.md) |
 | 벤치마크 근거 확인하기 | [벤치마크](docs/benchmarking.md) |
 

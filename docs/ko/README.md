@@ -11,7 +11,8 @@ QAMap을 사용하는 데 필요한 내용을 한국어로 정리했습니다. �
 | 하고 싶은 일 | 문서 |
 | --- | --- |
 | 설치하지 않고 한 번 실행해 보기 | [빠른 시작](quickstart.md) |
-| Codex, ChatGPT 또는 다른 에이전트에서 사용하기 | [에이전트 연동](agent-integration.md) |
+| Codex, ChatGPT, Claude Code 또는 다른 에이전트에서 사용하기 | [에이전트 연동](agent-integration.md) |
+| Claude Code 플러그인 설치하기 | [Claude Code 설치 가이드](claude-code.md) |
 | 반복되는 오해를 저장소별 QA 기준으로 보완하기 | [Manifest 안내](manifest.md) |
 | 저장소에서 어디까지 탐색했는지 확인하기 | [탐색 범위 안내](repository-discovery.md) |
 | 제품 개요부터 다시 보기 | [한국어 README](../../README.ko.md) |
@@ -21,8 +22,12 @@ QAMap을 사용하는 데 필요한 내용을 한국어로 정리했습니다. �
 ```sh
 npx --yes @ivorycanvas/qamap@latest qa
 npx --yes @ivorycanvas/qamap@latest qa --format markdown
-npx --yes @ivorycanvas/qamap@latest qa --format agent
+npx --yes @ivorycanvas/qamap@latest qa brief --require-consent
 ```
+
+`qa`는 사람이 직접 실행하는 정적 분석입니다. 에이전트의 기본 검수는
+`qa brief`를 사용하며, 동의가 없으면 분석하지 않고 안내만 반환합니다.
+구조화된 JSON이 필요한 연동에서는 `qa --format agent`를 사용할 수 있습니다.
 
 | 더 자세히 보고 싶은 내용 | 영문 기술 문서 |
 | --- | --- |

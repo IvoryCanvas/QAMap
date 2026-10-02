@@ -53,6 +53,10 @@ for example `N = 0..9, 11..159`. No member is sampled or dropped.
 that the user chose QAMap review for this project; `--review-mode ask` restores
 the offer-first behavior. Installation alone is not consent.
 
+Directory plugins supply the same skill without requiring project setup.
+Follow [Claude Code setup](claude-code.md) or [agent integration](agent-skill.md)
+for installation; the matching CLI is separate from the plugin.
+
 Agents ask before running QAMap unless the user recorded consent. When asked,
 the user can answer this time only, always, or not now; "always" is recorded with
 `qamap consent grant` for the project or `qamap consent grant --global` for every

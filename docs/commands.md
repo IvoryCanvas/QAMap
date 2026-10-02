@@ -3,7 +3,8 @@
 Every QAMap command, with what it produces and when to reach for it. For the shortest path, see the [README](../README.md) quick start; for rollout order, see [adoption](adoption.md).
 
 > **This is a lookup page.** Most users need only `qamap qa`, `qamap qa run`,
-> and `qamap e2e draft --dry-run`. Search for a command name instead of reading
+> and `qamap e2e draft --dry-run`; agents start with `qamap qa brief`.
+> Search for a command name instead of reading
 > this document from top to bottom.
 
 `qamap --help` intentionally shows only that core workflow. Use
@@ -28,7 +29,14 @@ pnpm exec qamap e2e draft . --base origin/main --head HEAD --dry-run
 pnpm exec qamap init --scripts .
 ```
 
-Use `npx --yes @ivorycanvas/qamap@latest ...` for one-off human runs without installing QAMap into the target repository. Packaged agent skills use an explicit `npm exec --package` form so they do not invoke the target repository's package manager or Corepack metadata flow.
+Use `npx --yes @ivorycanvas/qamap@latest ...` for one-off human runs without
+installing QAMap into the target repository. The 0.5.1 packaged review skill uses
+the matching installed `qamap` binary. If it is missing or outdated, the skill
+reports a blocker; it does not install or upgrade without permission. Explicit
+one-off commands in the advanced workflow use `npm exec --package` to avoid
+the target repository's package manager or Corepack metadata flow.
+See [agent integration](agent-skill.md) or [Claude Code setup](claude-code.md)
+for plugin installation and the separately required CLI.
 
 `--base` is optional. QAMap resolves it from an explicit flag, CI pull-request metadata, `branch.<name>.qamap-base` or `qamap.base` Git config, and finally the nearest long-lived branch in local Git history. Reports include the selected source and reason. If multiple long-lived refs point to the same commit, they are reported as equivalent rather than presented as separately proven PR metadata.
 
@@ -97,6 +105,11 @@ behind removed lines, QA focus, and unknowns. The base is auto-selected unless
 `--base` is given. The full report is saved as with `qa report`, and execution
 stays `not-run`. See [the review brief](agent-brief.md).
 
+When invoked by an agent, use `qamap qa brief --require-consent` unless the user
+explicitly requested QAMap or consented to this review. Missing consent returns
+an offer without analysis. The local engine makes no model call; the agent's
+invocation and interpretation still use model tokens.
+
 ### Choose Whether Agents Ask First
 
 By default an agent offers QAMap and waits for an answer before each review.
@@ -105,7 +118,8 @@ To let agents run it without asking, record consent (0.5.1 or newer):
 ```sh
 qamap consent grant            # this project: edits QAMap's section of AGENTS.md
 qamap consent grant --global   # every repository: Claude Code and Codex user instructions
-qamap consent revoke [--global]
+qamap consent revoke           # this project: ask before each review
+qamap consent revoke --global  # remove the user-level choice
 qamap consent status
 ```
 

@@ -14,11 +14,36 @@ Start with the PR QA draft on a changed branch — no manifest, no config:
 npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD
 ```
 
-For coding agents, request the compact machine-readable summary instead:
+For coding agents on QAMap 0.5.1 or newer, use the bounded review brief:
 
 ```sh
-npx --yes @ivorycanvas/qamap@latest qa . --base origin/main --head HEAD --format agent
+npx --yes @ivorycanvas/qamap@latest qa brief . --base origin/main --head HEAD --require-consent
 ```
+
+With no recorded consent, this command offers QAMap without analyzing the
+change. The user can authorize a single review or save a preference; installation
+alone does not opt in. See [agent integration](agent-skill.md) for that flow.
+Structured integrations can still use `qa --format agent` explicitly.
+
+## Agent And Plugin Setup
+
+| Setup | Start here |
+| --- | --- |
+| ChatGPT or Codex plugin | [OpenAI QAMap listing](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629) |
+| Claude Code plugin | [Claude Code setup](claude-code.md) |
+| Directory-independent project skill | Install the CLI, then run `qamap init --agent .`; see [agent integration](agent-skill.md). |
+
+All paths need a local checkout and terminal access. Plugins provide the skill,
+not an automatic CLI installer; use the CLI version required by the skill.
+A general PR review request can offer QAMap before analysis. Saved consent,
+test execution and dependency installation are separate choices.
+
+Direct local analysis makes no model calls. An agent uses model tokens to load
+the skill, request execution and interpret evidence. A brief is not a guarantee
+of equal review quality, token savings or passed tests. See the
+[measured comparisons and limits](release-validation.md).
+
+## Optional Next Steps
 
 First confirm the inferred commit intent, lifecycle, confidence, and runner-independent QA scenarios. When that judgment looks useful, preview and then write the adapter-specific draft files:
 
@@ -74,7 +99,7 @@ Start advisory, then tighten the gate once the findings are understood.
 | Phase | Command | Goal |
 | --- | --- | --- |
 | 1. PR QA design | `qamap qa . --base origin/main --head HEAD` | Get commit-backed intent, behavior lifecycle, QA scenarios, affected flows, and missing evidence. |
-| 2. Agent handoff | `qamap qa . --base origin/main --head HEAD --format agent` | Give coding agents the same intent and scenario evidence as compact JSON instead of a long report. |
+| 2. Agent review | `qamap qa brief . --base origin/main --head HEAD --require-consent` | Check consent and provide bounded review evidence; structured JSON remains an explicit alternative. |
 | 3. E2E preview | `qamap e2e draft . --base origin/main --head HEAD --dry-run` | Preview generated draft paths, readiness, action items, and blockers before writing files. |
 | 4. E2E apply | `qamap e2e draft . --base origin/main --head HEAD` | Write draft files once the preview looks useful enough to review. |
 | 5. QA memory | `qamap manifest init .` (from the default branch) | Create `.qamap/manifest.yaml` so future PR recommendations reuse reviewed team QA language. |
@@ -188,7 +213,7 @@ On the QA side, QAMap starts one step earlier than test-writing tools — it dec
 | --- | --- | --- |
 | Test recorders and studios | Turning a known flow into a script by watching you run it. | Deciding which flow a PR affects and what evidence is missing, before recording starts. |
 | LLM test generation | Spending model tokens to write test code from source. | Free, deterministic PR-to-QA mapping; drafts are starter scaffolds an agent or human finishes. |
-| Re-prompting an agent per PR | Re-deriving repo QA context in every session. | Repo-owned QA memory (`.qamap/manifest.yaml`) plus a compact `--format agent` handoff. |
+| Re-prompting an agent per PR | Re-deriving repo QA context in every session. | Repo-owned QA memory (`.qamap/manifest.yaml`) plus one bounded review brief. |
 | Change-impact test selection | Choosing which existing unit/CI tests to run. | Naming the user-facing flow and E2E/checklist work that should exist at all. |
 
 On the guardrails side, QAMap is not trying to replace the larger security ecosystem:
@@ -226,7 +251,7 @@ QAMap is intentionally small:
 
 - time-saving: it surfaces missing context, risky settings, and validation gaps before agent work becomes review churn
 - static by default: `qamap qa` does not execute project code; only the explicit `qamap qa run` command executes one selected existing repository validation
-- no-token by default: it does not call an LLM API
+- no model calls by the CLI: an agent invoking it still uses its own model tokens
 - verification-focused: it tells reviewers what evidence is missing, not how to style code
 - PR QA skill output: `qamap qa` turns a branch into change intent, behavior lifecycle, QA scenarios, affected-flow evidence, optional automation drafts, and a copyable checklist
 - packaged agent skill: `skills/qamap-pr-qa/SKILL.md` gives coding agents a compact PR QA workflow for running QAMap before handoff

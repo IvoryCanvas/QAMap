@@ -13,6 +13,7 @@ what you are trying to do.
 | Adopt it in daily work or CI | [Adoption guide](adoption.md) |
 | Look up a command or output format | [Command reference](commands.md) |
 | Use it from a coding agent | [Agent integration](agent-skill.md) |
+| Install the Claude Code plugin | [Claude Code setup](claude-code.md) |
 | Report a problem or contribute | [Contributing](../CONTRIBUTING.md) |
 
 ## Configure Only When Needed
@@ -32,7 +33,7 @@ The first run does not require configuration.
 | --- | --- |
 | Compact agent JSON contract | [Agent format](agent-format.md) |
 | OpenAI skills-only plugin | [Plugin submission](plugin-submission.md) |
-| Claude directory package | [Claude submission](claude-plugin-submission.md) |
+| Claude Code plugin | [User setup](claude-code.md) and [maintainer submission](claude-plugin-submission.md) |
 | GitHub Actions and PR comments | [GitHub Action](github-action.md) |
 | Generated E2E and checklist examples | [E2E output examples](e2e-output-examples.md) |
 | Domain-neutral adoption boundaries | [Ecosystem](ecosystem.md) |

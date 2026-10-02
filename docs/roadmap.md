@@ -10,8 +10,12 @@ The sharp product position is:
 
 ```txt
 Read the change, find the affected behavior, and produce local QA evidence.
-No source upload. No LLM token. Let reviewed repository memory improve every later PR.
+No source upload or model call by QAMap. Reuse reviewed repository QA context.
 ```
+
+An agent invoking QAMap still uses its own model tokens. Local analysis, host
+usage and measured savings are separate claims; review quality must be checked
+alongside any usage reduction.
 
 This means QAMap should be judged by whether it identifies the right behavior and catches a seeded regression, not only whether it writes plausible test code. Playwright, Maestro, and other runners are implementation details behind that product contract.
 
@@ -34,12 +38,17 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 ## Now: 0.5.1 Review Brief
 
-QAMap 0.5.0 was published to npm on 2026-09-22. A real-host comparison then
+QAMap 0.5.1 was published to npm and GitHub on 2026-09-28. A real-host comparison of 0.5.0
 showed that an agent using its paged JSON handoff could spend more tokens than
 the same agent reviewing alone on real repository changes. 0.5.1 replaces that
 agent path with one bounded [review brief](agent-brief.md) and records the
 measured comparison in its [release record](releases/0.5.1.md). Readiness still
 requires quality evidence, not implementation volume.
+
+Claude Code publication was confirmed in the management portal on 2026-10-02.
+[Claude setup](claude-code.md) explains installation; publication alone does not
+establish successful use on every machine. npm, OpenAI and Claude versions
+remain independent.
 
 #### Delivery Status
 
@@ -50,12 +59,28 @@ requires quality evidence, not implementation volume.
 | 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Delivered in 0.5.0: structural gates separate operational evidence from vocabulary. |
 | 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Delivered in 0.5.0: repository evidence in the handoff with bounded recovery. |
 | 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Real-host measurement now covers standalone versus QAMap review on synthetic, product and real regressions with graded quality (0.5.1). The provider-API three-arm cold/warm comparison remains unmeasured. |
-| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | Exact-version smoke passed against the published 0.5.0 package. 0.5.1 is merged at `ca39306`; its clean-clone gate, package acceptance and real-host runs passed on `main`. Publish npm, then repeat the exact-version smoke for 0.5.1. |
+| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | 0.5.1 was published on 2026-09-28 after the release-scope fix in #291. Exact-version registry installation passed. The release record preserves the earlier measured candidate separately from the published artifact. |
 
 Each delivery stays reviewable and independently tested. A unit-test pass is not
 a product benchmark pass. Token comparisons count only complete host receipts and
 graded answers; offline read counts cannot establish token or billing savings.
 New public reproductions must be neutral, never copied from private repositories.
+
+#### Next Patch Focus
+
+1. Reject legal/document prose as executable evidence while preserving genuine
+   extensionless scripts.
+2. Route display-only manifest changes to metadata validation, not invented
+   product journeys or optional automation blockers.
+3. Improve indirect test evidence and verify important evidence retained under
+   large-PR output limits; omitted counts do not establish complete review.
+4. Extend independent repository and repeated host comparisons in #264. Preserve
+   quality and uncertainty before accepting measured token savings. The final
+   single-run user-level arm scored 0.722 QA-plan coverage against the standalone
+   mean of 0.731; earlier runs differed. Do not hide that variation behind an
+   aggregate savings figure.
+
+These are follow-up targets, not completed fixes or a release-readiness claim.
 
 See [repository discovery](repository-discovery.md) for supported metadata and
 limits, and [benchmarking](benchmarking.md#compare-a-review-host-with-and-without-qamap)
@@ -63,7 +88,7 @@ for the review-host protocol. The normal CI path remains offline and credential-
 
 #### Generalized Work Queue
 
-The OpenAI Plugin Directory is a real first-run surface, so the next patches
+OpenAI and Claude plugin directories are first-run surfaces, so the next patches
 continue to prioritize recommendation quality over another distribution channel
 or runner name. QAMap 0.4.17 preserves schema-derived response provenance,
 independent and diverged branch intent, Flutter validation evidence, runnable

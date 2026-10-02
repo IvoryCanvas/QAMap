@@ -1,5 +1,23 @@
 # Claude Directory Submission
 
+For installation and first-use consent, read the [Claude Code setup guide](claude-code.md)
+([한국어](ko/claude-code.md)). This document is for maintainers.
+
+## Current Status
+
+The management portal showed the plugin as published on 2026-10-02, with
+Claude Code as its only selected surface. Approval, publication and a successful
+user installation are distinct evidence. The portal establishes publication;
+the public listing establishes the served version. Local tests or a matching
+npm version cannot establish either. The shown automatic-publication toggle was
+off, so later versions must follow the portal's applied publication policy.
+
+For an approved version that is not live, follow the portal's Publish action and
+applied publication policy. Do not withdraw and resubmit an approved plugin just
+to refresh documentation. Preserve the last live version during later reviews.
+
+## Submission Source
+
 Submit the dedicated plugin folder, not the repository root. The root includes
 development benchmarks, test fixtures and release tooling that are not part of
 the installed skill. The directory's source scanner can inspect those files
@@ -11,7 +29,7 @@ when the plugin path is left blank.
 | --- | --- |
 | Repository | `https://github.com/IvoryCanvas/QAMap` |
 | Plugin path | `plugins/claude` |
-| Branch or tag | `main`, after the packaging change is merged |
+| Branch or tag | `main` |
 
 The plugin path names the folder containing `.claude-plugin`, not the manifest
 file itself. Re-validate the source and check the displayed commit before
@@ -22,6 +40,10 @@ do not move that tag or use it with this path.
 Tracking `main` allows subsequent commits on that branch to be picked up by the
 directory. It does not mean changes bypass review or become publicly available
 immediately. Review and publication remain separate from npm and OpenAI.
+The scheduled check and an optional GitHub push webhook discover updates;
+auto-publication depends on the setting applied by the reviewer. Review the
+displayed source revision after each change. A README update does not publish
+a new CLI version or move the existing `v0.5.1` tag.
 
 ## What Is Included
 

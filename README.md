@@ -22,7 +22,7 @@ automation. It does not upload source code or make its own LLM call.
 
 ## Install And Run
 
-The npm package and plugin directory update separately. For the 0.5.1
+The npm package, OpenAI plugin and Claude plugin update separately. For the 0.5.1
 review brief and its measured token results, see the [release notes](docs/releases/0.5.1.md).
 
 ### Local CLI (Recommended)
@@ -39,19 +39,25 @@ see the [adoption guide](docs/adoption.md).
 
 ### ChatGPT And Codex Plugin
 
-Install the plugin when you want an agent to invoke the same local workflow
-during PR review or test planning.
-
 <a href="https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629">
   <img src="docs/assets/openai-plugin-directory-badge.svg" alt="Install QAMap from the OpenAI Plugin Directory" height="64">
 </a>
 
 [Plugin installation help](https://learn.chatgpt.com/docs/plugins#install-and-use-a-plugin)
 
-The host agent still uses its own model and permissions. QAMap provides the
-local, deterministic repository analysis inside that workflow.
-From QAMap 0.5.1, agents review from one bounded [review brief](docs/agent-brief.md)
-(`qamap qa brief`) instead of rebuilding the diff, searches and file reads themselves.
+The host needs access to the local repository and terminal.
+
+### Claude Code Plugin
+
+QAMap is published in the Claude directory for Claude Code.
+The [Claude Code setup guide](docs/claude-code.md) covers plugin installation,
+the separately required CLI, and first-use consent.
+
+Once set up, ask **"Check this PR for bugs."** The skill offers QAMap when no
+choice is recorded; installing it is not consent to analysis or test execution.
+
+**Token boundary:** QAMap's local analysis makes no model calls. An agent still
+uses model tokens to invoke QAMap and interpret the report; savings are not guaranteed.
 
 ## Read The Result
 
@@ -108,6 +114,7 @@ this is not a complete runtime model or a measured token-savings guarantee.
 | Review one branch | [First-run walkthrough](docs/quickstart-demo.md) |
 | Adopt QAMap in a team | [Adoption guide](docs/adoption.md) |
 | Use QAMap from an agent | [Agent integration](docs/agent-skill.md) |
+| Set up the Claude Code plugin | [Claude Code setup](docs/claude-code.md) |
 | Review every command | [Command reference](docs/commands.md) |
 | Inspect benchmark evidence | [Benchmarking](docs/benchmarking.md) |
 
