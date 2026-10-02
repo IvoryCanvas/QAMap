@@ -2,7 +2,7 @@
 
 QAMap can gather local evidence inside a coding agent's ordinary PR review.
 From 0.5.1 the packaged workflow uses the [review brief](agent-brief.md): offer
-QAMap, obtain consent, run `qamap qa brief` once, and review from its numbered
+QAMap, obtain consent, run `qamap qa brief --require-consent` once, and review from its numbered
 diff, references, history and unknowns. Source reads are limited to specific open
 items. [Measured Claude Code comparisons](release-validation.md) record the token
 and quality results; they are not a general savings guarantee. The JSON
@@ -14,6 +14,21 @@ The goal is not to replace a reviewer or claim QA passed. The goal is to remove 
 ```txt
 What user flow did this PR touch, what should be tested, and what evidence is missing?
 ```
+
+## Choose An Installation Path
+
+| Path | Setup |
+| --- | --- |
+| ChatGPT or Codex plugin | Use the [public OpenAI listing](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629) on a host with repository and terminal access. |
+| Claude Code plugin | Follow [Claude Code setup](claude-code.md); the approved submission and public installation are separate states. |
+| Project skill | Use `qamap init --agent .` as described below; no directory install is needed. |
+
+Installing a skill or plugin does not install the CLI automatically or grant
+analysis consent. Use the CLI version required by the installed skill. Once set
+up, a general request such as "Check this PR for bugs" can offer QAMap without
+the user naming it. If no preference is recorded, the default gated command
+returns an offer without analyzing the repository. An explicit QAMap request
+or one-time consent lets the skill run without the gate for that review.
 
 ## One-Command Setup
 
@@ -102,7 +117,11 @@ npx --yes skills add IvoryCanvas/qamap --skill qamap-pr-qa
 
 This path is useful when a team already manages reusable agent skills through `skills-lock.json`. QAMap also keeps `qamap init --agent` for repositories that want the `AGENTS.md`, config, and packaged-skill setup in one idempotent command.
 
-Use it when an agent surface supports local skill folders, instruction folders, or reusable workflow prompts. The template is intentionally vendor-neutral: it tells an agent when to run `qamap qa`, how to pick a base branch, what sections to copy into the PR, and when to suggest manifest repair.
+Use it when an agent surface supports local skill folders, instruction folders,
+or reusable workflow prompts. The template is vendor-neutral: it tells an agent
+when to offer QAMap, how to obtain consent and review one brief, and when a
+specific unknown justifies another source read. Execution and manifest repair
+are separate scopes, not automatic follow-ups to a review.
 
 After installing QAMap as a dev dependency, inspect the template:
 
@@ -120,17 +139,27 @@ If your agent supports symlinked skills, point its skill directory at `skills/qa
 
 ## Native Plugin Boundary
 
-The repository now includes native `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` manifests. Both discover the same `skills/qamap-pr-qa/SKILL.md`, which invokes the installed or one-off QAMap CLI and consumes the versioned agent JSON. QAMap itself does not call an LLM or upload repository source.
+The repository includes native `.codex-plugin/plugin.json` and
+`.claude-plugin/plugin.json` manifests around the same `skills/qamap-pr-qa/SKILL.md`.
+OpenAI packaging uses the root sources; Claude directory submission uses the
+isolated `plugins/claude` folder with synchronized copies. The 0.5.1 skill invokes
+the matching installed CLI and reviews bounded text, not the entire JSON archive.
+Advanced structured output remains available separately. QAMap itself does not
+call an LLM or upload repository source.
 
 These manifests are thin distribution wrappers, not another QA implementation. They intentionally add no MCP server, background monitor, or automatic hook: the CLI already runs inside the checked-out repository, and an agent must not silently install a runner or claim product QA passed.
 
 From a source checkout, validate the Claude Code manifest without invoking a model:
 
 ```sh
-claude plugin validate .
+claude plugin validate plugins/claude
 ```
 
-For a local Claude Code session, the same checkout can be loaded with `claude --plugin-dir .`. OpenAI plugin packaging uses `.codex-plugin/plugin.json`. The packaged skill pins the exact QAMap release so a reviewed plugin does not silently change when npm `latest` moves.
+For a local Claude Code session, load this folder with
+`claude --plugin-dir ./plugins/claude`. This is local source testing, not a
+directory installation. The [Claude submission guide](claude-plugin-submission.md)
+explains directory-only metadata warnings. The packaged skill pins the exact
+QAMap release so a reviewed plugin does not silently change when npm `latest` moves.
 
 Validate the OpenAI submission package without invoking a model:
 
@@ -139,7 +168,14 @@ pnpm plugin:check
 pnpm plugin:smoke
 ```
 
-Public directory availability is not implied by the presence of either manifest alone. QAMap is currently [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629), whose public listing is the source of truth for the approved directory version. `qamap init --agent` and the portable skill install remain vendor-neutral onboarding paths. The full skills-only boundary and submission sequence are documented in [plugin-submission.md](plugin-submission.md).
+Public directory availability is not implied by a manifest or approval alone.
+QAMap is [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629).
+The Claude Code submission was confirmed approved on 2026-10-02; consult its
+public listing for installation availability and version. Neither directory is
+updated by npm publication. `qamap init --agent` and portable skill installation
+remain vendor-neutral alternatives. Maintainer procedures are in
+[OpenAI submission](plugin-submission.md) and
+[Claude submission](claude-plugin-submission.md).
 
 ## What The Agent Should Do With The Output
 

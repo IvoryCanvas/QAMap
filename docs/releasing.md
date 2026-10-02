@@ -34,7 +34,9 @@ Before publishing, confirm:
 - The canonical release identifier is `vX.Y.Z` (for example, `v0.4.0`). The Git tag and GitHub Release title must match this identifier exactly.
 - `CHANGELOG.md` has a dated section for the version being published.
 - `README.md`, [adoption](adoption.md), [E2E examples](e2e-output-examples.md), and [release validation](release-validation.md) describe the current CLI behavior.
-- npm, GitHub Releases, and the OpenAI Plugin Directory are described as independent release channels; no document hard-codes an older directory version as current.
+- npm, GitHub Releases, OpenAI and Claude directories are described as independent
+  release channels. Approval is separate from publication; no document hard-codes
+  an unverified directory version as current.
 - If public branding changed, the README covers, skill icon, dedicated plugin upload images, GitHub social preview, and general social card have been reviewed at their intended sizes. Use the [brand asset guide](../brand/README.md) as the inventory.
 - `pnpm run release:check` passes from a clean checkout.
 - Representative repository smoke notes in [release validation](release-validation.md) do not hit any stop condition.
@@ -132,7 +134,13 @@ node --test test/release-smoke.test.mjs
 
 This reports `source: local-cli`, not published-package verification. It does not build or install dependencies.
 
-If the release is the version pinned by the OpenAI skill package, also run the published-package form of the smoke before submitting the plugin. The directory submission must refer to a package version that already resolves from the public registry. Follow [the plugin submission runbook](plugin-submission.md); npm publication does not imply directory approval.
+If the release is pinned by either directory's skill, also run the
+published-package smoke before submitting or updating that plugin. The pinned
+CLI must resolve from the public registry. Follow the
+[OpenAI submission runbook](plugin-submission.md) for uploaded bundles and the
+[Claude submission runbook](claude-plugin-submission.md) for `plugins/claude` on
+the tracked Git branch. npm publication does not imply directory approval or
+publication, and a directory update does not upgrade the separately installed CLI.
 
 GitHub does not read a social preview image from Markdown automatically. After a
 brand update, upload

@@ -4,6 +4,12 @@
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.
 
+For current plugin installation, use [agent integration](agent-skill.md) or
+[Claude Code setup](claude-code.md). Claude Code submission approval was confirmed
+on 2026-10-02; it does not constitute a new quality benchmark, a user-installation
+receipt or publication evidence. The dated measurements below remain historical
+records and have not been rerun for this documentation update.
+
 ## 0.5.1 - Release Validation (2026-09-25)
 
 A real-host comparison showed that the published 0.5.0 review workflow cost more

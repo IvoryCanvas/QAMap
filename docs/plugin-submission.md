@@ -14,6 +14,12 @@ replacement passes review.
 | npm | [npm package](https://www.npmjs.com/package/@ivorycanvas/qamap) | Maintainer publication |
 | GitHub | [GitHub Releases](https://github.com/IvoryCanvas/QAMap/releases) | Tagged repository release |
 | OpenAI Plugin Directory | [Public QAMap listing](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629) | Separate upload, review, and publication |
+| Claude plugin directory | [Claude Code setup](claude-code.md) | Tracked Git source, checks, review and publication; independent of npm and OpenAI |
+
+The Claude Code submission was confirmed approved on 2026-10-02. Its approval
+does not establish the public version of either directory. Claude packaging and
+updates use the [separate runbook](claude-plugin-submission.md); do not submit
+the whole repository or the OpenAI archive as the Claude directory source.
 
 ## Product Boundary
 

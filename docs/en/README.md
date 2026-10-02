@@ -13,6 +13,7 @@ without moving those files or breaking external links.
 | Run QAMap once and understand the result | [First-run walkthrough](../quickstart-demo.md) |
 | Adopt it in daily work or CI | [Adoption guide](../adoption.md) |
 | Use it from a coding agent | [Agent integration](../agent-skill.md) |
+| Install the Claude Code plugin | [Claude Code setup](../claude-code.md) |
 | Preserve reviewed QA context | [Verification manifest](../manifest.md) |
 | Look up commands and output formats | [Command reference](../commands.md) |
 | Report a problem or contribute | [Contributing](../../CONTRIBUTING.md) |
@@ -27,3 +28,4 @@ without moving those files or breaking external links.
 - [Roadmap](../roadmap.md)
 - [Release validation](../release-validation.md)
 - [OpenAI plugin submission](../plugin-submission.md)
+- [Claude plugin submission](../claude-plugin-submission.md)

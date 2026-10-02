@@ -2,16 +2,32 @@
 
 [한국어 문서 홈](README.md) | [English agent guide](../agent-skill.md)
 
-Codex, ChatGPT 또는 다른 코딩 에이전트에서 사용해도 QAMap은 같은 로컬
+Codex, ChatGPT, Claude Code 또는 다른 코딩 에이전트에서 사용해도 QAMap은 같은 로컬
 CLI를 실행합니다. 특정 에이전트에서만 동작하는 별도 분석 엔진을 두지
-않으며, 결과는 버전이 지정된 `qamap.qa` 형식으로 전달합니다.
+않습니다. 기본 검수는 텍스트 브리프를 사용하고, 별도의 구조화된 연동에는
+버전이 지정된 `qamap.qa` 형식을 제공합니다.
 
 0.5.1부터 패키지의 검수 지침은 [검수 브리프](agent-brief.md)를 사용합니다. 사용자의
-동의 후 `qamap qa brief`를 한 번 실행하고, 줄 번호가 붙은 diff와 사용처, 이력,
+동의를 확인하는 `qamap qa brief --require-consent`를 한 번 실행하고, 줄 번호가 붙은 diff와 사용처, 이력,
 미확인 항목으로 검수합니다. 소스는 특정 미확인 항목을 확인할 때만 읽습니다.
 [Claude Code 실측](../release-validation.md)에 토큰과 품질 결과를 기록했지만,
 모든 저장소에서 같은 절감을 보장하지는 않습니다. 0.5.0의 JSON
 [한 번의 호출로 요약과 코드 근거를 받는 방식](agent-handoff.md)도 계속 사용할 수 있습니다.
+
+## 설치 방식 선택
+
+| 방식 | 안내 |
+| --- | --- |
+| ChatGPT 또는 Codex 플러그인 | 아래의 OpenAI 플러그인 설치 안내 |
+| Claude Code 플러그인 | [Claude Code 설치 가이드](claude-code.md) |
+| 프로젝트에 스킬 설치 | CLI 설치 후 `qamap init --agent .`; 디렉터리 설치 없이 사용 가능 |
+
+플러그인이나 스킬을 설치해도 CLI가 자동으로 설치되거나 분석에 동의한 것이
+되지는 않습니다. 설치한 스킬이 요구하는 CLI 버전을 준비하세요.
+"이 PR에 버그가 없는지 확인해줘"처럼 QAMap을 지칭하지 않은 요청에서도
+스킬이 사용 여부를 물을 수 있습니다. 저장된 선택이 없으면 기본 명령은
+분석 없이 동의 안내만 반환합니다. QAMap을 직접 요청하거나 이번만 사용하겠다고
+동의하면 스킬이 해당 검수에서만 동의 옵션을 빼고 실행할 수 있습니다.
 
 ## 프로젝트의 검수 방식 저장하기
 
@@ -32,7 +48,8 @@ qamap init --agent . --review-mode report
 ```sh
 qamap consent grant            # 이 프로젝트: AGENTS.md의 QAMap 구간만 수정
 qamap consent grant --global   # 모든 저장소: Claude Code와 Codex 사용자 지침
-qamap consent revoke [--global]
+qamap consent revoke           # 이 프로젝트: 매번 묻기로 되돌리기
+qamap consent revoke --global  # 사용자 전역 선택 제거
 qamap consent status
 ```
 
@@ -62,6 +79,13 @@ ChatGPT 또는 Codex의 **Plugins**에서 **QAMap**을 검색하고 **+**를 누
 플러그인을 실행하는 앱이 현재 저장소와 로컬 터미널을 읽을 수 있어야
 합니다. 일반 웹 채팅처럼 로컬 파일에 접근할 수 없는 환경에서는 분석할
 코드를 읽을 수 없습니다.
+
+## Claude Code 플러그인으로 설치하기
+
+Claude Code 제출은 2026-10-02에 승인 사실이 확인되었습니다. 승인만으로
+공개 완료를 판단하지는 않습니다. [Claude Code 설치 가이드](claude-code.md)에서
+공개 목록 확인, 별도 CLI 설치와 첫 검수 요청을 순서대로 확인하세요.
+지원 안내는 로컬 저장소와 터미널을 사용할 수 있는 Claude Code에 한정합니다.
 
 ## 에이전트용 JSON 출력
 
@@ -149,7 +173,8 @@ qamap qa report . --base origin/main --head HEAD --format agent
 결과 전용 검수에서는 반환된 근거만 해석하고, 나머지는 확인하지 못한 범위로
 남깁니다. 아래 단계는 사용자가 추가 검수나 실행을 요청한 경우에 적용합니다.
 
-1. 먼저 `qa --format agent`로 변경 없이 분석 결과만 받아봅니다.
+1. 동의 후 `qa brief`로 검수 근거를 받습니다. 구조화된 연동을 명시적으로
+   요청한 경우에만 `qa --format agent`를 사용합니다.
 2. 가장 중요한 판단이 실제 변경 코드와 연결되는지 확인합니다.
 3. `route.nextAction`에 적힌 다음 단계 하나를 검토합니다.
 4. 저장소 명령을 실행하거나 파일을 만들기 전에는 `action`의 허용 범위와
