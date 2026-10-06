@@ -16,6 +16,12 @@
 - One draft reuses project walks and import graphs instead of rebuilding them, skips importer and impact resolution that cannot affect the result, reads index files in a bounded window, reads blobs through one `git cat-file --batch` process, and searches references with one alternation per batch. On the largest measured monorepo the brief went from 47-106 s to 31-67 s with byte-identical output; smaller repositories from 10-14 s to 8-10 s.
 - When the repository index reaches its file cap, it keeps changed files, package and compiler configuration, and files nearest the change, and records `coverage.ordering`. Under the cap the index is unchanged.
 
+### Measurement
+
+- On public pull requests chosen by a registered rule, Claude Code CLI 2.1.291 with one fixed model compared standalone review, published 0.5.1 and this change. Tokens: 6 later-fixed regressions -54.1% (0.5.1: -56.3%); 24 seeded random pull requests -45.1% (0.5.1: -51.8%); 12 held-out pull requests selected before the change -40.4% (0.5.1: -47.5%).
+- Blind pairwise grades of this change against standalone were 10:11 with 3 ties on the 24 and 6:4 with 2 ties on the held-out 12. Against 0.5.1 they were 10:10 with 4 ties and 6:3 with 3 ties. Across both studies, its incorrect findings were 6 against standalone's 15. No split is statistically conclusive. Standalone still found more later-fixed regressions (5 of 12 runs against 2).
+- Across its 48 runs, the host never moved this brief to the background. It moved 0.5.1's brief 5 times.
+
 
 
 npm and plugin publication are separate steps.
