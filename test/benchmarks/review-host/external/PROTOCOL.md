@@ -177,3 +177,35 @@ REVIEW B:
 - A later fix shows that a defect existed. It does not show that the defect
   could be found from the diff alone, so Study 1 recall can be low for both
   arms.
+
+## Re-Measurement (Registered 2026-10-06)
+
+The first results showed that QAMap often stopped at the brief and judged the
+code safe, and that `qa brief` was slow on the largest repository. QAMap will be
+changed to address both. Its authors have read the Study 1 and Study 2 answers
+and grades. Re-measuring those cases therefore shows whether the misses are
+fixed, but it is not an independent test. The independent check is Study 3.
+
+- **Study 3 (held out).** This uses Study 2's rules on commits merged from
+  2026-09-21 to 2026-10-04, after Study 2's window. It takes one pull request
+  per repository with the same seed, and excludes commits already selected.
+  The repository caches are fetched before selection. The cases are selected
+  and committed before QAMap changes, and nobody reads them before measurement.
+- **Arms.** All three run on the same host version:
+  - `standalone`;
+  - `qamap`: the published 0.5.1;
+  - `candidate`: the changed QAMap, packed from the commit recorded with the
+    results.
+
+  The host CLI changed since the first run, so all three arms are measured
+  again. The first results are not reused in comparisons.
+- **Runs.** Two per arm in Study 1, and one per arm in Studies 2 and 3. Limits,
+  prompt, tools and fixtures are unchanged. Arm order rotates by case and run.
+- **Grading.** Study 1 grades every run as before. Studies 2 and 3 are graded
+  in three pairs: `candidate` against `standalone`, `qamap` against
+  `standalone`, and `candidate` against `qamap`. A/B order comes from
+  `sha256(seed:case:first:second)`, except that `qamap` against `standalone`
+  keeps the first rule.
+- **Primary comparisons.** These are `candidate` against `standalone` on tokens
+  and on pairwise preference in Study 3, then the same comparison in Studies 1
+  and 2. Every case and run is reported.

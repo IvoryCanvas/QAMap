@@ -4,7 +4,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { causes, changeSize, executedTests, loadProtocol, materialize, pairPrompt, parseLog, ranQamap, sessionAnswer } from "../scripts/agent-bench/external-review.mjs";
+import { armOrder, causes, changeSize, executedTests, loadProtocol, materialize, pairFile, pairPrompt, parseLog, ranQamap, sessionAnswer } from "../scripts/agent-bench/external-review.mjs";
 
 const protocol = await loadProtocol();
 const commit = (subject, message = "") => ({ subject, message: `${subject}\n\n${message}` });
@@ -113,4 +113,15 @@ test("a session answer keeps every ended turn, so a late acknowledgement cannot 
     JSON.stringify({ type: "result", subtype: "success", result: "That monitor was a leftover." }),
   ].join("\n");
   assert.equal(sessionAnswer(stdout), "Waiting for the report.\n\n## Review\nFinding 1\n\nThat monitor was a leftover.");
+});
+
+test("the re-measurement rotates three arms and keeps the first pair's file name", () => {
+  const arms = protocol.rerun.arms;
+  assert.deepEqual(arms, ["standalone", "qamap", "candidate"]);
+  const firsts = [0, 1, 2].map((index) => armOrder(arms, index, 1)[0]);
+  assert.deepEqual([...firsts].sort(), [...arms].sort());
+  assert.deepEqual([...armOrder(arms, 4, 1)].sort(), [...arms].sort());
+  assert.equal(pairFile("s2-x-1", ["qamap", "standalone"]), "s2-x-1.pair.json");
+  assert.equal(pairFile("s2-x-1", ["candidate", "standalone"]), "s2-x-1.pair-candidate-standalone.json");
+  assert.deepEqual(protocol.rerun.study3.window, ["2026-09-21", "2026-10-04"]);
 });

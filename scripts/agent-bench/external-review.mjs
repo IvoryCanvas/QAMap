@@ -2,8 +2,10 @@
 // See test/benchmarks/review-host/external/PROTOCOL.md for the registered rules.
 //
 //   node scripts/agent-bench/external-review.mjs select --cache <dir> [--out cases.json]
-//   node scripts/agent-bench/external-review.mjs run --cache <dir> --engine <prefix> --out <dir> [--study 1|2] [--case <id>] [--model <id>] [--dry-run]
-//   node scripts/agent-bench/external-review.mjs judge --cache <dir> --runs <dir> [--model <id>]
+//   node scripts/agent-bench/external-review.mjs select-holdout --cache <dir>
+//   node scripts/agent-bench/external-review.mjs run --cache <dir> --engine <prefix> --out <dir> [--study 1|2|3] [--case <id>] [--model <id>] [--dry-run]
+//     [--candidate <prefix> --arms standalone,qamap,candidate]
+//   node scripts/agent-bench/external-review.mjs judge --cache <dir> --runs <dir> [--model <id>] [--arms ...] [--pairs candidate:standalone,...]
 //   node scripts/agent-bench/external-review.mjs reanswer --runs <dir>
 //   node scripts/agent-bench/external-review.mjs summary --runs <dir> --summary <file.json>
 //
@@ -173,6 +175,39 @@ export async function select({ cache, out }) {
   return result;
 }
 
+// Study 3 is drawn after Studies 1 and 2 with Study 2's rules, from commits merged after its
+// window. Existing studies stay as recorded; only `study3` is added to the cases file.
+export async function selectHoldout({ cache, casesFile }) {
+  const protocol = await loadProtocol();
+  const recorded = JSON.parse(await fs.readFile(casesFile, "utf8"));
+  if (recorded.study3) throw new Error("Study 3 is already selected");
+  const limits = { ...protocol.study2, ...protocol.rerun.study3 };
+  const taken = new Set([...recorded.study1.cases, ...recorded.study2.cases].map((entry) => entry.commit));
+  const heads = [], cases = [];
+  for (const { slug, pool } of protocol.repositories) {
+    const target = cachePath(cache, slug);
+    const branch = git(target, ["symbolic-ref", "HEAD"]).trim();
+    git(target, ["fetch", "-q", "--no-tags", "origin", `+${branch}:${branch}`]);
+    const head = git(target, ["rev-parse", "HEAD"]).trim();
+    const candidates = [];
+    for (const change of parseLog(git(target, ["log", "--first-parent", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%cI%x1f%s%x1f%B%x1e", head]))) {
+      if (taken.has(change.sha) || !eligibleChange(change, protocol) || !inWindow(change.date, limits.window)) continue;
+      const changed = changeSize(git(target, ["show", "--numstat", "--format=", "--no-renames", change.sha]), protocol);
+      if (changed.files < limits.minFiles || changed.files > limits.maxFiles || changed.lines < limits.minLines || changed.lines > limits.maxLines) continue;
+      if (changed.sourceFiles.length === 0) continue;
+      candidates.push({ change, changed, rank: order(protocol.seed, slug, pullNumber(change.subject)) });
+    }
+    heads.push({ slug, head, candidates: candidates.length });
+    for (const { change, changed } of candidates.sort((a, b) => (a.rank < b.rank ? -1 : 1)).slice(0, limits.perRepository)) {
+      cases.push({ id: `s3-${slug.split("/")[1]}-${pullNumber(change.subject)}`, study: 3, repository: slug, pool, pr: Number(pullNumber(change.subject)),
+        commit: change.sha, parent: change.parents[0], subject: change.subject, committedAt: change.date, files: changed.files, lines: changed.lines });
+    }
+  }
+  recorded.study3 = { selectedAt: new Date().toISOString(), window: limits.window, repositories: heads, cases };
+  await fs.writeFile(casesFile, `${JSON.stringify(recorded, null, 2)}\n`);
+  return recorded.study3;
+}
+
 function gitEnvironment(home) {
   return { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"), GIT_CONFIG_NOSYSTEM: "1",
     GIT_COMMITTER_NAME: "Fixture Author", GIT_COMMITTER_EMAIL: "author@fixture.test", GIT_COMMITTER_DATE: "2026-09-22T00:00:00Z" };
@@ -190,7 +225,7 @@ export async function materialize(entry, { cache, workspace, home, engineBin, ar
   const since = new Date(Date.parse(entry.committedAt) - historyDays * day).toISOString().slice(0, 10);
   run("fetch", "-q", "--no-tags", `--shallow-since=${since}`, cachePath(cache, entry.repository), entry.commit);
   run("checkout", "-q", "-B", "main", entry.parent);
-  if (arm === "qamap") {
+  if (arm !== "standalone") {
     execFileSync(path.join(engineBin, "qamap"), ["init", "--agent", "--review-mode", "report"], { cwd: repo, env, input: "", stdio: ["pipe", "pipe", "pipe"] });
     run("add", "-A");
     if (run("status", "--porcelain").trim()) run("-c", "user.name=Fixture Author", "-c", "user.email=author@fixture.test", "commit", "-q", "-m", "chore: add QAMap agent setup");
@@ -208,22 +243,33 @@ export async function materialize(entry, { cache, workspace, home, engineBin, ar
 
 async function loadCases(file) {
   const cases = JSON.parse(await fs.readFile(file, "utf8"));
-  return [...cases.study1.cases, ...cases.study2.cases];
+  return [...cases.study1.cases, ...cases.study2.cases, ...(cases.study3?.cases ?? [])];
 }
 
-async function runCases({ cache, engine, out, study, only, model, dryRun, casesFile }) {
+// Study 3 is the held-out sample registered for the re-measurement; it follows Study 2's rules.
+const runsPerArm = (protocol, entry) => entry.study === 1 ? protocol.study1.runsPerArm
+  : entry.study === 3 ? protocol.rerun.study3.runsPerArm : protocol.study2.runsPerArm;
+
+// Arm order rotates by case and run, so no arm always starts first or warms the host cache.
+export function armOrder(arms, index, run) {
+  const shift = (index + run) % arms.length;
+  return [...arms.slice(shift), ...arms.slice(0, shift)];
+}
+
+async function runCases({ cache, engines, arms: armList, out, study, only, model, dryRun, casesFile }) {
   const protocol = await loadProtocol();
+  const arms = armList ?? protocol.host.arms;
   const cases = (await loadCases(casesFile)).filter((entry) => (!study || entry.study === Number(study)) && (!only || entry.id === only));
   const jobs = [];
   cases.forEach((entry, index) => {
-    const runs = entry.study === 1 ? protocol.study1.runsPerArm : protocol.study2.runsPerArm;
-    for (let run = 1; run <= runs; run++) {
-      const arms = (index + run) % 2 === 0 ? protocol.host.arms : [...protocol.host.arms].reverse();
-      for (const arm of arms) jobs.push({ entry, arm, run });
+    for (let run = 1; run <= runsPerArm(protocol, entry); run++) {
+      const ordered = arms.length === 2 ? ((index + run) % 2 === 0 ? arms : [...arms].reverse()) : armOrder(arms, index, run);
+      for (const arm of ordered) jobs.push({ entry, arm, run });
     }
   });
   await fs.mkdir(out, { recursive: true });
-  const engineBin = path.join(path.resolve(engine), "bin");
+  const bins = Object.fromEntries(Object.entries(engines).map(([arm, prefix]) => [arm, path.join(path.resolve(prefix), "bin")]));
+  for (const arm of arms) if (arm !== "standalone" && !bins[arm]) throw new Error(`No engine for arm ${arm}`);
   let next = 0;
   const worker = async () => {
     while (next < jobs.length) {
@@ -237,15 +283,17 @@ async function runCases({ cache, engine, out, study, only, model, dryRun, casesF
       try {
         const home = path.join(workspace, "home");
         await fs.mkdir(home);
+        const engineBin = bins[arm];
         const { repo, base, head } = await materialize(entry, { cache, workspace, home, engineBin, arm, historyDays: protocol.fixtureHistoryDays });
-        const prompt = arm === "qamap" ? `${prompts.qamapPrefix} ${prompts.prompt}` : prompts.prompt;
+        const prompt = arm !== "standalone" ? `${prompts.qamapPrefix} ${prompts.prompt}` : prompts.prompt;
+        const engineVersion = engineBin ? execFileSync(path.join(engineBin, "qamap"), ["--version"], { input: "", stdio: ["pipe", "pipe", "pipe"] }).toString().trim() : null;
         const record = { schema: { name: "qamap.external-review-run", version: 1 }, case: entry.id, study: entry.study, arm, run, model: model ?? null, base, head,
-          promptSha256: createHash("sha256").update(prompt).digest("hex") };
+          engineVersion, promptSha256: createHash("sha256").update(prompt).digest("hex") };
         if (dryRun) {
           await fs.writeFile(path.join(outDir, "result.json"), JSON.stringify({ ...record, status: "dry-run" }, null, 2));
           line = { label, status: "dry-run" };
         } else {
-          const host = await runHost({ cwd: repo, home, pathPrefix: arm === "qamap" ? engineBin : undefined, prompt, model,
+          const host = await runHost({ cwd: repo, home, pathPrefix: engineBin, prompt, model,
             transcript: path.join(outDir, "transcript.jsonl"), timeoutMs: protocol.host.timeoutMinutes * 60_000, maxTurns: protocol.host.maxTurns });
           const summary = { ...summarizeHostRun(host.stdout), answer: sessionAnswer(host.stdout) };
           const status = host.code === 0 && summary.completed ? "completed" : "stopped";
@@ -412,9 +460,12 @@ export async function reanswer(runs) {
     await fs.rm(path.join(directory, "judge.json"), { force: true });
     changed.push(entry.name);
   }
+  const names = await fs.readdir(runs);
   for (const label of changed) {
-    const id = label.slice(0, label.indexOf("."));
-    await fs.rm(path.join(runs, `${id}.pair.json`), { force: true });
+    const [id, arm] = label.split(".");
+    for (const name of names) {
+      if ((name === `${id}.pair.json` && ["qamap", "standalone"].includes(arm)) || (name.startsWith(`${id}.pair-`) && name.split(".")[1].split("-").includes(arm))) await fs.rm(path.join(runs, name), { force: true });
+    }
   }
   return changed;
 }
@@ -422,22 +473,29 @@ export async function reanswer(runs) {
 const readRun = (runs, label) => fs.readFile(path.join(runs, label, "result.json"), "utf8").then(JSON.parse, () => undefined);
 const answerOf = (result) => (result?.status === "completed" ? redactArm(result.answer ?? "") : "");
 
-async function judge({ cache, runs, model, casesFile }) {
+// The v1 pair (QAMap 0.5.1 against standalone) keeps its file name and A/B rule.
+export const pairFile = (id, [first, second]) => first === "qamap" && second === "standalone" ? `${id}.pair.json` : `${id}.pair-${first}-${second}.json`;
+const pairFlip = (seed, id, [first, second]) => Number.parseInt((first === "qamap" && second === "standalone"
+  ? order(seed, id) : order(seed, id, first, second)).slice(-1), 16) % 2 === 1;
+
+async function judge({ cache, runs, model, casesFile, arms: armList, pairs: pairList }) {
   const protocol = await loadProtocol();
+  const arms = armList ?? protocol.host.arms;
+  const pairs = pairList ?? [["qamap", "standalone"]];
   const cases = await loadCases(casesFile);
   const jobs = [];
   for (const entry of cases) {
     if (entry.study === 1) {
-      for (let run = 1; run <= protocol.study1.runsPerArm; run++) for (const arm of protocol.host.arms) jobs.push({ entry, labels: [`${entry.id}.${arm}.run${run}`] });
+      for (let run = 1; run <= protocol.study1.runsPerArm; run++) for (const arm of arms) jobs.push({ entry, labels: [`${entry.id}.${arm}.run${run}`] });
     } else {
-      jobs.push({ entry, labels: protocol.host.arms.map((arm) => `${entry.id}.${arm}.run1`) });
+      for (const pair of pairs) jobs.push({ entry, pair, labels: pair.map((arm) => `${entry.id}.${arm}.run1`) });
     }
   }
   let next = 0;
   const worker = async () => {
     while (next < jobs.length) {
-      const { entry, labels } = jobs[next++];
-      const target = path.join(runs, entry.study === 1 ? labels[0] : "", entry.study === 1 ? "judge.json" : `${entry.id}.pair.json`);
+      const { entry, labels, pair } = jobs[next++];
+      const target = entry.study === 1 ? path.join(runs, labels[0], "judge.json") : path.join(runs, pairFile(entry.id, pair));
       if (await fs.stat(target).then(() => true, () => false)) continue;
       const results = await Promise.all(labels.map((label) => readRun(runs, label)));
       if (results.some((result) => !result)) continue;
@@ -450,8 +508,7 @@ async function judge({ cache, runs, model, casesFile }) {
           : { verdict: { verdict: "missed", quote: "", notes: "run stopped before an answer" } };
         record = { case: entry.id, label: labels[0], arm: results[0].arm, run: results[0].run, judgeModel: model ?? null, ...graded };
       } else {
-        const flip = Number.parseInt(order(protocol.seed, entry.id).slice(-1), 16) % 2 === 1;
-        const [a, b] = flip ? [results[1], results[0]] : results;
+        const [a, b] = pairFlip(protocol.seed, entry.id, pair) ? [results[1], results[0]] : results;
         const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-external-pair-"));
         try {
           const home = path.join(workspace, "home");
@@ -464,7 +521,7 @@ async function judge({ cache, runs, model, casesFile }) {
         }
       }
       await fs.writeFile(target, JSON.stringify(record, null, 2));
-      process.stdout.write(`${JSON.stringify({ case: entry.id, label: record.label ?? "pair", verdict: record.verdict?.verdict ?? record.verdict?.preferred ?? null, error: record.error ?? null })}\n`);
+      process.stdout.write(`${JSON.stringify({ case: entry.id, label: record.label ?? path.basename(target), verdict: record.verdict?.verdict ?? record.verdict?.preferred ?? null, error: record.error ?? null })}\n`);
     }
   };
   await Promise.all(Array.from({ length: 3 }, worker));
@@ -475,14 +532,16 @@ const median = (values) => {
   return sorted.length ? (sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2) : null;
 };
 
-export async function summarize({ runs, summary, casesFile }) {
+export async function summarize({ runs, summary, casesFile, arms: armList, pairs: pairList }) {
   const protocol = await loadProtocol();
+  const armNames = armList ?? protocol.host.arms;
+  const pairs = pairList ?? [["qamap", "standalone"]];
   const cases = await loadCases(casesFile);
   const perCase = [], runRecords = [];
   for (const entry of cases) {
     const arms = {};
-    for (const arm of protocol.host.arms) {
-      const count = entry.study === 1 ? protocol.study1.runsPerArm : protocol.study2.runsPerArm;
+    for (const arm of armNames) {
+      const count = runsPerArm(protocol, entry);
       const records = [];
       for (let run = 1; run <= count; run++) {
         const label = `${entry.id}.${arm}.run${run}`;
@@ -496,23 +555,26 @@ export async function summarize({ runs, summary, casesFile }) {
           executedTests: executedTests(commands), usedQamap: ranQamap(commands),
           movedToBackground: transcript.includes("was moved to the background"),
           endedTurns: transcript.split("\n").filter((line) => { try { return JSON.parse(line).type === "result"; } catch { return false; } }).length,
-          verdict: graded?.verdict?.verdict ?? null };
+          engineVersion: result.engineVersion ?? null, verdict: graded?.verdict?.verdict ?? null };
         records.push(record);
         runRecords.push(record);
       }
       arms[arm] = { runs: records.length, medianTokens: median(records.filter((record) => Number.isSafeInteger(record.totalTokens)).map((record) => record.totalTokens)),
         verdicts: records.map((record) => record.verdict) };
     }
-    const pair = entry.study === 2 ? await fs.readFile(path.join(runs, `${entry.id}.pair.json`), "utf8").then(JSON.parse, () => undefined) : undefined;
-    let quality = null;
-    if (pair?.verdict) {
+    const qualities = {};
+    for (const names of entry.study === 1 ? [] : pairs) {
+      const pair = await fs.readFile(path.join(runs, pairFile(entry.id, names)), "utf8").then(JSON.parse, () => undefined);
+      if (!pair?.verdict) continue;
       const count = (list, kind) => (list ?? []).filter((item) => item.class === kind).length;
-      quality = {};
+      const quality = {};
       for (const side of ["A", "B"]) {
         quality[pair[side]] = Object.fromEntries(["valid", "minor", "incorrect", "unverifiable"].map((kind) => [kind, count(pair.verdict[side], kind)]));
       }
       quality.preferred = pair.verdict.preferred === "tie" ? "tie" : pair[pair.verdict.preferred] ?? null;
+      qualities[names.join(":")] = quality;
     }
+    const quality = pairList ? qualities : qualities["qamap:standalone"] ?? null;
     perCase.push({ id: entry.id, study: entry.study, repository: entry.repository, pool: entry.pool, pr: entry.pr, files: entry.files, lines: entry.lines, arms, quality });
   }
   const output = { schema: { name: "qamap.external-review-summary", version: 1 }, cases: perCase, runs: runRecords };
@@ -524,28 +586,35 @@ async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const { values } = parseArgs({ args: rest, options: { cache: { type: "string" }, out: { type: "string" }, engine: { type: "string" },
     runs: { type: "string" }, study: { type: "string" }, case: { type: "string" }, model: { type: "string" }, summary: { type: "string" },
-    cases: { type: "string", default: path.join(directory, "cases.json") }, "dry-run": { type: "boolean", default: false } } });
+    cases: { type: "string", default: path.join(directory, "cases.json") }, "dry-run": { type: "boolean", default: false },
+    candidate: { type: "string" }, arms: { type: "string" }, pairs: { type: "string" } } });
+  const arms = values.arms?.split(",");
+  const pairs = values.pairs?.split(",").map((pair) => pair.split(":"));
   const outside = (target) => { const relative = path.relative(root, path.resolve(target)); return relative.startsWith("..") || path.isAbsolute(relative); };
-  if (command === "select") {
+  if (command === "select-holdout") {
+    if (!values.cache) throw new Error("--cache is required");
+    const result = await selectHoldout({ cache: path.resolve(values.cache), casesFile: values.cases });
+    process.stdout.write(`${JSON.stringify({ study3: result.cases.length, repositories: result.repositories.map(({ slug, candidates }) => `${slug}:${candidates}`) })}\n`);
+  } else if (command === "select") {
     if (!values.cache || !outside(values.cache)) throw new Error("--cache must be a directory outside the repository");
     const result = await select({ cache: path.resolve(values.cache), out: values.out ?? values.cases });
     process.stdout.write(`${JSON.stringify({ repositories: result.repositories.map(({ slug, status }) => `${slug}:${status}`),
       study1: result.study1.cases.length, fallback: result.study1.fallback, study2: result.study2.cases.length })}\n`);
   } else if (command === "run") {
     if (!values.cache || !values.engine || !values.out || !outside(values.out)) throw new Error("--cache, --engine and an --out outside the repository are required");
-    await runCases({ cache: path.resolve(values.cache), engine: values.engine, out: path.resolve(values.out), study: values.study, only: values.case,
-      model: values.model, dryRun: values["dry-run"], casesFile: values.cases });
+    await runCases({ cache: path.resolve(values.cache), engines: { qamap: values.engine, ...(values.candidate ? { candidate: values.candidate } : {}) }, arms,
+      out: path.resolve(values.out), study: values.study, only: values.case, model: values.model, dryRun: values["dry-run"], casesFile: values.cases });
   } else if (command === "judge") {
     if (!values.cache || !values.runs) throw new Error("--cache and --runs are required");
-    await judge({ cache: path.resolve(values.cache), runs: path.resolve(values.runs), model: values.model, casesFile: values.cases });
+    await judge({ cache: path.resolve(values.cache), runs: path.resolve(values.runs), model: values.model, casesFile: values.cases, arms, pairs });
   } else if (command === "reanswer") {
     if (!values.runs) throw new Error("--runs is required");
     process.stdout.write(`${JSON.stringify(await reanswer(path.resolve(values.runs)))}\n`);
   } else if (command === "summary") {
     if (!values.runs || !values.summary) throw new Error("--runs and --summary are required");
-    await summarize({ runs: path.resolve(values.runs), summary: values.summary, casesFile: values.cases });
+    await summarize({ runs: path.resolve(values.runs), summary: values.summary, casesFile: values.cases, arms, pairs });
   } else {
-    throw new Error("Usage: external-review.mjs select|run|judge|reanswer|summary");
+    throw new Error("Usage: external-review.mjs select|select-holdout|run|judge|reanswer|summary");
   }
 }
 
