@@ -4,7 +4,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { armOrder, causes, changeSize, executedTests, loadProtocol, materialize, pairFile, pairPrompt, parseLog, ranQamap, sessionAnswer } from "../scripts/agent-bench/external-review.mjs";
+import { armOrder, causes, changeSize, executedTests, loadProtocol, mainLoopTokens, materialize, pairFile, pairPrompt, parseLog, ranQamap, sessionAnswer } from "../scripts/agent-bench/external-review.mjs";
 
 const protocol = await loadProtocol();
 const commit = (subject, message = "") => ({ subject, message: `${subject}\n\n${message}` });
@@ -124,4 +124,15 @@ test("the re-measurement rotates three arms and keeps the first pair's file name
   assert.equal(pairFile("s2-x-1", ["qamap", "standalone"]), "s2-x-1.pair.json");
   assert.equal(pairFile("s2-x-1", ["candidate", "standalone"]), "s2-x-1.pair-candidate-standalone.json");
   assert.deepEqual(protocol.rerun.study3.window, ["2026-09-21", "2026-10-04"]);
+});
+
+test("a run killed before its usage receipt counts its main-loop requests once each", () => {
+  const usage = (input, read) => ({ input_tokens: input, cache_creation_input_tokens: 0, cache_read_input_tokens: read, output_tokens: 1 });
+  const stdout = [
+    JSON.stringify({ type: "assistant", message: { id: "m1", usage: usage(10, 100) } }),
+    JSON.stringify({ type: "assistant", message: { id: "m1", usage: usage(10, 100) } }),
+    JSON.stringify({ type: "assistant", message: { id: "m2", usage: usage(5, 200) } }),
+  ].join("\n");
+  assert.equal(mainLoopTokens(stdout), 317);
+  assert.equal(mainLoopTokens(""), null);
 });

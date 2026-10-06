@@ -527,6 +527,18 @@ async function judge({ cache, runs, model, casesFile, arms: armList, pairs: pair
   await Promise.all(Array.from({ length: 3 }, worker));
 }
 
+export function mainLoopTokens(stdout) {
+  const usage = new Map();
+  for (const line of stdout.split("\n")) {
+    let event;
+    try { event = JSON.parse(line); } catch { continue; }
+    if (event.type === "assistant" && event.message?.id && event.message.usage) usage.set(event.message.id, event.message.usage);
+  }
+  if (!usage.size) return null;
+  return [...usage.values()].reduce((total, entry) => total + (entry.input_tokens ?? 0) + (entry.cache_creation_input_tokens ?? 0)
+    + (entry.cache_read_input_tokens ?? 0) + (entry.output_tokens ?? 0), 0);
+}
+
 const median = (values) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted.length ? (sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2) : null;
@@ -550,7 +562,11 @@ export async function summarize({ runs, summary, casesFile, arms: armList, pairs
         const graded = entry.study === 1 ? await fs.readFile(path.join(runs, label, "judge.json"), "utf8").then(JSON.parse, () => undefined) : undefined;
         const commands = result.commands ?? [];
         const transcript = await fs.readFile(path.join(runs, label, "transcript.jsonl"), "utf8").catch(() => "");
-        const record = { case: entry.id, study: entry.study, arm, run, status: result.status, totalTokens: result.totalTokens, requests: result.requests,
+        // A run killed at the time limit has no final usage receipt; its main-loop requests
+        // still show what it spent, so they are counted as a lower bound and labeled.
+        const lowerBound = result.totalTokens === null || result.totalTokens === undefined ? mainLoopTokens(transcript) : null;
+        const record = { case: entry.id, study: entry.study, arm, run, status: result.status, totalTokens: result.totalTokens ?? lowerBound,
+          tokensSource: lowerBound === null ? "receipt" : "main-loop-lower-bound", requests: result.requests,
           uncachedInputTokens: result.uncachedInputTokens, costUsd: result.costUsd, wallMs: result.wallMs, turns: result.turns,
           executedTests: executedTests(commands), usedQamap: ranQamap(commands),
           movedToBackground: transcript.includes("was moved to the background"),

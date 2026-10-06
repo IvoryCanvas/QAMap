@@ -119,3 +119,96 @@ as an open question. Only the QAMap review found a real problem in three cases:
 - Study 1 has six cases from three repositories.
 - A language model graded both studies. The answers were redacted, but the
   QAMap arm's wording may still be recognizable.
+
+## Re-Measurement With The Changed QAMap
+
+This follows the [re-measurement protocol](PROTOCOL.md#re-measurement-registered-2026-10-06).
+The changes targeted two problems the first run found:
+- the brief cut removed lines and hid unchanged lines between hunks, and its
+  wording was over-trusted;
+- the brief was slow on the largest repository and was run with a 30-second
+  host timeout.
+
+The changed package was packed from commit `76c8152` of
+`fix/review-brief-checks`. All three arms ran in rotation on Claude Code CLI
+2.1.291 with the same fixed model. Every one of the 144 runs finished, and
+every run was graded. Per-run records are in `results-v2.json`.
+
+Two runs stopped at the 30-minute limit, one standalone and one with the
+changed QAMap. Both are counted as empty reviews:
+- `s2-immich-30612`, standalone: 78 requests.
+- `s2-astro-17812`, changed QAMap: the brief printed in seconds, then the host
+  searched the whole file system.
+
+A stopped run has no final usage receipt. Its main-loop request usage is
+counted as a lower bound.
+
+### Tokens
+
+| Study | Cases | Standalone | QAMap 0.5.1 | Changed QAMap |
+| --- | ---: | ---: | ---: | ---: |
+| 1, later-fixed regressions (median of 2 runs) | 6 | 20,803,791 | 9,084,342 (-56.3%) | 9,552,306 (-54.1%) |
+| 2, seeded random pull requests | 24 | 56,784,259 | 27,376,632 (-51.8%) | 31,187,159 (-45.1%) |
+| 3, held out | 12 | 22,226,994 | 11,663,137 (-47.5%) | 13,242,861 (-40.4%) |
+
+The changed QAMap used fewer tokens than standalone in 6 of 6, 23 of 24 and 10 of
+12 cases. It used 5-14% more than 0.5.1, because it reads more before
+concluding. That was the intended trade.
+
+### Quality
+
+Study 1 counts runs that stated the defect the project fixed later, out of 12
+per arm:
+
+| Verdict | Standalone | QAMap 0.5.1 | Changed QAMap |
+| --- | ---: | ---: | ---: |
+| Found | 5 | 2 | 2 |
+| Partial | 2 | 3 | 3 |
+| Missed | 5 | 7 | 7 |
+
+Studies 2 and 3 are pairwise blind grades. Each cell gives wins for the first
+arm, wins for the second, and ties.
+
+| Pair | Study 2 | Study 3 (held out) | Both |
+| --- | ---: | ---: | ---: |
+| Changed QAMap vs standalone | 10 : 11 : 3 | 6 : 4 : 2 | 16 : 15 : 5 |
+| QAMap 0.5.1 vs standalone | 13 : 11 : 0 | 4 : 7 : 1 | 17 : 18 : 1 |
+| Changed QAMap vs QAMap 0.5.1 | 10 : 10 : 4 | 6 : 3 : 3 | 16 : 13 : 7 |
+
+Incorrect findings within each pair (first arm, second arm), Studies 2 and 3
+together:
+
+| Pair | Incorrect findings |
+| --- | ---: |
+| Changed QAMap vs standalone | 6 vs 15 |
+| QAMap 0.5.1 vs standalone | 9 vs 8 |
+| Changed QAMap vs QAMap 0.5.1 | 4 vs 6 |
+
+Valid findings were 19 against 21 for changed QAMap against standalone.
+
+None of the preference splits is statistically conclusive. Two-sided sign
+tests give p from 0.51 to 1.00. On the held-out study, the changed QAMap was
+preferred over standalone (6 to 4) and over 0.5.1 (6 to 3), and it made no
+incorrect finding.
+
+The same comparison of 0.5.1 against standalone came out 9 to 15 in the first
+run and 13 to 11 here. Single-run quality comparisons of this size move by
+several cases between runs. Study 1 did not improve: standalone found more
+later-fixed defects than either QAMap arm.
+
+### Speed
+
+- **Host waits.** Across its 48 runs, the changed QAMap was never moved to the
+  background. QAMap 0.5.1 was moved 5 times, standalone 2 times.
+- **Brief time.** On the profiled fixtures, briefs on the largest repository
+  went from 47-106 s to 31-67 s. Smaller repositories went from 10-14 s to
+  8-10 s. Output was byte-identical except where the repository index reaches
+  its file cap.
+
+### Limits
+
+- One host and one model.
+- One run per arm in Studies 2 and 3, and an LLM grader.
+- Six Study 1 cases from three repositories.
+- The changed QAMap was designed after reading the Study 1 and 2 failures, so
+  only Study 3 is independent of that design.
