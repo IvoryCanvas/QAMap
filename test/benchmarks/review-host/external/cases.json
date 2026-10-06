@@ -558,5 +558,232 @@
         "lines": 75
       }
     ]
+  },
+  "study3": {
+    "selectedAt": "2026-10-06T06:32:39.926Z",
+    "window": [
+      "2026-09-21",
+      "2026-10-04"
+    ],
+    "repositories": [
+      {
+        "slug": "documenso/documenso",
+        "head": "cd0cc5febcbb76ec7e5ecb75c0b8c65ab8432198",
+        "candidates": 6
+      },
+      {
+        "slug": "formbricks/formbricks",
+        "head": "b34551a5e0481c4e3060f2aea7c5970b1fcd4702",
+        "candidates": 61
+      },
+      {
+        "slug": "excalidraw/excalidraw",
+        "head": "ed10ac7dca7e40f3f4a31269b4bfba980d0db41e",
+        "candidates": 19
+      },
+      {
+        "slug": "outline/outline",
+        "head": "68d05987e1d54efe39568ab5584d651bd8defd55",
+        "candidates": 36
+      },
+      {
+        "slug": "twentyhq/twenty",
+        "head": "9a9e812234e6b351e6fec9a92c608fbd6e7ca1fe",
+        "candidates": 335
+      },
+      {
+        "slug": "immich-app/immich",
+        "head": "07daf87133ad9e9ac17cda8f5654f7a374cc5ad1",
+        "candidates": 45
+      },
+      {
+        "slug": "vitejs/vite",
+        "head": "fea5b21dd9524ed7308632407b996f1fe5942c9c",
+        "candidates": 26
+      },
+      {
+        "slug": "withastro/astro",
+        "head": "c5275e3d5a688a7d246c9576b594870675b70e37",
+        "candidates": 10
+      },
+      {
+        "slug": "pydantic/pydantic",
+        "head": "1e6cc758a04b3b1b50d12907b6c463a9ea575b4a",
+        "candidates": 11
+      },
+      {
+        "slug": "langchain-ai/langchain",
+        "head": "67ba389f4a85dbb98fca475619670a99b23d399d",
+        "candidates": 17
+      },
+      {
+        "slug": "go-gitea/gitea",
+        "head": "43fedd662ad5ec44152d4ddd3d6d88e28a43e03c",
+        "candidates": 55
+      },
+      {
+        "slug": "caddyserver/caddy",
+        "head": "700d60327d77d56ba81455acb989a698f1819640",
+        "candidates": 32
+      }
+    ],
+    "cases": [
+      {
+        "id": "s3-documenso-3409",
+        "study": 3,
+        "repository": "documenso/documenso",
+        "pool": "typescript",
+        "pr": 3409,
+        "commit": "5a123be46c4b8173701a3e1e94591cadf4cad602",
+        "parent": "586b1f5cb5df9a4330a9f72b8fb6e80209005696",
+        "subject": "fix: embed signing completion and reload states (#3409)",
+        "committedAt": "2026-09-29T05:44:25.000Z",
+        "files": 5,
+        "lines": 141
+      },
+      {
+        "id": "s3-formbricks-9409",
+        "study": 3,
+        "repository": "formbricks/formbricks",
+        "pool": "typescript",
+        "pr": 9409,
+        "commit": "c40632e6f7c8e2e8abf17073cf14aab3f1a89b47",
+        "parent": "736e35ab6867d13efe389d5ec08fa437d4895b3e",
+        "subject": "fix(survey-list): keep settings when a survey is duplicated [ENG-2144] (#9409)",
+        "committedAt": "2026-09-28T07:55:54.000Z",
+        "files": 3,
+        "lines": 172
+      },
+      {
+        "id": "s3-excalidraw-12180",
+        "study": 3,
+        "repository": "excalidraw/excalidraw",
+        "pool": "typescript",
+        "pr": 12180,
+        "commit": "84e3f5a40c5fac43cb8b28161b9c239d9e857061",
+        "parent": "974f054bafad6787e7eb1c781e12df4b93372405",
+        "subject": "perf(editor): avoid rebuilding id sets on every resize (#12180)",
+        "committedAt": "2026-09-27T09:01:38.000Z",
+        "files": 1,
+        "lines": 21
+      },
+      {
+        "id": "s3-outline-13888",
+        "study": 3,
+        "repository": "outline/outline",
+        "pool": "typescript",
+        "pr": 13888,
+        "commit": "ed4aaf274df8ac7d9a1da5d24a545b2537a816db",
+        "parent": "6509bf553b67d17e481c86eb40fdb3b475a60158",
+        "subject": "fix: Update group timestamp when membership changes (#13888)",
+        "committedAt": "2026-09-25T21:17:05.000Z",
+        "files": 4,
+        "lines": 204
+      },
+      {
+        "id": "s3-twenty-26398",
+        "study": 3,
+        "repository": "twentyhq/twenty",
+        "pool": "typescript",
+        "pr": 26398,
+        "commit": "f03fe1216d39b5255e8b1a05bf9548c0ce9334f8",
+        "parent": "20fd8c9f75fc04bc44d2f3c6c7c8cdd24e6599ad",
+        "subject": "fix(shared): escape regex metacharacters in raw json and rich text like filters (#26398)",
+        "committedAt": "2026-09-23T09:47:44.000Z",
+        "files": 2,
+        "lines": 39
+      },
+      {
+        "id": "s3-immich-31425",
+        "study": 3,
+        "repository": "immich-app/immich",
+        "pool": "typescript",
+        "pr": 31425,
+        "commit": "54987c764a393d5aabace1ccfb2faeea0492f812",
+        "parent": "aa023378477fb1a65d24f4614de0940f6a769794",
+        "subject": "fix(server): write tag updates to exif table (#31425)",
+        "committedAt": "2026-09-28T15:52:25.000Z",
+        "files": 5,
+        "lines": 114
+      },
+      {
+        "id": "s3-vite-23543",
+        "study": 3,
+        "repository": "vitejs/vite",
+        "pool": "typescript",
+        "pr": 23543,
+        "commit": "f155b62ceabbaaf71abbf59933968787e3961c56",
+        "parent": "af7cdf6964f124f58d66037e808fe687654948e2",
+        "subject": "fix(create-vite): add router only options for tanstack router/start (#23543)",
+        "committedAt": "2026-09-23T06:52:57.000Z",
+        "files": 1,
+        "lines": 20
+      },
+      {
+        "id": "s3-astro-18000",
+        "study": 3,
+        "repository": "withastro/astro",
+        "pool": "typescript",
+        "pr": 18000,
+        "commit": "67245751e02fb94223266d3c55cc7d7ac65ab060",
+        "parent": "e48da9d4f6f293d8708bd8de9ae235429272f556",
+        "subject": "fix(dev): load renderers before resolving built-in routes so server islands render framework components (#18000)",
+        "committedAt": "2026-09-28T15:32:17.000Z",
+        "files": 10,
+        "lines": 101
+      },
+      {
+        "id": "s3-pydantic-13895",
+        "study": 3,
+        "repository": "pydantic/pydantic",
+        "pool": "python",
+        "pr": 13895,
+        "commit": "5bc650bb3b41d8472db480ffcec4b67ee9158104",
+        "parent": "c9ac504d2ab62f7135950ccd7a5c0684be30805f",
+        "subject": "Add `__namespace__` parameter to `create_model()` (#13895)",
+        "committedAt": "2026-09-30T21:47:14.000Z",
+        "files": 5,
+        "lines": 195
+      },
+      {
+        "id": "s3-langchain-40711",
+        "study": 3,
+        "repository": "langchain-ai/langchain",
+        "pool": "python",
+        "pr": 40711,
+        "commit": "3290757339233aa9b08897d11c4c677b304a4c3e",
+        "parent": "d5fbcdbb54e7c099cbba6d29c92cec309e40cbf0",
+        "subject": "chore(core): deprecate chat message history (#40711)",
+        "committedAt": "2026-09-21T14:28:24.000Z",
+        "files": 2,
+        "lines": 52
+      },
+      {
+        "id": "s3-gitea-39436",
+        "study": 3,
+        "repository": "go-gitea/gitea",
+        "pool": "go",
+        "pr": 39436,
+        "commit": "db7d1da28f8fdc700e4b3ff7089a4a569d553d03",
+        "parent": "826c65d0eccf4ebe4790ec3bfc856fff34df7f84",
+        "subject": "fix(markup): link team mentions that use a different org name case (#39436)",
+        "committedAt": "2026-10-04T12:51:46.000Z",
+        "files": 3,
+        "lines": 31
+      },
+      {
+        "id": "s3-caddy-8017",
+        "study": 3,
+        "repository": "caddyserver/caddy",
+        "pool": "go",
+        "pr": 8017,
+        "commit": "69ec5dfedf5ba8f7d042f8f2ff41baa5ce576ce8",
+        "parent": "fbc88ae2322082b55aef52e0209a0bc56166eca6",
+        "subject": "caddyauth: only replace known placeholders in basic auth credentials (#8017)",
+        "committedAt": "2026-09-26T08:52:53.000Z",
+        "files": 2,
+        "lines": 113
+      }
+    ]
   }
 }
