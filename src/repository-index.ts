@@ -43,6 +43,8 @@ export interface RepositoryEvidenceIndex {
     limits: typeof limits;
     skipped: Array<{ path: string; reason: string }>;
     classifications: Record<string, number>;
+    // Present when the file cap was reached and files near the change were indexed first.
+    ordering?: "changed-file-proximity";
   };
   reuse: {
     status: "cold" | "warm" | "incremental" | "rebuilt" | "disabled" | "unavailable";
@@ -270,7 +272,36 @@ const moduleName = (value: unknown): boolean => typeof value === "string" && saf
 const hashValue = (value: unknown): boolean => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 const enumOf = (...values: string[]) => (value: unknown): boolean => typeof value === "string" && values.includes(value);
 
-export async function buildRepositoryEvidenceIndex(rootInput: string, options: { cacheDirectory?: string | false } = {}): Promise<RepositoryEvidenceIndex> {
+// Inventory paths in index priority: changed files and package or compiler
+// configuration (the module resolver needs them for aliases and package exports), then
+// files sharing the deepest directory prefix with a changed file, then the rest, each
+// tier in path order. `effective` is false when no file shares a directory with a change.
+const resolverConfig = /(?:^|\/)(?:package\.json|[jt]sconfig(?:\.[\w-]+)*\.json)$/;
+function orderByProximity(files: string[], changedFiles: string[]): { order: string[]; effective: boolean } {
+  const changed = new Set(changedFiles);
+  const prefixes = new Set<string>();
+  for (const file of changedFiles) {
+    let prefix = "";
+    for (const part of file.split("/").slice(0, -1)) { prefix = prefix ? `${prefix}/${part}` : part; prefixes.add(prefix); }
+  }
+  const depth = (file: string): number => {
+    if (changed.has(file) || resolverConfig.test(file)) return Number.MAX_SAFE_INTEGER;
+    let shared = 0, prefix = "";
+    for (const part of file.split("/").slice(0, -1)) {
+      prefix = prefix ? `${prefix}/${part}` : part;
+      if (!prefixes.has(prefix)) break;
+      shared++;
+    }
+    return shared;
+  };
+  const depths = new Map(files.map((file) => [file, depth(file)]));
+  const effective = files.some((file) => !resolverConfig.test(file) && depths.get(file)! > 0);
+  return { order: [...files].sort((a, b) => depths.get(b)! - depths.get(a)!), effective };
+}
+
+export async function buildRepositoryEvidenceIndex(
+  rootInput: string, options: { cacheDirectory?: string | false; changedFiles?: string[] } = {},
+): Promise<RepositoryEvidenceIndex> {
   const root = path.resolve(rootInput);
   const inventory = await discoverRepositoryPaths(root, excluded);
   const readerGaps = [...inventory.skipped];
@@ -282,9 +313,7 @@ export async function buildRepositoryEvidenceIndex(rootInput: string, options: {
     process.env.QAMAP_REPOSITORY_CACHE === "off" ? false : options.cacheDirectory, inventory.inventoryComplete && inventory.discovery !== "unavailable");
   const previous = cache.previous;
   const oldBlocks = new Map(previous?.blocks.map((block) => [block.file, block]));
-  const blocks: RepositoryIndexBlock[] = [];
-  let reusedFiles = 0;
-  let readBytes = 0;
+  const candidates: Array<{ file: string; kind: RepositoryIndexBlock["kind"] }> = [];
   for (const file of inventory.files) {
     if (file.split("/").some((part) => excluded.has(part) || (part.startsWith(".") && part !== ".github"))) {
       skipped.push({ path: file, reason: "excluded-directory" }); continue;
@@ -294,15 +323,44 @@ export async function buildRepositoryEvidenceIndex(rootInput: string, options: {
     if (kind === "documentation" || kind === "generated" || kind === "unsupported-language" || kind === "non-source") {
       skipped.push({ path: file, reason: kind }); continue;
     }
-    if (blocks.length >= limits.files) { skipped.push({ path: file, reason: "source-limit" }); continue; }
-    const text = await read(file);
+    candidates.push({ file, kind });
+  }
+  // The file cap keeps the files nearest the change. Blocks stay in path order, so a
+  // repository under the cap produces the same index whatever the change is.
+  const files = candidates.map((candidate) => candidate.file);
+  const position = new Map(files.map((file, index) => [file, index]));
+  const kinds = new Map(candidates.map((candidate) => [candidate.file, candidate.kind]));
+  const ranked = (options.changedFiles?.length ?? 0) > 0 ? orderByProximity(files, options.changedFiles!) : undefined;
+  const proximity = ranked?.effective ?? false;
+  const order = proximity ? ranked!.order : files;
+  const blocks: RepositoryIndexBlock[] = [];
+  let reusedFiles = 0;
+  let readBytes = 0;
+  let capped = false;
+  // Reads run ahead in a bounded window but are consumed in order. A read is issued only
+  // while every in-flight read could still fit under the cap, so no file past it is opened.
+  const reads = new Map<string, Promise<string | undefined>>();
+  let issued = 0;
+  for (let cursor = 0; cursor < order.length; cursor++) {
+    const file = order[cursor];
+    if (blocks.length >= limits.files) { skipped.push({ path: file, reason: "source-limit" }); capped = true; continue; }
+    while (issued < order.length && issued - cursor < 32 && blocks.length + issued - cursor < limits.files) {
+      const next = order[issued++];
+      const pending = read(next);
+      pending.catch(() => undefined);
+      reads.set(next, pending);
+    }
+    const text = await reads.get(file);
+    reads.delete(file);
     if (text === undefined) continue;
     readBytes += Buffer.byteLength(text);
+    const kind = kinds.get(file)!;
     const old = oldBlocks.get(file);
     if (previous?.context === context && old?.hash === digest(text) && old.kind === kind) {
       blocks.push(old); reusedFiles++;
     } else blocks.push(metadata(file, text, kind));
   }
+  if (proximity) blocks.sort((a, b) => position.get(a.file)! - position.get(b.file)!);
   skipped.push(...readerGaps);
   for (const block of blocks) for (const gap of block.gaps) skipped.push({ path: `${block.file}:${gap.line}`, reason: gap.kind });
   skipped.sort((a, b) => comparePaths(a.path, b.path) || comparePaths(a.reason, b.reason));
@@ -313,7 +371,8 @@ export async function buildRepositoryEvidenceIndex(rootInput: string, options: {
   // Configuration changes invalidate relationships, not unchanged syntax blocks.
   const configChanged = changedFiles.some((file) => (current.get(file) ?? oldBlocks.get(file))?.kind === "configuration");
   const reverse = new Map<string, Set<string>>();
-  for (const snapshot of [[...oldBlocks.values()], blocks]) {
+  // Without a changed file the walk below has nothing to start from, so the importer map is never read.
+  for (const snapshot of changedFiles.length ? [[...oldBlocks.values()], blocks] : []) {
     const resolve = createRepositoryModuleResolver(snapshot);
     for (const block of snapshot) {
     if (configChanged && (block.imports.length || block.exports.some((entry) => entry.module))) affected.add(block.file);
@@ -341,7 +400,7 @@ export async function buildRepositoryEvidenceIndex(rootInput: string, options: {
   return { schemaVersion: 1, blocks, coverage: {
     scope: "repository-evidence", snapshot: "working-tree", discovery: inventory.discovery, inventoryFiles: inventory.files.length,
     indexedFiles: blocks.length, complete: inventory.inventoryComplete && skipped.length === 0, inventoryComplete: inventory.inventoryComplete,
-    fingerprint, limits, skipped, classifications,
+    fingerprint, limits, skipped, classifications, ...(proximity && capped ? { ordering: "changed-file-proximity" as const } : {}),
   }, reuse: { status, storage: await cache.save({ schema: 1, context, blocks }), reusedFiles, rebuiltFiles: blocks.length - reusedFiles,
     changedFiles, affectedFiles: [...affected].filter((file) => current.has(file)).sort(comparePaths), readFiles: blocks.length, readBytes } };
 }

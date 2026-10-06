@@ -49,18 +49,34 @@ export function createRepositoryModuleResolver(
   const probe = (candidate: string): string[] => files.has(path.posix.normalize(candidate))
     ? [path.posix.normalize(candidate)] : probePaths(candidate).filter((file) => files.has(file));
   const skippedByPath = new Map<string, typeof skipped>();
-  for (const gap of skipped) skippedByPath.set(gap.path, [...(skippedByPath.get(gap.path) ?? []), gap]);
-  const exclusions = (targets: string[]): Array<{ path: string; reason: string }> => {
-    const matches = new Map<string, typeof skipped[number]>();
-    for (const target of targets) {
-      const parts = target.split("/");
-      for (let end = 1; end <= parts.length; end++) for (const gap of skippedByPath.get(parts.slice(0, end).join("/")) ?? []) {
-        matches.set(`${gap.path}:${gap.reason}`, gap);
+  for (const gap of skipped) {
+    const gaps = skippedByPath.get(gap.path);
+    if (gaps) gaps.push(gap); else skippedByPath.set(gap.path, [gap]);
+  }
+  // Gaps recorded on a target or any of its directories, shallowest first. Targets repeat
+  // across imports, so each is matched once per resolver.
+  const targetGaps = new Map<string, typeof skipped>();
+  const gapsFor = (target: string): typeof skipped => {
+    let gaps = targetGaps.get(target);
+    if (!gaps) {
+      gaps = [];
+      let prefix: string | undefined;
+      for (const part of target.split("/")) {
+        prefix = prefix === undefined ? part : `${prefix}/${part}`;
+        for (const gap of skippedByPath.get(prefix) ?? []) gaps.push(gap);
       }
+      targetGaps.set(target, gaps);
     }
+    return gaps;
+  };
+  const exclusions = (targets: string[]): Array<{ path: string; reason: string }> => {
+    if (!skippedByPath.size) return [];
+    const matches = new Map<string, typeof skipped[number]>();
+    for (const target of targets) for (const gap of gapsFor(target)) matches.set(`${gap.path}:${gap.reason}`, gap);
     return [...matches.values()].sort((a, b) => comparePaths(a.path, b.path) || comparePaths(a.reason, b.reason));
   };
   const withExclusions = (resolution: ModuleResolution, targets: string[]): ModuleResolution => {
+    if (!skippedByPath.size) return resolution;
     const excluded = exclusions(targets.flatMap((target) => files.has(path.posix.normalize(target)) ? [path.posix.normalize(target)] : probePaths(target)));
     return excluded.length ? { ...resolution, reason: resolution.candidates.length > 1 ? resolution.reason : "index-excluded-module", excluded } : resolution;
   };
@@ -150,7 +166,8 @@ export function traceRepositoryImpact(
   const incoming = new Map<string, Array<{ block: RepositoryIndexBlock; local: string; imported: string; line: number; reexport: boolean; compiler?: string }>>();
   const unresolved = new Map<string, Array<{ line: number; module: string; reason: string; target?: string }>>();
   const blockedIncoming = new Map<string, Array<{ file: string; line: number; symbol: string; module: string; target?: string; reason: string }>>();
-  for (const block of index.blocks) for (const binding of [...block.imports.map((entry) => ({ ...entry, reexport: false })),
+  // Incoming edges are only walked from a changed, indexed file; with none the queue stays empty.
+  if (changes.some((change) => blocks.has(change.file))) for (const block of index.blocks) for (const binding of [...block.imports.map((entry) => ({ ...entry, reexport: false })),
     ...block.exports.filter((entry) => entry.module).map((entry) => ({ module: entry.module!, imported: entry.local, local: entry.exported, line: entry.line, reexport: true }))]) {
     const resolution = resolve(block.file, binding.module);
     if (resolution.reason || resolution.candidates.length !== 1) {

@@ -134,9 +134,16 @@ export function createRepositoryTextReader(root: string, skipped: DiscoveryGap[]
         return undefined;
       }
       handle = await fs.open(path.join(root, file), constants.O_RDONLY | constants.O_NOFOLLOW);
-      const buffer = Buffer.alloc(maxBytes + 1);
+      // Size the buffer from the stat and grow it to the limit only if the file grew
+      // while open. Only bytes [0, length) are ever read back, so no zero fill is needed.
+      let buffer = Buffer.allocUnsafe(stat.size + 1);
       let length = 0;
-      while (length < buffer.length) {
+      while (length < maxBytes + 1) {
+        if (length === buffer.length) {
+          const grown = Buffer.allocUnsafe(maxBytes + 1);
+          buffer.copy(grown, 0, 0, length);
+          buffer = grown;
+        }
         const { bytesRead } = await handle.read(buffer, length, buffer.length - length, null);
         if (!bytesRead) break;
         length += bytesRead;

@@ -200,3 +200,53 @@ test("syntax facts keep aliases and exports, exclude shadowed references, and fl
   assert.ok(structure.gaps.some((entry) => entry.kind === "runtime-module-loading"));
   assert.ok(!JSON.stringify(structure).includes("/items"));
 });
+
+test("a capped index keeps the files nearest the change and stays in path order", async (t) => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "qamap-repository-proximity-test-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  for (let index = 0; index < 12000; index++) {
+    const file = path.join(temp, "a", String(Math.floor(index / 1000)), `${index}.ts`);
+    if (index % 1000 === 0) await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, `export const value${index} = ${index};`);
+  }
+  await mkdir(path.join(temp, "z/feature/deep"), { recursive: true });
+  await mkdir(path.join(temp, "z/other"), { recursive: true });
+  await mkdir(path.join(temp, "y"), { recursive: true });
+  await writeFile(path.join(temp, "z/feature/deep/changed.ts"), "export const changed = 1;");
+  await writeFile(path.join(temp, "z/feature/deep/sibling.ts"), "export const sibling = 1;");
+  await writeFile(path.join(temp, "z/feature/near.ts"), "export const near = 1;");
+  await writeFile(path.join(temp, "z/other/shallow.ts"), "export const shallow = 1;");
+  await writeFile(path.join(temp, "y/far.ts"), "export const far = 1;");
+  // The resolver needs package and compiler configuration even when it sits shallower.
+  await writeFile(path.join(temp, "tsconfig.json"), "{}");
+  const plain = await buildRepositoryEvidenceIndex(temp, { cacheDirectory: false });
+  assert.equal(plain.coverage.indexedFiles, 12000);
+  assert.equal(plain.coverage.ordering, undefined);
+  assert.ok(!plain.blocks.some((block) => block.file.startsWith("z/")));
+  const near = await buildRepositoryEvidenceIndex(temp, { cacheDirectory: false, changedFiles: ["z/feature/deep/changed.ts"] });
+  assert.equal(near.coverage.indexedFiles, 12000);
+  assert.equal(near.coverage.ordering, "changed-file-proximity");
+  // Changed file and resolver configuration, then deepest shared directory, then shallower,
+  // then path order for the rest.
+  assert.deepEqual(near.blocks.slice(-5).map((block) => block.file),
+    ["tsconfig.json", "z/feature/deep/changed.ts", "z/feature/deep/sibling.ts", "z/feature/near.ts", "z/other/shallow.ts"]);
+  assert.deepEqual(near.blocks.map((block) => block.file), near.blocks.map((block) => block.file).sort());
+  assert.deepEqual(near.coverage.skipped.filter((gap) => gap.reason === "source-limit").map((gap) => gap.path),
+    ["a/9/9995.ts", "a/9/9996.ts", "a/9/9997.ts", "a/9/9998.ts", "a/9/9999.ts", "y/far.ts"]);
+  assert.equal(near.reuse.readFiles, 12000);
+  // A change that shares no directory with the inventory leaves the order and the record unchanged.
+  const unrelated = await buildRepositoryEvidenceIndex(temp, { cacheDirectory: false, changedFiles: ["q/missing.ts"] });
+  assert.equal(unrelated.coverage.ordering, undefined);
+  assert.deepEqual(unrelated.blocks.map((block) => block.file), plain.blocks.map((block) => block.file));
+});
+
+test("changed-file proximity leaves an index under the file cap unchanged", async (t) => {
+  const { root, put } = await fixture(t);
+  await put("docs/readme.md", "documentation");
+  await put("src/large.ts", `export const large = "${"x".repeat(310_000)}";`);
+  const plain = await buildRepositoryEvidenceIndex(root, { cacheDirectory: false });
+  const near = await buildRepositoryEvidenceIndex(root, { cacheDirectory: false, changedFiles: ["tests/service.test.ts"] });
+  assert.deepEqual(near, plain);
+  assert.deepEqual(plain.blocks.map((block) => block.file), ["package.json", "schema/openapi.json", "src/service.ts", "src/value.ts", "tests/service.test.ts"]);
+  assert.ok(plain.coverage.skipped.some((gap) => gap.path === "src/large.ts" && gap.reason === "oversized"));
+});

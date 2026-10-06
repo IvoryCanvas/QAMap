@@ -17,7 +17,7 @@ import { buildDomainLanguageSummary } from "./domain-language.js";
 import { defaultDomainManifestPath, loadDomainManifest, matchDomains } from "./domains.js";
 import { analyzeFixtureSource, insightCoversEndpoint } from "./fixture-insight.js";
 import type { FixtureFileInsight } from "./fixture-insight.js";
-import { collectProjectFiles } from "./fs.js";
+import { collectProjectFilePaths, collectProjectFiles } from "./fs.js";
 import { readFileAtRef } from "./git-context.js";
 import { buildReverseImportIndex, expandChangedFilesWithImporters, findImportingSurfaces } from "./import-graph.js";
 import type { ImportImpact } from "./import-graph.js";
@@ -4163,7 +4163,7 @@ async function detectProjectProfile(root: string, workspaceRoot?: string): Promi
     "routers.py",
     "admin.py",
   ]);
-  const projectFilePaths = (await collectProjectFiles(root, 2000)).map((file) => file.path);
+  const projectFilePaths = await collectProjectFilePaths(root, 2000);
   const projectProfileArtifactFiles = projectFilePaths.filter((file) => !isTestLikeFile(file));
   const hasDesignTokenProject = projectProfileArtifactFiles.some(isDesignTokenFile);
   const hasDataCatalogProject = projectProfileArtifactFiles.some(isCatalogDataFile);

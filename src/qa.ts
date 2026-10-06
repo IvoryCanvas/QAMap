@@ -59,6 +59,7 @@ import {
 import type { AddedDiffEvidence } from "./test-plan.js";
 import { parsePythonValidationCommand } from "./validation-command.js";
 import { TOOL_NAME, VERSION } from "./version.js";
+import { withProjectScanMemo } from "./fs.js";
 import { buildReverseImportIndex } from "./import-graph.js";
 import type { ImportDiscoveryCoverage, ImportIndexReuse } from "./import-graph.js";
 import { buildRepositoryEvidenceIndex, repositoryIndexMatchesRef } from "./repository-index.js";
@@ -284,12 +285,20 @@ interface QaRuntimePrerequisiteTestGap {
   wrapperFile?: string;
 }
 
+// Stages of one draft share project walks and import graphs instead of rescanning the tree.
+// The repository index is built once the diff is known, so a capped inventory keeps the
+// files nearest the change; the scoped and repository-root passes share that one build.
 export async function generateQaDraft(rootInput: string, options: QaDraftOptions = {}): Promise<QaDraftResult> {
-  const index = await buildRepositoryEvidenceIndex(options.workspaceRoot ?? path.resolve(rootInput));
-  return generateQaDraftWithIndex(rootInput, options, index);
+  return withProjectScanMemo(() => {
+    let index: Promise<RepositoryEvidenceIndex> | undefined;
+    return generateQaDraftWithIndex(rootInput, options, (changedFiles) =>
+      index ??= buildRepositoryEvidenceIndex(options.workspaceRoot ?? path.resolve(rootInput), { changedFiles }));
+  });
 }
 
-async function generateQaDraftWithIndex(rootInput: string, options: QaDraftOptions, repositoryIndex: RepositoryEvidenceIndex): Promise<QaDraftResult> {
+type RepositoryIndexLoader = (changedFiles: string[]) => Promise<RepositoryEvidenceIndex>;
+
+async function generateQaDraftWithIndex(rootInput: string, options: QaDraftOptions, loadRepositoryIndex: RepositoryIndexLoader): Promise<QaDraftResult> {
   const root = path.resolve(rootInput);
   const {
     automaticWorkspaceScope = true,
@@ -309,7 +318,7 @@ async function generateQaDraftWithIndex(rootInput: string, options: QaDraftOptio
         head: preflight.head,
         workspaceRoot: root,
         automaticWorkspaceScope: false,
-      }, repositoryIndex);
+      }, loadRepositoryIndex);
       const qualified = qualifyAutomaticPackageCommands(scoped, selected.path);
       return {
         ...qualified,
@@ -555,6 +564,7 @@ async function generateQaDraftWithIndex(rootInput: string, options: QaDraftOptio
 
   const importIndex = await buildReverseImportIndex(root);
   const repositoryPrefix = e2eOptions.workspaceRoot ? toPosixPath(path.relative(e2eOptions.workspaceRoot, root)) : "";
+  const repositoryIndex = await loadRepositoryIndex(changedFiles.map((file) => repositoryPrefix ? `${repositoryPrefix}/${file}` : file));
   const indexMatchesChange = draft.plan.includeWorkingTree || await repositoryIndexMatchesRef(e2eOptions.workspaceRoot ?? root, repositoryIndex, draft.plan.head);
   const repositoryImpact = traceRepositoryImpact(repositoryIndex, (indexMatchesChange ? changedFiles : []).map((file) => ({
     file: repositoryPrefix ? `${repositoryPrefix}/${file}` : file,

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { memoizeProjectScan } from "./fs.js";
 import { comparePaths, createRepositoryTextReader, discoverRepositoryPaths } from "./repository-discovery.js";
 import type { DiscoveryGap } from "./repository-discovery.js";
 import { openImportCache } from "./import-index-cache.js";
@@ -88,10 +89,19 @@ interface TsconfigPaths {
 const importSpecifierMatcher =
   /(?:import|export)\s+(?:[\s\S]*?from\s+)?["']([^"'\n]+)["']|require\(\s*["']([^"'\n]+)["']\s*\)|import\(\s*["']([^"'\n]+)["']\s*\)/g;
 
-export async function buildReverseImportIndex(
+// One analysis run asks for the same package graph from several stages; the
+// first build serves them all, and its reuse status describes that build.
+export function buildReverseImportIndex(
   rootInput: string, options: { cacheDirectory?: string | false } = {},
 ): Promise<ReverseImportIndex> {
   const root = path.resolve(rootInput);
+  return memoizeProjectScan(`reverse-import-index\0${root}\0${JSON.stringify(options.cacheDirectory ?? null)}`,
+    () => buildReverseImportIndexUncached(root, options));
+}
+
+async function buildReverseImportIndexUncached(
+  root: string, options: { cacheDirectory?: string | false },
+): Promise<ReverseImportIndex> {
   const inventory = await discoverRepositoryPaths(root, ignoredDirectories);
   const skipped = [...inventory.skipped];
   const readable = createRepositoryTextReader(root, skipped, maxSourceBytes);
