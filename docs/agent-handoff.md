@@ -29,10 +29,13 @@ progress or a generated terminal launcher. Add `--include-working-tree` only
 when those changes belong to the requested review.
 
 Use the execution tool's foreground completion wait rather than an early
-one-second yield. On hosts with `exec_command`, the packaged instructions request
-`yield_time_ms: 30000`. This is an initial wait, not an analysis timeout or a
-zero-token guarantee. If the host still requires another model turn to await
-completion, count that turn; never relaunch the analysis to check its status.
+one-second yield. Large repositories can take a few minutes, so the packaged
+instructions ask for a 10-minute wait: Claude Code Bash `timeout: 600000`, or
+`yield_time_ms: 600000` on hosts with `exec_command`. A shorter limit can move
+the command to the background and leave the host waiting without a result. This
+is a wait, not a zero-token guarantee. If the host still requires another model
+turn to await completion, count that turn; never relaunch the analysis to check
+its status.
 
 | Field | Meaning |
 | --- | --- |
