@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { ProjectFile } from "./types.js";
@@ -92,7 +93,95 @@ export async function pathExists(value: string): Promise<boolean> {
   }
 }
 
+interface ProjectWalk<T> {
+  maxFiles: number;
+  items: Promise<T[]>;
+}
+
+interface ProjectScanMemo {
+  files: Map<string, ProjectWalk<ProjectFile>>;
+  paths: Map<string, ProjectWalk<string>>;
+  values: Map<string, Promise<unknown>>;
+}
+
+const projectScanMemo = new AsyncLocalStorage<ProjectScanMemo>();
+
+// Scans are shared only inside one analysis run, so a caller that edits the
+// tree between runs never receives a stale inventory or import graph.
+export function withProjectScanMemo<T>(run: () => Promise<T>): Promise<T> {
+  if (projectScanMemo.getStore()) {
+    return run();
+  }
+  return projectScanMemo.run({ files: new Map(), paths: new Map(), values: new Map() }, run);
+}
+
+export function memoizeProjectScan<T>(key: string, compute: () => Promise<T>): Promise<T> {
+  const memo = projectScanMemo.getStore();
+  if (!memo) {
+    return compute();
+  }
+  const cached = memo.values.get(key) as Promise<T> | undefined;
+  if (cached) {
+    return cached;
+  }
+  const value = compute();
+  memo.values.set(key, value);
+  value.catch(() => {
+    if (memo.values.get(key) === value) memo.values.delete(key);
+  });
+  return value;
+}
+
+// The walk is a sorted depth-first prefix that stops at maxFiles, so a larger
+// walk, or one that ended before its own limit, already holds every smaller answer.
+async function reuseWalk<T>(walk: ProjectWalk<T> | undefined, maxFiles: number): Promise<T[] | undefined> {
+  const items = await walk?.items.catch(() => undefined);
+  return walk && items && (maxFiles <= walk.maxFiles || items.length < walk.maxFiles) ? items.slice(0, maxFiles) : undefined;
+}
+
+async function memoizedWalk<T>(walks: Map<string, ProjectWalk<T>>, key: string, maxFiles: number, walk: () => Promise<T[]>): Promise<T[]> {
+  const reused = await reuseWalk(walks.get(key), maxFiles);
+  if (reused) {
+    return reused;
+  }
+  const entry = { maxFiles, items: walk() };
+  const current = walks.get(key);
+  if (!current || maxFiles > current.maxFiles) {
+    walks.set(key, entry);
+  }
+  entry.items.catch(() => {
+    if (walks.get(key) === entry) walks.delete(key);
+  });
+  return entry.items;
+}
+
 export async function collectProjectFiles(root: string, maxFiles: number): Promise<ProjectFile[]> {
+  const memo = projectScanMemo.getStore();
+  if (!memo || !Number.isSafeInteger(maxFiles) || maxFiles < 0) {
+    return walkProjectFiles(root, maxFiles, true);
+  }
+  // Callers receive their own records, so filtering or annotating one never leaks into another.
+  const files = await memoizedWalk(memo.files, path.resolve(root), maxFiles, () => walkProjectFiles(root, maxFiles, true));
+  return files.map((file) => ({ ...file }));
+}
+
+// Same order and limit as collectProjectFiles, without stat calls or text reads.
+export async function collectProjectFilePaths(root: string, maxFiles: number): Promise<string[]> {
+  const memo = projectScanMemo.getStore();
+  if (!memo || !Number.isSafeInteger(maxFiles) || maxFiles < 0) {
+    return (await walkProjectFiles(root, maxFiles, false)).map((file) => file.path);
+  }
+  const key = path.resolve(root);
+  const files = await reuseWalk(memo.files.get(key), maxFiles);
+  if (files) {
+    return files.map((file) => file.path);
+  }
+  const paths = await memoizedWalk(memo.paths, key, maxFiles,
+    async () => (await walkProjectFiles(root, maxFiles, false)).map((file) => file.path));
+  return [...paths];
+}
+
+async function walkProjectFiles(root: string, maxFiles: number, withContents: boolean): Promise<ProjectFile[]> {
   const files: ProjectFile[] = [];
   const normalizedRoot = path.resolve(root);
 
@@ -128,6 +217,11 @@ export async function collectProjectFiles(root: string, maxFiles: number): Promi
       }
 
       if (!entry.isFile()) {
+        continue;
+      }
+
+      if (!withContents) {
+        files.push({ path: relativePath, absolutePath, size: 0 });
         continue;
       }
 

@@ -66,7 +66,8 @@ test("qa brief connects a changed declaration to its tests, callers and caller t
   const output = await brief(root);
   assert.match(output, /^QAMap brief: main\.\.\.HEAD\n/);
   assert.match(output, /Static analysis only: no tests were run, no LLM was called\./);
-  assert.match(output, /Changed declarations with tests found: 1\/1\./);
+  assert.match(output, /Changed declarations named by a test file: 1\/1 \(name match: a listed test may not reach the change/);
+  assert.match(output, /Only \+ lines are new; code outside these hunks existed at base\./);
   // Removed lines keep base numbering and added lines head numbering, so citations need no reread.
   assert.match(output, /\n-2\|  return Math\.max\(0, limit - used\);\n\+2\|  return limit - used;\n/);
   assert.match(output, /remaining: re-exported at src\/index\.mjs:1/);
@@ -117,7 +118,7 @@ test("qa brief prints repeated change shapes once with every value", async () =>
   assert.match(output, /-1\|export function check10\(value\) \{ return Math\.max\(0, value\); \}/);
   assert.match(output, /test\/rule-10\.test\.mjs:4 "rule 10 keeps its bound"/);
   assert.match(output, /### Same change in 29 more files: identical to the block above except that each standalone number 10 becomes N, for N = 0\.\.9, 11\.\.29\n/);
-  assert.match(output, /Changed declarations with tests found: 30\/30\./);
+  assert.match(output, /Changed declarations named by a test file: 30\/30 /);
   assert.ok(Buffer.byteLength(output) < 4000);
 });
 
@@ -131,8 +132,12 @@ test("qa brief lists everything it omits when the byte limit is reached", async 
   const { root } = await repository(base, head);
   const output = await brief(root, ["--max-bytes", "4000"]);
   assert.ok(Buffer.byteLength(output) <= 4000, `brief exceeded its limit: ${Buffer.byteLength(output)}`);
-  assert.match(output, /== Omitted to fit the budget ==\n- Diff and references for \d+ files: /);
-  assert.match(output, /Show one with: git diff main\.\.\.HEAD -- <file>/);
+  assert.match(output, /Not everything fits: the files under Not fully shown need their diff read before concluding\./);
+  assert.match(output, /== Not fully shown \(removed lines appear only in the diff\) ==\n- src\/module\d+\.mjs: /);
+  // Every file that is not shown in full is named, and the command shows exactly those source files.
+  const hiddenFiles = [...output.matchAll(/^- (src\/module\d+\.mjs): /gm)].map((match) => match[1]);
+  for (let i = 0; i < 12; i++) assert.ok(output.includes(`### src/module${i}.mjs`) || hiddenFiles.includes(`src/module${i}.mjs`), `module${i} is neither shown nor named`);
+  assert.match(output, /- Show them with: git diff main\.\.\.HEAD -- (?:'src\/module\d+\.mjs' ?)+\n|- Show them with: git diff main\.\.\.HEAD -- <file>\n/);
   await assert.rejects(brief(root, ["--max-bytes", "100"]), /--max-bytes must be an integer of at least 4000/);
 });
 
@@ -157,7 +162,7 @@ test("qa brief resolves what the new code calls", async () => {
   }, { "src/save.mjs": "import { persist } from './store.mjs';\nexport function save(record) {\n  audit(record);\n  return persist(record);\n}\n" });
   const output = await brief(root);
   assert.match(output, /calls persist: src\/store\.mjs:1\| export function persist\(record\) \{/);
-  assert.match(output, /calls audit: not defined or imported in this repository/);
+  assert.match(output, /calls audit: external or built-in \(no definition in this repository\)/);
 });
 
 test("qa brief resolves Python imports and includes untracked working-tree files on request", async () => {
@@ -233,7 +238,7 @@ test("qa brief turns inferred QA focus into concrete checks with the behavior fl
   };
   const { root } = await repository(await read("base"), await read("head"), { message: "fix: defer email validation to after first blur on signup form" });
   const output = await brief(root);
-  assert.match(output, /== What to verify \(QAMap QA focus: turn each check into action -> expected result, or dismiss it with a reason\) ==/);
+  assert.match(output, /== What to verify \(QAMap pattern checks, matched heuristically: turn each one that fits this diff into action -> expected result, or dismiss it in one line\) ==/);
   assert.match(output, /flow: trigger: After first blur on signup form -> /);
   assert.match(output, /\n {6}Verify the changed test contract: shows the email error after the field is blurred with an invalid value\.\n/);
   assert.match(output, /\n {6}edge case: /);
@@ -272,4 +277,62 @@ test("qa brief help documents the bounded command", async () => {
   const { stdout } = await exec(process.execPath, [cli, "qa", "brief", "--help"]);
   assert.match(stdout, /qamap qa brief \[path\] \[--base <ref>\]/);
   assert.match(stdout, /Default limit: 24000 bytes/);
+});
+
+test("qa brief keeps every removed line when a file exceeds its line cap and folds added runs instead", async () => {
+  const before = Array.from({ length: 120 }, (_, line) => `  const a${line} = input.a${line};`);
+  before.splice(100, 0, '  const label = includeChildren ? "Export" : "Download";');
+  const afterLines = Array.from({ length: 150 }, (_, line) => `  const b${line} = input.b${line};`);
+  afterLines.push('  const label = "Download";');
+  const { root } = await repository(
+    { "src/dialog.mjs": `export function dialog(input, includeChildren) {\n${before.join("\n")}\n  return label;\n}\n` },
+    { "src/dialog.mjs": `export function dialog(input, includeChildren) {\n${afterLines.join("\n")}\n  return label;\n}\n` });
+  const output = await brief(root, ["--max-bytes", "6000"]);
+  assert.ok(Buffer.byteLength(output) <= 6000);
+  // The removed ternary survives the cap; the head file still has the added lines.
+  assert.match(output, /\n-102\|  const label = includeChildren \? "Export" : "Download";\n/);
+  assert.match(output, /\+  \.\.\. \d+ more added lines at head \d+-\d+ \(read them from the file\)/);
+  assert.match(output, /change signals \(pattern match; read these lines\): removes or rewrites a condition at base 102/);
+});
+
+test("qa brief flags lowered error logging, new early exits and gaps between hunks of one function", async () => {
+  const filler = Array.from({ length: 200 }, (_, line) => `  steps.push(${line});`).join("\n");
+  const { root } = await repository({
+    "src/sync.mjs": `export async function sync(item, steps, save, logger) {\n  try {\n    await save(item);\n  } catch (error) {\n    logger.error("sync failed", error);\n    throw error;\n  }\n${filler}\n  return steps.length;\n}\n`,
+  }, {
+    "src/sync.mjs": `export async function sync(item, steps, save, logger) {\n  if (item.synced) return item;\n  try {\n    await save(item);\n  } catch (error) {\n    logger.debug("sync failed", error);\n  }\n${filler}\n  return steps.length + 1;\n}\n`,
+  });
+  const output = await brief(root);
+  assert.match(output, /removes 1 error\/warning log call\(s\) at base 5; adds info\/debug logging at 6/);
+  assert.match(output, /adds an early exit at 2/);
+  assert.match(output, /sync \(head lines 1-\d+\): unchanged lines between its hunks not shown: \d+-\d+/);
+});
+
+test("qa brief marks references this diff changes and ignores same-named symbols in other languages", async () => {
+  const { root } = await repository({
+    "src/format.ts": "export function formatLabel(value: string): string {\n  return value.trim();\n}\n",
+    "src/updated.ts": "import { formatLabel } from './format';\nexport const updated = (value: string) => formatLabel(value);\n",
+    "src/stale.ts": "import { formatLabel } from './format';\nexport const stale = (value: string) => formatLabel(value);\n",
+    "mobile/test/format_test.dart": "void main() {\n  test('formatLabel trims', () {\n    expect(formatLabel(' a '), 'a');\n  });\n}\n",
+  }, {
+    "src/format.ts": "export function formatLabel(value: string, upper = false): string {\n  return upper ? value.trim().toUpperCase() : value.trim();\n}\n",
+    "src/updated.ts": "import { formatLabel } from './format';\nexport const updated = (value: string) => formatLabel(value, true);\n",
+  });
+  const output = await brief(root);
+  assert.match(output, /src\/updated\.ts:2 in updated \(changed\)\|/);
+  assert.match(output, /src\/stale\.ts:2 in stale\|/);
+  assert.doesNotMatch(output, /format_test\.dart/);
+});
+
+test("enclosing definitions are found by indentation or braces when no syntax index exists", async () => {
+  const { enclosingDefinition, changeSignals } = await import("../dist/qa-brief.js");
+  const python = ["class Job:", "    def run(self, item):", "        if item:", "            return 1", "        return 0", "", "def other():", "    pass"];
+  assert.deepEqual(enclosingDefinition(python, 4), { name: "run", line: 2, endLine: 5 });
+  const go = ["package queue", "", "func (q *Queue) Push(item Item) error {", "\tif item == nil {", "\t\treturn errNil", "\t}", "\treturn nil", "}"];
+  assert.deepEqual(enclosingDefinition(go, 5), { name: "Push", line: 3, endLine: 8 });
+  assert.equal(enclosingDefinition(["const a = 1;", "const b = 2;"], 2), undefined);
+  const hunk = { header: "@@ -10,3 +10,3 @@", oldStart: 10, newStart: 10, newCount: 3,
+    lines: ["-\t\tlog.Error(\"check failed: %v\", err)", "+\t\tlog.Debug(\"check failed: %v\", err)", " \t}"] };
+  assert.match(changeSignals({ hunks: { minimal: [hunk] } }), /removes 1 error\/warning log call\(s\) at base 10; adds info\/debug logging at 10/);
+  assert.equal(changeSignals({ hunks: { minimal: [{ ...hunk, lines: [" \treturn nil"] }] } }), undefined);
 });

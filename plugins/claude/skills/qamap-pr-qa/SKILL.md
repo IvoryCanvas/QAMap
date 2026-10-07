@@ -1,6 +1,6 @@
 ---
 name: qamap-pr-qa
-description: PR bug review and test planning with QAMap. Run `qamap qa brief` once; it prints the diff, each changed declaration's tests and callers with assertion lines, QA focus and unknowns in one bounded local response, so review from it instead of re-exploring the repository.
+description: PR bug review and test planning with QAMap. Run `qamap qa brief` once; it prints the diff, each changed declaration's tests and callers with assertion lines, QA focus and unknowns in one bounded local response, so the review starts from it instead of re-exploring the repository.
 ---
 
 # QAMap PR Review
@@ -14,8 +14,10 @@ with three answers, this time only; always (`qamap consent grant`, or
 installation is not consent. `qamap consent revoke [--global]` returns to
 asking. Respect a refusal or a request for independent review.
 
-1. From the repository root, run once in the foreground and wait for completion
-   (`exec_command`: `yield_time_ms: 30000`; short polling adds model turns):
+1. From the repository root, run once in the foreground and wait for it to
+   finish. Large repositories can take a few minutes, so allow up to 10 minutes
+   (Claude Code Bash `timeout: 600000`; Codex `exec_command`
+   `yield_time_ms: 600000`). Do not background, poll or restart it.
 
    ```sh
    qamap qa brief --require-consent
@@ -23,17 +25,34 @@ asking. Respect a refusal or a request for independent review.
 
    The base is auto-selected. Add `--base <ref>` only for a known different PR
    base, and `--include-working-tree` only for requested uncommitted changes.
-2. Review from the brief. It already contains the diff, each changed
-   declaration's direct tests and callers with their assertion lines, QAMap's QA
-   focus, and unknowns. Do not repeat git diff, searches or file reads for what
-   it already shows.
-3. Read source only to settle a specific open item (Unknowns, Omitted, or an
-   unclear call site), and say what you read. Do not start a second full review.
-4. Report findings with file:line; then what to verify: turn each check under
-   "What to verify", and each behavior the diff changes, into a concrete check
-   (action -> expected observable result), or dismiss it with a reason; then what
-   remains unknown. Tests stay `not-run`: the brief proves nothing was executed.
-   Test runs, edits and automation need separate approval.
+2. Use the brief as your map, not your limit. It prints the changed hunks with a
+   few context lines, callers and tests matched by name, QAMap's QA focus,
+   unknowns, and what it could not fit. Do not re-run the whole diff or broad
+   searches for what it prints in full.
+3. Look for bugs before planning tests. Before concluding:
+   - Run the `git diff` command the brief gives for each file under "Not fully
+     shown". Reading a file at HEAD cannot show removed lines.
+   - Read the whole changed function once when the brief says lines between
+     its hunks are not shown, or when the change touches a guard, an early
+     return, error handling, a log level, a transaction or shared state.
+   - For each removed or rewritten behavior, state the old behavior, the new
+     one, and one concrete failure scenario. Examples: a retry after a partial
+     failure, a concurrent request, a caller that does not handle a new error,
+     or removed behavior that nothing replaces.
+   - Check before you call something new, removed, worse, untested, unused or
+     fully updated. Use `git show <base>:<path>` for the old version, or one
+     repository-wide search.
+   - If an open question decides whether a finding is real (a crash, an error
+     response, lost or duplicated data), settle it with a targeted read instead
+     of leaving it unknown.
+   Keep reads to these checks. The brief replaces the initial exploration.
+4. Report findings first, with file:line and the failure scenario. Then list
+   what to verify: turn each check under "What to verify", and each behavior the
+   diff changes, into a concrete check (action -> expected observable result), or
+   dismiss it with a reason. Then list what remains unknown. Test names and
+   assertion lines show what a test asserts, not that it passes or reaches the
+   change. Tests stay `not-run`: the brief proves nothing was executed. Test runs,
+   edits and automation need separate approval.
 
 `qa brief` ships with `@ivorycanvas/qamap@0.5.1`. If `qamap` is missing, rejects
 `brief`, or fails, report the blocker. Do not retry, install, upgrade or switch to

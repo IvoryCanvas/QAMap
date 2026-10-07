@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { collectProjectFilePaths, collectProjectFiles, withProjectScanMemo } from "../dist/fs.js";
 import { buildReverseImportIndex, findImportingSurfaces } from "../dist/import-graph.js";
 import { formatAgentQaDraft, formatMarkdownQaDraft, generateQaDraft } from "../dist/qa.js";
 
@@ -207,4 +208,31 @@ test("QA exposes scoped discovery without changing static execution or compact p
   assert.match(markdown, /working-tree import graph only/);
   assert.match(markdown, /not full semantic coverage/);
   assert.ok(Buffer.byteLength(formatAgentQaDraft(result)) <= 4096);
+});
+
+test("one analysis run shares walks and import graphs while a later run sees edits", async (t) => {
+  const root = await repository(t);
+  for (let index = 0; index < 12; index++) await put(root, `src/file-${String(index).padStart(2, "0")}.ts`, `export const value${index} = ${index};`);
+  await put(root, "src/page.tsx", "import { value0 } from './file-00'; export const page = value0;");
+  track(root);
+  const fresh = await collectProjectFiles(root, 5);
+  const freshPaths = (await collectProjectFiles(root, 100)).map((file) => file.path);
+  await withProjectScanMemo(async () => {
+    const large = await collectProjectFiles(root, 100);
+    const small = await collectProjectFiles(root, 5);
+    assert.deepEqual(small, fresh);
+    assert.deepEqual(large.map((file) => file.path), freshPaths);
+    // An exhaustive walk also answers a larger limit, and every caller gets its own records.
+    assert.deepEqual((await collectProjectFiles(root, 1000)).map((file) => file.path), freshPaths);
+    small[0].text = "mutated";
+    assert.notEqual((await collectProjectFiles(root, 5))[0].text, "mutated");
+    assert.deepEqual(await collectProjectFilePaths(root, 7), freshPaths.slice(0, 7));
+    const first = await buildReverseImportIndex(root);
+    assert.equal(await buildReverseImportIndex(root), first);
+    assert.notEqual(await buildReverseImportIndex(root, { cacheDirectory: false }), first);
+  });
+  assert.deepEqual(await collectProjectFilePaths(root, 7), freshPaths.slice(0, 7));
+  await put(root, "src/page.tsx", "import { value1 } from './file-01'; export const page = value1;");
+  const edited = await withProjectScanMemo(() => buildReverseImportIndex(root));
+  assert.deepEqual([...edited.importsOf.get("src/page.tsx")], ["src/file-01.ts"]);
 });

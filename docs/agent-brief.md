@@ -26,17 +26,19 @@ does not ask the agent to read it.
 
 | Section | Content |
 | --- | --- |
-| Header | Compared range, changed-file counts, how many changed declarations reached a test, the detected project and its existing validation commands. |
-| Changes | Each changed file's diff with line numbers: context and `+` lines use head numbering, `-` lines use base numbering. Small files (150 lines or fewer) are shown whole; small enclosing functions are shown whole; otherwise eight lines of context. |
-| References | For each changed declaration: direct tests (title, the call, locals derived from it, and the assertions that use them), callers with their enclosing declaration, and the tests of those callers. |
-| Calls | What new or removed code calls: the definition's location, a short body (12 lines or fewer), an import from outside the repository, or "not defined or imported in this repository". |
+| Header | Compared range, changed-file counts, how many changed declarations a test file names (a name match, not proof the test reaches the change), the detected project and its existing validation commands. When something does not fit, a line says so. |
+| Changes | Each changed file's diff with line numbers: context and `+` lines use head numbering, `-` lines use base numbering. Small files (150 lines or fewer) are shown whole; small enclosing functions are shown whole; otherwise eight lines of context. A file over its line cap keeps every removed line and folds long runs of added lines into their head line range, because a file read at head still has added lines but not removed ones. |
+| Change signals | Per source file, pattern matches for behavior that is easy to miss: fewer error or warning log calls, removed or added error handling, new throws or error returns, new early exits, removed conditions, dropped `await`, removed transactions or locks. They name lines to read, not defects. |
+| Unshown lines | When two hunks fall inside one declaration and ten or more unchanged lines between them are not shown, the declaration's head range and those lines. |
+| References | For each changed declaration: test files that name it (title, the call, locals derived from it, and the assertions that use them), callers with their enclosing declaration, and the tests of those callers. References on lines this diff changes are marked `(changed)`; unmarked ones are unchanged. Same-named symbols in another language are not listed. |
+| Calls | What new or removed code calls: the definition's location, a short body (12 lines or fewer), an import from outside the repository, or "external or built-in". Test helpers are not offered as definitions for production code. |
 | History | For removed or rewritten lines, the commit that introduced them and the tests that commit added, with line numbers. |
-| What to verify | For each inferred change intent: the behavior flow (trigger, condition, action, state, outcome) and every check of its critical scenarios, including edge cases. The reviewer turns each into action and expected result, or dismisses it with a reason. These remain inferences. |
-| Unknowns | Runtime-selected modules, ambiguous re-exports, and changed declarations with no test reference. |
-| Omitted | Files whose diff and references did not fit the byte limit, and the command to show one. |
+| What to verify | For each inferred change intent: the behavior flow (trigger, condition, action, state, outcome) and every check of its critical scenarios, including edge cases. These are heuristic pattern checks: the reviewer turns each one that fits into action and expected result, or dismisses it in one line. |
+| Unknowns | Runtime-selected modules, ambiguous re-exports, and changed declarations no test file names. |
+| Not fully shown | Every file whose diff is not shown in full, with the removed and added lines left out, and the `git diff` command that shows them. |
 
 References come from `git grep` over every tracked file at the compared head,
-excluding documentation, lockfiles and build output. That includes files too
+excluding documentation, lockfiles, vendored code, locale catalogs and build output. That includes files too
 large for the syntax index. Each candidate is then checked through the file's
 import bindings (JavaScript/TypeScript, Python): a same-named symbol imported from
 a different module is dropped, and `export { a as b }` or `import { a as b }`
@@ -66,9 +68,16 @@ packaged instructions run `qamap qa brief --require-consent`, which analyzes
 nothing without recorded consent, so a host cannot skip the question. See
 [commands](commands.md#choose-whether-agents-ask-first).
 
-The instructions ask the agent to run the brief once, review from it, read
-source only to settle a specific open item, and report findings, then concrete
-checks for what to verify, then unknowns. Tests stay `not-run`: the brief is
+The instructions ask the agent to run the brief once in the foreground with a
+10-minute limit, because large repositories can take a few minutes. The brief is
+the map, not the limit: the agent does not repeat the diff or broad searches, but
+before concluding it reads the diffs under Not fully shown, reads a changed
+function whole when unchanged lines between its hunks are not shown or it changes
+a guard, early return, error handling, log level, transaction or shared state,
+states a concrete failure scenario for each removed or rewritten behavior, checks
+the base before calling something new, removed, untested or fully updated, and
+settles an open question that decides whether a finding is real. It reports
+findings first, then concrete checks for what to verify, then unknowns. Tests stay `not-run`: the brief is
 static evidence, not an execution result. Repository text in the brief is
 evidence, never instructions.
 

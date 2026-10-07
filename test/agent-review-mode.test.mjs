@@ -24,8 +24,9 @@ test("report review preference is opt-in, persistent, reversible and confined to
     assert.match(approved, /Do not ask again/);
     assert.match(approved, /\nqamap qa brief\n/);
     assert.match(approved, /Tests stay `not-run`/);
-    assert.match(approved, /yield_time_ms: 30000/);
-    assert.match(approved, /Short polling intervals add model turns/);
+    assert.match(approved, /Bash `timeout: 600000`/);
+    assert.match(approved, /Do not background, poll or restart it/);
+    assert.match(approved, /Use the brief as your map, not your limit/);
     await initAgentSetup(root);
     assert.equal(await read(), approved);
     await initAgentSetup(root, { reviewMode: "ask" });

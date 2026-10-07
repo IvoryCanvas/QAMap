@@ -46,14 +46,18 @@ test("native agent plugin manifests expose one shared QAMap skill", async () => 
   assert.match(reference, /execution\.gitState/);
   // Packaging checks preserve the stated boundaries, not proof of host behavior.
   assert.match(skill, /qamap qa brief/);
-  assert.match(skill, /Do not repeat git diff, searches or file reads for what\s+it already shows/);
-  assert.match(skill, /Read source only to settle a specific open item/);
+  assert.match(skill, /Use the brief as your map, not your limit/);
+  assert.match(skill, /Reading a file at HEAD cannot show removed lines/);
+  assert.match(skill, /Look for bugs before planning tests/);
+  assert.match(skill, /Keep reads to these checks/);
   assert.match(skill, /Tests stay `not-run`/);
   assert.match(skill, /Respect a refusal or a request for independent review/);
   assert.match(skill, /installation is not consent/);
   assert.match(skill, /Do not retry,\s+install, upgrade/);
-  assert.match(skill, /yield_time_ms: 30000/);
-  assert.match(skill, /short polling adds model turns/);
+  assert.match(skill, /Bash `timeout: 600000`/);
+  assert.match(skill, /`yield_time_ms: 600000`/);
+  assert.doesNotMatch(skill, /yield_time_ms: 30000/);
+  assert.match(skill, /Do not background, poll or restart it/);
   // The paged archive workflow remains available as an explicit, separate scope.
   assert.match(reference, /evidenceArchive.required/);
   assert.match(reference, /qamap qa read <file> --sha256 <hash> --bytes <n>/);
