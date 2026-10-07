@@ -11,6 +11,10 @@
 - References skip vendored, minified and locale files, same-named symbols in other languages, and test helpers offered as production definitions. Very common names stop after 300 checked files and are reported as capped.
 - The packaged skill and the `AGENTS.md` section ask hosts to wait up to 10 minutes for the brief in the foreground instead of 30 seconds, treat the brief as the map rather than the limit, read the diffs under "Not fully shown", read a changed function whole when its hunks leave lines out or it changes guards, early exits, error handling, log levels, transactions or shared state, state a failure scenario for each removed or rewritten behavior, and check the base before calling something new, removed, untested or fully updated.
 
+### Fixed
+
+- The repository index resolves imports of dotted module names such as `./user.service`, `./app.module` or an alias `@app/users/user.entity`. Only a JavaScript, TypeScript, JSON, `.node` or `.wasm` extension now ends a module name; any other suffix is probed with source extensions and `index` files, so these imports reach their tests and callers instead of being reported as unresolved.
+
 ### Performance
 
 - One draft reuses project walks and import graphs instead of rebuilding them, skips importer and impact resolution that cannot affect the result, reads index files in a bounded window, reads blobs through one `git cat-file --batch` process, and searches references with one alternation per batch. On the largest measured monorepo the brief went from 47-106 s to 31-67 s with byte-identical output; smaller repositories from 10-14 s to 8-10 s.
