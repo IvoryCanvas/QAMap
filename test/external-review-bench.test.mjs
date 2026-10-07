@@ -124,6 +124,8 @@ test("the re-measurement rotates three arms and keeps the first pair's file name
   assert.equal(pairFile("s2-x-1", ["qamap", "standalone"]), "s2-x-1.pair.json");
   assert.equal(pairFile("s2-x-1", ["candidate", "standalone"]), "s2-x-1.pair-candidate-standalone.json");
   assert.deepEqual(protocol.rerun.study3.window, ["2026-09-21", "2026-10-04"]);
+  assert.deepEqual(protocol.rerun2.arms, arms);
+  assert.deepEqual(protocol.rerun2.pairs, protocol.rerun.pairs);
 });
 
 test("a run killed before its usage receipt counts its main-loop requests once each", () => {
