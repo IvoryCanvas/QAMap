@@ -14,6 +14,7 @@
 ### Fixed
 
 - The repository index resolves imports of dotted module names such as `./user.service`, `./app.module` or an alias `@app/users/user.entity`. Only a JavaScript, TypeScript, JSON, `.node` or `.wasm` extension now ends a module name; any other suffix is probed with source extensions and `index` files, so these imports reach their tests and callers instead of being reported as unresolved.
+- A commit message splits into flow stages at "and" or "then" only before a verb. "Compare a and b" stays one stage instead of becoming "Compare a" with "b" dropped; "save the draft and show a toast" still gives two stages.
 
 ### Performance
 
