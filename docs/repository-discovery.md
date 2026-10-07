@@ -37,7 +37,8 @@ returns `repository-snapshot-mismatch` instead of citing current-file lines as
 historical evidence. Working-tree analysis may trace the current index directly.
 
 The separate `qamap-repository-index-<user-id>` cache shares the private storage
-rules below: 8 MiB per snapshot, at most eight retained repositories after a
+rules below, except that one snapshot may hold 64 MiB so a large monorepo's index
+is kept: at most eight retained repositories and 256 MiB in total after a
 successful write, 24-hour expiry, and fail-open rebuilding. It stores structural
 metadata and hashes, not source bodies, test descriptions, command bodies or
 response examples. Names, module specifiers and schema pointers can still expose
@@ -113,7 +114,7 @@ permissions are user-only where supported. Symlinks, shared locations, and cache
 directories inside the analyzed repository are rejected.
 
 Each snapshot is limited to 8 MiB. Successful writes prune managed snapshots to
-eight repositories and remove managed files older than 24 hours. Concurrent writes
+eight repositories and 32 MiB in total, and remove managed files older than 24 hours. Concurrent writes
 can temporarily exceed that count; interrupted temporary writes are also eligible
 for age-based cleanup. There is no background cleanup process. You may delete the
 cache directory at any time. Corrupt, expired, or incompatible snapshots are
