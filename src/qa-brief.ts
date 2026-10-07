@@ -1393,7 +1393,9 @@ function renderQaFocus(result: QaDraftResult, level: Level, shownTests: Set<stri
       const important = intent.scenarios.filter((scenario) => scenario.priority === "critical");
       const shown = (important.length ? important : intent.scenarios).slice(0, level.scenarios);
       for (const scenario of shown) {
-        lines.push(`  - [${scenario.priority}] ${clip(scenario.title, 160)}`);
+        // A pattern match on a lower-confidence intent is a check to consider, not a critical one.
+        const priority = scenario.priority === "critical" && intent.confidence !== "high" ? "check" : scenario.priority;
+        lines.push(`  - [${priority}] ${clip(scenario.title, 160)}`);
         const checks = [...scenario.assertions.filter((check) => check && !/^Record the expected/.test(check)),
           ...scenario.edgeCases.filter(Boolean).map((edge) => `edge case: ${edge}`)];
         for (const check of checks.slice(0, 3)) lines.push(`      ${clip(check, 180)}`);

@@ -33,7 +33,7 @@ does not ask the agent to read it.
 | References | For each changed declaration: test files that name it (title, the call, locals derived from it, and the assertions that use them), callers with their enclosing declaration, and the tests of those callers. References on lines this diff changes are marked `(changed)`; unmarked ones are unchanged. Same-named symbols in another language are not listed. |
 | Calls | What new or removed code calls: the definition's location, a short body (12 lines or fewer), an import from outside the repository, or "external or built-in". Test helpers are not offered as definitions for production code. |
 | History | For removed or rewritten lines, the commit that introduced them and the tests that commit added, with line numbers. |
-| What to verify | For each inferred change intent: the behavior flow (trigger, condition, action, state, outcome) and every check of its critical scenarios, including edge cases. These are heuristic pattern checks: the reviewer turns each one that fits into action and expected result, or dismisses it in one line. |
+| What to verify | For each inferred change intent: the behavior flow (trigger, condition, action, state, outcome) and every check of its critical scenarios, including edge cases. These are heuristic pattern checks: the reviewer turns each one that fits into action and expected result, or dismisses it in one line. A critical scenario of an intent below high confidence is labeled `[check]`. |
 | Unknowns | Runtime-selected modules, ambiguous re-exports, and changed declarations no test file names. |
 | Not fully shown | Every file whose diff is not shown in full, with the removed and added lines left out, and the `git diff` command that shows them. |
 
