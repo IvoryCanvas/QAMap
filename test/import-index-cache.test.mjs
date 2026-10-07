@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { buildReverseImportIndex } from "../dist/import-graph.js";
-import { openImportCache } from "../dist/import-index-cache.js";
+import { openImportCache, openLocalIndexCache } from "../dist/import-index-cache.js";
 
 async function fixture(t) {
   const temp = await mkdtemp(path.join(os.tmpdir(), "qamap-import-cache-test-"));
@@ -298,4 +298,33 @@ test("large import inventory preserves uncached, cold, warm and incremental evid
   assert.deepEqual(edges(changed), edges(fresh));
   t.diagnostic(JSON.stringify({ files: 2005, ...times, warmReused: 2005, incrementalRebuilt: 1,
     evidenceParity: true, timing: "single local sample; no speed or token-savings threshold" }));
+});
+
+test("a repository index snapshot may exceed the import graph's size limit, and the directory keeps a total budget", async (t) => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "qamap-index-size-test-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const cacheDirectory = path.join(temp, "cache");
+  const any = (value) => typeof value === "object" && value !== null;
+  const roots = [];
+  for (let index = 0; index < 6; index++) {
+    roots.push(path.join(temp, `repo-${index}`));
+    await mkdir(roots[index]);
+  }
+  const large = { blocks: "x".repeat(9 * 1024 * 1024) };
+  const repository = await openLocalIndexCache(roots[0], "repository", any, cacheDirectory);
+  assert.equal(await repository.save(large), "saved");
+  const reopened = await openLocalIndexCache(roots[0], "repository", any, cacheDirectory);
+  assert.equal(reopened.state, "loaded");
+  assert.equal(reopened.previous.blocks.length, large.blocks.length);
+  assert.equal(await (await openLocalIndexCache(roots[1], "import", any, path.join(temp, "imports"))).save(large), "skipped");
+
+  // Import snapshots of 7 MiB: the fifth would pass four snapshots' size, so the oldest goes.
+  const imports = path.join(temp, "budget");
+  const seven = { blocks: "y".repeat(7 * 1024 * 1024) };
+  for (const [index, root] of roots.slice(1).entries()) {
+    assert.equal(await (await openLocalIndexCache(root, "import", any, imports)).save(seven), "saved");
+    const kept = await readdir(imports);
+    assert.ok(kept.length <= Math.min(index + 1, 4), `${kept.length} snapshots after ${index + 1} saves`);
+  }
+  assert.equal((await openLocalIndexCache(roots[5], "import", any, imports)).state, "loaded");
 });

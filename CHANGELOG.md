@@ -19,6 +19,7 @@
 
 - One draft reuses project walks and import graphs instead of rebuilding them, skips importer and impact resolution that cannot affect the result, reads index files in a bounded window, reads blobs through one `git cat-file --batch` process, and searches references with one alternation per batch. On the largest measured monorepo the brief went from 47-106 s to 31-67 s with byte-identical output; smaller repositories from 10-14 s to 8-10 s.
 - When the repository index reaches its file cap, it keeps changed files, package and compiler configuration, and files nearest the change, and records `coverage.ordering`. Under the cap the index is unchanged.
+- The repository index cache keeps snapshots up to 64 MiB, so a large monorepo's index is reused instead of being rebuilt on every run. The import cache keeps 8 MiB, and each cache directory now keeps at most four snapshots' size in total. On a 7,221-file server package the index took 3.4 s from cache against 8-11 s rebuilt. A repeated brief on that checkout took 32-35 s, against 43-44 s every time before.
 
 ### Measurement
 
