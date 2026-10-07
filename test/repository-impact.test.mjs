@@ -195,6 +195,31 @@ test("excluded alternatives stop unique-source claims and preserve alias and pac
   assert.ok(impact.boundaries.some(gap => gap.file === "test/ambiguous.test.mjs" && gap.target === "src/item.tsx" && gap.reason === "index-excluded-oversized"));
 });
 
+test("dotted module names resolve through relative imports and aliases", async (t) => {
+  const { root, put } = await fixture(t);
+  await put("tsconfig.json", { compilerOptions: { paths: { "@app/*": ["src/*"] } } });
+  await put("src/users/user.service.ts", "export function findUser(id: string) { return id; }");
+  await put("src/users/user.module/index.ts", "export const users = 1;");
+  await put("src/users/user.entity.js", "export const entity = 1;");
+  await put("src/users/user.controller.ts", "import { findUser } from './user.service';\nexport function show(id: string) { return findUser(id); }");
+  await put("src/users/legacy.js", "export const legacy = 1;");
+  await put("src/users/legacy.ts", "export const legacy = 2;");
+  await put("test/users.test.mjs", "import { show } from '../src/users/user.controller';\ntest('show', () => expect(show('a')).toBe('a'));");
+  const index = await buildRepositoryEvidenceIndex(root, { cacheDirectory: false });
+  const resolve = createRepositoryModuleResolver(index.blocks);
+  const file = "src/users/user.controller.ts";
+  assert.deepEqual(resolve(file, "./user.service"), { candidates: ["src/users/user.service.ts"] });
+  assert.deepEqual(resolve(file, "./user.module"), { candidates: ["src/users/user.module/index.ts"] });
+  assert.deepEqual(resolve(file, "./user.entity"), { candidates: ["src/users/user.entity.js"] });
+  assert.deepEqual(resolve("src/main.ts", "@app/users/user.service"), { candidates: ["src/users/user.service.ts"] });
+  assert.deepEqual(resolve(file, "./user.service.js"), { candidates: ["src/users/user.service.ts"] });
+  assert.deepEqual(resolve(file, "./legacy.js"), { candidates: ["src/users/legacy.js"] });
+  assert.deepEqual(resolve(file, "./legacy"), { candidates: ["src/users/legacy.ts", "src/users/legacy.js"], reason: "ambiguous-module" });
+  assert.equal(resolve(file, "./user.missing").reason, "unresolved-relative-module");
+  const impact = traceRepositoryImpact(index, [{ file: "src/users/user.service.ts", lines: [1] }]);
+  assert.ok(impact.paths.some(entry => entry.evidence.at(-1).file === "test/users.test.mjs"));
+});
+
 test("Node runtime boundaries retain module locations across cold and warm indexes", async (t) => {
   const { root, put, cacheDirectory } = await fixture(t);
   const file = "apps/web/tests/route.test.ts";
