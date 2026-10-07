@@ -99,7 +99,7 @@ session costs more than a brief, so the packaged review workflow uses the brief.
 
 ## Measured Results
 
-Claude Code CLI reviewed 19 frozen cases three times per arm, once with this
+Claude Code CLI 2.1.282 reviewed 19 frozen cases three times per arm, once with this
 workflow and once on its own, with one fixed model, a fresh session, identical tools
 and prompt, and blind grading against frozen oracles. The cases include three real
 regressions reverted from this repository's history.
@@ -119,3 +119,9 @@ medians was 2,881,446 (-70.5%). These are known cases on one host and one model,
 The per-case table, sensitivity arms and limits are in the
 [0.5.1 release record](releases/0.5.1.md#measured-results) and the
 [validation record](release-validation.md).
+
+On Claude Code CLI 2.1.292, 0.5.1 used 65.4% fewer tokens on the same cases, and
+the next candidate 54.6% fewer. The candidate asks the host to check the code before
+it concludes, which costs about one more request on these small cases. All arms
+found every seeded regression. On public pull requests chosen by a registered rule,
+savings were 40-56% ([external results](../test/benchmarks/review-host/external/RESULTS.md)).
