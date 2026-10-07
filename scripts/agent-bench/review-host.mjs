@@ -38,7 +38,7 @@ async function evidenceCase(suite, id) {
 }
 
 function gitEnvironment(home) {
-  return { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null",
+  return { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"), GIT_CONFIG_NOSYSTEM: "1",
     GIT_AUTHOR_NAME: "Fixture Author", GIT_AUTHOR_EMAIL: "author@fixture.test", GIT_COMMITTER_NAME: "Fixture Author",
     GIT_COMMITTER_EMAIL: "author@fixture.test", GIT_AUTHOR_DATE: "2026-09-22T00:00:00Z", GIT_COMMITTER_DATE: "2026-09-22T00:00:00Z" };
 }
@@ -133,15 +133,17 @@ export function toolArguments(disableSkills = false) {
   return ["--allowedTools", ...allowed, "--disallowedTools", ...disallowed];
 }
 
-function runHost({ cwd, home, pathPrefix, prompt, model, transcript, timeoutMs, disableSkills }) {
-  const env = { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: "/dev/null" };
+export function runHost({ cwd, home, pathPrefix, prompt, model, transcript, timeoutMs, disableSkills, maxTurns = 60 }) {
+  const env = { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"), GIT_CONFIG_NOSYSTEM: "1" };
   for (const key of hostEnvironment) delete env[key];
   if (pathPrefix) env.PATH = `${pathPrefix}${path.delimiter}${process.env.PATH}`;
   const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", ...(model ? ["--model", model] : []), "--no-session-persistence",
-    "--strict-mcp-config", "--max-turns", "60", ...toolArguments(disableSkills)];
+    "--strict-mcp-config", "--max-turns", String(maxTurns), ...toolArguments(disableSkills)];
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn("claude", args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    // An empty stdin pipe keeps print mode from reading anything but the prompt.
+    const child = spawn("claude", args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+    child.stdin.end();
     const out = [], err = [];
     child.stdout.on("data", (chunk) => out.push(chunk));
     child.stderr.on("data", (chunk) => err.push(chunk));

@@ -1,0 +1,789 @@
+{
+  "schema": {
+    "name": "qamap.external-review-cases",
+    "version": 1
+  },
+  "selectedAt": "2026-09-28T02:27:56.299Z",
+  "seed": "qamap-external-review-v1",
+  "repositories": [
+    {
+      "slug": "documenso/documenso",
+      "pool": "typescript",
+      "status": "eligible",
+      "head": "a1d4bec1430a937395db9a4aae28979cd71c2831",
+      "windowCommits": 105,
+      "squashShare": 0.952,
+      "study2Candidates": 40
+    },
+    {
+      "slug": "formbricks/formbricks",
+      "pool": "typescript",
+      "status": "eligible",
+      "head": "bfe7933cb2882c99f2196aa6a46edd104cd7fbb8",
+      "windowCommits": 556,
+      "squashShare": 1,
+      "study2Candidates": 172
+    },
+    {
+      "slug": "excalidraw/excalidraw",
+      "pool": "typescript",
+      "status": "eligible",
+      "head": "438d89861f53d8a90ad566113ecac1b83761098f",
+      "windowCommits": 73,
+      "squashShare": 1,
+      "study2Candidates": 26
+    },
+    {
+      "slug": "outline/outline",
+      "pool": "typescript",
+      "status": "eligible",
+      "head": "179d7dd7be2cb395d45f0151b858e14009cec9d1",
+      "windowCommits": 647,
+      "squashShare": 0.969,
+      "study2Candidates": 252
+    },
+    {
+      "slug": "twentyhq/twenty",
+      "pool": "typescript",
+      "status": "eligible",
+      "head": "741d216a75af0939d7ee8edf91b3ff16f61abda5",
+      "windowCommits": 2412,
+      "squashShare": 1,
+      "study2Candidates": 710
+    },
+    {
+      "slug": "immich-app/immich",
+      "pool": "typescript",
+      "status": "eligible",
+      "head": "6b978d0c0d3dfddf43c9138314bc7d1c5e5295d2",
+      "windowCommits": 631,
+      "squashShare": 0.992,
+      "study2Candidates": 77
+    },
+    {
+      "slug": "vitejs/vite",
+      "pool": "typescript",
+      "status": "eligible",
+      "head": "88c17415af221b3a13e778f4f2c0e907c8287baf",
+      "windowCommits": 279,
+      "squashShare": 0.957,
+      "study2Candidates": 57
+    },
+    {
+      "slug": "withastro/astro",
+      "pool": "typescript",
+      "status": "eligible",
+      "head": "d047b5c23c273d993470258a84bf71852889c76e",
+      "windowCommits": 425,
+      "squashShare": 0.913,
+      "study2Candidates": 110
+    },
+    {
+      "slug": "pydantic/pydantic",
+      "pool": "python",
+      "status": "eligible",
+      "head": "bb6da4cfbb1f559885ea2fa207ec93853bfeac64",
+      "windowCommits": 182,
+      "squashShare": 1,
+      "study2Candidates": 41
+    },
+    {
+      "slug": "langchain-ai/langchain",
+      "pool": "python",
+      "status": "eligible",
+      "head": "d7508191bcf2af823ad8a168a15772710de5592b",
+      "windowCommits": 465,
+      "squashShare": 0.998,
+      "study2Candidates": 107
+    },
+    {
+      "slug": "go-gitea/gitea",
+      "pool": "go",
+      "status": "eligible",
+      "head": "47529e225cf0753c896a9eb416d9d9fcccf31e58",
+      "windowCommits": 522,
+      "squashShare": 0.881,
+      "study2Candidates": 164
+    },
+    {
+      "slug": "caddyserver/caddy",
+      "pool": "go",
+      "status": "eligible",
+      "head": "ea1e94b89972b83b189cbb946352abd9acec0f8c",
+      "windowCommits": 76,
+      "squashShare": 0.961,
+      "study2Candidates": 39
+    }
+  ],
+  "study1": {
+    "introWindow": [
+      "2026-04-01",
+      "2026-09-20"
+    ],
+    "fallback": true,
+    "qualifying": 20,
+    "cases": [
+      {
+        "id": "s1-twenty-22015",
+        "study": 1,
+        "repository": "twentyhq/twenty",
+        "pool": "typescript",
+        "pr": 22015,
+        "commit": "c6aca3f0ea2330d59a1b20f1bb4a8d2a96999485",
+        "parent": "9b2ca6f3f7caccf6db73d4eb157a876a06329350",
+        "subject": "fix(calendar): ID-first chunked import for Google and CalDAV (#22015)",
+        "committedAt": "2026-06-23T14:38:38.000Z",
+        "files": 16,
+        "lines": 821,
+        "fix": {
+          "commit": "885effb3d89ac60356a26b056a5097e04594e64e",
+          "pr": 22137,
+          "subject": "fix(calendar): mark channel completed on no-events fetch (#22137)",
+          "committedAt": "2026-06-25T08:46:56.000Z"
+        }
+      },
+      {
+        "id": "s1-twenty-21684",
+        "study": 1,
+        "repository": "twentyhq/twenty",
+        "pool": "typescript",
+        "pr": 21684,
+        "commit": "814b43ca41a69a4adbece0845a4aedec75708593",
+        "parent": "1b3d9339001e2102a20fd10a6023206dfaeae23a",
+        "subject": "feat(server): derive email/calendar timelines from object relations (#21684)",
+        "committedAt": "2026-06-19T00:22:27.000Z",
+        "files": 29,
+        "lines": 1828,
+        "fix": {
+          "commit": "41d1b478b0e72b5aefd9facf1ae901ef13a8caf9",
+          "pr": 22064,
+          "subject": "Fix Opportunity email timeline relation traversal (#22064)",
+          "committedAt": "2026-06-24T10:06:37.000Z"
+        }
+      },
+      {
+        "id": "s1-gitea-38517",
+        "study": 1,
+        "repository": "go-gitea/gitea",
+        "pool": "go",
+        "pr": 38517,
+        "commit": "ae176cd6493480f27b138fb77701d6ac251ebe2c",
+        "parent": "e8befe026853a90a9efca559ca9f9cac8b41fc88",
+        "subject": "refactor: clean up fragile diff render templates, use backend typed structs (#38517)",
+        "committedAt": "2026-07-19T03:20:01.000Z",
+        "files": 7,
+        "lines": 227,
+        "fix": {
+          "commit": "7f7dc2d16c5bece927af0113f072ec84e0ed0078",
+          "pr": 38746,
+          "subject": "chore: fix git diff render (#38746)",
+          "committedAt": "2026-08-02T17:34:26.000Z"
+        }
+      },
+      {
+        "id": "s1-gitea-38706",
+        "study": 1,
+        "repository": "go-gitea/gitea",
+        "pool": "go",
+        "pr": 38706,
+        "commit": "d87d26d7352cbd76f5e5139c4f94504fbd465bf8",
+        "parent": "11d0ed699b111011d12baf354029337b80994677",
+        "subject": "perf(gitdiff): optimize inline diff highlighting using cache (#38706)",
+        "committedAt": "2026-07-30T16:43:36.000Z",
+        "files": 11,
+        "lines": 345,
+        "fix": {
+          "commit": "a3e7fe1f113d0e63ce9a0fd55bfc7757b0a52c08",
+          "pr": 38728,
+          "subject": "fix(gitdiff): prevent index out of range panic in GetLineTypeMarker (#38728)",
+          "committedAt": "2026-07-31T13:49:47.000Z"
+        }
+      },
+      {
+        "id": "s1-outline-13198",
+        "study": 1,
+        "repository": "outline/outline",
+        "pool": "typescript",
+        "pr": 13198,
+        "commit": "97964071f20f46b93691fdd3c544a4a350ee3878",
+        "parent": "f78f285ec058feaac0cd5af19e9bd78f4d323f90",
+        "subject": "fix: Cannot duplicate document from read-only collection (#13198)",
+        "committedAt": "2026-07-30T00:48:32.000Z",
+        "files": 3,
+        "lines": 255,
+        "fix": {
+          "commit": "0e054da71d0c8426cdb49bcd8ce98c0dfef79921",
+          "pr": 13717,
+          "subject": "fix(policies): let guests with edit rights duplicate documents again (#13717)",
+          "committedAt": "2026-09-17T00:50:07.000Z"
+        }
+      },
+      {
+        "id": "s1-outline-13597",
+        "study": 1,
+        "repository": "outline/outline",
+        "pool": "typescript",
+        "pr": 13597,
+        "commit": "f44fad43807694248bc6cf4b036e0bac6b79b293",
+        "parent": "d55e7f37e551a72d7b959ededa79e267fb946f1d",
+        "subject": "fix: Preserve MCP attachment form values (#13597)",
+        "committedAt": "2026-09-01T06:12:39.000Z",
+        "files": 1,
+        "lines": 8,
+        "fix": {
+          "commit": "33f2b9353087718722ed61808b633bcd9b122563",
+          "pr": 13613,
+          "subject": "fix: Escape MCP attachment PUT upload command arguments (#13613)",
+          "committedAt": "2026-09-02T23:20:53.000Z"
+        }
+      }
+    ]
+  },
+  "study2": {
+    "window": [
+      "2026-08-01",
+      "2026-09-20"
+    ],
+    "cases": [
+      {
+        "id": "s2-documenso-3159",
+        "study": 2,
+        "repository": "documenso/documenso",
+        "pool": "typescript",
+        "pr": 3159,
+        "commit": "fc95ee9ead6e93a4b3af95067472c9f18b61a07b",
+        "parent": "d6cf3fec4bcbb1bac8608b64c4fcc71659cd68d4",
+        "subject": "fix: handle completion when already signed (#3159)",
+        "committedAt": "2026-08-09T23:25:41.000Z",
+        "files": 5,
+        "lines": 95
+      },
+      {
+        "id": "s2-documenso-3372",
+        "study": 2,
+        "repository": "documenso/documenso",
+        "pool": "typescript",
+        "pr": 3372,
+        "commit": "e658cc581878f52c03b3e6a8f7ffd613aead4e69",
+        "parent": "0c6249744acea29fd01f9156cfaab359d722a8ba",
+        "subject": "feat: add inbox filters (#3372)",
+        "committedAt": "2026-09-17T07:21:34.000Z",
+        "files": 8,
+        "lines": 942
+      },
+      {
+        "id": "s2-formbricks-9253",
+        "study": 2,
+        "repository": "formbricks/formbricks",
+        "pool": "typescript",
+        "pr": 9253,
+        "commit": "57e5187db25c2540ba3ee93a87eead6b06c64296",
+        "parent": "255f86afb882124d9662bbdeb7f6e2457395fc35",
+        "subject": "fix(responses): bound the \"Other\" response filter instead of permuting every subset (#9253)",
+        "committedAt": "2026-09-16T08:43:18.000Z",
+        "files": 5,
+        "lines": 656
+      },
+      {
+        "id": "s2-formbricks-9141",
+        "study": 2,
+        "repository": "formbricks/formbricks",
+        "pool": "typescript",
+        "pr": 9141,
+        "commit": "5582eeaea9af167dc4aa05f2e90ea780630c423d",
+        "parent": "d44c2d7a624dc687d50c125af75325556a91cf48",
+        "subject": "fix(dashboards): place a duplicated chart in the next free slot and add an E shortcut for edit mode (#9141)",
+        "committedAt": "2026-09-08T14:26:41.000Z",
+        "files": 16,
+        "lines": 775
+      },
+      {
+        "id": "s2-excalidraw-11872",
+        "study": 2,
+        "repository": "excalidraw/excalidraw",
+        "pool": "typescript",
+        "pr": 11872,
+        "commit": "abeeaeba217ab3b5193b78c8d8d63c373b518ced",
+        "parent": "c5a50d223feb5fceaebc916ad75f2dcecb399467",
+        "subject": "feat(editor): customizing color top picks (#11872)",
+        "committedAt": "2026-08-11T13:59:35.000Z",
+        "files": 22,
+        "lines": 1476
+      },
+      {
+        "id": "s2-excalidraw-11838",
+        "study": 2,
+        "repository": "excalidraw/excalidraw",
+        "pool": "typescript",
+        "pr": 11838,
+        "commit": "74789584bed7de19e91e35a3c0e708aeadcddf8b",
+        "parent": "e33a1c0e85a9fae8636deb9b9eb7079825de8337",
+        "subject": "feat(packages/excalidraw): support ViewportStatusFrame label onClick (#11838)",
+        "committedAt": "2026-08-05T16:28:52.000Z",
+        "files": 5,
+        "lines": 89
+      },
+      {
+        "id": "s2-outline-13272",
+        "study": 2,
+        "repository": "outline/outline",
+        "pool": "typescript",
+        "pr": 13272,
+        "commit": "9abba0f663c5a057ff275465d335a5f1f77b23c9",
+        "parent": "a1925983c188b06d3210b9c32ae2b7350030081e",
+        "subject": "Remember last download format and redesign the format picker (#13272)",
+        "committedAt": "2026-08-04T01:20:48.000Z",
+        "files": 9,
+        "lines": 884
+      },
+      {
+        "id": "s2-outline-13552",
+        "study": 2,
+        "repository": "outline/outline",
+        "pool": "typescript",
+        "pr": 13552,
+        "commit": "e141280d41b5c2f9b8e1b5f382c7aef5c430ad67",
+        "parent": "09b043c6561dbf5c59641581e8af292ec5bd815f",
+        "subject": "fix: Stop reporting expected IndexedDB connection closures (#13552)",
+        "committedAt": "2026-08-24T21:11:13.000Z",
+        "files": 2,
+        "lines": 75
+      },
+      {
+        "id": "s2-twenty-24299",
+        "study": 2,
+        "repository": "twentyhq/twenty",
+        "pool": "typescript",
+        "pr": 24299,
+        "commit": "f773ffcef0fcf627c68018ecb761176f493f7e36",
+        "parent": "50e325f82219b37aa2693c4985c83f02fe0300dd",
+        "subject": "fix(server): ORM v2 rollout safety - rollback-proof transactions and a working flag rollback (#24299)",
+        "committedAt": "2026-08-19T06:54:05.000Z",
+        "files": 8,
+        "lines": 286
+      },
+      {
+        "id": "s2-twenty-24938",
+        "study": 2,
+        "repository": "twentyhq/twenty",
+        "pool": "typescript",
+        "pr": 24938,
+        "commit": "80af0155c304313a19627b1aac8909ea2d4a422a",
+        "parent": "fcde9ea94685b4db1a5f61a70ca326ecaaf65482",
+        "subject": "Bill logic function executions for duration like AWS Lambda (#24938)",
+        "committedAt": "2026-08-28T12:33:31.000Z",
+        "files": 14,
+        "lines": 195
+      },
+      {
+        "id": "s2-immich-30612",
+        "study": 2,
+        "repository": "immich-app/immich",
+        "pool": "typescript",
+        "pr": 30612,
+        "commit": "5ad1e4e0f7ecefdb6f43ba74a01dc92b9ea6b7cb",
+        "parent": "a9a99cffbfc758bd7ad70596bb191a583fb6cef2",
+        "subject": "fix: medium tests dependencies (#30612)",
+        "committedAt": "2026-08-07T09:36:20.000Z",
+        "files": 4,
+        "lines": 80
+      },
+      {
+        "id": "s2-immich-31424",
+        "study": 2,
+        "repository": "immich-app/immich",
+        "pool": "typescript",
+        "pr": 31424,
+        "commit": "e039168e4ae60fb7f0b23814a7c0ba197805cf44",
+        "parent": "72f1034c58503b4b17bee682d47b141ef58eb766",
+        "subject": "fix(server): vacuum after migrations, concurrent reindex (#31424)",
+        "committedAt": "2026-09-11T14:27:04.000Z",
+        "files": 6,
+        "lines": 107
+      },
+      {
+        "id": "s2-vite-22473",
+        "study": 2,
+        "repository": "vitejs/vite",
+        "pool": "typescript",
+        "pr": 22473,
+        "commit": "924997a4bdda9115faee9bdb622fcec4fc8357f0",
+        "parent": "8156684572bdcf73e9d8568ed67971f0467fab60",
+        "subject": "feat(worker): remove worker chunk if it's detected that it's not referenced (#22473)",
+        "committedAt": "2026-08-21T09:13:28.000Z",
+        "files": 10,
+        "lines": 188
+      },
+      {
+        "id": "s2-vite-23138",
+        "study": 2,
+        "repository": "vitejs/vite",
+        "pool": "typescript",
+        "pr": 23138,
+        "commit": "7673c02e53343ae9356c1f496c1c1da2eb732ac1",
+        "parent": "e6b6b167afa0a80548829d1f24a0712f9194389a",
+        "subject": "test: reduce logs (#23138)",
+        "committedAt": "2026-08-03T02:48:27.000Z",
+        "files": 8,
+        "lines": 34
+      },
+      {
+        "id": "s2-astro-17812",
+        "study": 2,
+        "repository": "withastro/astro",
+        "pool": "typescript",
+        "pr": 17812,
+        "commit": "29af6da5c11aff673133f96df029f40345674f0e",
+        "parent": "d38ed60390abfc9087a0cbfce99b9a4893229de5",
+        "subject": "Fix FetchState manifest resolution in development (#17812)",
+        "committedAt": "2026-08-24T15:04:08.000Z",
+        "files": 3,
+        "lines": 54
+      },
+      {
+        "id": "s2-astro-17942",
+        "study": 2,
+        "repository": "withastro/astro",
+        "pool": "typescript",
+        "pr": 17942,
+        "commit": "0bc5715a2990a84598a064ac8de52c08fffd1186",
+        "parent": "e294953aa8aadd98d5be92e60a03037b05dbdfd4",
+        "subject": "Return client errors for invalid image paths (#17942)",
+        "committedAt": "2026-09-09T12:14:53.000Z",
+        "files": 5,
+        "lines": 115
+      },
+      {
+        "id": "s2-pydantic-13540",
+        "study": 2,
+        "repository": "pydantic/pydantic",
+        "pool": "python",
+        "pr": 13540,
+        "commit": "c82f870d4cb6cbf98cee5266cf88d56054747549",
+        "parent": "69fd688e2d2d8e6fa25f2b2ec30781b52553a388",
+        "subject": "Introduce micro-optimizations for model class building (#13540)",
+        "committedAt": "2026-08-04T09:54:17.000Z",
+        "files": 3,
+        "lines": 157
+      },
+      {
+        "id": "s2-pydantic-13523",
+        "study": 2,
+        "repository": "pydantic/pydantic",
+        "pool": "python",
+        "pr": 13523,
+        "commit": "c333d775d49cfa91ab2686d11f9002ea1933ec16",
+        "parent": "b75fadbaa55d4d700a388f1b67683ef0be0ed540",
+        "subject": "Avoid exponential core schema traversal in `gather_schemas_for_cleaning()` (#13523)",
+        "committedAt": "2026-08-03T18:54:04.000Z",
+        "files": 2,
+        "lines": 56
+      },
+      {
+        "id": "s2-langchain-39245",
+        "study": 2,
+        "repository": "langchain-ai/langchain",
+        "pool": "python",
+        "pr": 39245,
+        "commit": "1bdaf0c133de0718cd26264e908c954057804650",
+        "parent": "8f7cee0b52bdff6677d88f8aa87b0fe8afa0fdf1",
+        "subject": "fix(langchain): handle malformed structured-output responses (#39245)",
+        "committedAt": "2026-08-05T17:54:49.000Z",
+        "files": 2,
+        "lines": 438
+      },
+      {
+        "id": "s2-langchain-39570",
+        "study": 2,
+        "repository": "langchain-ai/langchain",
+        "pool": "python",
+        "pr": 39570,
+        "commit": "b5e8e2e85e63bb97491a0fce63f006983911621c",
+        "parent": "72fb0090bd1bc7ac0e0e492827cd05814b3d2408",
+        "subject": "fix(core): fail fast when tool schemas can't resolve forward refs during serialization (#39570)",
+        "committedAt": "2026-08-18T21:08:52.000Z",
+        "files": 3,
+        "lines": 33
+      },
+      {
+        "id": "s2-gitea-39001",
+        "study": 2,
+        "repository": "go-gitea/gitea",
+        "pool": "go",
+        "pr": 39001,
+        "commit": "60326ca03de38fc7cc77f628a74e0ce36f210b46",
+        "parent": "1652dfe62abf45ec2521053e9e249dfabd92beb1",
+        "subject": "refactor(automerge): fix error handling, populate recent automerge tasks on restart (#39001)",
+        "committedAt": "2026-08-28T21:17:01.000Z",
+        "files": 15,
+        "lines": 416
+      },
+      {
+        "id": "s2-gitea-38827",
+        "study": 2,
+        "repository": "go-gitea/gitea",
+        "pool": "go",
+        "pr": 38827,
+        "commit": "f899dfd6e0995afe6fd9fe58b0eb1d404c48d96b",
+        "parent": "09f78aed199f9548e55733e8bf610a23040e13b3",
+        "subject": "chore: fix legacy git ref problems (#38827)",
+        "committedAt": "2026-08-07T23:04:36.000Z",
+        "files": 5,
+        "lines": 54
+      },
+      {
+        "id": "s2-caddy-7947",
+        "study": 2,
+        "repository": "caddyserver/caddy",
+        "pool": "go",
+        "pr": 7947,
+        "commit": "39af0aec318cd2d07c6e920055565f238c7f4830",
+        "parent": "8b62e3c60e91c00fb0e0238bb19309e0b6fad5b2",
+        "subject": "rewrite: fix URI splitting when a query or fragment arrives via a placeholder (#7947)",
+        "committedAt": "2026-08-25T18:06:09.000Z",
+        "files": 2,
+        "lines": 122
+      },
+      {
+        "id": "s2-caddy-8003",
+        "study": 2,
+        "repository": "caddyserver/caddy",
+        "pool": "go",
+        "pr": 8003,
+        "commit": "56ae39bdcc1d64661038683e30ea49cad0b0121d",
+        "parent": "769ed7e4a33e76c529d1a2446bd9817113e910e7",
+        "subject": "reverseproxy: replace only known placeholders in health check body (#8003)",
+        "committedAt": "2026-09-09T14:48:08.000Z",
+        "files": 2,
+        "lines": 75
+      }
+    ]
+  },
+  "study3": {
+    "selectedAt": "2026-10-06T06:32:39.926Z",
+    "window": [
+      "2026-09-21",
+      "2026-10-04"
+    ],
+    "repositories": [
+      {
+        "slug": "documenso/documenso",
+        "head": "cd0cc5febcbb76ec7e5ecb75c0b8c65ab8432198",
+        "candidates": 6
+      },
+      {
+        "slug": "formbricks/formbricks",
+        "head": "b34551a5e0481c4e3060f2aea7c5970b1fcd4702",
+        "candidates": 61
+      },
+      {
+        "slug": "excalidraw/excalidraw",
+        "head": "ed10ac7dca7e40f3f4a31269b4bfba980d0db41e",
+        "candidates": 19
+      },
+      {
+        "slug": "outline/outline",
+        "head": "68d05987e1d54efe39568ab5584d651bd8defd55",
+        "candidates": 36
+      },
+      {
+        "slug": "twentyhq/twenty",
+        "head": "9a9e812234e6b351e6fec9a92c608fbd6e7ca1fe",
+        "candidates": 335
+      },
+      {
+        "slug": "immich-app/immich",
+        "head": "07daf87133ad9e9ac17cda8f5654f7a374cc5ad1",
+        "candidates": 45
+      },
+      {
+        "slug": "vitejs/vite",
+        "head": "fea5b21dd9524ed7308632407b996f1fe5942c9c",
+        "candidates": 26
+      },
+      {
+        "slug": "withastro/astro",
+        "head": "c5275e3d5a688a7d246c9576b594870675b70e37",
+        "candidates": 10
+      },
+      {
+        "slug": "pydantic/pydantic",
+        "head": "1e6cc758a04b3b1b50d12907b6c463a9ea575b4a",
+        "candidates": 11
+      },
+      {
+        "slug": "langchain-ai/langchain",
+        "head": "67ba389f4a85dbb98fca475619670a99b23d399d",
+        "candidates": 17
+      },
+      {
+        "slug": "go-gitea/gitea",
+        "head": "43fedd662ad5ec44152d4ddd3d6d88e28a43e03c",
+        "candidates": 55
+      },
+      {
+        "slug": "caddyserver/caddy",
+        "head": "700d60327d77d56ba81455acb989a698f1819640",
+        "candidates": 32
+      }
+    ],
+    "cases": [
+      {
+        "id": "s3-documenso-3409",
+        "study": 3,
+        "repository": "documenso/documenso",
+        "pool": "typescript",
+        "pr": 3409,
+        "commit": "5a123be46c4b8173701a3e1e94591cadf4cad602",
+        "parent": "586b1f5cb5df9a4330a9f72b8fb6e80209005696",
+        "subject": "fix: embed signing completion and reload states (#3409)",
+        "committedAt": "2026-09-29T05:44:25.000Z",
+        "files": 5,
+        "lines": 141
+      },
+      {
+        "id": "s3-formbricks-9409",
+        "study": 3,
+        "repository": "formbricks/formbricks",
+        "pool": "typescript",
+        "pr": 9409,
+        "commit": "c40632e6f7c8e2e8abf17073cf14aab3f1a89b47",
+        "parent": "736e35ab6867d13efe389d5ec08fa437d4895b3e",
+        "subject": "fix(survey-list): keep settings when a survey is duplicated [ENG-2144] (#9409)",
+        "committedAt": "2026-09-28T07:55:54.000Z",
+        "files": 3,
+        "lines": 172
+      },
+      {
+        "id": "s3-excalidraw-12180",
+        "study": 3,
+        "repository": "excalidraw/excalidraw",
+        "pool": "typescript",
+        "pr": 12180,
+        "commit": "84e3f5a40c5fac43cb8b28161b9c239d9e857061",
+        "parent": "974f054bafad6787e7eb1c781e12df4b93372405",
+        "subject": "perf(editor): avoid rebuilding id sets on every resize (#12180)",
+        "committedAt": "2026-09-27T09:01:38.000Z",
+        "files": 1,
+        "lines": 21
+      },
+      {
+        "id": "s3-outline-13888",
+        "study": 3,
+        "repository": "outline/outline",
+        "pool": "typescript",
+        "pr": 13888,
+        "commit": "ed4aaf274df8ac7d9a1da5d24a545b2537a816db",
+        "parent": "6509bf553b67d17e481c86eb40fdb3b475a60158",
+        "subject": "fix: Update group timestamp when membership changes (#13888)",
+        "committedAt": "2026-09-25T21:17:05.000Z",
+        "files": 4,
+        "lines": 204
+      },
+      {
+        "id": "s3-twenty-26398",
+        "study": 3,
+        "repository": "twentyhq/twenty",
+        "pool": "typescript",
+        "pr": 26398,
+        "commit": "f03fe1216d39b5255e8b1a05bf9548c0ce9334f8",
+        "parent": "20fd8c9f75fc04bc44d2f3c6c7c8cdd24e6599ad",
+        "subject": "fix(shared): escape regex metacharacters in raw json and rich text like filters (#26398)",
+        "committedAt": "2026-09-23T09:47:44.000Z",
+        "files": 2,
+        "lines": 39
+      },
+      {
+        "id": "s3-immich-31425",
+        "study": 3,
+        "repository": "immich-app/immich",
+        "pool": "typescript",
+        "pr": 31425,
+        "commit": "54987c764a393d5aabace1ccfb2faeea0492f812",
+        "parent": "aa023378477fb1a65d24f4614de0940f6a769794",
+        "subject": "fix(server): write tag updates to exif table (#31425)",
+        "committedAt": "2026-09-28T15:52:25.000Z",
+        "files": 5,
+        "lines": 114
+      },
+      {
+        "id": "s3-vite-23543",
+        "study": 3,
+        "repository": "vitejs/vite",
+        "pool": "typescript",
+        "pr": 23543,
+        "commit": "f155b62ceabbaaf71abbf59933968787e3961c56",
+        "parent": "af7cdf6964f124f58d66037e808fe687654948e2",
+        "subject": "fix(create-vite): add router only options for tanstack router/start (#23543)",
+        "committedAt": "2026-09-23T06:52:57.000Z",
+        "files": 1,
+        "lines": 20
+      },
+      {
+        "id": "s3-astro-18000",
+        "study": 3,
+        "repository": "withastro/astro",
+        "pool": "typescript",
+        "pr": 18000,
+        "commit": "67245751e02fb94223266d3c55cc7d7ac65ab060",
+        "parent": "e48da9d4f6f293d8708bd8de9ae235429272f556",
+        "subject": "fix(dev): load renderers before resolving built-in routes so server islands render framework components (#18000)",
+        "committedAt": "2026-09-28T15:32:17.000Z",
+        "files": 10,
+        "lines": 101
+      },
+      {
+        "id": "s3-pydantic-13895",
+        "study": 3,
+        "repository": "pydantic/pydantic",
+        "pool": "python",
+        "pr": 13895,
+        "commit": "5bc650bb3b41d8472db480ffcec4b67ee9158104",
+        "parent": "c9ac504d2ab62f7135950ccd7a5c0684be30805f",
+        "subject": "Add `__namespace__` parameter to `create_model()` (#13895)",
+        "committedAt": "2026-09-30T21:47:14.000Z",
+        "files": 5,
+        "lines": 195
+      },
+      {
+        "id": "s3-langchain-40711",
+        "study": 3,
+        "repository": "langchain-ai/langchain",
+        "pool": "python",
+        "pr": 40711,
+        "commit": "3290757339233aa9b08897d11c4c677b304a4c3e",
+        "parent": "d5fbcdbb54e7c099cbba6d29c92cec309e40cbf0",
+        "subject": "chore(core): deprecate chat message history (#40711)",
+        "committedAt": "2026-09-21T14:28:24.000Z",
+        "files": 2,
+        "lines": 52
+      },
+      {
+        "id": "s3-gitea-39436",
+        "study": 3,
+        "repository": "go-gitea/gitea",
+        "pool": "go",
+        "pr": 39436,
+        "commit": "db7d1da28f8fdc700e4b3ff7089a4a569d553d03",
+        "parent": "826c65d0eccf4ebe4790ec3bfc856fff34df7f84",
+        "subject": "fix(markup): link team mentions that use a different org name case (#39436)",
+        "committedAt": "2026-10-04T12:51:46.000Z",
+        "files": 3,
+        "lines": 31
+      },
+      {
+        "id": "s3-caddy-8017",
+        "study": 3,
+        "repository": "caddyserver/caddy",
+        "pool": "go",
+        "pr": 8017,
+        "commit": "69ec5dfedf5ba8f7d042f8f2ff41baa5ce576ce8",
+        "parent": "fbc88ae2322082b55aef52e0209a0bc56166eca6",
+        "subject": "caddyauth: only replace known placeholders in basic auth credentials (#8017)",
+        "committedAt": "2026-09-26T08:52:53.000Z",
+        "files": 2,
+        "lines": 113
+      }
+    ]
+  }
+}

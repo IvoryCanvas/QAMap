@@ -1,0 +1,5950 @@
+{
+  "schema": {
+    "name": "qamap.external-review-summary",
+    "version": 1
+  },
+  "cases": [
+    {
+      "id": "s1-twenty-22015",
+      "study": 1,
+      "repository": "twentyhq/twenty",
+      "pool": "typescript",
+      "pr": 22015,
+      "files": 16,
+      "lines": 821,
+      "arms": {
+        "standalone": {
+          "runs": 2,
+          "medianTokens": 4181747,
+          "verdicts": [
+            "missed",
+            "missed"
+          ]
+        },
+        "qamap": {
+          "runs": 2,
+          "medianTokens": 2502116,
+          "verdicts": [
+            "missed",
+            "partial"
+          ]
+        },
+        "candidate": {
+          "runs": 2,
+          "medianTokens": 2184747.5,
+          "verdicts": [
+            "missed",
+            "missed"
+          ]
+        }
+      },
+      "quality": {}
+    },
+    {
+      "id": "s1-twenty-21684",
+      "study": 1,
+      "repository": "twentyhq/twenty",
+      "pool": "typescript",
+      "pr": 21684,
+      "files": 29,
+      "lines": 1828,
+      "arms": {
+        "standalone": {
+          "runs": 2,
+          "medianTokens": 4153554.5,
+          "verdicts": [
+            "missed",
+            "missed"
+          ]
+        },
+        "qamap": {
+          "runs": 2,
+          "medianTokens": 1278220,
+          "verdicts": [
+            "missed",
+            "missed"
+          ]
+        },
+        "candidate": {
+          "runs": 2,
+          "medianTokens": 1963161.5,
+          "verdicts": [
+            "missed",
+            "missed"
+          ]
+        }
+      },
+      "quality": {}
+    },
+    {
+      "id": "s1-gitea-38517",
+      "study": 1,
+      "repository": "go-gitea/gitea",
+      "pool": "go",
+      "pr": 38517,
+      "files": 7,
+      "lines": 227,
+      "arms": {
+        "standalone": {
+          "runs": 2,
+          "medianTokens": 2768911,
+          "verdicts": [
+            "missed",
+            "found"
+          ]
+        },
+        "qamap": {
+          "runs": 2,
+          "medianTokens": 1732098,
+          "verdicts": [
+            "missed",
+            "missed"
+          ]
+        },
+        "candidate": {
+          "runs": 2,
+          "medianTokens": 1383204,
+          "verdicts": [
+            "missed",
+            "missed"
+          ]
+        }
+      },
+      "quality": {}
+    },
+    {
+      "id": "s1-gitea-38706",
+      "study": 1,
+      "repository": "go-gitea/gitea",
+      "pool": "go",
+      "pr": 38706,
+      "files": 11,
+      "lines": 345,
+      "arms": {
+        "standalone": {
+          "runs": 2,
+          "medianTokens": 3723484.5,
+          "verdicts": [
+            "partial",
+            "partial"
+          ]
+        },
+        "qamap": {
+          "runs": 2,
+          "medianTokens": 1798385,
+          "verdicts": [
+            "partial",
+            "partial"
+          ]
+        },
+        "candidate": {
+          "runs": 2,
+          "medianTokens": 1884970,
+          "verdicts": [
+            "partial",
+            "partial"
+          ]
+        }
+      },
+      "quality": {}
+    },
+    {
+      "id": "s1-outline-13198",
+      "study": 1,
+      "repository": "outline/outline",
+      "pool": "typescript",
+      "pr": 13198,
+      "files": 3,
+      "lines": 255,
+      "arms": {
+        "standalone": {
+          "runs": 2,
+          "medianTokens": 4881344,
+          "verdicts": [
+            "found",
+            "found"
+          ]
+        },
+        "qamap": {
+          "runs": 2,
+          "medianTokens": 1148724.5,
+          "verdicts": [
+            "missed",
+            "missed"
+          ]
+        },
+        "candidate": {
+          "runs": 2,
+          "medianTokens": 1663312,
+          "verdicts": [
+            "partial",
+            "missed"
+          ]
+        }
+      },
+      "quality": {}
+    },
+    {
+      "id": "s1-outline-13597",
+      "study": 1,
+      "repository": "outline/outline",
+      "pool": "typescript",
+      "pr": 13597,
+      "files": 1,
+      "lines": 8,
+      "arms": {
+        "standalone": {
+          "runs": 2,
+          "medianTokens": 1094749.5,
+          "verdicts": [
+            "found",
+            "found"
+          ]
+        },
+        "qamap": {
+          "runs": 2,
+          "medianTokens": 624798.5,
+          "verdicts": [
+            "found",
+            "found"
+          ]
+        },
+        "candidate": {
+          "runs": 2,
+          "medianTokens": 472910.5,
+          "verdicts": [
+            "found",
+            "found"
+          ]
+        }
+      },
+      "quality": {}
+    },
+    {
+      "id": "s2-documenso-3159",
+      "study": 2,
+      "repository": "documenso/documenso",
+      "pool": "typescript",
+      "pr": 3159,
+      "files": 5,
+      "lines": 95,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 1751661,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 1599430,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 808724,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 2,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 2,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 2,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        }
+      }
+    },
+    {
+      "id": "s2-documenso-3372",
+      "study": 2,
+      "repository": "documenso/documenso",
+      "pool": "typescript",
+      "pr": 3372,
+      "files": 8,
+      "lines": 942,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 4574643,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 2068166,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1433193,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 6,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 0,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s2-formbricks-9253",
+      "study": 2,
+      "repository": "formbricks/formbricks",
+      "pool": "typescript",
+      "pr": 9253,
+      "files": 5,
+      "lines": 656,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 3737376,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 1742517,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 2777190,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 1,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 1,
+            "unverifiable": 1
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 1,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s2-formbricks-9141",
+      "study": 2,
+      "repository": "formbricks/formbricks",
+      "pool": "typescript",
+      "pr": 9141,
+      "files": 16,
+      "lines": 775,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 3655148,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 1879826,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 2582273,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 6,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 6,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 1,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s2-excalidraw-11872",
+      "study": 2,
+      "repository": "excalidraw/excalidraw",
+      "pool": "typescript",
+      "pr": 11872,
+      "files": 22,
+      "lines": 1476,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 3064455,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 2699993,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 3606252,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 2,
+            "minor": 0,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s2-excalidraw-11838",
+      "study": 2,
+      "repository": "excalidraw/excalidraw",
+      "pool": "typescript",
+      "pr": 11838,
+      "files": 5,
+      "lines": 89,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 970926,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 697498,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 914528,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 1,
+            "minor": 6,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 1,
+            "minor": 6,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 1,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s2-outline-13272",
+      "study": 2,
+      "repository": "outline/outline",
+      "pool": "typescript",
+      "pr": 13272,
+      "files": 9,
+      "lines": 884,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 1380922,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 846647,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1124307,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 7,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 0,
+            "minor": 7,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 1,
+            "minor": 5,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s2-outline-13552",
+      "study": 2,
+      "repository": "outline/outline",
+      "pool": "typescript",
+      "pr": 13552,
+      "files": 2,
+      "lines": 75,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 973368,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 912550,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 874220,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s2-twenty-24299",
+      "study": 2,
+      "repository": "twentyhq/twenty",
+      "pool": "typescript",
+      "pr": 24299,
+      "files": 8,
+      "lines": 286,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2889206,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 2386140,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 698762,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 1,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s2-twenty-24938",
+      "study": 2,
+      "repository": "twentyhq/twenty",
+      "pool": "typescript",
+      "pr": 24938,
+      "files": 14,
+      "lines": 195,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2070907,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 1211291,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1176975,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 1,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "standalone": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s2-immich-30612",
+      "study": 2,
+      "repository": "immich-app/immich",
+      "pool": "typescript",
+      "pr": 30612,
+      "files": 4,
+      "lines": 80,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 4331528,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 900355,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1186248,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 0,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 0,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 1,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s2-immich-31424",
+      "study": 2,
+      "repository": "immich-app/immich",
+      "pool": "typescript",
+      "pr": 31424,
+      "files": 6,
+      "lines": 107,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2648430,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 961489,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1372590,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 1,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 1,
+            "minor": 6,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 2,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 1,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s2-vite-22473",
+      "study": 2,
+      "repository": "vitejs/vite",
+      "pool": "typescript",
+      "pr": 22473,
+      "files": 10,
+      "lines": 188,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2733642,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 687118,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1220374,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 2,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 2
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 3
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 3
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s2-vite-23138",
+      "study": 2,
+      "repository": "vitejs/vite",
+      "pool": "typescript",
+      "pr": 23138,
+      "files": 8,
+      "lines": 34,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 1190495,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 632931,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 758674,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s2-astro-17812",
+      "study": 2,
+      "repository": "withastro/astro",
+      "pool": "typescript",
+      "pr": 17812,
+      "files": 3,
+      "lines": 54,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2070436,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 1234981,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1408146,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 0,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 0,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s2-astro-17942",
+      "study": 2,
+      "repository": "withastro/astro",
+      "pool": "typescript",
+      "pr": 17942,
+      "files": 5,
+      "lines": 115,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 767573,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 449535,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 667551,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 2,
+            "minor": 2,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 1,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        }
+      }
+    },
+    {
+      "id": "s2-pydantic-13540",
+      "study": 2,
+      "repository": "pydantic/pydantic",
+      "pool": "python",
+      "pr": 13540,
+      "files": 3,
+      "lines": 157,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 3065940,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 928023,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 992419,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 0,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 0,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        }
+      }
+    },
+    {
+      "id": "s2-pydantic-13523",
+      "study": 2,
+      "repository": "pydantic/pydantic",
+      "pool": "python",
+      "pr": 13523,
+      "files": 2,
+      "lines": 56,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2799120,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 273644,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 902029,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 6,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 7,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s2-langchain-39245",
+      "study": 2,
+      "repository": "langchain-ai/langchain",
+      "pool": "python",
+      "pr": 39245,
+      "files": 2,
+      "lines": 438,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2158967,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 828004,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 720690,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 2,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 2,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s2-langchain-39570",
+      "study": 2,
+      "repository": "langchain-ai/langchain",
+      "pool": "python",
+      "pr": 39570,
+      "files": 3,
+      "lines": 33,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 1931759,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 1048705,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 905130,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 1,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 7,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 2
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        }
+      }
+    },
+    {
+      "id": "s2-gitea-39001",
+      "study": 2,
+      "repository": "go-gitea/gitea",
+      "pool": "go",
+      "pr": 39001,
+      "files": 15,
+      "lines": 416,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2619652,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 1210351,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1976085,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 1,
+            "minor": 6,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 1,
+            "minor": 6,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 6,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s2-gitea-38827",
+      "study": 2,
+      "repository": "go-gitea/gitea",
+      "pool": "go",
+      "pr": 38827,
+      "files": 5,
+      "lines": 54,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2070634,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 1062321,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1882058,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s2-caddy-7947",
+      "study": 2,
+      "repository": "caddyserver/caddy",
+      "pool": "go",
+      "pr": 7947,
+      "files": 2,
+      "lines": 122,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2135460,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 609377,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 584554,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 1,
+            "unverifiable": 2
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s2-caddy-8003",
+      "study": 2,
+      "repository": "caddyserver/caddy",
+      "pool": "go",
+      "pr": 8003,
+      "files": 2,
+      "lines": 75,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 1192011,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 505740,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 614187,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 1,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s3-documenso-3409",
+      "study": 3,
+      "repository": "documenso/documenso",
+      "pool": "typescript",
+      "pr": 3409,
+      "files": 5,
+      "lines": 141,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 3272699,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 1256986,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1257764,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 2,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s3-formbricks-9409",
+      "study": 3,
+      "repository": "formbricks/formbricks",
+      "pool": "typescript",
+      "pr": 9409,
+      "files": 3,
+      "lines": 172,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2388867,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 1676727,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1673285,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 1,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 2,
+            "minor": 0,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 2,
+            "minor": 0,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 2,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s3-excalidraw-12180",
+      "study": 3,
+      "repository": "excalidraw/excalidraw",
+      "pool": "typescript",
+      "pr": 12180,
+      "files": 1,
+      "lines": 21,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 1407934,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 778538,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1128567,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s3-outline-13888",
+      "study": 3,
+      "repository": "outline/outline",
+      "pool": "typescript",
+      "pr": 13888,
+      "files": 4,
+      "lines": 204,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2521419,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 959520,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 1286605,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 7,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s3-twenty-26398",
+      "study": 3,
+      "repository": "twentyhq/twenty",
+      "pool": "typescript",
+      "pr": 26398,
+      "files": 2,
+      "lines": 39,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 1117814,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 732304,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 393158,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 1,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        }
+      }
+    },
+    {
+      "id": "s3-immich-31425",
+      "study": 3,
+      "repository": "immich-app/immich",
+      "pool": "typescript",
+      "pr": 31425,
+      "files": 5,
+      "lines": 114,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 1238870,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 723889,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 872605,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 2,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 2,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 1,
+            "minor": 1,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s3-vite-23543",
+      "study": 3,
+      "repository": "vitejs/vite",
+      "pool": "typescript",
+      "pr": 23543,
+      "files": 1,
+      "lines": 20,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 857681,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 641724,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 561046,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 1,
+            "incorrect": 1,
+            "unverifiable": 3
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 1,
+            "incorrect": 1,
+            "unverifiable": 2
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s3-astro-18000",
+      "study": 3,
+      "repository": "withastro/astro",
+      "pool": "typescript",
+      "pr": 18000,
+      "files": 10,
+      "lines": 101,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 3429828,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 939325,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 974655,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        }
+      }
+    },
+    {
+      "id": "s3-pydantic-13895",
+      "study": 3,
+      "repository": "pydantic/pydantic",
+      "pool": "python",
+      "pr": 13895,
+      "files": 5,
+      "lines": 195,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 1615600,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 588216,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 876864,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 2,
+            "unverifiable": 1
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 1,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s3-langchain-40711",
+      "study": 3,
+      "repository": "langchain-ai/langchain",
+      "pool": "python",
+      "pr": 40711,
+      "files": 2,
+      "lines": 52,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 2203812,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 2332748,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 2408971,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 1,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 2,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 1,
+            "minor": 2,
+            "incorrect": 1,
+            "unverifiable": 0
+          },
+          "preferred": "qamap"
+        }
+      }
+    },
+    {
+      "id": "s3-gitea-39436",
+      "study": 3,
+      "repository": "go-gitea/gitea",
+      "pool": "go",
+      "pr": 39436,
+      "files": 3,
+      "lines": 31,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 843243,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 440098,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 991526,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "candidate": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 0,
+            "minor": 2,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        },
+        "qamap:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "preferred": "tie"
+        },
+        "candidate:qamap": {
+          "qamap": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 1
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 5,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "candidate"
+        }
+      }
+    },
+    {
+      "id": "s3-caddy-8017",
+      "study": 3,
+      "repository": "caddyserver/caddy",
+      "pool": "go",
+      "pr": 8017,
+      "files": 2,
+      "lines": 113,
+      "arms": {
+        "standalone": {
+          "runs": 1,
+          "medianTokens": 1329227,
+          "verdicts": [
+            null
+          ]
+        },
+        "qamap": {
+          "runs": 1,
+          "medianTokens": 593062,
+          "verdicts": [
+            null
+          ]
+        },
+        "candidate": {
+          "runs": 1,
+          "medianTokens": 817815,
+          "verdicts": [
+            null
+          ]
+        }
+      },
+      "quality": {
+        "candidate:standalone": {
+          "standalone": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "candidate": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "qamap:standalone": {
+          "qamap": {
+            "valid": 2,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "standalone": {
+            "valid": 1,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "standalone"
+        },
+        "candidate:qamap": {
+          "candidate": {
+            "valid": 0,
+            "minor": 4,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "qamap": {
+            "valid": 0,
+            "minor": 3,
+            "incorrect": 0,
+            "unverifiable": 0
+          },
+          "preferred": "tie"
+        }
+      }
+    }
+  ],
+  "runs": [
+    {
+      "case": "s1-twenty-22015",
+      "study": 1,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2910058,
+      "tokensSource": "receipt",
+      "requests": 30,
+      "uncachedInputTokens": 98073,
+      "costUsd": 1.2379066000000003,
+      "wallMs": 377575,
+      "turns": 30,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-twenty-22015",
+      "study": 1,
+      "arm": "standalone",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 5453436,
+      "tokensSource": "receipt",
+      "requests": 60,
+      "uncachedInputTokens": 178941,
+      "costUsd": 2.005756299999999,
+      "wallMs": 638965,
+      "turns": 18,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-twenty-22015",
+      "study": 1,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2364109,
+      "tokensSource": "receipt",
+      "requests": 25,
+      "uncachedInputTokens": 95378,
+      "costUsd": 1.1272765999999999,
+      "wallMs": 423960,
+      "turns": 31,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-twenty-22015",
+      "study": 1,
+      "arm": "qamap",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 2640123,
+      "tokensSource": "receipt",
+      "requests": 30,
+      "uncachedInputTokens": 105111,
+      "costUsd": 1.2327532,
+      "wallMs": 478243,
+      "turns": 51,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": true,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "partial"
+    },
+    {
+      "case": "s1-twenty-22015",
+      "study": 1,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2561091,
+      "tokensSource": "receipt",
+      "requests": 28,
+      "uncachedInputTokens": 96596,
+      "costUsd": 1.1207312,
+      "wallMs": 705667,
+      "turns": 42,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-twenty-22015",
+      "study": 1,
+      "arm": "candidate",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 1808404,
+      "tokensSource": "receipt",
+      "requests": 22,
+      "uncachedInputTokens": 106560,
+      "costUsd": 0.9423523999999999,
+      "wallMs": 276904,
+      "turns": 33,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-twenty-21684",
+      "study": 1,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1982591,
+      "tokensSource": "receipt",
+      "requests": 26,
+      "uncachedInputTokens": 71209,
+      "costUsd": 0.8622734,
+      "wallMs": 256898,
+      "turns": 31,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-twenty-21684",
+      "study": 1,
+      "arm": "standalone",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 6324518,
+      "tokensSource": "receipt",
+      "requests": 61,
+      "uncachedInputTokens": 168623,
+      "costUsd": 2.1370958000000004,
+      "wallMs": 577063,
+      "turns": 19,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-twenty-21684",
+      "study": 1,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2195859,
+      "tokensSource": "receipt",
+      "requests": 30,
+      "uncachedInputTokens": 71418,
+      "costUsd": 0.8984630000000001,
+      "wallMs": 648778,
+      "turns": 1,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": true,
+      "endedTurns": 3,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-twenty-21684",
+      "study": 1,
+      "arm": "qamap",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 360581,
+      "tokensSource": "receipt",
+      "requests": 8,
+      "uncachedInputTokens": 15549,
+      "costUsd": 0.14651720000000001,
+      "wallMs": 63634,
+      "turns": 9,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": true,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-twenty-21684",
+      "study": 1,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1499295,
+      "tokensSource": "receipt",
+      "requests": 19,
+      "uncachedInputTokens": 68576,
+      "costUsd": 0.6831266,
+      "wallMs": 226468,
+      "turns": 21,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-twenty-21684",
+      "study": 1,
+      "arm": "candidate",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 2427028,
+      "tokensSource": "receipt",
+      "requests": 28,
+      "uncachedInputTokens": 81705,
+      "costUsd": 1.0108139999999999,
+      "wallMs": 328064,
+      "turns": 30,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-gitea-38517",
+      "study": 1,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2274799,
+      "tokensSource": "receipt",
+      "requests": 37,
+      "uncachedInputTokens": 91677,
+      "costUsd": 0.9073015,
+      "wallMs": 444254,
+      "turns": 3,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": true,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-gitea-38517",
+      "study": 1,
+      "arm": "standalone",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 3263023,
+      "tokensSource": "receipt",
+      "requests": 51,
+      "uncachedInputTokens": 111673,
+      "costUsd": 1.3850636000000003,
+      "wallMs": 823250,
+      "turns": 20,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "found"
+    },
+    {
+      "case": "s1-gitea-38517",
+      "study": 1,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1628531,
+      "tokensSource": "receipt",
+      "requests": 22,
+      "uncachedInputTokens": 60922,
+      "costUsd": 0.7941151999999999,
+      "wallMs": 288781,
+      "turns": 23,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-gitea-38517",
+      "study": 1,
+      "arm": "qamap",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 1835665,
+      "tokensSource": "receipt",
+      "requests": 24,
+      "uncachedInputTokens": 63321,
+      "costUsd": 0.8570864000000001,
+      "wallMs": 302967,
+      "turns": 28,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-gitea-38517",
+      "study": 1,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1606717,
+      "tokensSource": "receipt",
+      "requests": 23,
+      "uncachedInputTokens": 54175,
+      "costUsd": 0.7290454,
+      "wallMs": 269999,
+      "turns": 23,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-gitea-38517",
+      "study": 1,
+      "arm": "candidate",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 1159691,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 55899,
+      "costUsd": 0.6850077999999998,
+      "wallMs": 263744,
+      "turns": 23,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-gitea-38706",
+      "study": 1,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 5163894,
+      "tokensSource": "receipt",
+      "requests": 74,
+      "uncachedInputTokens": 113150,
+      "costUsd": 1.7410295,
+      "wallMs": 500596,
+      "turns": 33,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "partial"
+    },
+    {
+      "case": "s1-gitea-38706",
+      "study": 1,
+      "arm": "standalone",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 2283075,
+      "tokensSource": "receipt",
+      "requests": 33,
+      "uncachedInputTokens": 61954,
+      "costUsd": 0.9061165999999997,
+      "wallMs": 305181,
+      "turns": 33,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "partial"
+    },
+    {
+      "case": "s1-gitea-38706",
+      "study": 1,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2060259,
+      "tokensSource": "receipt",
+      "requests": 28,
+      "uncachedInputTokens": 64739,
+      "costUsd": 0.8617879999999997,
+      "wallMs": 287250,
+      "turns": 29,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "partial"
+    },
+    {
+      "case": "s1-gitea-38706",
+      "study": 1,
+      "arm": "qamap",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 1536511,
+      "tokensSource": "receipt",
+      "requests": 20,
+      "uncachedInputTokens": 66342,
+      "costUsd": 0.7619956,
+      "wallMs": 271995,
+      "turns": 23,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "partial"
+    },
+    {
+      "case": "s1-gitea-38706",
+      "study": 1,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1862177,
+      "tokensSource": "receipt",
+      "requests": 23,
+      "uncachedInputTokens": 74151,
+      "costUsd": 0.8654444000000001,
+      "wallMs": 303500,
+      "turns": 39,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "partial"
+    },
+    {
+      "case": "s1-gitea-38706",
+      "study": 1,
+      "arm": "candidate",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 1907763,
+      "tokensSource": "receipt",
+      "requests": 25,
+      "uncachedInputTokens": 68116,
+      "costUsd": 0.8227791999999999,
+      "wallMs": 408166,
+      "turns": 33,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "partial"
+    },
+    {
+      "case": "s1-outline-13198",
+      "study": 1,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 6119199,
+      "tokensSource": "receipt",
+      "requests": 87,
+      "uncachedInputTokens": 130467,
+      "costUsd": 2.2824214999999994,
+      "wallMs": 948147,
+      "turns": 26,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "found"
+    },
+    {
+      "case": "s1-outline-13198",
+      "study": 1,
+      "arm": "standalone",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 3643489,
+      "tokensSource": "receipt",
+      "requests": 58,
+      "uncachedInputTokens": 106269,
+      "costUsd": 1.4971354,
+      "wallMs": 665753,
+      "turns": 18,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "found"
+    },
+    {
+      "case": "s1-outline-13198",
+      "study": 1,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1042812,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 43448,
+      "costUsd": 0.546071,
+      "wallMs": 238587,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-outline-13198",
+      "study": 1,
+      "arm": "qamap",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 1254637,
+      "tokensSource": "receipt",
+      "requests": 18,
+      "uncachedInputTokens": 56768,
+      "costUsd": 0.6734125999999999,
+      "wallMs": 265008,
+      "turns": 19,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-outline-13198",
+      "study": 1,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2103184,
+      "tokensSource": "receipt",
+      "requests": 32,
+      "uncachedInputTokens": 49529,
+      "costUsd": 0.8321394000000001,
+      "wallMs": 304806,
+      "turns": 33,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "partial"
+    },
+    {
+      "case": "s1-outline-13198",
+      "study": 1,
+      "arm": "candidate",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 1223440,
+      "tokensSource": "receipt",
+      "requests": 19,
+      "uncachedInputTokens": 44479,
+      "costUsd": 0.5579078,
+      "wallMs": 574130,
+      "turns": 22,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "missed"
+    },
+    {
+      "case": "s1-outline-13597",
+      "study": 1,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1301499,
+      "tokensSource": "receipt",
+      "requests": 26,
+      "uncachedInputTokens": 56591,
+      "costUsd": 0.5873288000000001,
+      "wallMs": 223808,
+      "turns": 16,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "found"
+    },
+    {
+      "case": "s1-outline-13597",
+      "study": 1,
+      "arm": "standalone",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 888000,
+      "tokensSource": "receipt",
+      "requests": 20,
+      "uncachedInputTokens": 38856,
+      "costUsd": 0.3843764,
+      "wallMs": 147416,
+      "turns": 9,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": "found"
+    },
+    {
+      "case": "s1-outline-13597",
+      "study": 1,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 869186,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 31881,
+      "costUsd": 0.39082379999999994,
+      "wallMs": 159923,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "found"
+    },
+    {
+      "case": "s1-outline-13597",
+      "study": 1,
+      "arm": "qamap",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 380411,
+      "tokensSource": "receipt",
+      "requests": 8,
+      "uncachedInputTokens": 23336,
+      "costUsd": 0.2331114,
+      "wallMs": 112995,
+      "turns": 9,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "found"
+    },
+    {
+      "case": "s1-outline-13597",
+      "study": 1,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 508057,
+      "tokensSource": "receipt",
+      "requests": 10,
+      "uncachedInputTokens": 27206,
+      "costUsd": 0.2870978,
+      "wallMs": 116594,
+      "turns": 10,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "found"
+    },
+    {
+      "case": "s1-outline-13597",
+      "study": 1,
+      "arm": "candidate",
+      "run": 2,
+      "status": "completed",
+      "totalTokens": 437764,
+      "tokensSource": "receipt",
+      "requests": 9,
+      "uncachedInputTokens": 20803,
+      "costUsd": 0.23478599999999997,
+      "wallMs": 666906,
+      "turns": 10,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": "found"
+    },
+    {
+      "case": "s2-documenso-3159",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1751661,
+      "tokensSource": "receipt",
+      "requests": 25,
+      "uncachedInputTokens": 60637,
+      "costUsd": 0.8071993999999999,
+      "wallMs": 262958,
+      "turns": 25,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-documenso-3159",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1599430,
+      "tokensSource": "receipt",
+      "requests": 22,
+      "uncachedInputTokens": 55671,
+      "costUsd": 0.7089728000000001,
+      "wallMs": 252004,
+      "turns": 22,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-documenso-3159",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 808724,
+      "tokensSource": "receipt",
+      "requests": 12,
+      "uncachedInputTokens": 51851,
+      "costUsd": 0.5364536,
+      "wallMs": 242769,
+      "turns": 13,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-documenso-3372",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 4574643,
+      "tokensSource": "receipt",
+      "requests": 55,
+      "uncachedInputTokens": 281778,
+      "costUsd": 2.057354600000001,
+      "wallMs": 1757323,
+      "turns": 2,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-documenso-3372",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2068166,
+      "tokensSource": "receipt",
+      "requests": 28,
+      "uncachedInputTokens": 64836,
+      "costUsd": 0.9233317999999999,
+      "wallMs": 360472,
+      "turns": 36,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-documenso-3372",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1433193,
+      "tokensSource": "receipt",
+      "requests": 20,
+      "uncachedInputTokens": 61731,
+      "costUsd": 0.6963114,
+      "wallMs": 388156,
+      "turns": 22,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-formbricks-9253",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 3737376,
+      "tokensSource": "receipt",
+      "requests": 46,
+      "uncachedInputTokens": 72694,
+      "costUsd": 1.2306808000000002,
+      "wallMs": 695660,
+      "turns": 46,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-formbricks-9253",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1742517,
+      "tokensSource": "receipt",
+      "requests": 19,
+      "uncachedInputTokens": 81553,
+      "costUsd": 0.8385606,
+      "wallMs": 283179,
+      "turns": 20,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-formbricks-9253",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2777190,
+      "tokensSource": "receipt",
+      "requests": 31,
+      "uncachedInputTokens": 73715,
+      "costUsd": 1.0619188000000002,
+      "wallMs": 1303252,
+      "turns": 33,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-formbricks-9141",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 3655148,
+      "tokensSource": "receipt",
+      "requests": 43,
+      "uncachedInputTokens": 80853,
+      "costUsd": 1.2856960000000004,
+      "wallMs": 361998,
+      "turns": 43,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-formbricks-9141",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1879826,
+      "tokensSource": "receipt",
+      "requests": 21,
+      "uncachedInputTokens": 79180,
+      "costUsd": 0.8565854,
+      "wallMs": 543355,
+      "turns": 27,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-formbricks-9141",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2582273,
+      "tokensSource": "receipt",
+      "requests": 30,
+      "uncachedInputTokens": 78995,
+      "costUsd": 1.0725406000000002,
+      "wallMs": 377636,
+      "turns": 31,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-excalidraw-11872",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 3064455,
+      "tokensSource": "receipt",
+      "requests": 37,
+      "uncachedInputTokens": 82314,
+      "costUsd": 1.1921354,
+      "wallMs": 496201,
+      "turns": 37,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-excalidraw-11872",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2699993,
+      "tokensSource": "receipt",
+      "requests": 33,
+      "uncachedInputTokens": 74109,
+      "costUsd": 1.0631781999999999,
+      "wallMs": 322535,
+      "turns": 34,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-excalidraw-11872",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 3606252,
+      "tokensSource": "receipt",
+      "requests": 45,
+      "uncachedInputTokens": 80835,
+      "costUsd": 1.3063967999999995,
+      "wallMs": 414068,
+      "turns": 46,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-excalidraw-11838",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 970926,
+      "tokensSource": "receipt",
+      "requests": 21,
+      "uncachedInputTokens": 73343,
+      "costUsd": 0.6051028999999999,
+      "wallMs": 292032,
+      "turns": 14,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-excalidraw-11838",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 697498,
+      "tokensSource": "receipt",
+      "requests": 13,
+      "uncachedInputTokens": 33876,
+      "costUsd": 0.4360014,
+      "wallMs": 213078,
+      "turns": 19,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-excalidraw-11838",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 914528,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 37360,
+      "costUsd": 0.48108039999999996,
+      "wallMs": 229642,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-outline-13272",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1380922,
+      "tokensSource": "receipt",
+      "requests": 23,
+      "uncachedInputTokens": 37884,
+      "costUsd": 0.5192766,
+      "wallMs": 823949,
+      "turns": 23,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-outline-13272",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 846647,
+      "tokensSource": "receipt",
+      "requests": 14,
+      "uncachedInputTokens": 41059,
+      "costUsd": 0.4289914,
+      "wallMs": 171065,
+      "turns": 18,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-outline-13272",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1124307,
+      "tokensSource": "receipt",
+      "requests": 17,
+      "uncachedInputTokens": 48429,
+      "costUsd": 0.5100282,
+      "wallMs": 159185,
+      "turns": 25,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-outline-13552",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 973368,
+      "tokensSource": "receipt",
+      "requests": 17,
+      "uncachedInputTokens": 38505,
+      "costUsd": 0.48878699999999997,
+      "wallMs": 221064,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-outline-13552",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 912550,
+      "tokensSource": "receipt",
+      "requests": 15,
+      "uncachedInputTokens": 43905,
+      "costUsd": 0.5168200000000001,
+      "wallMs": 246381,
+      "turns": 16,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-outline-13552",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 874220,
+      "tokensSource": "receipt",
+      "requests": 14,
+      "uncachedInputTokens": 47224,
+      "costUsd": 0.5784239999999999,
+      "wallMs": 783174,
+      "turns": 15,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-twenty-24299",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2889206,
+      "tokensSource": "receipt",
+      "requests": 32,
+      "uncachedInputTokens": 86128,
+      "costUsd": 1.1372106,
+      "wallMs": 307707,
+      "turns": 39,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-twenty-24299",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2386140,
+      "tokensSource": "receipt",
+      "requests": 30,
+      "uncachedInputTokens": 75790,
+      "costUsd": 0.963315,
+      "wallMs": 388459,
+      "turns": 31,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": true,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-twenty-24299",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 698762,
+      "tokensSource": "receipt",
+      "requests": 10,
+      "uncachedInputTokens": 55889,
+      "costUsd": 0.4363216,
+      "wallMs": 206480,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-twenty-24938",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2070907,
+      "tokensSource": "receipt",
+      "requests": 30,
+      "uncachedInputTokens": 59829,
+      "costUsd": 0.8324037999999999,
+      "wallMs": 265859,
+      "turns": 30,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-twenty-24938",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1211291,
+      "tokensSource": "receipt",
+      "requests": 18,
+      "uncachedInputTokens": 67423,
+      "costUsd": 0.6405132000000001,
+      "wallMs": 243647,
+      "turns": 19,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-twenty-24938",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1176975,
+      "tokensSource": "receipt",
+      "requests": 17,
+      "uncachedInputTokens": 51888,
+      "costUsd": 0.5559618,
+      "wallMs": 198104,
+      "turns": 26,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-immich-30612",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "stopped",
+      "totalTokens": 4331528,
+      "tokensSource": "main-loop-lower-bound",
+      "requests": 78,
+      "uncachedInputTokens": null,
+      "costUsd": null,
+      "wallMs": 1800034,
+      "turns": null,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": true,
+      "endedTurns": 0,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-immich-30612",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 900355,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 32270,
+      "costUsd": 0.4056506,
+      "wallMs": 149299,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-immich-30612",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1186248,
+      "tokensSource": "receipt",
+      "requests": 19,
+      "uncachedInputTokens": 40552,
+      "costUsd": 0.5350764,
+      "wallMs": 762731,
+      "turns": 20,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-immich-31424",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2648430,
+      "tokensSource": "receipt",
+      "requests": 44,
+      "uncachedInputTokens": 96890,
+      "costUsd": 1.209263,
+      "wallMs": 466885,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-immich-31424",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 961489,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 40627,
+      "costUsd": 0.5237416,
+      "wallMs": 1367414,
+      "turns": 20,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-immich-31424",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1372590,
+      "tokensSource": "receipt",
+      "requests": 23,
+      "uncachedInputTokens": 43325,
+      "costUsd": 0.6059942000000001,
+      "wallMs": 233696,
+      "turns": 24,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-vite-22473",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2733642,
+      "tokensSource": "receipt",
+      "requests": 43,
+      "uncachedInputTokens": 128954,
+      "costUsd": 1.5636221999999995,
+      "wallMs": 839362,
+      "turns": 24,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-vite-22473",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 687118,
+      "tokensSource": "receipt",
+      "requests": 11,
+      "uncachedInputTokens": 46793,
+      "costUsd": 0.5131922,
+      "wallMs": 469414,
+      "turns": 12,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-vite-22473",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1220374,
+      "tokensSource": "receipt",
+      "requests": 15,
+      "uncachedInputTokens": 69257,
+      "costUsd": 0.8677432,
+      "wallMs": 465183,
+      "turns": 16,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-vite-23138",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1190495,
+      "tokensSource": "receipt",
+      "requests": 22,
+      "uncachedInputTokens": 49187,
+      "costUsd": 0.5097785,
+      "wallMs": 201919,
+      "turns": 2,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-vite-23138",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 632931,
+      "tokensSource": "receipt",
+      "requests": 13,
+      "uncachedInputTokens": 21105,
+      "costUsd": 0.2788514,
+      "wallMs": 118822,
+      "turns": 14,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-vite-23138",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 758674,
+      "tokensSource": "receipt",
+      "requests": 13,
+      "uncachedInputTokens": 42054,
+      "costUsd": 0.477598,
+      "wallMs": 229779,
+      "turns": 16,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-astro-17812",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2070436,
+      "tokensSource": "receipt",
+      "requests": 33,
+      "uncachedInputTokens": 48233,
+      "costUsd": 0.7757868,
+      "wallMs": 502104,
+      "turns": 33,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-astro-17812",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1234981,
+      "tokensSource": "receipt",
+      "requests": 21,
+      "uncachedInputTokens": 38226,
+      "costUsd": 0.556174,
+      "wallMs": 1357983,
+      "turns": 21,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-astro-17812",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "stopped",
+      "totalTokens": 1408146,
+      "tokensSource": "main-loop-lower-bound",
+      "requests": 25,
+      "uncachedInputTokens": null,
+      "costUsd": null,
+      "wallMs": 1800033,
+      "turns": null,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 0,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-astro-17942",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 767573,
+      "tokensSource": "receipt",
+      "requests": 14,
+      "uncachedInputTokens": 32255,
+      "costUsd": 0.42328240000000006,
+      "wallMs": 195215,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-astro-17942",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 449535,
+      "tokensSource": "receipt",
+      "requests": 8,
+      "uncachedInputTokens": 33861,
+      "costUsd": 0.3060412,
+      "wallMs": 129365,
+      "turns": 14,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-astro-17942",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 667551,
+      "tokensSource": "receipt",
+      "requests": 11,
+      "uncachedInputTokens": 37471,
+      "costUsd": 0.3971898,
+      "wallMs": 178096,
+      "turns": 14,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-pydantic-13540",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 3065940,
+      "tokensSource": "receipt",
+      "requests": 54,
+      "uncachedInputTokens": 103222,
+      "costUsd": 1.2025580000000002,
+      "wallMs": 1652444,
+      "turns": 18,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-pydantic-13540",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 928023,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 36664,
+      "costUsd": 0.4365446,
+      "wallMs": 197246,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-pydantic-13540",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 992419,
+      "tokensSource": "receipt",
+      "requests": 17,
+      "uncachedInputTokens": 35539,
+      "costUsd": 0.455523,
+      "wallMs": 489425,
+      "turns": 18,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-pydantic-13523",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2799120,
+      "tokensSource": "receipt",
+      "requests": 46,
+      "uncachedInputTokens": 97929,
+      "costUsd": 1.3436774000000002,
+      "wallMs": 815685,
+      "turns": 14,
+      "executedTests": true,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-pydantic-13523",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 273644,
+      "tokensSource": "receipt",
+      "requests": 5,
+      "uncachedInputTokens": 32807,
+      "costUsd": 0.3756106,
+      "wallMs": 243482,
+      "turns": 6,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-pydantic-13523",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 902029,
+      "tokensSource": "receipt",
+      "requests": 13,
+      "uncachedInputTokens": 49508,
+      "costUsd": 0.6718628,
+      "wallMs": 406394,
+      "turns": 14,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-langchain-39245",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2158967,
+      "tokensSource": "receipt",
+      "requests": 29,
+      "uncachedInputTokens": 61601,
+      "costUsd": 0.9026859999999999,
+      "wallMs": 290296,
+      "turns": 29,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-langchain-39245",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 828004,
+      "tokensSource": "receipt",
+      "requests": 13,
+      "uncachedInputTokens": 42397,
+      "costUsd": 0.44762860000000004,
+      "wallMs": 168816,
+      "turns": 14,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-langchain-39245",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 720690,
+      "tokensSource": "receipt",
+      "requests": 11,
+      "uncachedInputTokens": 44188,
+      "costUsd": 0.4481794,
+      "wallMs": 180990,
+      "turns": 12,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-langchain-39570",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1931759,
+      "tokensSource": "receipt",
+      "requests": 36,
+      "uncachedInputTokens": 90975,
+      "costUsd": 0.8626428000000002,
+      "wallMs": 379489,
+      "turns": 15,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-langchain-39570",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1048705,
+      "tokensSource": "receipt",
+      "requests": 18,
+      "uncachedInputTokens": 37180,
+      "costUsd": 0.5276176,
+      "wallMs": 221043,
+      "turns": 19,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-langchain-39570",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 905130,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 37141,
+      "costUsd": 0.4573769999999999,
+      "wallMs": 183947,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-gitea-39001",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2619652,
+      "tokensSource": "receipt",
+      "requests": 41,
+      "uncachedInputTokens": 102945,
+      "costUsd": 1.0923564000000001,
+      "wallMs": 453810,
+      "turns": 20,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-gitea-39001",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1210351,
+      "tokensSource": "receipt",
+      "requests": 17,
+      "uncachedInputTokens": 57911,
+      "costUsd": 0.6520174000000001,
+      "wallMs": 896056,
+      "turns": 18,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-gitea-39001",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1976085,
+      "tokensSource": "receipt",
+      "requests": 24,
+      "uncachedInputTokens": 72474,
+      "costUsd": 0.9233426000000002,
+      "wallMs": 350004,
+      "turns": 26,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-gitea-38827",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2070634,
+      "tokensSource": "receipt",
+      "requests": 35,
+      "uncachedInputTokens": 44013,
+      "costUsd": 0.7362036000000002,
+      "wallMs": 237318,
+      "turns": 35,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-gitea-38827",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1062321,
+      "tokensSource": "receipt",
+      "requests": 19,
+      "uncachedInputTokens": 29798,
+      "costUsd": 0.4352336,
+      "wallMs": 166150,
+      "turns": 20,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-gitea-38827",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1882058,
+      "tokensSource": "receipt",
+      "requests": 28,
+      "uncachedInputTokens": 52139,
+      "costUsd": 0.7715842,
+      "wallMs": 299988,
+      "turns": 36,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-caddy-7947",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2135460,
+      "tokensSource": "receipt",
+      "requests": 36,
+      "uncachedInputTokens": 114058,
+      "costUsd": 1.1642897000000003,
+      "wallMs": 647411,
+      "turns": 25,
+      "executedTests": true,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-caddy-7947",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 609377,
+      "tokensSource": "receipt",
+      "requests": 10,
+      "uncachedInputTokens": 39483,
+      "costUsd": 0.4929882,
+      "wallMs": 281701,
+      "turns": 11,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-caddy-7947",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 584554,
+      "tokensSource": "receipt",
+      "requests": 9,
+      "uncachedInputTokens": 48505,
+      "costUsd": 0.5273288,
+      "wallMs": 271467,
+      "turns": 10,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-caddy-8003",
+      "study": 2,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1192011,
+      "tokensSource": "receipt",
+      "requests": 21,
+      "uncachedInputTokens": 39472,
+      "costUsd": 0.5286478000000001,
+      "wallMs": 216479,
+      "turns": 21,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s2-caddy-8003",
+      "study": 2,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 505740,
+      "tokensSource": "receipt",
+      "requests": 10,
+      "uncachedInputTokens": 26664,
+      "costUsd": 0.28110559999999996,
+      "wallMs": 116028,
+      "turns": 11,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s2-caddy-8003",
+      "study": 2,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 614187,
+      "tokensSource": "receipt",
+      "requests": 12,
+      "uncachedInputTokens": 25667,
+      "costUsd": 0.2859546,
+      "wallMs": 82388,
+      "turns": 12,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-documenso-3409",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 3272699,
+      "tokensSource": "receipt",
+      "requests": 40,
+      "uncachedInputTokens": 78665,
+      "costUsd": 1.1766096,
+      "wallMs": 316098,
+      "turns": 40,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-documenso-3409",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1256986,
+      "tokensSource": "receipt",
+      "requests": 17,
+      "uncachedInputTokens": 57773,
+      "costUsd": 0.6665137999999999,
+      "wallMs": 281619,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-documenso-3409",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1257764,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 63515,
+      "costUsd": 0.6817603999999999,
+      "wallMs": 265479,
+      "turns": 21,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-formbricks-9409",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2388867,
+      "tokensSource": "receipt",
+      "requests": 29,
+      "uncachedInputTokens": 72985,
+      "costUsd": 1.0559976,
+      "wallMs": 396066,
+      "turns": 29,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-formbricks-9409",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1676727,
+      "tokensSource": "receipt",
+      "requests": 23,
+      "uncachedInputTokens": 53353,
+      "costUsd": 0.7044478000000001,
+      "wallMs": 267273,
+      "turns": 23,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-formbricks-9409",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1673285,
+      "tokensSource": "receipt",
+      "requests": 22,
+      "uncachedInputTokens": 58461,
+      "costUsd": 0.7617662000000001,
+      "wallMs": 295900,
+      "turns": 22,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-excalidraw-12180",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1407934,
+      "tokensSource": "receipt",
+      "requests": 27,
+      "uncachedInputTokens": 29413,
+      "costUsd": 0.5048309999999999,
+      "wallMs": 180779,
+      "turns": 27,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-excalidraw-12180",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 778538,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 26091,
+      "costUsd": 0.3371976,
+      "wallMs": 139365,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-excalidraw-12180",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1128567,
+      "tokensSource": "receipt",
+      "requests": 21,
+      "uncachedInputTokens": 35274,
+      "costUsd": 0.5229189999999999,
+      "wallMs": 247172,
+      "turns": 22,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-outline-13888",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2521419,
+      "tokensSource": "receipt",
+      "requests": 35,
+      "uncachedInputTokens": 68401,
+      "costUsd": 1.0216312,
+      "wallMs": 356981,
+      "turns": 35,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-outline-13888",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 959520,
+      "tokensSource": "receipt",
+      "requests": 15,
+      "uncachedInputTokens": 44408,
+      "costUsd": 0.5486466,
+      "wallMs": 294889,
+      "turns": 22,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-outline-13888",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1286605,
+      "tokensSource": "receipt",
+      "requests": 20,
+      "uncachedInputTokens": 48882,
+      "costUsd": 0.6288986000000002,
+      "wallMs": 270429,
+      "turns": 23,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-twenty-26398",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1117814,
+      "tokensSource": "receipt",
+      "requests": 22,
+      "uncachedInputTokens": 32973,
+      "costUsd": 0.4821208,
+      "wallMs": 197462,
+      "turns": 22,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-twenty-26398",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 732304,
+      "tokensSource": "receipt",
+      "requests": 14,
+      "uncachedInputTokens": 28983,
+      "costUsd": 0.341075,
+      "wallMs": 138077,
+      "turns": 14,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": true,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-twenty-26398",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 393158,
+      "tokensSource": "receipt",
+      "requests": 8,
+      "uncachedInputTokens": 22082,
+      "costUsd": 0.2339728,
+      "wallMs": 129479,
+      "turns": 9,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-immich-31425",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1238870,
+      "tokensSource": "receipt",
+      "requests": 26,
+      "uncachedInputTokens": 79310,
+      "costUsd": 0.6245302000000003,
+      "wallMs": 191756,
+      "turns": 13,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-immich-31425",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 723889,
+      "tokensSource": "receipt",
+      "requests": 13,
+      "uncachedInputTokens": 34595,
+      "costUsd": 0.4085064,
+      "wallMs": 182672,
+      "turns": 13,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-immich-31425",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 872605,
+      "tokensSource": "receipt",
+      "requests": 15,
+      "uncachedInputTokens": 45795,
+      "costUsd": 0.49050359999999993,
+      "wallMs": 182259,
+      "turns": 18,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-vite-23543",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 857681,
+      "tokensSource": "receipt",
+      "requests": 21,
+      "uncachedInputTokens": 58657,
+      "costUsd": 0.4182467,
+      "wallMs": 148485,
+      "turns": 6,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-vite-23543",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 641724,
+      "tokensSource": "receipt",
+      "requests": 14,
+      "uncachedInputTokens": 18499,
+      "costUsd": 0.27555419999999997,
+      "wallMs": 118532,
+      "turns": 15,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-vite-23543",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 561046,
+      "tokensSource": "receipt",
+      "requests": 12,
+      "uncachedInputTokens": 19519,
+      "costUsd": 0.2387046,
+      "wallMs": 89236,
+      "turns": 13,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-astro-18000",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 3429828,
+      "tokensSource": "receipt",
+      "requests": 61,
+      "uncachedInputTokens": 84903,
+      "costUsd": 1.2304926999999999,
+      "wallMs": 431813,
+      "turns": 35,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-astro-18000",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 939325,
+      "tokensSource": "receipt",
+      "requests": 16,
+      "uncachedInputTokens": 40050,
+      "costUsd": 0.4846684,
+      "wallMs": 224252,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-astro-18000",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 974655,
+      "tokensSource": "receipt",
+      "requests": 17,
+      "uncachedInputTokens": 36664,
+      "costUsd": 0.4585482000000001,
+      "wallMs": 194821,
+      "turns": 18,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-pydantic-13895",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1615600,
+      "tokensSource": "receipt",
+      "requests": 33,
+      "uncachedInputTokens": 57438,
+      "costUsd": 0.6824669999999999,
+      "wallMs": 275156,
+      "turns": 16,
+      "executedTests": true,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-pydantic-13895",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 588216,
+      "tokensSource": "receipt",
+      "requests": 11,
+      "uncachedInputTokens": 27590,
+      "costUsd": 0.3114448,
+      "wallMs": 123684,
+      "turns": 11,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-pydantic-13895",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 876864,
+      "tokensSource": "receipt",
+      "requests": 15,
+      "uncachedInputTokens": 36223,
+      "costUsd": 0.4549622,
+      "wallMs": 198898,
+      "turns": 16,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-langchain-40711",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2203812,
+      "tokensSource": "receipt",
+      "requests": 33,
+      "uncachedInputTokens": 51959,
+      "costUsd": 0.8806638000000001,
+      "wallMs": 313991,
+      "turns": 33,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-langchain-40711",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2332748,
+      "tokensSource": "receipt",
+      "requests": 31,
+      "uncachedInputTokens": 69661,
+      "costUsd": 1.0948742,
+      "wallMs": 449056,
+      "turns": 32,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-langchain-40711",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 2408971,
+      "tokensSource": "receipt",
+      "requests": 29,
+      "uncachedInputTokens": 77955,
+      "costUsd": 1.0813544000000002,
+      "wallMs": 383877,
+      "turns": 30,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-gitea-39436",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 843243,
+      "tokensSource": "receipt",
+      "requests": 17,
+      "uncachedInputTokens": 25692,
+      "costUsd": 0.36099580000000003,
+      "wallMs": 139429,
+      "turns": 17,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-gitea-39436",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 440098,
+      "tokensSource": "receipt",
+      "requests": 9,
+      "uncachedInputTokens": 21659,
+      "costUsd": 0.2596638,
+      "wallMs": 129467,
+      "turns": 13,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-gitea-39436",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 991526,
+      "tokensSource": "receipt",
+      "requests": 18,
+      "uncachedInputTokens": 30155,
+      "costUsd": 0.42908939999999995,
+      "wallMs": 176952,
+      "turns": 20,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-caddy-8017",
+      "study": 3,
+      "arm": "standalone",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 1329227,
+      "tokensSource": "receipt",
+      "requests": 27,
+      "uncachedInputTokens": 80234,
+      "costUsd": 0.6441451999999999,
+      "wallMs": 245855,
+      "turns": 14,
+      "executedTests": false,
+      "usedQamap": false,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": null,
+      "verdict": null
+    },
+    {
+      "case": "s3-caddy-8017",
+      "study": 3,
+      "arm": "qamap",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 593062,
+      "tokensSource": "receipt",
+      "requests": 11,
+      "uncachedInputTokens": 29277,
+      "costUsd": 0.3080838,
+      "wallMs": 116295,
+      "turns": 12,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    },
+    {
+      "case": "s3-caddy-8017",
+      "study": 3,
+      "arm": "candidate",
+      "run": 1,
+      "status": "completed",
+      "totalTokens": 817815,
+      "tokensSource": "receipt",
+      "requests": 13,
+      "uncachedInputTokens": 43056,
+      "costUsd": 0.4331108000000001,
+      "wallMs": 152412,
+      "turns": 14,
+      "executedTests": false,
+      "usedQamap": true,
+      "movedToBackground": false,
+      "endedTurns": 1,
+      "engineVersion": "0.5.1",
+      "verdict": null
+    }
+  ]
+}
