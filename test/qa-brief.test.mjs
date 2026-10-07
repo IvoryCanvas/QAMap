@@ -361,7 +361,8 @@ test("change signals name rewritten access rules, dropped initializers, unassign
   assert.match(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct),
     /field `leftCount` \(line 5\) is read at 16 but never assigned in this file or the diff; a local of that name is set at 9/);
   assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct.map((line) => line.replace("\tleftCount = count()", "\tret.leftCount = count()"))) ?? "", /field `leftCount`/);
-  assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct, ["\tout := Detail{leftCount: 2}", "\t\tleftCount: 2,"]) ?? "", /field `leftCount`/);
+  assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct, ["\t\tleftCount: 2,"]) ?? "", /field `leftCount`/);
+  assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct, ["\tout := Detail{ready: true, leftCount: 2}"]) ?? "", /field `leftCount`/);
   const tsClass = ["export class Job {", "  retries: number;", "  run() { return this.retries > 0; }", "}"];
   assert.match(changeSignals({ path: "job.ts", hunks: { minimal: [hunk(2, 2, ["+  retries: number;"])] } }, tsClass), /field `retries` \(line 2\) is read at 3/);
   assert.doesNotMatch(changeSignals({ path: "job.ts", hunks: { minimal: [hunk(2, 2, ["+  retries: number;"])] } },

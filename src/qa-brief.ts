@@ -529,7 +529,8 @@ function unassignedFieldSignals(file: string, added: SignalRows["added"], head: 
     let read: number | undefined, written = false;
     const scan = (text: string, line?: number): void => {
       const code = stripStrings(text);
-      if (new RegExp(`^\\s*["']?${escaped}["']?\\s*:(?!=)`).test(code) && line !== field.line) { written = true; return; }
+      // A literal key sets the field, at the start of a line or inline after `{` or `,`.
+      if (new RegExp(`(?:^\\s*|[{,]\\s*)["']?${escaped}["']?\\s*:(?!=)`).test(code) && line !== field.line) { written = true; return; }
       const assignment = /(?<![=!<>:+\-*/%&|^])(?::=|=(?!=)|[+\-*/%&|^]=|\+\+|--)/.exec(code);
       for (const match of code.matchAll(member)) {
         const after = code.slice((match.index ?? 0) + match[0].length);
