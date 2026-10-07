@@ -187,6 +187,12 @@ with `qamap init --agent --review-mode report`, and its prompt begins with
 "Use QAMap for this review." Arm order alternates per case and run. `--disable-skills` removes the
 host's `Skill` tool from both arms: the standalone host then cannot delegate to a
 built-in review skill, and the QAMap arm relies on its `AGENTS.md` instructions.
+`--arms standalone,qamap,candidate --candidate <prefix>` adds a third arm with the
+same setup and prompt as the QAMap arm and a second engine, such as an unreleased
+build, and rotates the order of all three. A rerun into the same `--out` keeps
+finished runs and repeats only those without a result. The stored answer is every
+ended host turn in order, so a short acknowledgement after a background task
+cannot replace the review.
 
 The frozen [case list](../test/benchmarks/review-host/cases.json) combines
 synthetic seeded regressions from the report-evidence suites, public product

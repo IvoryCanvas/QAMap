@@ -3,12 +3,14 @@
 // comes from the host's own per-model receipt. Nothing is estimated from bytes.
 //
 //   node scripts/agent-bench/review-host.mjs --engine <prefix with bin/qamap> --out <dir> [--runs 3]
-//     [--arms standalone,qamap] [--case <id>] [--model <id>] [--concurrency 4] [--disable-skills] [--dry-run]
+//     [--arms standalone,qamap] [--candidate <prefix>] [--case <id>] [--model <id>] [--concurrency 4] [--disable-skills] [--dry-run]
 //
 // The host is the Claude Code CLI (`claude -p --output-format stream-json`). Provider
 // charges apply to real runs. --dry-run materializes every fixture and stops before
 // starting the host. --disable-skills removes the host's Skill tool from both arms, so
-// neither arm can load a built-in review skill or the packaged QAMap skill.
+// neither arm can load a built-in review skill or the packaged QAMap skill. --candidate adds a
+// `candidate` arm: the same QAMap setup and prompt with a second engine, such as an
+// unreleased build measured against the published one.
 import { spawn, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -123,8 +125,28 @@ export function summarizeHostRun(stdout) {
     usage, totalTokens: complete ? usage.input + usage.cacheWrite + usage.cacheRead + usage.output : null,
     uncachedInputTokens: complete ? usage.input + usage.cacheWrite : null,
     costUsd: result?.total_cost_usd ?? null, models: models ? Object.keys(models) : [],
-    turns: result?.num_turns ?? null, requests: requests.size, tools, answer: result?.result ?? "",
+    turns: result?.num_turns ?? null, requests: requests.size, tools, answer: sessionAnswer(stdout),
   };
+}
+
+// A host session can end more than one turn: a background task that finishes after the
+// review re-invokes the model, and the last turn may only acknowledge it. The answer is
+// every turn's final text in order; usage is already cumulative in the last receipt.
+export function sessionAnswer(stdout) {
+  const texts = [];
+  for (const line of stdout.split("\n")) {
+    let event;
+    try { event = JSON.parse(line); } catch { continue; }
+    if (event.type === "result" && typeof event.result === "string" && event.result.trim()) texts.push(event.result.trim());
+  }
+  return texts.join("\n\n");
+}
+
+// Two arms alternate; more arms rotate so each one goes first equally often.
+export function armOrder(arms, index, run) {
+  if (arms.length === 2) return (index + run) % 2 === 0 ? arms : [...arms].reverse();
+  const shift = (index + run) % arms.length;
+  return [...arms.slice(shift), ...arms.slice(0, shift)];
 }
 
 export function toolArguments(disableSkills = false) {
@@ -160,21 +182,27 @@ export function runHost({ cwd, home, pathPrefix, prompt, model, transcript, time
 export async function runOne(entry, { suite, arm, run, engine, model, out, dryRun = false, timeoutMs = 900_000, disableSkills = false }) {
   const label = `${entry.id}.${arm}${disableSkills ? "-noskills" : ""}.run${run}`;
   const outDir = path.join(out, label);
-  await fs.mkdir(outDir, { recursive: false });
+  // A rerun keeps finished runs and repeats only those that never wrote a result.
+  if (await fs.stat(path.join(outDir, "result.json")).then(() => true, () => false)) return { label, status: "kept" };
+  await fs.rm(outDir, { recursive: true, force: true });
+  await fs.mkdir(outDir);
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-review-host-"));
   try {
     const home = path.join(directory, "home");
     await fs.mkdir(home);
+    // The candidate arm is set up and prompted exactly like the qamap arm, with its own engine.
+    const setup = arm === "candidate" ? "qamap" : arm;
     const engineBin = path.join(path.resolve(engine), "bin");
-    const { repo, base, head } = await materializeCase(entry, { directory, home, engineBin, arm });
-    const prompt = arm === "qamap" ? `${suite.qamapPrefix} ${suite.prompt}` : suite.prompt;
-    const record = { schema: { name: "qamap.review-host-run", version: 1 }, case: entry.id, arm, run, model, base, head,
+    const { repo, base, head } = await materializeCase(entry, { directory, home, engineBin, arm: setup });
+    const prompt = setup === "qamap" ? `${suite.qamapPrefix} ${suite.prompt}` : suite.prompt;
+    const engineVersion = setup === "qamap" ? execFileSync(path.join(engineBin, "qamap"), ["--version"], { input: "", stdio: ["pipe", "pipe", "pipe"] }).toString().trim() : null;
+    const record = { schema: { name: "qamap.review-host-run", version: 1 }, case: entry.id, arm, run, model, base, head, engineVersion,
       promptSha256: createHash("sha256").update(prompt).digest("hex"), tools: toolArguments(disableSkills), disableSkills };
     if (dryRun) {
       await fs.writeFile(path.join(outDir, "result.json"), JSON.stringify({ ...record, status: "dry-run" }, null, 2));
       return { label, status: "dry-run" };
     }
-    const host = await runHost({ cwd: repo, home, pathPrefix: arm === "qamap" ? engineBin : undefined, prompt, model,
+    const host = await runHost({ cwd: repo, home, pathPrefix: setup === "qamap" ? engineBin : undefined, prompt, model,
       transcript: path.join(outDir, "transcript.jsonl"), timeoutMs, disableSkills });
     const summary = summarizeHostRun(host.stdout);
     const changed = execFileSync("git", ["status", "--porcelain"], { cwd: repo }).toString();
@@ -190,7 +218,7 @@ export async function runOne(entry, { suite, arm, run, engine, model, out, dryRu
 
 async function main() {
   const { values } = parseArgs({ options: { engine: { type: "string" }, out: { type: "string" }, runs: { type: "string", default: "3" },
-    arms: { type: "string", default: "standalone,qamap" }, case: { type: "string" }, model: { type: "string" },
+    arms: { type: "string", default: "standalone,qamap" }, candidate: { type: "string" }, case: { type: "string" }, model: { type: "string" },
     concurrency: { type: "string", default: "4" }, "dry-run": { type: "boolean", default: false }, suite: { type: "string" },
     "disable-skills": { type: "boolean", default: false } } });
   if (!values.engine || !values.out) throw new Error("--engine and --out are required");
@@ -201,18 +229,19 @@ async function main() {
   const suite = await loadSuite(values.suite);
   const cases = suite.cases.filter((entry) => !values.case || entry.id === values.case);
   const arms = values.arms.split(",");
-  // Alternate arm order per case and run so neither arm always warms the host's prompt cache.
+  if (arms.includes("candidate") && !values.candidate) throw new Error("--candidate is required for the candidate arm");
+  const engines = { standalone: values.engine, qamap: values.engine, candidate: values.candidate };
+  // Rotate arm order per case and run so no arm always warms the host's prompt cache.
   const jobs = [];
   for (let run = 1; run <= Number(values.runs); run++) cases.forEach((entry, index) => {
-    const ordered = (index + run) % 2 === 0 ? arms : [...arms].reverse();
-    for (const arm of ordered) jobs.push({ entry, arm, run });
+    for (const arm of armOrder(arms, index, run)) jobs.push({ entry, arm, run });
   });
   let next = 0;
   const worker = async () => {
     while (next < jobs.length) {
       const job = jobs[next++];
       let line;
-      try { line = await runOne(job.entry, { suite, arm: job.arm, run: job.run, engine: values.engine, model: values.model, out,
+      try { line = await runOne(job.entry, { suite, arm: job.arm, run: job.run, engine: engines[job.arm], model: values.model, out,
         dryRun: values["dry-run"], disableSkills: values["disable-skills"] }); }
       catch (error) { line = { label: `${job.entry.id}.${job.arm}.run${job.run}`, status: "harness-error", message: String(error.message ?? error) }; }
       await fs.appendFile(path.join(out, "runs.jsonl"), `${JSON.stringify(line)}\n`);
