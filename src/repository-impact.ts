@@ -31,6 +31,9 @@ export interface RepositoryImpact {
   archiveLimits?: { paths: number; bytes: number };
 }
 
+const sourceExtensions = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
+const moduleExtensions = new Set([...sourceExtensions, ".json", ".node", ".wasm"]);
+
 export function createRepositoryModuleResolver(
   blocks: RepositoryIndexBlock[], skipped: RepositoryEvidenceIndex["coverage"]["skipped"] = [],
 ): (file: string, module: string) => ModuleResolution {
@@ -42,9 +45,9 @@ export function createRepositoryModuleResolver(
     if (normalized.startsWith("../") || path.posix.isAbsolute(normalized)) return [];
     const extension = path.posix.extname(normalized);
     const substitutions: Record<string, string[]> = { ".js": [".ts", ".tsx"], ".jsx": [".tsx"], ".mjs": [".mts"], ".cjs": [".cts"] };
-    if (extension) return [normalized, ...(substitutions[extension] ?? []).map((suffix) => normalized.slice(0, -extension.length) + suffix)];
-    const base = normalized;
-    return [...new Set([base, ...[".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"].flatMap((extension) => [`${base}${extension}`, `${base}/index${extension}`])])];
+    // Only a module extension ends the name; `user.service` still needs one appended.
+    if (moduleExtensions.has(extension)) return [normalized, ...(substitutions[extension] ?? []).map((suffix) => normalized.slice(0, -extension.length) + suffix)];
+    return [...new Set([normalized, ...sourceExtensions.flatMap((suffix) => [`${normalized}${suffix}`, `${normalized}/index${suffix}`])])];
   };
   const probe = (candidate: string): string[] => files.has(path.posix.normalize(candidate))
     ? [path.posix.normalize(candidate)] : probePaths(candidate).filter((file) => files.has(file));

@@ -5681,8 +5681,12 @@ function splitIntentClauses(statement: string): string[] {
   const stripped = stripTerminalPunctuation(statement.trim());
   const lifecycleVerb =
     "(?:cache|cancel|clear|click|complete|delete|display|emit|fetch|fire|invalidate|navigate|notify|open|persist|post|publish|redirect|remove|render|request|resync|reset|restore|save|schedule|select|send|show|store|submit|surface|sync|tap|toggle|track|update|upload)";
+  // "and" or "then" starts a new clause only before a verb; "compare a and b" or
+  // "search and filters" joins nouns and stays one clause.
+  const clauseVerb =
+    "(?:add|adjust|allow|apply|avoid|block|build|cache|cancel|change|check|clean|clear|click|close|complete|create|defer|delete|disable|display|drop|edit|emit|enable|ensure|expose|fetch|fire|fix|handle|hide|ignore|improve|invalidate|keep|limit|load|make|mark|merge|move|navigate|notify|open|persist|post|prevent|publish|redirect|refresh|reject|remove|rename|render|replace|report|request|require|reset|restore|resync|retry|return|reuse|run|save|schedule|select|send|show|skip|sort|start|stop|store|submit|support|surface|switch|sync|tap|toggle|track|update|upload|use|validate|wait|warn|write)";
   const clauses = stripped
-    .split(new RegExp(`(?:,\\s*(?=${lifecycleVerb}\\b)|,?\\s+(?:and then|then|and)\\s+)`, "i"))
+    .split(new RegExp(`(?:,\\s*(?=${lifecycleVerb}\\b)|,?\\s+(?:and then|then|and)\\s+(?=${clauseVerb}\\b))`, "i"))
     .map((clause) => clause.trim())
     .filter((clause) => clause.length >= 4);
   return clauses.length > 0 ? clauses : [stripped];
