@@ -2531,7 +2531,8 @@ function buildIntentQaScenarios(
         const stageSearchable = `${stage.label} ${stage.evidence.map((item) => `${item.symbol ?? ""} ${item.value}`).join(" ")}`
           .replaceAll("navigation.setoptions", "")
           .replaceAll("update the navigation options state", "");
-        return Boolean(matchRoutingSignal(stageSearchable)) ||
+        const files = stage.evidence.map((item) => item.file).filter((file): file is string => Boolean(file));
+        return clientRoutingSignal(matchRoutingSignal(stageSearchable), files) ||
           /\bopen\b[^.;]{0,80}\b(?:linked|destination|route|screen|page|detail|summary)\b/i.test(stageSearchable);
       })
       .flatMap((stage) => stage.evidence),
@@ -2540,7 +2541,7 @@ function buildIntentQaScenarios(
       return item.kind === "diff" &&
         !/navigation\.setoptions/i.test(evidenceSearchable) &&
         (
-          Boolean(matchRoutingSignal(evidenceSearchable)) ||
+          clientRoutingSignal(matchRoutingSignal(evidenceSearchable), item.file ? [item.file] : []) ||
           /\bopen\b[^.;]{0,80}\b(?:linked|destination|route|screen|page|detail|summary)\b/i.test(evidenceSearchable)
         );
     }),
@@ -3680,6 +3681,15 @@ function collectDiffRiskEvidence(
   return uniqueEvidence(evidence);
 }
 
+// Navigation words route a client anywhere. Payload, destination and search-parameter words
+// are ordinary server vocabulary, so they count only outside server-side code.
+const serverSidePath = /(?:^|\/)(?:server|server-only|backend|api|[\w.-]+-server)\/|\.(?:go|py|rb|java|php|cs|rs|exs?)$/i;
+function clientRoutingSignal(signal: string | undefined, files: string[]): boolean {
+  if (!signal) return false;
+  if (/deep.?link|redirect|router|navigat|openurl|openlink|location/i.test(signal)) return true;
+  return !files.length || files.some((file) => !serverSidePath.test(file));
+}
+
 function matchRoutingSignal(line: string): string | undefined {
   const direct = line.match(
     /\b(deep.?link|destination|redirect\w*|router\.(?:push|replace)|navigate\w*|openurl|openlink|URLSearchParams|searchParams|location\.href|window\.location)\b/i,
@@ -4668,15 +4678,19 @@ function performanceSignal(
     return { mechanism: "font-loading", rawSymbol: fontLoading };
   }
 
-  const deliveryCache = text.match(
-    /\b(Cache-Control|s-maxage|stale-while-revalidate|CloudFront|CDN|invalidation|invalidate\w*|immutable)\b/i,
-  )?.[1];
+  // Cache headers name delivery caching anywhere; invalidation and immutability do only in
+  // hosting, CDN, build or service-worker configuration, not in server data caches.
+  const deliveryCache = text.match(/\b(Cache-Control|s-maxage|stale-while-revalidate|CloudFront|CDN)\b/i)?.[1] ??
+    (deliveryConfigPath.test(file) ? text.match(/\b(invalidation|invalidate\w*|immutable)\b/i)?.[1] : undefined);
   if (deliveryCache) {
     return { mechanism: "delivery-cache", rawSymbol: deliveryCache };
   }
 
   return undefined;
 }
+
+const deliveryConfigPath =
+  /(?:^|\/)(?:vercel\.json|netlify\.toml|_headers|_redirects|firebase\.json|staticwebapp\.config\.json|serverless\.ya?ml|Caddyfile|\.htaccess|nginx[^/]*\.conf|(?:next|nuxt|vite|astro|svelte|remix|webpack|rollup|rspack)\.config\.[cm]?[jt]s|(?:service-?worker|sw|workbox)[^/]*\.[cm]?[jt]s|[^/]*(?:cloudfront|cdn)[^/]*)$|(?:^|\/)(?:infra|deploy|deployment|cdn|cloudfront|terraform|cdk)\//i;
 
 function isPerformanceEvidence(evidence: ChangeIntentEvidence): boolean {
   return evidence.kind === "diff" && evidence.symbol?.startsWith("performance:") === true;
@@ -5681,8 +5695,12 @@ function splitIntentClauses(statement: string): string[] {
   const stripped = stripTerminalPunctuation(statement.trim());
   const lifecycleVerb =
     "(?:cache|cancel|clear|click|complete|delete|display|emit|fetch|fire|invalidate|navigate|notify|open|persist|post|publish|redirect|remove|render|request|resync|reset|restore|save|schedule|select|send|show|store|submit|surface|sync|tap|toggle|track|update|upload)";
+  // "and" or "then" starts a new clause only before a verb; "compare a and b" or
+  // "search and filters" joins nouns and stays one clause.
+  const clauseVerb =
+    "(?:add|adjust|allow|apply|avoid|block|build|cache|cancel|change|check|clean|clear|click|close|complete|create|defer|delete|disable|display|drop|edit|emit|enable|ensure|expose|fetch|fire|fix|handle|hide|ignore|improve|invalidate|keep|limit|load|make|mark|merge|move|navigate|notify|open|persist|post|prevent|publish|redirect|refresh|reject|remove|rename|render|replace|report|request|require|reset|restore|resync|retry|return|reuse|run|save|schedule|select|send|show|skip|sort|start|stop|store|submit|support|surface|switch|sync|tap|toggle|track|update|upload|use|validate|wait|warn|write)";
   const clauses = stripped
-    .split(new RegExp(`(?:,\\s*(?=${lifecycleVerb}\\b)|,?\\s+(?:and then|then|and)\\s+)`, "i"))
+    .split(new RegExp(`(?:,\\s*(?=${lifecycleVerb}\\b)|,?\\s+(?:and then|then|and)\\s+(?=${clauseVerb}\\b))`, "i"))
     .map((clause) => clause.trim())
     .filter((clause) => clause.length >= 4);
   return clauses.length > 0 ? clauses : [stripped];

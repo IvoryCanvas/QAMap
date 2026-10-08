@@ -4,7 +4,9 @@ import { lstat, mkdir, open, readdir, realpath, rename, unlink } from "node:fs/p
 import os from "node:os";
 import path from "node:path";
 
-const maxBytes = 8 * 1024 * 1024;
+// A repository index of a large monorepo holds every indexed file's syntax metadata, so its
+// snapshot may be larger than an import graph's. The directory keeps at most four snapshots' size.
+const snapshotBytes = { import: 8 * 1024 * 1024, repository: 64 * 1024 * 1024 } as const;
 const maxSnapshots = 8;
 const ttlMs = 24 * 60 * 60 * 1000;
 const managedName = /^[a-f0-9]{64}\.json$/;
@@ -68,18 +70,21 @@ function inside(parent: string, child: string): boolean {
 }
 
 // Only this private cache's named regular files are eligible for eviction.
-async function prune(directory: string, keep: string): Promise<void> {
-  const entries: Array<{ name: string; modified: number }> = [];
+async function prune(directory: string, keep: string, keptBytes: number, maxBytes: number): Promise<void> {
+  const entries: Array<{ name: string; modified: number; size: number }> = [];
   for (const name of await readdir(directory)) {
     if (!managedName.test(name) && !temporaryName.test(name)) continue;
     const stat = await lstat(path.join(directory, name)).catch(() => undefined);
     if (!stat?.isFile() || stat.nlink !== 1 || !isPrivate(stat) || name === keep) continue;
     if (Date.now() - stat.mtimeMs > ttlMs) {
       await unlink(path.join(directory, name)).catch(() => undefined);
-    } else if (managedName.test(name)) entries.push({ name, modified: stat.mtimeMs });
+    } else if (managedName.test(name)) entries.push({ name, modified: stat.mtimeMs, size: stat.size });
   }
   entries.sort((a, b) => b.modified - a.modified || a.name.localeCompare(b.name));
-  for (const entry of entries.slice(maxSnapshots - 1)) {
+  let total = keptBytes;
+  for (const [index, entry] of entries.entries()) {
+    total += entry.size;
+    if (index < maxSnapshots - 1 && total <= maxBytes * 4) continue;
     await unlink(path.join(directory, entry.name)).catch(() => undefined);
   }
 }
@@ -96,6 +101,7 @@ export async function openLocalIndexCache<T>(
   requestedDirectory?: string | false, available = true,
 ): Promise<LocalIndexCache<T>> {
   const inactive = (state: "disabled" | "unavailable"): LocalIndexCache<T> => ({ state, save: async () => "skipped" });
+  const maxBytes = snapshotBytes[namespace];
   if (requestedDirectory === false) return inactive("disabled");
   if (!available) return inactive("unavailable");
   try {
@@ -157,7 +163,7 @@ export async function openLocalIndexCache<T>(
           try { await handle.writeFile(text); }
           finally { await handle.close(); }
           await rename(temporary, filename);
-          await prune(directory, name).catch(() => undefined);
+          await prune(directory, name, Buffer.byteLength(text), maxBytes).catch(() => undefined);
           return "saved";
         } catch { return "failed"; }
         finally { await unlink(temporary).catch(() => undefined); }

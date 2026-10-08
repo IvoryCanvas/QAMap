@@ -6,15 +6,23 @@
 
 - `qamap qa brief` keeps every removed line when a file exceeds its line cap and folds long runs of added lines into their head line range, because a file read at head cannot show removed behavior. References shrink before source diff does.
 - The brief adds per-file change signals (fewer error or warning logs, removed or added error handling, new throws, new early exits, removed conditions, dropped `await`, removed transactions or locks) and names unchanged lines between two hunks of one declaration.
+- More change signals: a removed throw whose case now continues, the name a new throw raises, rewritten access conditions with the clauses dropped and added, a key dropped from a Go, JavaScript or Python initializer while the field is still read, and a field the diff declares and reads but never assigns. When a declaration now throws, directly or through a changed function it calls, its callers without a try block, `.catch` or Go error check are listed first with the handling found at each call. Comment lines that only name a symbol are no longer listed as references. When the brief cannot show every file, each file keeps its header and signals instead of later files losing them.
 - Every file that is not shown in full is listed under "Not fully shown" with its hidden removed and added line counts and the `git diff` command that shows it. A file that does not fit at all keeps its header and change signals.
 - Brief wording no longer reads as proof: test coverage is "named by a test file", references this diff changes are marked `(changed)`, unresolved calls are "external or built-in", QA focus items are labeled heuristic pattern checks, and the references footer states that string, routing, injection and reflection calls are not traced.
 - References skip vendored, minified and locale files, same-named symbols in other languages, and test helpers offered as production definitions. Very common names stop after 300 checked files and are reported as capped.
+- QA focus no longer suggests client scenarios from server code: invalidation or immutability names a deployed HTML and asset cache only in hosting, CDN, build or service-worker configuration, and payload, destination or search-parameter words in server-side files no longer raise an entry-routing scenario. Cache headers and navigation calls still count anywhere. In the brief, a critical scenario of an intent below high confidence is labeled `[check]`.
 - The packaged skill and the `AGENTS.md` section ask hosts to wait up to 10 minutes for the brief in the foreground instead of 30 seconds, treat the brief as the map rather than the limit, read the diffs under "Not fully shown", read a changed function whole when its hunks leave lines out or it changes guards, early exits, error handling, log levels, transactions or shared state, state a failure scenario for each removed or rewritten behavior, and check the base before calling something new, removed, untested or fully updated.
+
+### Fixed
+
+- The repository index resolves imports of dotted module names such as `./user.service`, `./app.module` or an alias `@app/users/user.entity`. Only a JavaScript, TypeScript, JSON, `.node` or `.wasm` extension now ends a module name; any other suffix is probed with source extensions and `index` files, so these imports reach their tests and callers instead of being reported as unresolved.
+- A commit message splits into flow stages at "and" or "then" only before a verb. "Compare a and b" stays one stage instead of becoming "Compare a" with "b" dropped; "save the draft and show a toast" still gives two stages.
 
 ### Performance
 
 - One draft reuses project walks and import graphs instead of rebuilding them, skips importer and impact resolution that cannot affect the result, reads index files in a bounded window, reads blobs through one `git cat-file --batch` process, and searches references with one alternation per batch. On the largest measured monorepo the brief went from 47-106 s to 31-67 s with byte-identical output; smaller repositories from 10-14 s to 8-10 s.
 - When the repository index reaches its file cap, it keeps changed files, package and compiler configuration, and files nearest the change, and records `coverage.ordering`. Under the cap the index is unchanged.
+- The repository index cache keeps snapshots up to 64 MiB, so a large monorepo's index is reused instead of being rebuilt on every run. The import cache keeps 8 MiB, and each cache directory now keeps at most four snapshots' size in total. On a 7,221-file server package the index took 3.4 s from cache against 8-11 s rebuilt. A repeated brief on that checkout took 32-35 s, against 43-44 s every time before.
 
 ### Measurement
 

@@ -41,7 +41,7 @@ interface DiffFile {
 interface Span { name: string; line: number; endLine: number }
 interface CalleeInfo { name: string; definition?: string; body?: Array<{ line: number; text: string }> }
 interface TestUse { file: string; titleLine: number; title: string; hitLine: number; lines: Array<{ line: number; text: string }> }
-interface CallerUse { file: string; line: number; owner?: string; text: string; alias?: string; tests: TestUse[] }
+interface CallerUse { file: string; line: number; owner?: string; text: string; alias?: string; tests: TestUse[]; guard?: string }
 interface SymbolUsage {
   symbol: string;
   file: string;
@@ -51,6 +51,8 @@ interface SymbolUsage {
   exports: Array<{ file: string; line: number }>;
   hitCount: number;
   truncated: boolean;
+  // Set when this diff adds a throw or error exit to the declaration: the thrown names, if any.
+  throws?: string[];
 }
 interface Level { context: "full" | "wide" | "normal" | "minimal"; tests: number; callers: number; callerTests: number;
   lowPriorityHunks: "show" | "cap" | "list"; testHunks: "show" | "cap" | "list"; hunkLineCap: number; scenarios: number }
@@ -119,10 +121,26 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
   await collectCallees(top, headSha, files, changedSymbols, reader, graph);
   await collectRelatedTests(top, headSha, files, usages, reader);
   if (!result.includeWorkingTree) await collectHistory(top, result.base, result.head, files, reader);
+  const diffAdded = files.flatMap((file) => file.hunks.minimal.flatMap((hunk) => hunk.lines.filter((line) => line.startsWith("+")).map((line) => line.slice(1))));
   for (const file of files) {
     if (file.kind !== "source" || file.status.startsWith("D")) continue;
-    file.signals = changeSignals(file);
+    file.signals = changeSignals(file, await reader(file.path), diffAdded);
     file.spans = await changedSpans(file, blocks.get(file.path), reader);
+    // Callers of a declaration that now throws are listed with how each one handles it.
+    const thrown = await thrownBy(file, blocks.get(file.path), reader);
+    for (const usage of usages.get(file.path) ?? []) {
+      const names = thrown.get(usage.symbol);
+      if (!names) continue;
+      usage.throws = names;
+      for (const caller of usage.callers.slice(0, 24)) {
+        // Only a line that calls it has handling to read; a destructure or a type is not a call.
+        const name = (caller.alias ?? usage.symbol).replace(/\$/g, "\\$");
+        if (!new RegExp(`(?<![\\w$])${name}\\s*(?:<[^>()]*>)?\\s*\\(`).test(stripStrings(caller.text))) continue;
+        const lines = await reader(caller.file);
+        const guard = lines ? callGuard(lines, caller.line, caller.file) : undefined;
+        if (guard) caller.guard = guard;
+      }
+    }
   }
   const changed = new Map(files.map((file) => [file.path, new Set(changedLines(file).added)]));
 
@@ -378,19 +396,36 @@ const handlerPattern = /\bcatch\b|\bexcept\b|\brecover\s*\(\s*\)|\.catch\s*\(|\b
 const conditionPattern = /^\s*(?:\}?\s*else\s+if\b|if\b|elif\b|switch\b|case\b|guard\b|unless\b|while\b)|\s\?\s[^?:]+\s:\s|&&|\|\|/;
 const exitPattern = /^\s*(?:return\b|continue\b|break\b)|\bif\b.*\b(?:return|continue|break)\b/;
 const lockPattern = /\$transaction\b|\btransaction\s*\(|\bBEGIN\b|\.(?:lock|acquire|Lock|RLock)\s*\(|\bwithLock\b|\bmutex\b|\bsynchronized\b|\bFOR UPDATE\b/;
+// Authorization vocabulary; a rewritten rule that uses it changes who may act.
+const accessPattern = /\b(?:can|cannot|allow\w*|deny\w*|authori[sz]\w*|permit\w*|is(?:Team)?(?:Admin|Owner|Member|Guest|Viewer|Editor)\w*|has(?:Role|Permission|Access|Scope)\w*)\s*\(|\b\w*(?:Permission|Membership|Role|Policy|Polic(?:ies)|Ability|Abilities)\w*\b|\b(?:isAdmin|isOwner|isGuest|isViewer|isMember|role|roles|permissions?|scopes?)\b/;
+// One boolean clause on its own line: a call, a negated or optional member, or an if/else-if test.
+const clausePattern = /^\s*(?:!*[\w$.?]+(?:\s*\([^;{}]*\))?\s*[,)&|]*\s*$|(?:\}\s*)?(?:else\s+)?if\b|.*(?:&&|\|\|))/;
+// `key: value,` inside a composite or object literal.
+const initializerPattern = /^\s*(["']?)([A-Za-z_$][\w$]*)\1\s*:\s*(?!:)(\S.*?),\s*(?:\/\/.*)?$/;
+const thrownName = /\b(?:throw\s+new|throw|raise|panic\s*\(\s*(?:\w+\.)?(?:New|Errorf)?)\s+([A-Z][\w.]*)/;
 
-export function changeSignals(file: { hunks: { minimal: DiffHunk[] } }): string | undefined {
-  const removed: Array<{ line: number; text: string }> = [], added: Array<{ line: number; text: string; previous: string[] }> = [];
-  for (const hunk of file.hunks.minimal) {
+interface SignalRows { removed: Array<{ line: number; text: string; hunk: number }>; added: Array<{ line: number; text: string; previous: string[]; hunk: number }>;
+  context: Array<{ text: string; hunk: number }> }
+
+function signalRows(file: { hunks: { minimal: DiffHunk[] } }): SignalRows {
+  const removed: SignalRows["removed"] = [], added: SignalRows["added"] = [], context: SignalRows["context"] = [];
+  for (const [index, hunk] of file.hunks.minimal.entries()) {
     let oldLine = hunk.oldStart, newLine = hunk.newStart;
     const recent: string[] = [];
     for (const raw of hunk.lines) {
       const text = raw.slice(1);
-      if (raw.startsWith("-")) removed.push({ line: oldLine++, text });
-      else if (raw.startsWith("+")) { added.push({ line: newLine++, text, previous: recent.slice(-3) }); recent.push(text); }
-      else { oldLine++; newLine++; }
+      if (raw.startsWith("-")) removed.push({ line: oldLine++, text, hunk: index });
+      else if (raw.startsWith("+")) { added.push({ line: newLine++, text, previous: recent.slice(-3), hunk: index }); recent.push(text); }
+      else { oldLine++; newLine++; context.push({ text, hunk: index }); }
     }
   }
+  return { removed, added, context };
+}
+
+// `head` is the file at head; `assigned` holds added lines from every file in the diff, so a
+// field written elsewhere in the change is not reported as unassigned.
+export function changeSignals(file: { path?: string; hunks: { minimal: DiffHunk[] } }, head?: string[], assigned: string[] = []): string | undefined {
+  const { removed, added, context } = signalRows(file);
   const normal = (text: string): string => stripStrings(text).replace(/\s+/g, " ").trim();
   const addedSet = new Set(added.map((row) => normal(row.text))), removedSet = new Set(removed.map((row) => normal(row.text)));
   const onlyRemoved = removed.filter((row) => !addedSet.has(normal(row.text)) && !/^\s*(?:\/\/|#|\*|\/\*)/.test(row.text));
@@ -407,7 +442,10 @@ export function changeSignals(file: { hunks: { minimal: DiffHunk[] } }): string 
   const newHandlers = onlyAdded.filter((row) => handlerPattern.test(row.text));
   if (newHandlers.length) signals.push(`adds error handling at ${at(newHandlers)}`);
   const raises = onlyAdded.filter((row) => raisePattern.test(row.text));
-  if (raises.length) signals.push(`adds a throw or error exit at ${at(raises)}`);
+  const thrown = [...new Set(raises.map((row) => thrownName.exec(stripStrings(row.text))?.[1]).filter((name): name is string => !!name))];
+  if (raises.length) signals.push(`adds a throw or error exit at ${at(raises)}${thrown.length ? ` (${thrown.slice(0, 3).join(", ")})` : ""}`);
+  const lostRaises = onlyRemoved.filter((row) => raisePattern.test(row.text));
+  if (lostRaises.length > raises.length) signals.push(`removes a throw or error exit at base ${at(lostRaises)}: that case now continues, so check the state it leaves`);
   const exits = onlyAdded.filter((row) => exitPattern.test(row.text) && (/\bif\b/.test(row.text) || row.previous.some((text) => conditionPattern.test(text))));
   if (exits.length) signals.push(`adds an early exit at ${at(exits)}`);
   const conditions = onlyRemoved.filter((row) => conditionPattern.test(row.text));
@@ -416,11 +454,114 @@ export function changeSignals(file: { hunks: { minimal: DiffHunk[] } }): string 
   if (awaits.length) signals.push(`drops await at base ${at(awaits)}`);
   const locks = onlyRemoved.filter((row) => lockPattern.test(row.text));
   if (locks.length) signals.push(`removes a transaction or lock at base ${at(locks)}`);
+  // Typed object literals fail to compile without a required key; Go, JavaScript and Python
+  // literals silently leave it at a zero value, undefined or missing.
+  const untypedLiterals = /\.(?:go|[cm]?jsx?|py)$/.test(file.path ?? "");
+  signals.push(...accessSignals(removed, added), ...(untypedLiterals ? initializerSignals(onlyRemoved, [...added, ...context], head ?? [], assigned) : []));
+  if (head) signals.push(...unassignedFieldSignals(file.path ?? "", added, head, assigned));
   return signals.length ? clipSignals(`  change signals (pattern match; read these lines): ${signals.join("; ")}`) : undefined;
 }
 
 function clipSignals(text: string): string {
-  return text.length > 420 ? `${text.slice(0, 417)}...` : text;
+  return text.length > 640 ? `${text.slice(0, 637)}...` : text;
+}
+
+const clause = (text: string): string => clip(text.trim().replace(/^(?:\}\s*)?(?:else\s+)?if\s*/, "").replace(/\s*(?:[,{]|&&|\|\||and|or)\s*$/, ""), 60);
+
+// Per hunk, removed and added clauses that name an authorization check. String arguments
+// matter here (`can(actor, "update")` against `"read"`), so lines are compared as written.
+function accessSignals(removed: SignalRows["removed"], added: SignalRows["added"]): string[] {
+  const signals: string[] = [];
+  const same = (text: string): string => text.replace(/\s+/g, " ").trim();
+  const before = new Set(removed.map((row) => same(row.text))), after = new Set(added.map((row) => same(row.text)));
+  const onlyRemoved = removed.filter((row) => !after.has(same(row.text))), onlyAdded = added.filter((row) => !before.has(same(row.text)));
+  const access = (text: string): boolean => accessPattern.test(stripStrings(text)) && clausePattern.test(stripStrings(text)) && !/^\s*(?:import|from|export\s+\{|\/\/|#|\*)/.test(text);
+  for (const hunk of [...new Set(onlyRemoved.map((row) => row.hunk))]) {
+    const lost = onlyRemoved.filter((row) => row.hunk === hunk && access(row.text));
+    if (!lost.length) continue;
+    const gained = onlyAdded.filter((row) => row.hunk === hunk && access(row.text));
+    const list = (rows: Array<{ text: string }>): string => `${rows.slice(0, 3).map((row) => `\`${clause(row.text)}\``).join(", ")}${rows.length > 3 ? `, ${rows.length - 3} more` : ""}`;
+    signals.push(`rewrites access conditions at base ${lost[0].line}: drops ${list(lost)}${gained.length ? `, adds ${list(gained)}` : ""}; check who loses and who gains access`);
+  }
+  return signals;
+}
+
+// A literal key removed without being set again in the same hunk leaves the field at its zero
+// value; it matters only where the field is still read.
+function initializerSignals(onlyRemoved: SignalRows["removed"], surviving: Array<{ text: string; hunk: number }>, head: string[], assigned: string[]): string[] {
+  const dropped = onlyRemoved.flatMap((row) => {
+    const match = initializerPattern.exec(row.text);
+    // Type annotations in parameter lists look like keys; their values are types.
+    if (!match || /^\s*(?:case|default)\b/.test(row.text) || /^(?:string|number|boolean|bigint|symbol|object|any|unknown|never|void|undefined|null)\b|^[\w.]+<|^\(/.test(match[3])) return [];
+    const key = match[2];
+    const kept = new RegExp(`^\\s*["']?${key.replace(/\$/g, "\\$")}["']?\\s*:`);
+    if (surviving.some((other) => other.hunk === row.hunk && kept.test(other.text))) return [];
+    // Only part of a literal: another key of it survives in this hunk.
+    if (!surviving.some((other) => other.hunk === row.hunk && initializerPattern.test(other.text))) return [];
+    const reader = new RegExp(`\\.${key.replace(/\$/g, "\\$")}(?![\\w$])(?!\\s*(?::?=(?!=)|[+\\-*/%&|^]=))`);
+    const read = head.findIndex((text) => reader.test(stripStrings(text)));
+    return read >= 0 ? [{ key, line: row.line, read: `${read + 1}` }] : assigned.some((text) => reader.test(stripStrings(text))) ? [{ key, line: row.line, read: "an added line" }] : [];
+  });
+  if (!dropped.length) return [];
+  return [`drops ${dropped.slice(0, 3).map((entry) => `\`${entry.key}\` at base ${entry.line} (still read at ${entry.read})`).join(", ")} from an initializer; that read now gets the default value`];
+}
+
+// A field this diff declares and reads as a value, with no assignment in its file or the diff.
+function unassignedFieldSignals(file: string, added: SignalRows["added"], head: string[], assigned: string[]): string[] {
+  const go = file.endsWith(".go");
+  const fields: Array<{ name: string; line: number; text: string }> = [];
+  for (const row of added) {
+    const text = row.text.replace(/\s*\/\/.*$/, "");
+    const names = go
+      ? /^\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+[*\[\]\w.]+\s*$/.exec(text)?.[1]
+      : /^\s+(?:(?:private|protected|public|readonly)\s+)*#?([A-Za-z_$][\w$]*)[?!]?\s*:\s*[^=;(){}]+;?\s*$/.exec(text)?.[1];
+    if (!names || /^\s*(?:return|case|default|package|import|type|var|const|func)\b/.test(text)) continue;
+    if (!enclosedBy(head, row.line, go ? /\bstruct\s*\{\s*$/ : /\bclass\b[^{]*\{\s*$/)) continue;
+    // A decorated field is set by a framework, not by this code.
+    if (!go && /^\s*@/.test(head[row.line - 2] ?? "")) continue;
+    for (const name of names.split(",").map((entry) => entry.trim())) fields.push({ name, line: row.line, text: row.text });
+  }
+  const signals: string[] = [];
+  for (const field of fields.slice(0, 40)) {
+    if (signals.length >= 3) break;
+    const escaped = field.name.replace(/\$/g, "\\$");
+    const member = new RegExp(`\\.${escaped}(?![\\w$])`, "g");
+    let read: number | undefined, written = false;
+    const scan = (text: string, line?: number): void => {
+      const code = stripStrings(text);
+      // A literal key sets the field, at the start of a line or inline after `{` or `,`.
+      if (new RegExp(`(?:^\\s*|[{,]\\s*)["']?${escaped}["']?\\s*:(?!=)`).test(code) && line !== field.line) { written = true; return; }
+      const assignment = /(?<![=!<>:+\-*/%&|^])(?::=|=(?!=)|[+\-*/%&|^]=|\+\+|--)/.exec(code);
+      for (const match of code.matchAll(member)) {
+        const after = code.slice((match.index ?? 0) + match[0].length);
+        if (assignment && (match.index ?? 0) < assignment.index && !/^\s*(?:if|for|while|return|switch)\b/.test(code)) { written = true; return; }
+        if (/^\s*(?:\(|\.|\[)/.test(after)) continue;
+        if (line !== undefined) read ??= line;
+      }
+    };
+    head.forEach((text, index) => scan(text, index + 1));
+    for (const text of assigned) if (!written && text !== field.text) scan(text);
+    if (written || read === undefined) continue;
+    const local = head.findIndex((text) => new RegExp(`(?:\\b(?:var|let|const)\\s+(?:[\\w$]+\\s*,\\s*)*${escaped}\\b|(?<![.\\w$])${escaped}\\s*(?:,\\s*[\\w$.]+\\s*)*:?=(?!=))`).test(stripStrings(text)));
+    signals.push(`field \`${field.name}\` (line ${field.line}) is read at ${read} but never assigned in this file or the diff${local >= 0 ? `; a local of that name is set at ${local + 1}` : ""}`);
+  }
+  return signals;
+}
+
+// Whether the innermost block enclosing `line` opens on a line matching `opener`.
+function enclosedBy(lines: string[], line: number, opener: RegExp): boolean {
+  let depth = 0;
+  for (let index = line - 2; index >= 0 && line - index < 400; index--) {
+    const code = stripStrings(lines[index] ?? "").replace(/\/\/.*$/, "");
+    for (let char = code.length - 1; char >= 0; char--) {
+      if (code[char] === "}") depth++;
+      else if (code[char] === "{") {
+        if (depth) { depth--; continue; }
+        return opener.test(code.slice(0, char + 1));
+      }
+    }
+  }
+  return false;
 }
 
 // A changed declaration's extent at head. The syntax index covers JavaScript and
@@ -449,6 +590,96 @@ async function changedSpans(file: DiffFile, block: RepositoryIndexBlock | undefi
   const seen = new Set<string>();
   return spans.filter((span) => span.endLine - span.line < 400 && span.endLine - span.line >= 3 && !seen.has(`${span.line}:${span.endLine}`) && seen.add(`${span.line}:${span.endLine}`))
     .sort((a, b) => a.line - b.line);
+}
+
+const controlWord = /^\s*(?:\}\s*)?(?:if|else|for|foreach|while|switch|catch|do|try|with|synchronized|using|lock|finally|return|await|new|case|select|defer|go)\b/;
+
+// Declarations that gain a throw or error exit in this diff, with the thrown names found.
+async function thrownBy(file: DiffFile, block: RepositoryIndexBlock | undefined, read: Reader): Promise<Map<string, string[]>> {
+  const { removed, added } = signalRows(file);
+  const before = new Set(removed.map((row) => stripStrings(row.text).replace(/\s+/g, " ").trim()));
+  const result = new Map<string, string[]>();
+  for (const row of added) {
+    if (!raisePattern.test(row.text) || before.has(stripStrings(row.text).replace(/\s+/g, " ").trim()) || /^\s*(?:\/\/|#|\*)/.test(row.text)) continue;
+    const owner = ownerOf(block, row.line) ?? await ownerFromText(read, file.path, row.line);
+    if (!owner) continue;
+    const names = result.get(owner) ?? [];
+    const name = thrownName.exec(stripStrings(row.text))?.[1];
+    if (name && !names.includes(name)) names.push(name);
+    result.set(owner, names);
+  }
+  // An added call to a declaration that now throws passes the throw on to its own owner.
+  for (let round = 0; round < 3 && result.size; round++) {
+    let grew = false;
+    for (const row of added) {
+      const code = stripStrings(row.text);
+      const callee = [...result.keys()].find((name) => new RegExp(`(?<![\\w$.])${name.replace(/\$/g, "\\$")}\\s*\\(`).test(code));
+      if (!callee) continue;
+      const owner = ownerOf(block, row.line) ?? await ownerFromText(read, file.path, row.line);
+      if (!owner || result.has(owner)) continue;
+      result.set(owner, [...result.get(callee)!]);
+      grew = true;
+    }
+    if (!grew) break;
+  }
+  return result;
+}
+
+// How the code around one call handles an error from it, by pattern: a try block in the
+// caller's function, a `.catch` on the call, or Go's error check. Unknown when the function
+// start is not found nearby.
+export function callGuard(lines: string[], line: number, file: string): string | undefined {
+  const index = line - 1;
+  const text = stripStrings(lines[index] ?? "");
+  if (file.endsWith(".go")) {
+    if (/^\s*return\b/.test(text)) return "error returned to its caller";
+    if (/(?:^|,)\s*_\s*(?::=|=)|\b_\s*=\s/.test(text) && !/\berr\w*\s*(?:,[^=]*)?:?=/.test(text)) return "error discarded";
+    if (/\berr\w*\s*(?:,[^=]*)?:?=|,\s*err\w*\s*:?=/.test(text)) {
+      return lines.slice(index, index + 5).some((next) => /\berr\w*\s*!=\s*nil|errors\.(?:Is|As)\(|if\s+err\w*\s*:=/.test(next)) ? "err checked" : "err not checked within 4 lines";
+    }
+    return "error not assigned";
+  }
+  if (lines.slice(index, index + 4).some((next) => /\.catch\s*\(/.test(next))) return ".catch on the call";
+  if (/\.py$/.test(file)) {
+    let indent = /^\s*/.exec(lines[index] ?? "")![0].length;
+    for (let up = index - 1; up >= 0 && index - up <= 400; up--) {
+      const above = lines[up];
+      if (!above.trim() || /^\s*#/.test(above)) continue;
+      const depth = /^\s*/.exec(above)![0].length;
+      if (depth >= indent) continue;
+      indent = depth;
+      if (/^\s*try\s*:/.test(above)) return "inside try";
+      if (/^\s*(?:async\s+)?def\s|^\s*class\s/.test(above)) return "no try in its function";
+    }
+    return undefined;
+  }
+  let depth = 0;
+  for (let up = index - 1; up >= 0 && index - up <= 400; up--) {
+    const code = stripStrings(lines[up] ?? "").replace(/\/\/.*$/, "");
+    for (let char = code.length - 1; char >= 0; char--) {
+      if (code[char] === "}") { depth++; continue; }
+      if (code[char] !== "{") continue;
+      if (depth) { depth--; continue; }
+      // An enclosing block opens here: a try, a function, or another statement.
+      const opener = blockHeader(lines, up, char);
+      if (/(?:^|[\s}])try\s*$/.test(opener)) return "inside try";
+      if (/\bclass\b/.test(opener) || /\bfunction\b|=>\s*$/.test(opener) || !controlWord.test(opener) && /[\w$>\]]\s*\([^]*\)\s*(?::[^{]*)?(?:throws\b[^{]*)?$/.test(opener)) return "no try/catch in its function";
+    }
+  }
+  return undefined;
+}
+
+// The statement text before the `{` at (line, char), back to the line holding its opening parenthesis.
+function blockHeader(lines: string[], line: number, char: number): string {
+  let text = stripStrings(lines[line]).replace(/\/\/.*$/, "").slice(0, char);
+  let parens = 0;
+  for (const c of text) parens += c === ")" ? 1 : c === "(" ? -1 : 0;
+  for (let up = line - 1; parens > 0 && up >= 0 && line - up <= 20; up--) {
+    const above = stripStrings(lines[up]).replace(/\/\/.*$/, "");
+    for (const c of above) parens += c === ")" ? 1 : c === "(" ? -1 : 0;
+    text = `${above} ${text}`;
+  }
+  return text.trim();
 }
 
 const definitionStart = /^(\s*)(?:(?:export|public|private|protected|internal|static|async|override|suspend|pub(?:\([^)]*\))?|abstract|final|open)\s+)*(?:def|class|func|fn|fun)\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w*)/;
@@ -727,6 +958,8 @@ async function collectUsages(top: string, headSha: string | undefined, files: Di
     const byFile = new Map<string, typeof all>();
     for (const hit of all) {
       if (hit.file === file && addedByFile.get(file)?.has(hit.line)) continue;
+      // A comment that names the symbol is not a use.
+      if (/^\s*(?:\*|\/\/|\/\*|#\s|<!--)/.test(hit.text)) continue;
       if (hit.file === file && new RegExp(`\\b(?:function\\*?|class|interface|type|enum|const|let|var|def|func|fn|fun)\\s+${symbol.replace(/\$/g, "\\$")}\\b`).test(hit.text)) continue;
       byFile.set(hit.file, [...(byFile.get(hit.file) ?? []), hit]);
     }
@@ -1143,17 +1376,19 @@ function renderChanges(files: DiffFile[], usages: Map<string, SymbolUsage[]>, le
   const partial = new Map<string, Hidden>();
   const shownTests = new Set<string>();
   let used = Buffer.byteLength(lines.join("\n")) + 1;
+  // A file that does not fit keeps its header and change signals, so it is still named.
+  const stubs = files.map((file) => [renderFile(file, [], level, new Set(), changed).lines[0], ...(file.signals ? [file.signals] : []),
+    `  diff not shown (+${file.added} -${file.deleted}); see Not fully shown`]);
+  const stubSizes = stubs.map((stub) => Buffer.byteLength(stub.join("\n")) + 1);
+  // Room kept for the stubs of every later file, so an early large file cannot leave them unnamed.
+  let reserved = Number.isFinite(budget) ? stubSizes.reduce((total, size) => total + size, 0) : 0;
   for (const group of grouped) {
     const size = Buffer.byteLength(group.lines.join("\n")) + 1;
-    if (used + size > budget) {
-      // A file that does not fit keeps its header and change signals, so it is still named.
+    reserved -= Number.isFinite(budget) ? group.members.reduce((total, index) => total + stubSizes[index], 0) : 0;
+    if (used + size + reserved > budget) {
       for (const index of group.members) {
-        const file = files[index];
-        const stub = [renderFile(file, [], level, listedCommits, changed).lines[0], ...(file.signals ? [file.signals] : []),
-          `  diff not shown (+${file.added} -${file.deleted}); see Not fully shown`];
-        const stubSize = Buffer.byteLength(stub.join("\n")) + 1;
-        if (used + stubSize <= budget) { lines.push(...stub); used += stubSize; }
-        omitted.push(file.path);
+        if (used + stubSizes[index] <= budget) { lines.push(...stubs[index]); used += stubSizes[index]; }
+        omitted.push(files[index].path);
       }
       continue;
     }
@@ -1306,14 +1541,20 @@ function renderUsage(usage: SymbolUsage, level: Level, changed: Map<string, Set<
     if (usage.tests.length > level.tests) lines.push(`    ... ${usage.tests.length - level.tests} more tests: ${summarizeFiles(usage.tests.slice(level.tests).map((test) => test.file))}`);
   }
   if (usage.callers.length) {
-    lines.push(`  ${usage.symbol}: callers`);
-    for (const caller of usage.callers.slice(0, level.callers)) {
-      lines.push(`    ${caller.file}:${caller.line}${caller.owner ? ` in ${caller.owner}` : ""}${caller.alias ? ` (as ${caller.alias})` : ""}${mark(caller.file, caller.line)}| ${clip(caller.text)}`);
-      if (!level.callerTests) continue;
+    // For a declaration that now throws, callers without a handler come first; more of them
+    // are kept, by location and handling only.
+    const handled = (caller: CallerUse): boolean => /^(?:inside try|\.catch on the call|err checked|error returned to its caller)$/.test(caller.guard ?? "");
+    const callers = usage.throws ? [...usage.callers.filter((caller) => !handled(caller)), ...usage.callers.filter(handled)] : usage.callers;
+    const extra = usage.throws ? callers.slice(level.callers, level.callers * 3).filter((caller) => !handled(caller)).length : 0;
+    lines.push(`  ${usage.symbol}: callers${usage.throws ? ` (now throws${usage.throws.length ? ` ${usage.throws.join(", ")}` : " or returns an error"} here or in a changed callee; [handling] is a pattern match: follow unhandled callers to their entry point)` : ""}`);
+    for (const [index, caller] of callers.slice(0, level.callers + extra).entries()) {
+      lines.push(`    ${caller.file}:${caller.line}${caller.owner ? ` in ${caller.owner}` : ""}${caller.alias ? ` (as ${caller.alias})` : ""}${mark(caller.file, caller.line)}${usage.throws && caller.guard ? ` [${caller.guard}]` : ""}${index < level.callers ? `| ${clip(caller.text)}` : ""}`);
+      if (!level.callerTests || index >= level.callers) continue;
       for (const test of caller.tests.slice(0, level.callerTests)) lines.push(...renderTest(test, "      "));
       if (caller.tests.length > level.callerTests) lines.push(`      ... ${caller.tests.length - level.callerTests} more tests of ${caller.owner}`);
     }
-    if (usage.callers.length > level.callers) lines.push(`    ... ${usage.callers.length - level.callers} more callers: ${summarizeFiles(usage.callers.slice(level.callers).map((caller) => caller.file))}`);
+    const rest = callers.slice(level.callers + extra);
+    if (rest.length) lines.push(`    ... ${rest.length} more callers${usage.throws && rest.every(handled) ? " with a handler" : ""}: ${summarizeFiles(rest.map((caller) => caller.file))}`);
   }
   if (!usage.tests.length && !usage.callers.some((caller) => caller.tests.length)) lines.push(`  ${usage.symbol}: no test file names it (indirect coverage not checked)`);
   for (const other of usage.other.slice(0, 2)) lines.push(`  ${usage.symbol}: also in ${other.file}:${other.line}${mark(other.file, other.line)}| ${clip(other.text, 100)}`);
@@ -1393,7 +1634,9 @@ function renderQaFocus(result: QaDraftResult, level: Level, shownTests: Set<stri
       const important = intent.scenarios.filter((scenario) => scenario.priority === "critical");
       const shown = (important.length ? important : intent.scenarios).slice(0, level.scenarios);
       for (const scenario of shown) {
-        lines.push(`  - [${scenario.priority}] ${clip(scenario.title, 160)}`);
+        // A pattern match on a lower-confidence intent is a check to consider, not a critical one.
+        const priority = scenario.priority === "critical" && intent.confidence !== "high" ? "check" : scenario.priority;
+        lines.push(`  - [${priority}] ${clip(scenario.title, 160)}`);
         const checks = [...scenario.assertions.filter((check) => check && !/^Record the expected/.test(check)),
           ...scenario.edgeCases.filter(Boolean).map((edge) => `edge case: ${edge}`)];
         for (const check of checks.slice(0, 3)) lines.push(`      ${clip(check, 180)}`);

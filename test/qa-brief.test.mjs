@@ -242,6 +242,9 @@ test("qa brief turns inferred QA focus into concrete checks with the behavior fl
   assert.match(output, /flow: trigger: After first blur on signup form -> /);
   assert.match(output, /\n {6}Verify the changed test contract: shows the email error after the field is blurred with an invalid value\.\n/);
   assert.match(output, /\n {6}edge case: /);
+  // A medium-confidence intent's critical scenarios are checks to consider, not critical findings.
+  assert.match(output, /\(medium confidence; [^\n]*\n {2}flow: [^\n]*\n {2}- \[check\] Defer email validation/);
+  assert.doesNotMatch(output, /\[critical\]/);
 });
 
 test("qa brief --require-consent analyzes nothing until consent is recorded", async () => {
@@ -335,4 +338,90 @@ test("enclosing definitions are found by indentation or braces when no syntax in
     lines: ["-\t\tlog.Error(\"check failed: %v\", err)", "+\t\tlog.Debug(\"check failed: %v\", err)", " \t}"] };
   assert.match(changeSignals({ hunks: { minimal: [hunk] } }), /removes 1 error\/warning log call\(s\) at base 10; adds info\/debug logging at 10/);
   assert.equal(changeSignals({ hunks: { minimal: [{ ...hunk, lines: [" \treturn nil"] }] } }), undefined);
+});
+
+test("change signals name rewritten access rules, dropped initializers, unassigned fields and removed throws", async () => {
+  const { changeSignals } = await import("../dist/qa-brief.js");
+  const hunk = (oldStart, newStart, lines) => ({ header: `@@ -${oldStart} +${newStart} @@`, oldStart, newStart, newCount: lines.length, lines });
+  const policy = hunk(10, 10, [" allow(User, \"copy\", Document, (actor, document) =>", "   and(", "-    can(actor, \"update\", document),",
+    "-    isTeamAdmin(actor, document),", "+    can(actor, \"read\", document),", "+    can(actor, \"create\", actor.team)", "   )"]);
+  assert.match(changeSignals({ path: "server/policies.ts", hunks: { minimal: [policy] } }),
+    /rewrites access conditions at base 12: drops `can\(actor, "update", document\)`, `isTeamAdmin\(actor, document\)`, adds `can\(actor, "read", document\)`, `can\(actor, "create", actor\.team\)`; check who loses and who gains access/);
+
+  const literal = hunk(40, 40, ["   line := &Line{", "-\t\tType:    LineSection,", "-\t\tContent: \" \",", "+\t\tType: LineSection,", "   }"]);
+  const head = ["package diff", ...Array(38).fill(""), "\tline := &Line{", "\t\tType: LineSection,", "\t}", "func marker(l *Line) string { return l.Content[0:1] }"];
+  assert.match(changeSignals({ path: "diff.go", hunks: { minimal: [literal] } }, head),
+    /drops `Content` at base 42 \(still read at 43\) from an initializer; that read now gets the default value/);
+  assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [literal] } }, head.slice(0, 42)) ?? "", /drops/);
+  // A function removed whole is not a dropped initializer, and parameter types are not values.
+  const removedFunction = hunk(5, 5, ["-function sync(", "-  url: string,", "-  options: { retry: 1, delay: 2 },", "-) {}"]);
+  assert.equal(changeSignals({ path: "sync.ts", hunks: { minimal: [removedFunction] } }, ["const read = config.url;"]), undefined);
+
+  const struct = ["package diff", "", "type Detail struct {", "\tready bool", "\tleftCount int", "}", "",
+    "func prepare() (ret Detail) {", "\tvar leftCount int", "\tleftCount = count()", "\tret.ready = true", "\treturn ret", "}", "",
+    "func tail(detail Detail) int {", "\treturn detail.leftCount", "}"];
+  const fields = hunk(3, 3, ["+type Detail struct {", "+\tready bool", "+\tleftCount int", "+}"]);
+  assert.match(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct),
+    /field `leftCount` \(line 5\) is read at 16 but never assigned in this file or the diff; a local of that name is set at 9/);
+  assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct.map((line) => line.replace("\tleftCount = count()", "\tret.leftCount = count()"))) ?? "", /field `leftCount`/);
+  assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct, ["\t\tleftCount: 2,"]) ?? "", /field `leftCount`/);
+  assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct, ["\tout := Detail{ready: true, leftCount: 2}"]) ?? "", /field `leftCount`/);
+  const tsClass = ["export class Job {", "  retries: number;", "  run() { return this.retries > 0; }", "}"];
+  assert.match(changeSignals({ path: "job.ts", hunks: { minimal: [hunk(2, 2, ["+  retries: number;"])] } }, tsClass), /field `retries` \(line 2\) is read at 3/);
+  assert.doesNotMatch(changeSignals({ path: "job.ts", hunks: { minimal: [hunk(2, 2, ["+  retries: number;"])] } },
+    ["export class Job {", "  retries: number;", "  constructor() { this.retries = 3; }", "  run() { return this.retries > 0; }", "}"]) ?? "", /field/);
+
+  const thrown = hunk(80, 80, ["   } else {", "-    throw new SyncError(\"missing events\");", "+    await status.markPending(id);", "   }"]);
+  assert.match(changeSignals({ hunks: { minimal: [thrown] } }), /removes a throw or error exit at base 81: that case now continues, so check the state it leaves/);
+  assert.match(changeSignals({ hunks: { minimal: [hunk(5, 5, ["+  if (left < 0) throw new InvalidInputError(\"too large\");"])] } }), /adds a throw or error exit at 5 \(InvalidInputError\)/);
+});
+
+test("each caller's handling of an error is read from its function", async () => {
+  const { callGuard } = await import("../dist/qa-brief.js");
+  const js = ["async function load(id) {", "  try {", "    const where = build(id);", "  } catch (error) {", "    report(error);", "    build(id);", "  }", "  return build(id);", "}",
+    "const loadLater = (id) => fetchAll(id)", "  .then(build)", "  .catch(report);", "class Store {", "  get(id) {", "    if (id) {", "      return build(id);", "    }", "  }", "}"];
+  assert.equal(callGuard(js, 3, "load.ts"), "inside try");
+  assert.equal(callGuard(js, 6, "load.ts"), "no try/catch in its function");
+  assert.equal(callGuard(js, 8, "load.ts"), "no try/catch in its function");
+  assert.equal(callGuard(js, 11, "load.ts"), ".catch on the call");
+  assert.equal(callGuard(js, 16, "load.ts"), "no try/catch in its function");
+  const python = ["def load(item):", "    try:", "        if item:", "            build(item)", "    except ValueError:", "        build(None)", "    return build(item)"];
+  assert.equal(callGuard(python, 4, "load.py"), "inside try");
+  assert.equal(callGuard(python, 6, "load.py"), "no try in its function");
+  assert.equal(callGuard(python, 7, "load.py"), "no try in its function");
+  const go = ["func load() error {", "\tdetail, err := build()", "\tif err != nil {", "\t\treturn err", "\t}", "\t_ = build()", "\treturn build()", "}", "\tbuild()"];
+  assert.equal(callGuard(go, 2, "load.go"), "err checked");
+  assert.equal(callGuard(go, 6, "load.go"), "error discarded");
+  assert.equal(callGuard(go, 7, "load.go"), "error returned to its caller");
+  assert.equal(callGuard(go, 9, "load.go"), "error not assigned");
+});
+
+test("qa brief lists callers of a function that now throws through a changed helper, with their handling", async () => {
+  const { root } = await repository({
+    "src/where.ts": "export function buildWhere(filter: string[]) {\n  return filter.map((value) => ({ value }));\n}\n",
+    "src/service.ts": "import { buildWhere } from './where';\nexport async function list(filter: string[]) {\n  try {\n    return buildWhere(filter);\n  } catch (error) {\n    return [];\n  }\n}\n",
+    "src/export.ts": "import { buildWhere } from './where';\n// buildWhere is shared with the list view.\nexport async function exportAll(filter: string[]) {\n  const where = buildWhere(filter);\n  return where.length;\n}\n",
+  }, {
+    "src/where.ts": "const budget = () => {\n  let left = 100;\n  return (count: number) => {\n    left -= count;\n    if (left < 0) throw new InvalidInputError('too large');\n  };\n};\nexport function buildWhere(filter: string[]) {\n  const spend = budget();\n  spend(filter.length);\n  return filter.map((value) => ({ value }));\n}\n",
+  });
+  const output = await brief(root);
+  assert.match(output, /buildWhere: callers \(now throws InvalidInputError here or in a changed callee;/);
+  assert.match(output, /src\/service\.ts:4 in list \[inside try\]\|/);
+  assert.match(output, /src\/export\.ts:4 in exportAll \[no try\/catch in its function\]\|/);
+  assert.doesNotMatch(output, /src\/export\.ts:2/);
+});
+
+test("a brief that cannot fit every file still names each one with its change signals", async () => {
+  const big = Array.from({ length: 900 }, (_, index) => `export const value${index} = ${index};`).join("\n");
+  const { root } = await repository({
+    "src/a-large.ts": "export const start = 0;\n",
+    "src/z-status.ts": "export function sync(found: boolean) {\n  if (found) return 1;\n  else {\n    throw new Error('no events');\n  }\n}\n",
+  }, {
+    "src/a-large.ts": `${big}\n`,
+    "src/z-status.ts": "export function sync(found: boolean) {\n  if (found) return 1;\n  else {\n    return markPending();\n  }\n}\n",
+  });
+  const output = await brief(root, ["--max-bytes", "6000"]);
+  assert.ok(Buffer.byteLength(output) <= 6000);
+  assert.match(output, /### src\/z-status\.ts/);
+  assert.match(output, /removes a throw or error exit at base 4/);
 });
