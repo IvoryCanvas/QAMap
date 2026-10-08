@@ -6534,3 +6534,22 @@ test("server data-cache invalidation and server destination words do not raise c
   ], "perf: cache hashed assets for a year");
   assert.ok(hosted.includes(delivery), hosted.join(" | "));
 });
+
+test("a commit message splits into flow stages at and only before a verb", async (t) => {
+  const stages = async (message) => {
+    const root = await makeRepo(t);
+    await write(root, "src/compare.js", "export const placeholder = 1;\n");
+    commit(root, "chore: add baseline");
+    branch(root, "feature/change");
+    await write(root, "src/compare.js", "const a = 1\nconst b = 2\n\nexport function isSame() {\n  return a === b\n}\n");
+    commit(root, message);
+    const analysis = await analyze(root, ["src/compare.js"]);
+    return analysis.intents.flatMap((intent) => intent.lifecycle.map((stage) => stage.label));
+  };
+  const nouns = await stages("feat: compare a and b");
+  assert.ok(nouns.some((label) => /^Compare a and b\.?$/i.test(label)), nouns.join(" | "));
+  assert.ok(!nouns.some((label) => /^Compare a\.?$/i.test(label)), nouns.join(" | "));
+  const verbs = await stages("feat: save the draft and show a toast");
+  assert.ok(verbs.some((label) => /^Save the draft\.?$/i.test(label)), verbs.join(" | "));
+  assert.ok(verbs.some((label) => /^Show a toast\.?$/i.test(label)), verbs.join(" | "));
+});
