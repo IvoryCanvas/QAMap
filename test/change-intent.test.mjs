@@ -6510,6 +6510,31 @@ test("ordinary lazy and dynamic helpers do not imply code splitting", async (t) 
   );
 });
 
+test("server data-cache invalidation and server destination words do not raise client delivery or routing scenarios", async (t) => {
+  const titles = async (files, message) => {
+    const root = await makeRepo(t);
+    for (const [file] of files) await write(root, file, "export const placeholder = 1;\n");
+    commit(root, "chore: add baseline");
+    branch(root, "feature/change");
+    for (const [file, text] of files) await write(root, file, text);
+    commit(root, message);
+    const analysis = await analyze(root, files.map(([file]) => file));
+    return analysis.intents.flatMap((intent) => intent.scenarios).map((scenario) => scenario.title);
+  };
+  const delivery = "Deployed HTML, asset, and cache-version coherence";
+  const routing = "Entry payload and destination routing";
+  const server = await titles([
+    ["server/services/workspace.ts", "export async function reset(cache, id) {\n  await cache.invalidateAndRecompute(id, ['flags']);\n  return { id, immutable: true };\n}\n"],
+    ["server/routes/api/documents.ts", "export async function duplicate(ctx) {\n  const destination = ctx.input.collectionId;\n  return copyDocument(ctx.document, destination);\n}\n"],
+  ], "fix: recompute the workspace cache and copy documents");
+  assert.ok(!server.includes(delivery), server.join(" | "));
+  assert.ok(!server.includes(routing), server.join(" | "));
+  const hosted = await titles([
+    ["vercel.json", "{\n  \"headers\": [{ \"source\": \"/assets/(.*)\", \"headers\": [{ \"key\": \"Cache-Control\", \"value\": \"public, max-age=31536000, immutable\" }] }]\n}\n"],
+  ], "perf: cache hashed assets for a year");
+  assert.ok(hosted.includes(delivery), hosted.join(" | "));
+});
+
 test("a commit message splits into flow stages at and only before a verb", async (t) => {
   const stages = async (message) => {
     const root = await makeRepo(t);

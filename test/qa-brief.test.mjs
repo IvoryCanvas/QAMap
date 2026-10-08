@@ -242,6 +242,9 @@ test("qa brief turns inferred QA focus into concrete checks with the behavior fl
   assert.match(output, /flow: trigger: After first blur on signup form -> /);
   assert.match(output, /\n {6}Verify the changed test contract: shows the email error after the field is blurred with an invalid value\.\n/);
   assert.match(output, /\n {6}edge case: /);
+  // A medium-confidence intent's critical scenarios are checks to consider, not critical findings.
+  assert.match(output, /\(medium confidence; [^\n]*\n {2}flow: [^\n]*\n {2}- \[check\] Defer email validation/);
+  assert.doesNotMatch(output, /\[critical\]/);
 });
 
 test("qa brief --require-consent analyzes nothing until consent is recorded", async () => {

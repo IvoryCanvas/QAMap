@@ -2531,7 +2531,8 @@ function buildIntentQaScenarios(
         const stageSearchable = `${stage.label} ${stage.evidence.map((item) => `${item.symbol ?? ""} ${item.value}`).join(" ")}`
           .replaceAll("navigation.setoptions", "")
           .replaceAll("update the navigation options state", "");
-        return Boolean(matchRoutingSignal(stageSearchable)) ||
+        const files = stage.evidence.map((item) => item.file).filter((file): file is string => Boolean(file));
+        return clientRoutingSignal(matchRoutingSignal(stageSearchable), files) ||
           /\bopen\b[^.;]{0,80}\b(?:linked|destination|route|screen|page|detail|summary)\b/i.test(stageSearchable);
       })
       .flatMap((stage) => stage.evidence),
@@ -2540,7 +2541,7 @@ function buildIntentQaScenarios(
       return item.kind === "diff" &&
         !/navigation\.setoptions/i.test(evidenceSearchable) &&
         (
-          Boolean(matchRoutingSignal(evidenceSearchable)) ||
+          clientRoutingSignal(matchRoutingSignal(evidenceSearchable), item.file ? [item.file] : []) ||
           /\bopen\b[^.;]{0,80}\b(?:linked|destination|route|screen|page|detail|summary)\b/i.test(evidenceSearchable)
         );
     }),
@@ -3680,6 +3681,15 @@ function collectDiffRiskEvidence(
   return uniqueEvidence(evidence);
 }
 
+// Navigation words route a client anywhere. Payload, destination and search-parameter words
+// are ordinary server vocabulary, so they count only outside server-side code.
+const serverSidePath = /(?:^|\/)(?:server|server-only|backend|api|[\w.-]+-server)\/|\.(?:go|py|rb|java|php|cs|rs|exs?)$/i;
+function clientRoutingSignal(signal: string | undefined, files: string[]): boolean {
+  if (!signal) return false;
+  if (/deep.?link|redirect|router|navigat|openurl|openlink|location/i.test(signal)) return true;
+  return !files.length || files.some((file) => !serverSidePath.test(file));
+}
+
 function matchRoutingSignal(line: string): string | undefined {
   const direct = line.match(
     /\b(deep.?link|destination|redirect\w*|router\.(?:push|replace)|navigate\w*|openurl|openlink|URLSearchParams|searchParams|location\.href|window\.location)\b/i,
@@ -4668,15 +4678,19 @@ function performanceSignal(
     return { mechanism: "font-loading", rawSymbol: fontLoading };
   }
 
-  const deliveryCache = text.match(
-    /\b(Cache-Control|s-maxage|stale-while-revalidate|CloudFront|CDN|invalidation|invalidate\w*|immutable)\b/i,
-  )?.[1];
+  // Cache headers name delivery caching anywhere; invalidation and immutability do only in
+  // hosting, CDN, build or service-worker configuration, not in server data caches.
+  const deliveryCache = text.match(/\b(Cache-Control|s-maxage|stale-while-revalidate|CloudFront|CDN)\b/i)?.[1] ??
+    (deliveryConfigPath.test(file) ? text.match(/\b(invalidation|invalidate\w*|immutable)\b/i)?.[1] : undefined);
   if (deliveryCache) {
     return { mechanism: "delivery-cache", rawSymbol: deliveryCache };
   }
 
   return undefined;
 }
+
+const deliveryConfigPath =
+  /(?:^|\/)(?:vercel\.json|netlify\.toml|_headers|_redirects|firebase\.json|staticwebapp\.config\.json|serverless\.ya?ml|Caddyfile|\.htaccess|nginx[^/]*\.conf|(?:next|nuxt|vite|astro|svelte|remix|webpack|rollup|rspack)\.config\.[cm]?[jt]s|(?:service-?worker|sw|workbox)[^/]*\.[cm]?[jt]s|[^/]*(?:cloudfront|cdn)[^/]*)$|(?:^|\/)(?:infra|deploy|deployment|cdn|cloudfront|terraform|cdk)\//i;
 
 function isPerformanceEvidence(evidence: ChangeIntentEvidence): boolean {
   return evidence.kind === "diff" && evidence.symbol?.startsWith("performance:") === true;
