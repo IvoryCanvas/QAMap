@@ -9,25 +9,22 @@ Cowork나 일반 Claude 채팅에서의 지원을 보장하는 안내는 아닙�
 
 ## 플러그인 설치
 
-2026-10-02에 관리 화면의 **게시됨** 상태와 디렉터리 공개 완료 안내를
-확인했습니다. 공개 목록에서 제작자 **IvoryCanvas**, **Claude Code** 지원
-여부와 제공되는 버전을 확인하세요. 공개 완료가 모든 사용자 환경에서의
-설치 성공을 보장하는 것은 아닙니다.
+Claude Code에서 이 저장소의 플러그인 마켓플레이스로 설치합니다.
 
-1. Claude 왼쪽 메뉴의 **사용자 지정**에서 플러그인 목록을 열고 **QAMap**을
-   검색합니다. [웹 디렉터리](https://claude.com/marketplace/plugins)도 이용할 수 있습니다.
-2. 해당 페이지의 설치 기능을 사용합니다. 아직 검색되지 않는다면 목록이
-   갱신된 뒤 다시 확인하거나 아래의 프로젝트 설정 방식으로 사용할 수
-   있습니다. 제출 관리 페이지는 설치 링크가 아닙니다.
-3. Claude Code에서 플러그인이 활성화되어 있는지 확인합니다. 대화형 세션의
-   `/plugin`에서 설치 목록을 확인할 수 있습니다. claude.ai 계정에서 활성화한
-   플러그인은 Claude Code 2.1.273 이상의 터미널 세션에서 같은 계정으로 로그인하면 연동됩니다.
-   Git 마켓플레이스 설치와는 다른 경로입니다. 사용 중인 버전의 조건은
-   [공식 설치 안내](https://code.claude.com/docs/en/discover-plugins)를 확인하세요.
+```txt
+/plugin marketplace add IvoryCanvas/QAMap
+/plugin install qamap@ivorycanvas
+```
 
-`qamap@<마켓플레이스>` 형태의 설치 명령을 임의로 만들지 마세요. 설치 출처와
-마켓플레이스 이름은 공개 목록에서 확인해야 합니다. QAMap의 GitHub 저장소
-자체가 등록된 플러그인 마켓플레이스인 것은 아닙니다.
+마켓플레이스는 기본 브랜치의 `plugins/claude`에 있는 플러그인을 제공합니다.
+`/plugin`에서 플러그인이 활성화되었는지 확인하세요. 사용 중인 Claude Code 버전의 마켓플레이스 명령은
+[공식 설치 안내](https://code.claude.com/docs/en/discover-plugins)를 참고하세요.
+
+QAMap은 [Claude 플러그인 디렉터리](https://claude.com/marketplace/plugins)에도
+있습니다. **IvoryCanvas**의 **QAMap**을 검색해 해당 페이지의 설치 기능을
+사용하면 됩니다. claude.ai 계정에서 활성화한 플러그인은 Claude Code 2.1.273
+이상의 터미널 세션에서 같은 계정으로 로그인하면 연동됩니다. 스킬이 하나만
+활성화되도록 두 경로 중 하나만 사용하세요.
 
 ## CLI 별도 설치
 

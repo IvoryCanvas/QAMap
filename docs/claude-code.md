@@ -9,25 +9,22 @@ cannot run this workflow. Support on Cowork or ordinary Claude chat is not claim
 
 ## Install The Plugin
 
-The management portal showed the Claude Code plugin as published on 2026-10-02.
-Check the public listing for publisher **IvoryCanvas**, support for **Claude Code**
-and the served version. Publication does not establish a successful installation
-on every user's machine.
+Install from this repository's plugin marketplace in Claude Code:
 
-1. Open the [Claude plugin directory](https://claude.com/marketplace/plugins) and
-   search for **QAMap**.
-2. Use the installation action shown by that listing. If the listing is not yet
-   visible, refresh after directory updates propagate or use the project setup
-   below instead; do not use a submission-management URL as an installation link.
-3. Confirm that the plugin is enabled in Claude Code. In an interactive session,
-   `/plugin` shows installed plugins. Account-enabled plugins sync into signed-in
-   terminal sessions on Claude Code 2.1.273 or newer; this is a separate source
-   from Git marketplaces. Follow the [official installation guide](https://code.claude.com/docs/en/discover-plugins)
-   for the requirements of your installed Claude Code version.
+```txt
+/plugin marketplace add IvoryCanvas/QAMap
+/plugin install qamap@ivorycanvas
+```
 
-Do not assume a `qamap@<marketplace>` installation command: the source and
-marketplace name must come from the listing, not the GitHub repository name.
-QAMap's source repository is not itself a registered plugin marketplace.
+The marketplace serves the plugin in `plugins/claude` on the default branch.
+Confirm with `/plugin` that the plugin is enabled. The [official installation guide](https://code.claude.com/docs/en/discover-plugins)
+covers marketplace commands for your Claude Code version.
+
+QAMap is also in the [Claude plugin directory](https://claude.com/marketplace/plugins):
+search for **QAMap** by **IvoryCanvas** and use the installation action on the
+listing. Account-enabled plugins sync into signed-in terminal sessions on Claude
+Code 2.1.273 or newer. Use one of the two sources, not both, so only one copy of
+the skill is active.
 
 ## Install The Matching CLI
 

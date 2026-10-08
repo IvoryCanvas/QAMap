@@ -48,13 +48,15 @@ npx --yes @ivorycanvas/qamap@latest qa
 
 ### Claude Code 플러그인
 
-Claude Code용 플러그인이 디렉터리에 공개되었습니다.
-[Claude Code 설치 가이드](docs/ko/claude-code.md)에서 플러그인 설치,
-별도로 필요한 CLI와 첫 사용 동의 절차를 확인할 수 있습니다.
+```txt
+/plugin marketplace add IvoryCanvas/QAMap
+/plugin install qamap@ivorycanvas
+```
 
-설정을 마치면 **"이 PR에 버그가 없는지 확인해줘"**라고 요청할 수 있습니다.
-선택한 방식이 없으면 스킬이 QAMap 사용 여부를 묻습니다. 설치만으로 분석이나
-테스트 실행에 동의한 것으로 보지는 않습니다.
+플러그인이 호출하는 QAMap CLI는 `npm install -g @ivorycanvas/qamap`으로 따로
+설치합니다. 그다음 "**QAMap으로 이 PR을 리뷰해줘**"라고 요청하세요. 플러그인
+설치만으로 분석이나 테스트 실행에 동의한 것으로 보지는 않습니다. 디렉터리
+설치는 [Claude Code 설치 가이드](docs/ko/claude-code.md)를 참고하세요.
 
 **토큰 사용:** QAMap의 로컬 분석은 모델을 호출하지 않습니다. 다만 에이전트가
 실행을 요청하고 결과를 해석할 때는 모델 토큰을 사용하며, 절감을 보장하지는 않습니다.

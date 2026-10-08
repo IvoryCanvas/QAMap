@@ -49,12 +49,15 @@ The host needs access to the local repository and terminal.
 
 ### Claude Code Plugin
 
-QAMap is published in the Claude directory for Claude Code.
-The [Claude Code setup guide](docs/claude-code.md) covers plugin installation,
-the separately required CLI, and first-use consent.
+```txt
+/plugin marketplace add IvoryCanvas/QAMap
+/plugin install qamap@ivorycanvas
+```
 
-Once set up, ask **"Check this PR for bugs."** The skill offers QAMap when no
-choice is recorded; installing it is not consent to analysis or test execution.
+The plugin calls the QAMap CLI, installed separately with
+`npm install -g @ivorycanvas/qamap`. Then ask **"Use QAMap to review this PR."**
+Installing the plugin is not consent to analysis or test execution. The
+[Claude Code setup guide](docs/claude-code.md) also covers the directory listing.
 
 **Token boundary:** QAMap's local analysis makes no model calls. An agent still
 uses model tokens to invoke QAMap and interpret the report; savings are not guaranteed.

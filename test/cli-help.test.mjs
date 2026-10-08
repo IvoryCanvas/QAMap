@@ -19,6 +19,7 @@ test("default help teaches the small QA workflow before advanced commands", () =
   const output = runCli("--help");
 
   for (const command of [
+    "qamap qa brief [path]",
     "qamap qa [path]",
     "qamap qa run [path]",
     "qamap e2e draft [path] --dry-run",
