@@ -46,6 +46,12 @@ test("test execution counts a command word, not a test file passed to grep or fi
   assert.equal(executedTests(['grep -n "raises_for_ref\\|pytest.raises(Undefined" tests/test_tools.py']), false);
   assert.equal(executedTests(["GITEA_UNSAFE=true go test ./services/..."]), true);
   assert.equal(executedTests(["pip install -q pytest-timeout"]), true);
+  assert.equal(executedTests(["timeout 300 go test ./services/gitdiff/..."]), true);
+  assert.equal(executedTests(['su testuser -c "cd /repo && timeout 300 go test ./services/..."']), true);
+  assert.equal(executedTests(["bash -lc 'npm ci && npm test'"]), true);
+  assert.equal(executedTests(["sudo -E npx vitest run"]), true);
+  assert.equal(executedTests(["timeout 60 git diff main...HEAD -- test/"]), false);
+  assert.equal(executedTests(['bash -c "grep -rn \"go test\" Makefile"']), false);
 });
 
 test("QAMap use counts the command word, not a temporary directory named after it", () => {
@@ -124,6 +130,8 @@ test("the re-measurement rotates three arms and keeps the first pair's file name
   assert.equal(pairFile("s2-x-1", ["qamap", "standalone"]), "s2-x-1.pair.json");
   assert.equal(pairFile("s2-x-1", ["candidate", "standalone"]), "s2-x-1.pair-candidate-standalone.json");
   assert.deepEqual(protocol.rerun.study3.window, ["2026-09-21", "2026-10-04"]);
+  assert.deepEqual(protocol.rerun2.arms, arms);
+  assert.deepEqual(protocol.rerun2.pairs, protocol.rerun.pairs);
 });
 
 test("a run killed before its usage receipt counts its main-loop requests once each", () => {

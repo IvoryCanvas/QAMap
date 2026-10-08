@@ -7,8 +7,72 @@
 For current plugin installation, use [agent integration](agent-skill.md) or
 [Claude Code setup](claude-code.md). Claude Code publication was confirmed in the
 management portal on 2026-10-02; it does not constitute a new quality benchmark or
-a user-installation receipt. The dated measurements below remain historical
-records and have not been rerun for this documentation update.
+a user-installation receipt. The dated measurements below are records of their
+own date and host version.
+
+## Unreleased - Review Benchmarks On Claude Code CLI 2.1.292 (2026-10-07)
+
+The host CLI changed after the 0.5.1 measurement, so the internal review-host
+suite was measured again with every arm on Claude Code CLI 2.1.292. Cases,
+oracles, prompt, tools, host model and grader are unchanged.
+- Arms:
+  - `standalone`;
+  - the published 0.5.1;
+  - main at `62e0043`, with the brief changes from the
+    [external benchmark](../test/benchmarks/review-host/external/RESULTS.md);
+  - a candidate: main with the dotted module name fix, the new change signals, the
+    QA focus domain fix and the index cache limit, merged locally.
+- Runs: three per arm and case.
+  - The first three arms rotated their order.
+  - The candidate ran afterwards against the same standalone runs.
+- Status: all 228 runs completed and were graded.
+- Per-run results: `test/benchmarks/review-host/results-0.5.2-candidates.json`.
+
+| Measure | Standalone | 0.5.1 | main | Candidate |
+| --- | ---: | ---: | ---: | ---: |
+| Sum of per-case median tokens | 8,769,162 | 3,038,011 (-65.4%) | 4,083,357 (-53.4%) | 3,984,310 (-54.6%) |
+| All 57 runs, total tokens | 25,900,958 | 9,513,807 | 12,113,435 | 11,967,094 |
+| Median model requests per case | 5-18 | 3-7 | 3-8 | 3-8 |
+| Runs that found every seeded regression | 41/42 | 42/42 | 42/42 | 42/42 |
+| Mean QA-plan coverage, product fixtures | 0.778 | 0.889 | 0.806 | 0.833 |
+| Definite claims against safe code | 0 | 0 | 0 | 0 |
+| Uncertainty kept, runtime module choice | 3/3 | 3/3 | 3/3 | 2/3 |
+
+- **Host change.** On this host, 0.5.1 saved 65.4% where it saved 74.1% on CLI
+  2.1.282. The standalone baseline and the QAMap arms both moved, so savings
+  measured on different host versions are not comparable.
+- **main.** main used 34% more tokens than 0.5.1. Its instructions ask the host to
+  check the code before it concludes. On these small cases, that is usually one
+  more request of about 40,000 mostly cached tokens. External cases weighed this
+  cost against review quality, which these synthetic cases cannot show.
+- **Candidate.** The candidate used 2.4% fewer tokens than main.
+  - **Outlier.** `pf-async-job` went the other way: 346,000 against 167,000. That
+    brief differs from main only in labeling three medium-confidence scenarios
+    `[check]` instead of `[critical]`. With three runs per arm, it is not settled
+    whether the label caused more reading.
+  - **Uncertainty.** One candidate run said the runtime module choice could not be
+    established, but also called it a definite contract break. The grader did not
+    count that run as keeping the uncertainty.
+- **Cost ceiling.** The most expensive QAMap run cost less than the cheapest
+  standalone run in 18 of 19 cases for 0.5.1 and main, and in 19 of 19 for the
+  candidate.
+- **Static-review prompt.** The standalone host started a test runner or an
+  install in 15 of 57 runs. No QAMap run did, and every QAMap run ran QAMap.
+
+The [external benchmark](../test/benchmarks/review-host/external/RESULTS.md#second-re-measurement)
+ran the same host version on 42 public pull requests: 144 runs, all completed and
+graded.
+
+| Measure | Standalone | main | Candidate |
+| --- | ---: | ---: | ---: |
+| Tokens, all 42 cases | 86,099,099 | -44.6% | -43.6% |
+| Later-fixed regressions found or partly found, 12 runs | 3 + 0 | 3 + 3 | 5 + 5 |
+| Pairwise preference against standalone, 36 cases | - | 15 : 15 : 6 | 14 : 18 : 4 |
+
+The candidate's signals were designed after reading these cases, so this is not
+independent evidence. Across 17 run pairs with byte-identical briefs, tokens still
+differed by 25.8% in total and by up to 2.6 times in one pair, so single-run
+differences of that size are host variance.
 
 ## 0.5.1 - Release Validation (2026-09-25)
 

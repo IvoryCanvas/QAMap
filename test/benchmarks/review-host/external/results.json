@@ -1452,7 +1452,7 @@
       "costUsd": 1.4215568000000007,
       "wallMs": 536501,
       "turns": 11,
-      "executedTests": false,
+      "executedTests": true,
       "usedQamap": false,
       "movedToBackground": false,
       "endedTurns": 1,

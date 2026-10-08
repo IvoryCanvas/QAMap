@@ -209,3 +209,35 @@ fixed, but it is not an independent test. The independent check is Study 3.
 - **Primary comparisons.** These are `candidate` against `standalone` on tokens
   and on pairwise preference in Study 3, then the same comparison in Studies 1
   and 2. Every case and run is reported.
+
+## Second Re-Measurement (Registered 2026-10-07)
+
+The first re-measurement left Study 1 unchanged: standalone found more later-fixed
+defects than either QAMap arm. The brief will gain change signals aimed at the
+patterns behind those misses and behind the `formbricks-9253` miss in Study 2:
+- a removed throw whose case now continues;
+- a field the diff reads but never assigns;
+- a key dropped from an initializer that is still read;
+- rewritten access conditions;
+- callers of a declaration that now throws, with the handling at each call.
+
+QA focus will also stop proposing client scenarios for server-only changes. These
+changes were designed after reading answers and briefs from all three studies, so
+no study is independent of them. This measurement shows whether the targeted
+misses are now found, and whether tokens and quality hold on the other cases.
+
+- **Host.** Claude Code CLI 2.1.292. The host changed again, so every arm is
+  measured again on the same version.
+- **Arms.**
+  - `standalone`;
+  - `qamap`: main at `62e0043`, which merged the first re-measurement's
+    candidate;
+  - `candidate`: main with the new changes, packed from a local merge commit
+    recorded with the results.
+- **Runs and grading.** As in the first re-measurement: two runs per arm in
+  Study 1 and one in Studies 2 and 3. Limits, prompt, tools, fixtures, graders
+  and the three grading pairs are unchanged.
+- **Primary comparisons.**
+  1. Study 1 `found` counts: `candidate` against `qamap` and `standalone`.
+  2. Tokens in all studies.
+  3. Pairwise preference and incorrect findings in Studies 2 and 3.

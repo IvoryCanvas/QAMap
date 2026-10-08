@@ -139,5 +139,37 @@
       "perRepository": 1,
       "runsPerArm": 1
     }
+  },
+  "rerun2": {
+    "registered": "2026-10-07",
+    "host": "Claude Code CLI 2.1.292",
+    "arms": [
+      "standalone",
+      "qamap",
+      "candidate"
+    ],
+    "engines": {
+      "qamap": "main at 62e0043",
+      "candidate": "main with the second re-measurement changes, packed from a local merge commit recorded with the results"
+    },
+    "pairs": [
+      [
+        "candidate",
+        "standalone"
+      ],
+      [
+        "qamap",
+        "standalone"
+      ],
+      [
+        "candidate",
+        "qamap"
+      ]
+    ],
+    "studies": [
+      1,
+      2,
+      3
+    ]
   }
 }

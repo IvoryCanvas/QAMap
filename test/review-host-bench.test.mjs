@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { loadSuite, materializeCase, summarizeHostRun, toolArguments } from "../scripts/agent-bench/review-host.mjs";
+import { armOrder, loadSuite, materializeCase, summarizeHostRun, toolArguments } from "../scripts/agent-bench/review-host.mjs";
 import { aggregateRuns, gradingPrompt, redactArm, scoreVerdict } from "../scripts/agent-bench/review-judge.mjs";
 
 const exec = promisify(execFile);
@@ -41,6 +41,19 @@ test("host usage sums every model, including forked skill contexts, and counts d
   assert.equal(summary.requests, 2);
   assert.deepEqual(summary.tools, ["Skill", "Bash"]);
   assert.deepEqual(summary.models, ["main", "fork"]);
+});
+
+test("the answer keeps every ended turn, so a late acknowledgement cannot replace the review", () => {
+  const ended = (result) => JSON.stringify({ type: "result", subtype: "success", is_error: false, result });
+  const summary = summarizeHostRun([ended("## Review\nFinding 1"), assistant("m2"), ended("That task was a leftover.")].join("\n"));
+  assert.equal(summary.answer, "## Review\nFinding 1\n\nThat task was a leftover.");
+});
+
+test("two arms alternate and three arms rotate, so each arm goes first equally often", () => {
+  assert.deepEqual(armOrder(["standalone", "qamap"], 0, 1), ["qamap", "standalone"]);
+  assert.deepEqual(armOrder(["standalone", "qamap"], 1, 1), ["standalone", "qamap"]);
+  const arms = ["standalone", "qamap", "candidate"];
+  assert.deepEqual([0, 1, 2].map((index) => armOrder(arms, index, 1)[0]).sort(), [...arms].sort());
 });
 
 test("both arms share one tool list, and disabling skills removes Skill from both", () => {
@@ -134,6 +147,34 @@ test("dry runs stop before the host and refuse output inside the repository", as
     assert.match(record.promptSha256, /^[0-9a-f]{64}$/);
     await assert.rejects(exec(process.execPath, [runner, "--engine", directory, "--out", path.join(root, "bench-results", "x"), "--dry-run"]),
       /outside the repository/);
+    await assert.rejects(exec(process.execPath, [runner, "--engine", directory, "--out", path.join(directory, "missing"), "--arms", "standalone,candidate", "--dry-run"]),
+      /--candidate is required/);
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+});
+
+test("a candidate arm uses its own engine with the QAMap setup and prompt", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-review-host-candidate-"));
+  try {
+    const published = path.dirname(await engine(path.join(directory, "published")));
+    const candidate = path.join(directory, "candidate", "engine");
+    await fs.mkdir(path.join(candidate, "bin"), { recursive: true });
+    await fs.writeFile(path.join(candidate, "bin", "qamap"), `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 9.9.9-candidate; exit 0; fi\nexec "${process.execPath}" "${path.join(root, "dist/cli.js")}" "$@"\n`, { mode: 0o755 });
+    const out = path.join(directory, "out");
+    const { stdout } = await exec(process.execPath, [runner, "--engine", published, "--candidate", candidate, "--out", out,
+      "--case", "distant-assertion", "--runs", "1", "--arms", "standalone,qamap,candidate", "--dry-run"]);
+    assert.equal(stdout.trim().split("\n").length, 3);
+    const read = async (arm) => JSON.parse(await fs.readFile(path.join(out, `distant-assertion.${arm}.run1`, "result.json"), "utf8"));
+    const [standalone, qamap, changed] = [await read("standalone"), await read("qamap"), await read("candidate")];
+    assert.equal(changed.engineVersion, "9.9.9-candidate");
+    assert.notEqual(qamap.engineVersion, "9.9.9-candidate");
+    assert.equal(standalone.engineVersion, null);
+    assert.equal(changed.promptSha256, qamap.promptSha256);
+    assert.notEqual(changed.promptSha256, standalone.promptSha256);
+    await fs.rm(path.join(out, "distant-assertion.qamap.run1", "result.json"));
+    const rerun = await exec(process.execPath, [runner, "--engine", published, "--candidate", candidate, "--out", out,
+      "--case", "distant-assertion", "--runs", "1", "--arms", "standalone,qamap,candidate", "--dry-run"]);
+    assert.deepEqual(rerun.stdout.trim().split("\n").map((line) => JSON.parse(line)).map((line) => `${line.label}:${line.status}`).sort(),
+      ["distant-assertion.candidate.run1:kept", "distant-assertion.qamap.run1:dry-run", "distant-assertion.standalone.run1:kept"]);
   } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });
 

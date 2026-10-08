@@ -19,8 +19,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { runHost, summarizeHostRun } from "./review-host.mjs";
+import { armOrder, runHost, sessionAnswer, summarizeHostRun } from "./review-host.mjs";
 import { redactArm } from "./review-judge.mjs";
+
+export { armOrder, sessionAnswer };
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const directory = path.join(root, "test/benchmarks/review-host/external");
@@ -250,12 +252,6 @@ async function loadCases(file) {
 const runsPerArm = (protocol, entry) => entry.study === 1 ? protocol.study1.runsPerArm
   : entry.study === 3 ? protocol.rerun.study3.runsPerArm : protocol.study2.runsPerArm;
 
-// Arm order rotates by case and run, so no arm always starts first or warms the host cache.
-export function armOrder(arms, index, run) {
-  const shift = (index + run) % arms.length;
-  return [...arms.slice(shift), ...arms.slice(0, shift)];
-}
-
 async function runCases({ cache, engines, arms: armList, out, study, only, model, dryRun, casesFile }) {
   const protocol = await loadProtocol();
   const arms = armList ?? protocol.host.arms;
@@ -263,8 +259,7 @@ async function runCases({ cache, engines, arms: armList, out, study, only, model
   const jobs = [];
   cases.forEach((entry, index) => {
     for (let run = 1; run <= runsPerArm(protocol, entry); run++) {
-      const ordered = arms.length === 2 ? ((index + run) % 2 === 0 ? arms : [...arms].reverse()) : armOrder(arms, index, run);
-      for (const arm of ordered) jobs.push({ entry, arm, run });
+      for (const arm of armOrder(arms, index, run)) jobs.push({ entry, arm, run });
     }
   });
   await fs.mkdir(out, { recursive: true });
@@ -295,7 +290,7 @@ async function runCases({ cache, engines, arms: armList, out, study, only, model
         } else {
           const host = await runHost({ cwd: repo, home, pathPrefix: engineBin, prompt, model,
             transcript: path.join(outDir, "transcript.jsonl"), timeoutMs: protocol.host.timeoutMinutes * 60_000, maxTurns: protocol.host.maxTurns });
-          const summary = { ...summarizeHostRun(host.stdout), answer: sessionAnswer(host.stdout) };
+          const summary = summarizeHostRun(host.stdout);
           const status = host.code === 0 && summary.completed ? "completed" : "stopped";
           await fs.writeFile(path.join(outDir, "result.json"), JSON.stringify({ ...record, status, exitCode: host.code, wallMs: host.wallMs,
             workingTreeChanged: git(repo, ["status", "--porcelain"]).length > 0, stderrTail: host.stderr, commands: bashCommands(host.stdout), ...summary }, null, 2));
@@ -315,19 +310,6 @@ async function runCases({ cache, engines, arms: armList, out, study, only, model
   await Promise.all(Array.from({ length: protocol.host.concurrency }, worker));
 }
 
-// A host session can end more than one turn: a background task that finishes after the
-// review re-invokes the model, and the last turn may only acknowledge it. The answer is
-// every turn's final text in order; usage is already cumulative in the last receipt.
-export function sessionAnswer(stdout) {
-  const texts = [];
-  for (const line of stdout.split("\n")) {
-    let event;
-    try { event = JSON.parse(line); } catch { continue; }
-    if (event.type === "result" && typeof event.result === "string" && event.result.trim()) texts.push(event.result.trim());
-  }
-  return texts.join("\n\n");
-}
-
 export function bashCommands(stdout) {
   const commands = [];
   for (const line of stdout.split("\n")) {
@@ -342,7 +324,13 @@ export function bashCommands(stdout) {
 // A segment counts when its command word starts a test runner or an install, not when a
 // test file name is only passed to grep or find. Quoted text is removed first, so a `|`
 // inside a grep pattern does not start a segment; `test -f` is the shell builtin.
-const segments = (command) => command.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, "''").split(/&&|\|\||;|\||\n/).map((segment) => segment.trim().replace(/^(?:\S+=\S+\s+)+/, ""));
+// A wrapper such as `timeout 300`, `env`, `sudo` or `nice` does not change the command word,
+// and a shell started with `-c` runs the quoted command, which is checked as its own command.
+const wrapper = /^(?:(?:timeout(?:\s+-\S+)*\s+\d+[smhd]?|env(?:\s+-\S+)*|sudo(?:\s+-\S+)*|nice(?:\s+-n\s*-?\d+)?|nohup|time|command)\s+|\S+=\S+\s+)+/;
+const nested = (command) => [...command.matchAll(/\b(?:ba|z)?sh\s+(?:-\S+\s+)*-[a-z]*c\s+(['"])((?:(?!\1)[^\\]|\\.)*)\1|\bsu\s+(?:-\S*\s+)*\S+\s+-c\s+(['"])((?:(?!\3)[^\\]|\\.)*)\3/g)]
+  .map((match) => match[2] ?? match[4]);
+const segments = (command) => [command, ...nested(command)].flatMap((text) => text.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, "''")
+  .split(/&&|\|\||;|\||\n/).map((segment) => segment.trim().replace(wrapper, "")));
 const testRunner = /^(?:(?:npx|pnpm(?:\s+(?:exec|dlx))?|yarn|bunx?|npm(?:\s+exec)?)\s+(?:run\s+)?(?:test|vitest|jest|playwright|mocha|ava)\b|(?:vitest|jest|mocha|ava|pytest)\b|playwright\s+test\b|node\s+--test\b|python3?\s+-m\s+(?:pytest|unittest)\b|(?:uv|poetry)\s+run\s+(?:pytest|python3?\s+-m\s+pytest)\b|go\s+test\b|make\s+test\b|cargo\s+test\b|(?:npm|pnpm|yarn|bun)\s+(?:i|install|ci|add)\b|pip3?\s+install\b|uv\s+(?:sync|pip\s+install)\b|poetry\s+install\b)/;
 
 export function executedTests(commands) {
