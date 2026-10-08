@@ -6,36 +6,56 @@
 [![npm version](https://img.shields.io/npm/v/@ivorycanvas/qamap.svg)](https://www.npmjs.com/package/@ivorycanvas/qamap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-![QAMap: know what to test before merge](docs/assets/qamap-cover.png)
+**Give your coding agent one local brief to start a pull request review from, so it explores the repository less.**
 
-**Turn a PR diff into an evidence-backed QA plan before merge.**
+QAMap reads the branch on your machine and prints one size-limited brief: the numbered
+diff, the tests and callers that name each changed function, the history behind removed
+lines, and easy-to-miss changes such as a removed `throw` or a field that is read
+but never assigned. Claude Code or Codex reviews from it. QAMap itself makes no
+LLM call and uploads nothing.
 
-QAMap is a local-first CLI that reads the current branch, repository structure,
-and existing tests. It answers three questions:
+![Claude Code reviewing 42 public pull requests: 86.1M tokens alone, 48.6M with QAMap, 44% fewer](docs/assets/qamap-results.svg)
 
-- Which behavior and user flows may be affected?
-- Which normal, failure, boundary, and state-transition scenarios matter?
-- Which changed files, lines, symbols, and commits support each judgment?
+## Results
 
-QAMap can then route an existing validation command or prepare optional
-automation. It does not upload source code or make its own LLM call.
+42 public pull requests from 12 open-source projects, chosen by a rule fixed before the runs:
+
+| Claude Code CLI 2.1.292, one fixed model | Alone | With QAMap |
+| --- | ---: | ---: |
+| Tokens, all 42 pull requests | 86.1M | 48.6M (-44%) |
+| Pull requests where QAMap used fewer tokens | - | 35 of 42 |
+| Blind LLM grade, 36 pull requests: preferred (4 ties) / valid findings | 18 / 19 | 14 / 16 |
+| Runs that started a test runner or package install in a static review | 5 of 48 | 0 of 48 |
+| Runs that found a regression the project fixed later (6 regressions, 2 runs each), found + partly found | 3 + 0 | 5 + 5 |
+
+With QAMap is the unreleased build after 0.5.1; until the next release, `@latest` installs
+0.5.1. Its changes were designed after reading the reviews and briefs of these 42 pull
+requests, so no row is independent evidence. The last row's change signals target those six
+regressions, and this is the first of three measurements in which QAMap found more of them.
+The preference leans to Claude Code alone and is not statistically significant (p = 0.60).
+Codex was not measured. Tokens are the host's usage receipt, mostly cached input; the
+list-price estimate fell 34%. Single runs vary: one pair of byte-identical briefs used 0.9M
+and 2.0M tokens. [Protocol, every run and limits](test/benchmarks/review-host/external/RESULTS.md).
 
 ## Install And Run
 
-The npm package, OpenAI plugin and Claude plugin update separately. For the 0.5.1
-review brief and its measured token results, see the [release notes](docs/releases/0.5.1.md).
-
 ### Local CLI (Recommended)
 
-With Node.js 20 or newer, run this from the branch you want to review:
+With Node.js 20 or newer, install the CLI and set up the repository once for Claude Code
+and Codex. Commit the files it writes on the default branch, outside the reviewed diff:
 
 ```sh
-npx --yes @ivorycanvas/qamap@latest qa
+npm install -g @ivorycanvas/qamap
+qamap init --agent
 ```
 
-The command performs read-only static analysis. It does not change project files
-or run product tests. For repeat use, other package managers, and local changes,
-see the [adoption guide](docs/adoption.md).
+On the branch to review, ask your agent: **"Use QAMap to review this PR."** The benchmark
+used `qamap init --agent --review-mode report`, which lets agents run QAMap in this
+repository without asking first. To read the brief yourself, run `qamap qa brief`.
+
+`init --agent` writes an `AGENTS.md` section, skill files and `qamap.config.json`.
+`qa brief` only reads the repository and saves its report under `~/QAMap-reports/`.
+The [adoption guide](docs/adoption.md) covers other package managers and uncommitted changes.
 
 ### ChatGPT And Codex Plugin
 
@@ -59,29 +79,23 @@ choice is recorded; installing it is not consent to analysis or test execution.
 **Token boundary:** QAMap's local analysis makes no model calls. An agent still
 uses model tokens to invoke QAMap and interpret the report; savings are not guaranteed.
 
-## Read The Result
+## Read The Brief
 
-| Section | What it tells you |
+| Brief section | What the reviewer gets |
 | --- | --- |
-| **Change** | Which behavior probably changed. |
-| **Verify before merge** | Which scenarios matter before merge. |
-| **Evidence** | Which commit and code location support the judgment. |
-| **Next** | What can be reviewed, run, or drafted next. |
+| **Changes** | Numbered hunks, change signals, and lines a hunk leaves out. |
+| **References** | Tests that name each changed function, its callers and their tests. |
+| **What to verify** | Pattern checks to turn into action and expected result, or dismiss. |
+| **Unknowns, Not fully shown** | What the brief could not settle, and the `git diff` to read next. |
 
-The default `qa` command creates a plan and remains `not run`. Use `qamap qa run`
-only when you want to execute a selected repository command. Use
-`qamap e2e draft . --dry-run` to preview optional browser, mobile, API, CLI, or
-manual automation.
-
-`qamap qa brief` prints the numbered diff, the tests and callers of changed code,
-and QA focus in one bounded response. `qamap qa report` saves reports locally and
-returns only their paths. [Save first, interpret later](docs/commands.md#save-a-report-without-reading-it).
+For human reviewers, `qamap qa` prints a QA plan, `qamap qa run` executes a
+selected repository command, and `qamap e2e draft . --dry-run` previews optional
+automation. Nothing runs unless you ask. See the [brief guide](docs/agent-brief.md) and
+the [command reference](docs/commands.md).
 
 ## See A Real Run
 
-This public fixture changes a subscription renewal flow. QAMap finds the
-duplicate-request risk, cites the changed source, and keeps execution marked
-`not run`.
+The human QA plan, `qamap qa`, for a public fixture that changes a subscription renewal flow:
 
 ![QAMap reads a branch diff and returns an evidence-backed QA summary](docs/assets/qamap-quickstart.gif)
 
@@ -89,23 +103,11 @@ duplicate-request risk, cites the changed source, and keeps execution marked
 
 ## How It Works
 
-```txt
-commit + diff
-    -> affected behavior and flow
-    -> risk-based QA scenarios
-    -> evidence for every judgment
-    -> existing validation or optional automation
-```
-
-QAMap follows direct change evidence before broad repository guesses. Missing
-Playwright, Maestro, selectors, fixtures, or a test runner does not hide an
-important scenario. When evidence is insufficient, QAMap stops instead of
-inventing a contract or a passing result.
-
-A reusable JS/TS evidence index connects declared
-imports and exports to test references and registration candidates across
-packages. [Coverage and limits](docs/repository-discovery.md) remain explicit;
-this is not a complete runtime model or a measured token-savings guarantee.
+QAMap reads the diff, history and tests, finds the changed declarations with their tests
+and callers, adds change signals and QA focus, and fits them into one brief. It follows direct change evidence before broad guesses, labels name matches as
+name matches, and lists what it could not trace or fit. When evidence is
+insufficient, it says so instead of inventing a contract or a passing result.
+[Coverage and limits](docs/repository-discovery.md).
 
 ## Documentation
 
@@ -120,10 +122,8 @@ this is not a complete runtime model or a measured token-savings guarantee.
 
 ## Limits
 
-QAMap is early and pre-`1.0`. An inferred lifecycle is an evidence-backed draft,
-not a product specification. A person must decide whether observed behavior is
-intended or broken, and one passing command does not prove that an entire product
-passed QA.
+QAMap is pre-`1.0`. A brief or QA plan is evidence for a reviewer, not a product
+specification or proof: a person decides whether a behavior is intended or broken.
 
 ## Contributing
 

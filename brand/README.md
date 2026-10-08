@@ -16,8 +16,10 @@ runtime package.
 | Favicons, touch icon, and PWA icons | [`web/`](web/) |
 | GitHub repository social preview, 1280 x 640 | [`../docs/assets/qamap-github-social-preview-1280x640.png`](../docs/assets/qamap-github-social-preview-1280x640.png) |
 | General social card, 1200 x 630 | [`../docs/assets/qamap-social-card.png`](../docs/assets/qamap-social-card.png) |
-| English README cover, 1600 x 800 | [`../docs/assets/qamap-cover.png`](../docs/assets/qamap-cover.png) |
-| Korean README cover, 1600 x 800 | [`../docs/assets/qamap-cover-ko.png`](../docs/assets/qamap-cover-ko.png) |
+| English README results chart | [`../docs/assets/qamap-results.svg`](../docs/assets/qamap-results.svg) |
+| Korean README results chart | [`../docs/assets/qamap-results-ko.svg`](../docs/assets/qamap-results-ko.svg) |
+| English cover, 1600 x 800 | [`../docs/assets/qamap-cover.png`](../docs/assets/qamap-cover.png) |
+| Korean cover, 1600 x 800 | [`../docs/assets/qamap-cover-ko.png`](../docs/assets/qamap-cover-ko.png) |
 | OpenAI plugin upload images | [`../plugin/assets/`](../plugin/assets/) |
 | Portable skill icon | [`../skills/qamap-pr-qa/assets/qamap-logo.png`](../skills/qamap-pr-qa/assets/qamap-logo.png) |
 

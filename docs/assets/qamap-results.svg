@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title">
+  <title id="title">Claude Code reviewing 42 public pull requests: 86.1M tokens alone, 48.6M tokens with QAMap, 44% fewer</title>
+  <rect width="1200" height="340" rx="24" fill="#07111F"/>
+  <g font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="56" y="72" fill="#20BCEB" font-size="22" font-weight="600" letter-spacing="2">CLAUDE CODE REVIEWING 42 PUBLIC PULL REQUESTS</text>
+    <text x="56" y="152" fill="#F4F7FB" font-size="28" font-weight="600">Alone</text>
+    <rect x="260" y="120" width="700" height="46" rx="8" fill="#3B4A5E"/>
+    <text x="984" y="152" fill="#F4F7FB" font-size="26">86.1M tokens</text>
+    <text x="56" y="232" fill="#F4F7FB" font-size="28" font-weight="600">With QAMap</text>
+    <rect x="260" y="200" width="395" height="46" rx="8" fill="#20BCEB"/>
+    <text x="679" y="232" fill="#F4F7FB" font-size="26">48.6M tokens</text>
+    <text x="871" y="234" fill="#FFB31A" font-size="34" font-weight="700">−44%</text>
+    <text x="56" y="300" fill="#9AA7B8" font-size="17">12 open-source projects · Claude Code CLI 2.1.292 · one fixed model · pull requests chosen by a rule fixed before the runs</text>
+  </g>
+</svg>

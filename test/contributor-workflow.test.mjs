@@ -316,17 +316,15 @@ test("directory guidance does not hard-code a stale approved version", async () 
 
 test("the Korean entry point uses natural copy and portable Markdown", async () => {
   const readme = await readFile(path.join(repositoryRoot, "README.ko.md"), "utf8");
-  const cover = await readFile(
-    path.join(repositoryRoot, "docs/assets/qamap-cover-ko.svg"),
+  const chart = await readFile(
+    path.join(repositoryRoot, "docs/assets/qamap-results-ko.svg"),
     "utf8",
   );
 
-  for (const source of [readme, cover]) {
-    assert.ok(
-      !source.includes("변경이 무엇을 증명해야 하는지"),
-      "the old translated slogan must not return",
-    );
-  }
+  assert.ok(
+    !readme.includes("변경이 무엇을 증명해야 하는지"),
+    "the old translated slogan must not return",
+  );
   for (const rawHtml of ["<a ", "<img ", "<details>", "<summary>"]) {
     assert.ok(
       !readme.includes(rawHtml),
@@ -334,13 +332,36 @@ test("the Korean entry point uses natural copy and portable Markdown", async () 
     );
   }
   assert.ok(
-    readme.includes("병합 전에 무엇을 테스트할지 확인하세요."),
+    readme.includes("코딩 에이전트가 로컬 브리프 하나에서 PR 리뷰를 시작해 저장소를 덜 뒤지게 합니다."),
     "README.ko.md must open with the current Korean product promise",
   );
   assert.ok(
-    cover.includes("병합 전에 무엇을 테스트할지 확인하세요."),
-    "the Korean cover must match the README promise",
+    readme.includes("docs/assets/qamap-results-ko.svg") && chart.includes("Claude Code가 공개 PR 42건을 리뷰할 때"),
+    "the Korean README must show the Korean results chart",
   );
+});
+
+test("the README results match the recorded external benchmark", async () => {
+  const results = JSON.parse(await readFile(path.join(repositoryRoot, "test/benchmarks/review-host/external/results-v3.json"), "utf8"));
+  const sum = (arm) => results.cases.reduce((total, entry) => total + entry.arms[arm].medianTokens, 0);
+  const millions = (value) => (value / 1_000_000).toFixed(1);
+  const manwon = (value) => Math.round(value / 10_000).toLocaleString("en-US");
+  const saved = Math.round((1 - sum("candidate") / sum("standalone")) * 100);
+  const fewer = results.cases.filter((entry) => entry.arms.candidate.medianTokens < entry.arms.standalone.medianTokens).length;
+  const english = await readFile(path.join(repositoryRoot, "README.md"), "utf8");
+  for (const text of [`${millions(sum("standalone"))}M`, `${millions(sum("candidate"))}M (-${saved}%)`, `${fewer} of ${results.cases.length}`]) {
+    assert.ok(english.includes(text), `README.md must state ${text} from results-v3.json`);
+  }
+  const korean = await readFile(path.join(repositoryRoot, "README.ko.md"), "utf8");
+  for (const text of [`${manwon(sum("standalone"))}만`, `${manwon(sum("candidate"))}만 (-${saved}%)`, `${results.cases.length}건 중 ${fewer}건`]) {
+    assert.ok(korean.includes(text), `README.ko.md must state ${text} from results-v3.json`);
+  }
+  for (const [file, unit] of [["docs/assets/qamap-results.svg", (value) => `${millions(value)}M tokens`], ["docs/assets/qamap-results-ko.svg", (value) => `${manwon(value)}만 토큰`]]) {
+    const chart = await readFile(path.join(repositoryRoot, file), "utf8");
+    for (const text of [unit(sum("standalone")), unit(sum("candidate")), `−${saved}%`]) {
+      assert.ok(chart.includes(text), `${file} must show ${text} from results-v3.json`);
+    }
+  }
 });
 
 test("public READMEs present local setup before the optional plugin path", async () => {
@@ -350,7 +371,7 @@ test("public READMEs present local setup before the optional plugin path", async
       install: "## Install And Run",
       local: "### Local CLI (Recommended)",
       plugin: "### ChatGPT And Codex Plugin",
-      result: "## Read The Result",
+      result: "## Read The Brief",
       demo: "## See A Real Run",
       how: "## How It Works",
       docs: "## Documentation",
@@ -362,7 +383,7 @@ test("public READMEs present local setup before the optional plugin path", async
       install: "## 설치하고 실행하기",
       local: "### 로컬 CLI (권장)",
       plugin: "### ChatGPT와 Codex 플러그인",
-      result: "## 결과 읽는 방법",
+      result: "## 브리프 읽는 방법",
       demo: "## 실제 실행 예시",
       how: "## 동작 방식",
       docs: "## 목적별 문서",
