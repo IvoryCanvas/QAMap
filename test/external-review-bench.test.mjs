@@ -46,6 +46,12 @@ test("test execution counts a command word, not a test file passed to grep or fi
   assert.equal(executedTests(['grep -n "raises_for_ref\\|pytest.raises(Undefined" tests/test_tools.py']), false);
   assert.equal(executedTests(["GITEA_UNSAFE=true go test ./services/..."]), true);
   assert.equal(executedTests(["pip install -q pytest-timeout"]), true);
+  assert.equal(executedTests(["timeout 300 go test ./services/gitdiff/..."]), true);
+  assert.equal(executedTests(['su testuser -c "cd /repo && timeout 300 go test ./services/..."']), true);
+  assert.equal(executedTests(["bash -lc 'npm ci && npm test'"]), true);
+  assert.equal(executedTests(["sudo -E npx vitest run"]), true);
+  assert.equal(executedTests(["timeout 60 git diff main...HEAD -- test/"]), false);
+  assert.equal(executedTests(['bash -c "grep -rn \"go test\" Makefile"']), false);
 });
 
 test("QAMap use counts the command word, not a temporary directory named after it", () => {

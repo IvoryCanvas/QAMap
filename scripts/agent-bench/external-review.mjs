@@ -324,7 +324,13 @@ export function bashCommands(stdout) {
 // A segment counts when its command word starts a test runner or an install, not when a
 // test file name is only passed to grep or find. Quoted text is removed first, so a `|`
 // inside a grep pattern does not start a segment; `test -f` is the shell builtin.
-const segments = (command) => command.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, "''").split(/&&|\|\||;|\||\n/).map((segment) => segment.trim().replace(/^(?:\S+=\S+\s+)+/, ""));
+// A wrapper such as `timeout 300`, `env`, `sudo` or `nice` does not change the command word,
+// and a shell started with `-c` runs the quoted command, which is checked as its own command.
+const wrapper = /^(?:(?:timeout(?:\s+-\S+)*\s+\d+[smhd]?|env(?:\s+-\S+)*|sudo(?:\s+-\S+)*|nice(?:\s+-n\s*-?\d+)?|nohup|time|command)\s+|\S+=\S+\s+)+/;
+const nested = (command) => [...command.matchAll(/\b(?:ba|z)?sh\s+(?:-\S+\s+)*-[a-z]*c\s+(['"])((?:(?!\1)[^\\]|\\.)*)\1|\bsu\s+(?:-\S*\s+)*\S+\s+-c\s+(['"])((?:(?!\3)[^\\]|\\.)*)\3/g)]
+  .map((match) => match[2] ?? match[4]);
+const segments = (command) => [command, ...nested(command)].flatMap((text) => text.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, "''")
+  .split(/&&|\|\||;|\||\n/).map((segment) => segment.trim().replace(wrapper, "")));
 const testRunner = /^(?:(?:npx|pnpm(?:\s+(?:exec|dlx))?|yarn|bunx?|npm(?:\s+exec)?)\s+(?:run\s+)?(?:test|vitest|jest|playwright|mocha|ava)\b|(?:vitest|jest|mocha|ava|pytest)\b|playwright\s+test\b|node\s+--test\b|python3?\s+-m\s+(?:pytest|unittest)\b|(?:uv|poetry)\s+run\s+(?:pytest|python3?\s+-m\s+pytest)\b|go\s+test\b|make\s+test\b|cargo\s+test\b|(?:npm|pnpm|yarn|bun)\s+(?:i|install|ci|add)\b|pip3?\s+install\b|uv\s+(?:sync|pip\s+install)\b|poetry\s+install\b)/;
 
 export function executedTests(commands) {

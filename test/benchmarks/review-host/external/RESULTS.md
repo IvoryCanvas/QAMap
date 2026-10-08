@@ -80,7 +80,7 @@ as an open question. Only the QAMap review found a real problem in three cases:
 
 ## Other Observations
 
-- The standalone arm started a test runner or installed packages in 3 of 36
+- The standalone arm started a test runner or installed packages in 4 of 36
   runs, despite the static-review prompt. The QAMap arm did so in none.
 - In `twenty`, the largest repository, `qamap qa brief` took longer than the
   30-second limit the host set for the command in 5 QAMap runs. The host moved
@@ -111,6 +111,11 @@ as an open question. Only the QAMap review found a real problem in three cases:
 - **Detection rules.** Test execution and QAMap use are now counted from the
   command word. The first version also counted `test -f`, a `|` inside a quoted
   grep pattern, and temporary directory names containing `qamap`.
+- **Detection rules, revised 2026-10-08.** The rule now looks past wrappers such
+  as `timeout 120` or `sudo`, and also checks commands run through `sh -c` or
+  `su -c`. This found one more standalone run with tests in the first run, which
+  the count above includes. It also found two more in the first re-measurement and
+  one more in the second. The stored flags were updated; nothing else changed.
 
 ## Limits
 
