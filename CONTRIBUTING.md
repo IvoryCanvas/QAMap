@@ -18,6 +18,22 @@ unusable draft, or overstated what was executed.
 For a broad feature or public contract change, discuss the behavior in an issue
 before investing in an implementation.
 
+## Your First Contribution
+
+You do not need to learn the whole codebase or every convention below first.
+
+1. Pick an issue labeled
+   [`good first issue`](https://github.com/IvoryCanvas/QAMap/labels/good%20first%20issue),
+   and comment on it to say you are working on it or to ask a question.
+2. Fork the repository and make the change on any branch of your fork. Run
+   `pnpm install` and `pnpm test`.
+3. Open the pull request and fill in the template. The `PR policy` check needs a
+   title such as `Fix: ...` and the template sections. On a pull request from a
+   fork it does not check the branch name or labels; a maintainer adds the labels.
+
+Questions and ideas that are not bug reports are welcome in
+[Discussions](https://github.com/IvoryCanvas/QAMap/discussions).
+
 ## Protect Private Information
 
 Never publish private repository names, source, paths, customer data,
@@ -114,8 +130,10 @@ Every pull request should:
 The `PR policy` workflow checks these conventions when a pull request is ready
 for review. It validates the title and branch prefix, required template
 sections, completed public-OSS confirmations, exactly one `type:` label, and at
-least one `area:` label. Draft pull requests are intentionally skipped so work
-in progress can remain incomplete.
+least one `area:` label. On a pull request from a fork, the branch prefix and
+labels are not checked, because a contributor cannot apply labels there. Draft
+pull requests are intentionally skipped so work in progress can remain
+incomplete.
 
 Dependency changes also receive a read-only vulnerability review. Neither check
 comments on the pull request, changes labels, or executes code from the pull

@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Question or idea
+    url: https://github.com/IvoryCanvas/QAMap/discussions
+    about: Ask how to use QAMap or discuss an idea before opening an issue.
   - name: Security report
     url: https://github.com/IvoryCanvas/QAMap/security/advisories/new
     about: Report vulnerabilities privately instead of opening a public issue.

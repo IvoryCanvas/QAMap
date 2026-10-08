@@ -12,7 +12,7 @@ body:
     id: version
     attributes:
       label: QAMap version
-      placeholder: "0.4.11"
+      placeholder: "Output of qamap --version"
     validations:
       required: true
   - type: input

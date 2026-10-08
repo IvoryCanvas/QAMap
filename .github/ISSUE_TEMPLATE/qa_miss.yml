@@ -27,7 +27,7 @@ body:
     id: version
     attributes:
       label: QAMap version and command
-      placeholder: "0.4.11 · qamap qa . --base origin/main --head HEAD"
+      placeholder: "Output of qamap --version · qamap qa brief --base origin/main"
     validations:
       required: true
   - type: textarea
