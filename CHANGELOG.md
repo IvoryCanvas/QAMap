@@ -21,6 +21,8 @@
 - On public pull requests chosen by a registered rule, Claude Code CLI 2.1.291 with one fixed model compared standalone review, published 0.5.1 and this change. Tokens: 6 later-fixed regressions -54.1% (0.5.1: -56.3%); 24 seeded random pull requests -45.1% (0.5.1: -51.8%); 12 held-out pull requests selected before the change -40.4% (0.5.1: -47.5%).
 - Blind pairwise grades of this change against standalone were 10:11 with 3 ties on the 24 and 6:4 with 2 ties on the held-out 12. Against 0.5.1 they were 10:10 with 4 ties and 6:3 with 3 ties. Across both studies, its incorrect findings were 6 against standalone's 15. No split is statistically conclusive. Standalone still found more later-fixed regressions (5 of 12 runs against 2).
 - Across its 48 runs, the host never moved this brief to the background. It moved 0.5.1's brief 5 times.
+- On Claude Code CLI 2.1.292, the same public cases compared standalone review, main at `62e0043` and main with the change signals, QA focus fix, dotted module fix and index cache limit. Tokens with the signals: -49.8%, -45.2% and -32.7% on the three studies, -43.6% overall (main: -44.6%). They found 5 later-fixed regressions in 12 runs and partly found 5, against 3 and 0 for standalone and 3 and 3 for main. Pairwise grades against standalone were 14:18 with 4 ties. No split is statistically conclusive. In 17 run pairs where both QAMap arms received byte-identical briefs, tokens still differed by 25.8% in total, which bounds what single-run differences can show.
+- The internal 19-case suite on the same host: 0.5.1 -65.4%, main -53.4%, main with the changes -54.6%; every QAMap arm found every seeded regression.
 
 
 

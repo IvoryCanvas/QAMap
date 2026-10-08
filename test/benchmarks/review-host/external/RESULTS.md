@@ -217,3 +217,132 @@ later-fixed defects than either QAMap arm.
 - Six Study 1 cases from three repositories.
 - The changed QAMap was designed after reading the Study 1 and 2 failures, so
   only Study 3 is independent of that design.
+
+## Second Re-Measurement
+
+This follows the [second re-measurement protocol](PROTOCOL.md#second-re-measurement-registered-2026-10-07).
+All three arms ran on Claude Code CLI 2.1.292 with the same fixed host model. The
+grader was the same as before.
+- `qamap`: main at `62e0043`.
+- `candidate`: main with four changes, packed from local merge commit `e635d74`:
+  - the dotted module name fix;
+  - the change signals and callers that now throw, up to `5f59ba8`;
+  - the QA focus domain fix;
+  - the index cache limit.
+
+All 144 runs completed with a usage receipt, and every run was graded. Per-run
+records are in `results-v3.json`.
+
+The changes were designed after reading answers and briefs from all three studies,
+so none of these results is independent evidence.
+
+### Tokens
+
+Sum of per-case medians; Study 1 has two runs per arm, Studies 2 and 3 one.
+
+| Study | Cases | Standalone | main | Candidate |
+| --- | ---: | ---: | ---: | ---: |
+| 1, later-fixed regressions | 6 | 18,205,758 | 9,830,201 (-46.0%) | 9,141,298 (-49.8%) |
+| 2, seeded random pull requests | 24 | 49,811,505 | 27,638,460 (-44.5%) | 27,279,803 (-45.2%) |
+| 3, held out | 12 | 18,081,836 | 10,242,394 (-43.4%) | 12,169,371 (-32.7%) |
+| All | 42 | 86,099,099 | 47,711,055 (-44.6%) | 48,590,472 (-43.6%) |
+
+- **Fewer tokens than standalone.** The candidate used fewer tokens in 6 of 6, 20
+  of 24 and 9 of 12 cases. main did in 6 of 6, 20 of 24 and 11 of 12.
+- **Host variance.** In 17 run pairs, main and the candidate received
+  byte-identical briefs and identical project setup. The candidate still used
+  25.8% more tokens across those pairs, and more in 12 of the 17.
+  - Within this measurement, single-run differences of that size are host
+    variance and cannot be attributed to the brief.
+  - Study 3's gap rests mostly on `documenso-3409`, whose two briefs were
+    identical: 926,290 tokens with main and 2,005,235 with the candidate.
+  - In the other 31 run pairs, the briefs differed, and the candidate used 6.5%
+    fewer tokens than main, fewer in 17 of them.
+    - In 6 of these pairs, the only difference was `[check]` instead of
+      `[critical]` on one or two scenarios. There the candidate used 22.4%
+      more.
+    - In the other 25, it used 9.8% fewer.
+- **List-price estimate.** $43.30 standalone, $28.88 main and $28.51 candidate.
+  This is not billing.
+
+### Quality
+
+Study 1 counts runs that stated the defect the project fixed later, out of 12 per
+arm:
+
+| Verdict | Standalone | main | Candidate |
+| --- | ---: | ---: | ---: |
+| Found | 3 | 3 | 5 |
+| Partial | 0 | 3 | 5 |
+| Missed | 9 | 6 | 2 |
+
+This is the first measurement in which a QAMap arm found more later-fixed defects
+than standalone. Per case, for the candidate:
+- **`gitea-38517`:** found in both runs: the line counts stay in locals and the
+  returned fields are never assigned. Neither other arm found it.
+- **`outline-13198`:** found in one run and partial in the other, as with main.
+  Standalone missed both.
+- **`gitea-38706`:** both runs flagged the dropped `Content: " "` initializer, but
+  neither predicted the index-out-of-range panic, so both are partial. One run
+  dismissed the change as cosmetic. Standalone found it in one of two runs.
+- **`twenty-21684` and `twenty-22015`:** partial in one run each. The other arms
+  missed both.
+- **`outline-13597`:** every arm found it in both runs.
+
+Studies 2 and 3 are pairwise blind grades. Each cell gives wins for the first arm,
+wins for the second, and ties.
+
+| Pair | Study 2 | Study 3 | Both |
+| --- | ---: | ---: | ---: |
+| Candidate vs standalone | 10 : 12 : 2 | 4 : 6 : 2 | 14 : 18 : 4 |
+| main vs standalone | 12 : 10 : 2 | 3 : 5 : 4 | 15 : 15 : 6 |
+| Candidate vs main | 10 : 11 : 3 | 3 : 5 : 4 | 13 : 16 : 7 |
+
+Findings within each pair, Studies 2 and 3 together (first arm against second):
+
+| Pair | Valid | Incorrect | Unverifiable |
+| --- | ---: | ---: | ---: |
+| Candidate vs standalone | 16 vs 19 | 7 vs 7 | 12 vs 5 |
+| main vs standalone | 14 vs 13 | 7 vs 9 | 9 vs 9 |
+| Candidate vs main | 19 vs 20 | 7 vs 5 | 7 vs 8 |
+
+- **Significance.** None of the preference splits is statistically conclusive.
+  Two-sided sign tests give p from 0.60 to 1.00.
+- **Comparison with the first re-measurement.** main is the changed QAMap of the
+  first re-measurement, merged. Against standalone it was 16 : 15 : 5 there and
+  15 : 15 : 6 here. The single-run preference stays near even.
+
+### Other Observations
+
+- **Test runs and installs.** The standalone host started a test runner or an
+  install in 5 of 48 runs despite the static-review prompt. Neither QAMap arm ran
+  one. In one main run, `immich-30612`, the host ran a `pnpm exec tsc` type check,
+  and pnpm installed the workspace dependencies first.
+- **QAMap use.** Every QAMap arm run ran QAMap; no standalone run did.
+- **Background moves.** The host moved a command to the background once in
+  standalone and once with main, both in `formbricks-9409`, and never with the
+  candidate.
+- **Multiple turns.** No run ended more than one turn.
+
+### Deviations
+
+- **Time limit.** The first run process stopped at its two-hour limit after 87
+  runs. The four runs in flight had written no result.
+- **Host version.** Before the runs resumed, the environment's CLI updated itself
+  to 2.1.293.
+  - The resumed process was stopped before any run finished.
+  - The remaining runs and all grading used CLI 2.1.292 installed from npm, with
+    the auto-updater disabled.
+  - Every one of the 144 transcripts reports 2.1.292.
+- **Container restart.** The container restarted during Study 3, and the four
+  runs in flight wrote no result.
+- **Repeated runs.** Each interrupted run was run again from the start. Usage of
+  the interrupted attempts is not counted.
+
+### Limits
+
+- One host and one model.
+- One run per arm in Studies 2 and 3, and an LLM grader.
+- The 17 identical-brief pairs show that single-run token differences of 25% can
+  come from host variance alone.
+- None of the studies is independent of the candidate's design.

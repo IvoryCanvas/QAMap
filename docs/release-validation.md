@@ -59,6 +59,21 @@ oracles, prompt, tools, host model and grader are unchanged.
 - **Static-review prompt.** The standalone host started a test runner or an
   install in 15 of 57 runs. No QAMap run did, and every QAMap run ran QAMap.
 
+The [external benchmark](../test/benchmarks/review-host/external/RESULTS.md#second-re-measurement)
+ran the same host version on 42 public pull requests: 144 runs, all completed and
+graded.
+
+| Measure | Standalone | main | Candidate |
+| --- | ---: | ---: | ---: |
+| Tokens, all 42 cases | 86,099,099 | -44.6% | -43.6% |
+| Later-fixed regressions found or partly found, 12 runs | 3 + 0 | 3 + 3 | 5 + 5 |
+| Pairwise preference against standalone, 36 cases | - | 15 : 15 : 6 | 14 : 18 : 4 |
+
+The candidate's signals were designed after reading these cases, so this is not
+independent evidence. Across 17 run pairs with byte-identical briefs, tokens still
+differed by 25.8% in total and by up to 2.6 times in one pair, so single-run
+differences of that size are host variance.
+
 ## 0.5.1 - Release Validation (2026-09-25)
 
 A real-host comparison showed that the published 0.5.0 review workflow cost more
