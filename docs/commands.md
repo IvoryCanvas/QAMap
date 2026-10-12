@@ -30,7 +30,7 @@ pnpm exec qamap init --scripts .
 ```
 
 Use `npx --yes @ivorycanvas/qamap@latest ...` for one-off human runs without
-installing QAMap into the target repository. The 0.5.1 packaged review skill uses
+installing QAMap into the target repository. The 0.5.2 packaged review skill uses
 the matching installed `qamap` binary. If it is missing or outdated, the skill
 reports a blocker; it does not install or upgrade without permission. Explicit
 one-off commands in the advanced workflow use `npm exec --package` to avoid

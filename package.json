@@ -1,6 +1,6 @@
 {
   "name": "@ivorycanvas/qamap",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Local pull-request review brief for coding agents such as Claude Code and Codex: the diff, the tests and callers of changed code, and change signals in one bounded report. No LLM call, no upload.",
   "type": "module",
   "main": "./dist/index.js",
@@ -40,7 +40,7 @@
     "prepack": "pnpm build",
     "test:compiled": "node --test test/*.test.mjs",
     "test": "pnpm build && pnpm test:compiled",
-    "coverage:compiled": "node --test --experimental-test-coverage --test-coverage-include=\"dist/**/*.js\" --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 test/*.test.mjs",
+    "coverage:compiled": "node --test --test-concurrency=2 --experimental-test-coverage --test-coverage-include=\"dist/**/*.js\" --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 test/*.test.mjs",
     "coverage": "pnpm build && pnpm coverage:compiled",
     "scan:compiled": "node dist/cli.js scan .",
     "scan": "pnpm build && pnpm scan:compiled",

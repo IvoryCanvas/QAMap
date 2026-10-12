@@ -142,7 +142,7 @@ If your agent supports symlinked skills, point its skill directory at `skills/qa
 The repository includes native `.codex-plugin/plugin.json` and
 `.claude-plugin/plugin.json` manifests around the same `skills/qamap-pr-qa/SKILL.md`.
 OpenAI packaging uses the root sources; Claude directory submission uses the
-isolated `plugins/claude` folder with synchronized copies. The 0.5.1 skill invokes
+isolated `plugins/claude` folder with synchronized copies. The 0.5.2 skill invokes
 the matching installed CLI and reviews bounded text, not the entire JSON archive.
 Advanced structured output remains available separately. QAMap itself does not
 call an LLM or upload repository source.

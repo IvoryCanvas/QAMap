@@ -176,6 +176,17 @@ test("CI prepares pnpm after Node.js and reuses one compiled build per job", asy
   }
 });
 
+test("coverage bounds workers without narrowing tests or lowering quality floors", async () => {
+  const pkg = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8"));
+  const command = pkg.scripts["coverage:compiled"];
+  for (const required of ["node --test", "--test-concurrency=2", "--experimental-test-coverage",
+    '--test-coverage-include="dist/**/*.js"', "--test-coverage-lines=80",
+    "--test-coverage-branches=80", "--test-coverage-functions=80", "test/*.test.mjs"]) {
+    assert.ok(command.includes(required), `coverage must preserve ${required}`);
+  }
+  assert.doesNotMatch(command, /--test-(?:name|skip)-pattern/);
+});
+
 test("ready pull requests receive policy and dependency review checks", async () => {
   const policy = parseYaml(
     await readFile(path.join(repositoryRoot, ".github/workflows/pr-policy.yml"), "utf8"),

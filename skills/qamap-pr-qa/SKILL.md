@@ -54,7 +54,7 @@ asking. Respect a refusal or a request for independent review.
    change. Tests stay `not-run`: the brief proves nothing was executed. Test runs,
    edits and automation need separate approval.
 
-`qa brief` ships with `@ivorycanvas/qamap@0.5.1`. If `qamap` is missing, rejects
+`qa brief` ships with `@ivorycanvas/qamap@0.5.2`. If `qamap` is missing, rejects
 `brief`, or fails, report the blocker. Do not retry, install, upgrade or switch to
 another review without permission.
 The analysis does not upload source code or make another LLM call; the

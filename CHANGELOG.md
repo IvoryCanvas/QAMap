@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 - 2026-10-12
+
+npm and plugin publication are separate steps.
+See the [0.5.2 release record](docs/releases/0.5.2.md).
 
 ### Changed
 
@@ -9,12 +12,15 @@
 - More change signals: a removed throw whose case now continues, the name a new throw raises, rewritten access conditions with the clauses dropped and added, a key dropped from a Go, JavaScript or Python initializer while the field is still read, and a field the diff declares and reads but never assigns. When a declaration now throws, directly or through a changed function it calls, its callers without a try block, `.catch` or Go error check are listed first with the handling found at each call. Comment lines that only name a symbol are no longer listed as references. When the brief cannot show every file, each file keeps its header and signals instead of later files losing them.
 - Every file that is not shown in full is listed under "Not fully shown" with its hidden removed and added line counts and the `git diff` command that shows it. A file that does not fit at all keeps its header and change signals.
 - Brief wording no longer reads as proof: test coverage is "named by a test file", references this diff changes are marked `(changed)`, unresolved calls are "external or built-in", QA focus items are labeled heuristic pattern checks, and the references footer states that string, routing, injection and reflection calls are not traced.
-- The README leads with what the brief gives a coding agent and the measured result: on 42 public pull requests, Claude Code CLI 2.1.292 used 86.1M tokens alone against 48.6M with the unreleased build after 0.5.1. The preference and valid-finding counts, which lean to Claude Code alone, and the caveat that the build was changed after reading these pull requests stand next to it. Setup installs the CLI and runs `qamap init --agent`; the README names the `--review-mode report` setup the benchmark used. A test checks the token totals, reduction and per-pull-request count in both READMEs and both results charts against `results-v3.json`. The social preview and card show the same result.
+- The README leads with what the brief gives a coding agent and the measured result: on 42 public pull requests, Claude Code CLI 2.1.292 used 86.1M tokens alone against 48.6M with the build that became 0.5.2. The preference and valid-finding counts, which lean to Claude Code alone, and the caveat that the build was changed after reading these pull requests stand next to it. Setup installs the CLI and runs `qamap init --agent`; the README names the `--review-mode report` setup the benchmark used. A test checks the token totals, reduction and per-pull-request count in both READMEs and both results charts against `results-v3.json`. The social preview and card show the same result.
 - References skip vendored, minified and locale files, same-named symbols in other languages, and test helpers offered as production definitions. Very common names stop after 300 checked files and are reported as capped.
 - A pull request from a fork passes the `PR policy` check without the branch prefix and labels, which a fork contributor cannot set; a maintainer adds the labels. The title and template are still checked. `CONTRIBUTING.md` has a first-contribution path, questions go to Discussions, and the issue forms no longer suggest version 0.4.11.
 - QA focus no longer suggests client scenarios from server code: invalidation or immutability names a deployed HTML and asset cache only in hosting, CDN, build or service-worker configuration, and payload, destination or search-parameter words in server-side files no longer raise an entry-routing scenario. Cache headers and navigation calls still count anywhere. In the brief, a critical scenario of an intent below high confidence is labeled `[check]`.
 - The packaged skill and the `AGENTS.md` section ask hosts to wait up to 10 minutes for the brief in the foreground instead of 30 seconds, treat the brief as the map rather than the limit, read the diffs under "Not fully shown", read a changed function whole when its hunks leave lines out or it changes guards, early exits, error handling, log levels, transactions or shared state, state a failure scenario for each removed or rewritten behavior, and check the base before calling something new, removed, untested or fully updated.
 - Claude Code installs the plugin from this repository with `/plugin marketplace add IvoryCanvas/QAMap` and `/plugin install qamap@ivorycanvas`. The README and Claude Code guides show these two lines with the separate CLI install, and keep the Claude plugin directory as the other source. `qamap --help` lists `qamap qa brief` first. The npm, Claude and Codex plugin descriptions name the review brief, and the npm keywords name Claude Code, Codex and code review instead of MCP.
+- Claude Code directory installation uses an isolated `plugins/claude` package with synchronized skills, a square icon, listing links and English/Korean setup guidance that separates plugin installation, matching CLI installation and consent.
+- The post-release smoke default now targets the published 0.5.1 package.
+- Coverage runs the full test suite with at most two workers without lowering its quality thresholds. The offline benchmark records command timeouts separately from output-buffer failures and includes execution diagnostics when a compact-receipt assertion fails.
 
 ### Fixed
 
@@ -35,7 +41,7 @@
 - On Claude Code CLI 2.1.292, the same public cases compared standalone review, main at `62e0043` and main with the change signals, QA focus fix, dotted module fix and index cache limit. Tokens with the signals: -49.8%, -45.2% and -32.7% on the three studies, -43.6% overall (main: -44.6%). They found 5 later-fixed regressions in 12 runs and partly found 5, against 3 and 0 for standalone and 3 and 3 for main. Pairwise grades against standalone were 14:18 with 4 ties. No split is statistically conclusive. In 17 run pairs where both QAMap arms received byte-identical briefs, tokens still differed by 25.8% in total, which bounds what single-run differences can show.
 - The internal 19-case suite on the same host: 0.5.1 -65.4%, main -53.4%, main with the changes -54.6%; every QAMap arm found every seeded regression.
 
-
+## 0.5.1 - 2026-09-25
 
 npm and plugin publication are separate steps.
 See the [0.5.1 release record](docs/releases/0.5.1.md).

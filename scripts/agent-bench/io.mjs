@@ -18,7 +18,7 @@ export function createIORecorder({ tempDirectory }) {
     commandStdoutBytes: 0, commandStderrBytes: 0,
     compactOutputBytes: 0, fullReportGeneratedBytes: 0,
     fullRecoveryReadBytes: 0, fullRecoveryOutputBytes: 0, diagnosticReadBytes: 0,
-    toolErrors: 0, commandFailures: 0, truncatedResponses: 0, cappedFileReads: 0,
+    toolErrors: 0, commandFailures: 0, commandTimeouts: 0, truncatedResponses: 0, cappedFileReads: 0,
     repositoryIndexes: [], recoveryReports: [], recoveryReads: [],
     exploration: {
       callsByTool: toolCounts(),
@@ -47,10 +47,11 @@ export function createIORecorder({ tempDirectory }) {
       metrics.toolErrors++;
       if (metrics.exploration.afterCompact) metrics.exploration.afterCompact.toolErrors++;
     },
-    command(stdout, stderr, code) {
+    command(stdout, stderr, code, timedOut = false) {
       metrics.commandStdoutBytes += bytes(stdout);
       metrics.commandStderrBytes += bytes(stderr);
       if (code !== 0) metrics.commandFailures++;
+      if (timedOut) metrics.commandTimeouts++;
     },
     read(count, recovery, fileBytes) {
       metrics.fileReadBytes += count;

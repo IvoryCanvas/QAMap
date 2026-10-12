@@ -29,11 +29,11 @@ QAMap은 [Claude 플러그인 디렉터리](https://claude.com/marketplace/plugi
 ## CLI 별도 설치
 
 플러그인에는 CLI가 포함되어 있지 않으며, 자동으로 설치하지도 않습니다.
-스킬에서 요구하는 버전을 사용자 동의하에 설치합니다. 0.5.1 스킬에는 다음
+스킬에서 요구하는 버전을 사용자 동의하에 설치합니다. 0.5.2 스킬에는 다음
 버전이 필요합니다.
 
 ```sh
-npm install -g @ivorycanvas/qamap@0.5.1
+npm install -g @ivorycanvas/qamap@0.5.2
 qamap --version
 ```
 

@@ -151,9 +151,9 @@ export async function createToolExecutor({
       code = typeof error.code === "number" ? error.code : 1;
       stdout = error.stdout ?? "";
       stderr = error.stderr ?? "";
-      timedOut = Boolean(error.killed);
+      timedOut = Boolean(error.killed) && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
     }
-    io?.command(stdout, stderr, code);
+    io?.command(stdout, stderr, code, timedOut);
     if (io && qamapFormat) stdout = await io.qamapOutput(stdout, qamapFormat);
     return formatCommandOutput(stdout, stderr, code, timedOut);
   }

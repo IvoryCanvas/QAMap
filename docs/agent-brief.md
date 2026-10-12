@@ -121,7 +121,7 @@ The per-case table, sensitivity arms and limits are in the
 [validation record](release-validation.md).
 
 On Claude Code CLI 2.1.292, 0.5.1 used 65.4% fewer tokens on the same cases, and
-the next candidate 54.6% fewer. The candidate asks the host to check the code before
+the 0.5.2 candidate 54.6% fewer. The candidate asks the host to check the code before
 it concludes, which costs about one more request on these small cases. Every QAMap
 arm found every seeded regression in all 42 runs; standalone did in 41. On public pull requests chosen by a registered rule,
 the candidate used 33-50% fewer tokens per study, and found more of the defects

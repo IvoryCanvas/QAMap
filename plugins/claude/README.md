@@ -16,7 +16,7 @@ Source, issues and documentation: [IvoryCanvas/QAMap](https://github.com/IvoryCa
 ## Requirements
 
 Use Claude Code with a local checkout, a terminal, Git, Node.js 20 or later, and
-the matching CLI: `@ivorycanvas/qamap@0.5.1`. A chat without local repository and
+the matching CLI: `@ivorycanvas/qamap@0.5.2`. A chat without local repository and
 terminal access cannot run this workflow.
 
 This bundle supplies the skill, not the CLI. It has no automatic installer,
@@ -24,7 +24,7 @@ dependency lockfile, hook, background service or MCP server. With the user's
 permission, install the CLI separately:
 
 ```sh
-npm install -g @ivorycanvas/qamap@0.5.1
+npm install -g @ivorycanvas/qamap@0.5.2
 ```
 
 Installation downloads QAMap and its dependencies from the npm registry under
