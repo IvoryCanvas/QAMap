@@ -23,14 +23,19 @@ export function validatePullRequestEvent(event) {
     return {
       skipped: false,
       errors: ["The event payload does not contain a pull request."],
+      notes: [],
     };
   }
 
   if (pullRequest.draft === true) {
-    return { skipped: true, errors: [] };
+    return { skipped: true, errors: [], notes: [] };
   }
 
   const errors = [];
+  // A fork contributor cannot apply labels, and the fork's branch name is theirs;
+  // maintainers apply the labels before merge.
+  const notes = [];
+  const fromFork = isForkPullRequest(pullRequest);
   const title = typeof pullRequest.title === "string" ? pullRequest.title : "";
   const branch = typeof pullRequest.head?.ref === "string" ? pullRequest.head.ref : "";
   const body = typeof pullRequest.body === "string" ? pullRequest.body : "";
@@ -46,7 +51,7 @@ export function validatePullRequestEvent(event) {
     );
   }
 
-  if (!BRANCH_PATTERN.test(branch)) {
+  if (!fromFork && !BRANCH_PATTERN.test(branch)) {
     errors.push(
       "Use a documented lowercase branch prefix: feat/, fix/, test/, refactor/, style/, hotfix/, chore/, or docs/.",
     );
@@ -83,14 +88,27 @@ export function validatePullRequestEvent(event) {
   }
 
   const typeLabels = labels.filter((label) => label.startsWith("type: "));
+  const labelErrors = [];
   if (typeLabels.length !== 1) {
-    errors.push("Apply exactly one `type:` label.");
+    labelErrors.push("Apply exactly one `type:` label.");
   }
   if (!labels.some((label) => label.startsWith("area: "))) {
-    errors.push("Apply at least one `area:` label.");
+    labelErrors.push("Apply at least one `area:` label.");
+  }
+  if (fromFork && labelErrors.length > 0) {
+    notes.push("A maintainer applies the `type:` and `area:` labels to a pull request from a fork.");
+  } else {
+    errors.push(...labelErrors);
   }
 
-  return { skipped: false, errors };
+  return { skipped: false, errors, notes };
+}
+
+function isForkPullRequest(pullRequest) {
+  const base = pullRequest.base?.repo?.full_name;
+  if (typeof base !== "string") return false;
+  // A deleted fork leaves `head.repo` null.
+  return pullRequest.head?.repo?.full_name !== base;
 }
 
 function extractSections(body) {
@@ -131,6 +149,10 @@ async function runCli() {
   if (result.skipped) {
     console.log("Draft pull request: contribution policy check skipped.");
     return;
+  }
+
+  for (const note of result.notes) {
+    console.log(`Note: ${note}`);
   }
 
   if (result.errors.length > 0) {

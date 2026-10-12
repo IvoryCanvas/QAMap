@@ -64,6 +64,10 @@ Add only relevant `area:` labels. Labels should help routing, not repeat the
 title. External contributors can leave assignment and final labels to
 maintainers.
 
+Mark a small, well-scoped issue with `good first issue` when its acceptance
+evidence is stated and it needs no private context. Use `help wanted` for an
+issue maintainers would accept but are not working on.
+
 ## Durable Progress Updates
 
 Comment only when the update leaves reusable evidence:

@@ -4,6 +4,7 @@ QAMap is an early open-source project maintained through its public GitHub repos
 
 ## Get Help
 
+- Question about setup or usage, or an idea to discuss: [start a discussion](https://github.com/IvoryCanvas/QAMap/discussions)
 - Unexpected behavior or CLI failure: [open a bug report](https://github.com/IvoryCanvas/QAMap/issues/new?template=bug_report.yml)
 - Missed flow, false positive, wrong evidence, or unusable draft: [open a QA miss report](https://github.com/IvoryCanvas/QAMap/issues/new?template=qa_miss.yml)
 - Rule or capability proposal: [open a rule request](https://github.com/IvoryCanvas/QAMap/issues/new?template=rule_request.yml)

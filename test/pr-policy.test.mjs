@@ -50,7 +50,7 @@ function eventWith(overrides = {}) {
 }
 
 test("accepts a ready pull request that follows the contribution contract", () => {
-  assert.deepEqual(validatePullRequestEvent(eventWith()), { skipped: false, errors: [] });
+  assert.deepEqual(validatePullRequestEvent(eventWith()), { skipped: false, errors: [], notes: [] });
 });
 
 test("allows an incomplete draft without weakening ready pull request policy", () => {
@@ -58,7 +58,7 @@ test("allows an incomplete draft without weakening ready pull request policy", (
     validatePullRequestEvent(
       eventWith({ draft: true, title: "work in progress", body: "", labels: [] }),
     ),
-    { skipped: true, errors: [] },
+    { skipped: true, errors: [], notes: [] },
   );
 });
 
@@ -99,6 +99,54 @@ test("requires one type label and at least one area label", () => {
   assert.ok(result.errors.some((error) => error.includes("at least one `area:`")));
 });
 
+test("a pull request from a fork gets label and branch rules as notes", () => {
+  const fork = {
+    head: { ref: "patch-1", repo: { full_name: "contributor/QAMap" } },
+    base: { repo: { full_name: "IvoryCanvas/QAMap" } },
+    labels: [],
+  };
+  const result = validatePullRequestEvent(eventWith(fork));
+
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.notes.length, 1);
+  assert.match(result.notes[0], /maintainer applies the `type:` and `area:` labels/);
+
+  const deletedFork = validatePullRequestEvent(eventWith({ ...fork, head: { ref: "patch-1", repo: null } }));
+  assert.deepEqual(deletedFork.errors, []);
+
+  const labeled = validatePullRequestEvent(
+    eventWith({ ...fork, labels: [{ name: "type: fix" }, { name: "area: review" }] }),
+  );
+  assert.deepEqual(labeled, { skipped: false, errors: [], notes: [] });
+});
+
+test("a fork pull request still needs the title and template", () => {
+  const result = validatePullRequestEvent(eventWith({
+    title: "fix typo",
+    body: validBody.replaceAll("[x]", "[ ]"),
+    head: { ref: "patch-1", repo: { full_name: "contributor/QAMap" } },
+    base: { repo: { full_name: "IvoryCanvas/QAMap" } },
+    labels: [],
+  }));
+
+  assert.ok(result.errors.some((error) => error.includes("PR title")));
+  assert.ok(result.errors.some((error) => error.includes("`## Checks`")));
+  assert.ok(result.errors.some((error) => error.includes("`## Public OSS Check`")));
+  assert.ok(!result.errors.some((error) => /branch prefix|label/.test(error)));
+});
+
+test("a same-repository pull request keeps the branch and label rules", () => {
+  const result = validatePullRequestEvent(eventWith({
+    head: { ref: "patch-1", repo: { full_name: "IvoryCanvas/QAMap" } },
+    base: { repo: { full_name: "IvoryCanvas/QAMap" } },
+    labels: [],
+  }));
+
+  assert.ok(result.errors.some((error) => error.includes("branch prefix")));
+  assert.ok(result.errors.some((error) => error.includes("exactly one `type:`")));
+  assert.deepEqual(result.notes, []);
+});
+
 test("fails closed when the event is not a pull request", () => {
   const result = validatePullRequestEvent({});
 
@@ -115,6 +163,23 @@ test("the CLI reads a GitHub event file and returns its policy result", async (t
   const result = spawnSync(process.execPath, [scriptPath, eventPath], { encoding: "utf8" });
 
   assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /contribution policy passed/);
+});
+
+test("the CLI passes a fork pull request without labels and prints the note", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "qamap-pr-policy-fork-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const eventPath = path.join(root, "event.json");
+  await writeFile(eventPath, JSON.stringify(eventWith({
+    head: { ref: "main", repo: { full_name: "contributor/QAMap" } },
+    base: { repo: { full_name: "IvoryCanvas/QAMap" } },
+    labels: [],
+  })), "utf8");
+
+  const result = spawnSync(process.execPath, [scriptPath, eventPath], { encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Note: A maintainer applies/);
   assert.match(result.stdout, /contribution policy passed/);
 });
 
