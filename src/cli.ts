@@ -1169,9 +1169,14 @@ Full command reference: qamap help --all`);
 function printHelp(): void {
   console.log(`QAMap ${VERSION}
 
-Find what a change needs to prove before merge.
+Review a pull request from one local brief, or plan what it needs to prove.
 
 Core workflow:
+  qamap qa brief [path]
+      Print one bounded review brief for a coding agent or a person: the
+      numbered diff, the tests and callers of changed code, change signals,
+      QA focus and unknowns. Makes no LLM call and runs nothing.
+
   qamap qa [path]
       Analyze the current branch and show changed behavior, QA scenarios,
       diff evidence, and the safest next action. Does not run product QA.

@@ -5,6 +5,12 @@ callers and Git history into one bounded local report. Claude uses that evidence
 to explain possible regressions and what still needs testing. Missing evidence
 stays visible; a static report is not proof that tests passed.
 
+On 42 public pull requests from 12 open-source projects, Claude Code used 44%
+fewer tokens with the brief than alone; the blind-graded review preference leaned
+slightly to Claude Code alone and was not significant. See the
+[measured results](https://github.com/IvoryCanvas/QAMap/blob/main/test/benchmarks/review-host/external/RESULTS.md).
+Source, issues and documentation: [IvoryCanvas/QAMap](https://github.com/IvoryCanvas/QAMap).
+
 ![QAMap](.claude-plugin/icon.svg)
 
 ## Requirements

@@ -1,7 +1,7 @@
 {
   "name": "qamap",
   "version": "0.5.1",
-  "description": "Turn PR changes into traceable local QA decisions and optional automation handoffs without an LLM call.",
+  "description": "Review a pull request from one local brief: the diff, the tests and callers of changed code, and change signals. No LLM call, no upload.",
   "author": {
     "name": "IvoryCanvas",
     "url": "https://github.com/IvoryCanvas"
@@ -11,6 +11,7 @@
   "license": "MIT",
   "keywords": [
     "qa",
+    "code-review",
     "pull-request",
     "local-first",
     "agent-skill",

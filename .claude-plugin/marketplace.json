@@ -1,0 +1,15 @@
+{
+  "name": "ivorycanvas",
+  "owner": {
+    "name": "IvoryCanvas",
+    "url": "https://github.com/IvoryCanvas"
+  },
+  "description": "QAMap, a local pull-request review brief for Claude Code.",
+  "plugins": [
+    {
+      "name": "qamap",
+      "source": "./plugins/claude",
+      "description": "Review a pull request from one local brief: the diff, the tests and callers of changed code, and easy-to-miss change signals. No LLM call, no upload."
+    }
+  ]
+}
