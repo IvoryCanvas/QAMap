@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title">
+  <title id="title">Claude Code가 공개 PR 42건을 리뷰할 때: 단독 8,610만 토큰, QAMap 사용 4,859만 토큰, 44% 감소</title>
+  <rect width="1200" height="340" rx="24" fill="#07111F"/>
+  <g font-family="Inter, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', -apple-system, 'Segoe UI', sans-serif">
+    <text x="56" y="72" fill="#20BCEB" font-size="22" font-weight="600" letter-spacing="0">Claude Code가 공개 PR 42건을 리뷰할 때</text>
+    <text x="56" y="152" fill="#F4F7FB" font-size="28" font-weight="600">단독</text>
+    <rect x="260" y="120" width="700" height="46" rx="8" fill="#3B4A5E"/>
+    <text x="984" y="152" fill="#F4F7FB" font-size="26">8,610만 토큰</text>
+    <text x="56" y="232" fill="#F4F7FB" font-size="28" font-weight="600">QAMap 사용</text>
+    <rect x="260" y="200" width="395" height="46" rx="8" fill="#20BCEB"/>
+    <text x="679" y="232" fill="#F4F7FB" font-size="26">4,859만 토큰</text>
+    <text x="867" y="234" fill="#FFB31A" font-size="34" font-weight="700">−44%</text>
+    <text x="56" y="300" fill="#9AA7B8" font-size="17">오픈소스 프로젝트 12개 · Claude Code CLI 2.1.292 · 고정 모델 1개 · 실행 전에 정한 규칙으로 고른 PR</text>
+  </g>
+</svg>
