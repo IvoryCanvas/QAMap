@@ -78,6 +78,8 @@ assert.equal(codexPlugin.interface.shortDescription, submission.listing.shortDes
 assert.equal(codexPlugin.interface.longDescription, submission.listing.longDescription);
 assert.ok(submission.listing.shortDescription.length <= 30, "listing subtitle must fit 30 characters");
 assert.equal(codexPlugin.interface.websiteURL, submission.listing.websiteURL);
+assert.equal(codexPlugin.interface.supportURL, submission.listing.supportURL);
+assert.match(codexPlugin.interface.supportURL, /^https:\/\//);
 assert.equal(codexPlugin.interface.privacyPolicyURL, submission.listing.privacyPolicyURL);
 assert.equal(codexPlugin.interface.termsOfServiceURL, submission.listing.termsOfServiceURL);
 assert.deepEqual(codexPlugin.interface.defaultPrompt, submission.starterPrompts);

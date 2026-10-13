@@ -6,7 +6,9 @@ For installation and first-use consent, read the [Claude Code setup guide](claud
 ## Current Status
 
 The management portal showed the plugin as published on 2026-10-02, with
-Claude Code as its only selected surface. Approval, publication and a successful
+Claude Code as its only selected surface. On 2026-10-13, version 0.5.2 from
+commit `575ce12` passed the portal checks and was published with
+**Publish update**. Approval, publication and a successful
 user installation are distinct evidence. The portal establishes publication;
 the public listing establishes the served version. Local tests or a matching
 npm version cannot establish either. The shown automatic-publication toggle was

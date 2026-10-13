@@ -75,6 +75,7 @@ test("native agent plugin manifests expose one shared QAMap skill", async () => 
   assert.deepEqual(codexPlugin.interface.defaultPrompt, submission.starterPrompts);
   assert.deepEqual(codexPlugin.interface.capabilities, ["Interactive", "Write"]);
   assert.equal(codexPlugin.interface.privacyPolicyURL, submission.listing.privacyPolicyURL);
+  assert.equal(codexPlugin.interface.supportURL, submission.listing.supportURL);
   assert.equal(codexPlugin.interface.shortDescription, submission.listing.shortDescription);
   assert.equal(codexPlugin.interface.longDescription, submission.listing.longDescription);
   assert.ok(submission.listing.shortDescription.length <= 30);

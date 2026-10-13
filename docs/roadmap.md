@@ -66,7 +66,7 @@ remain independent.
 | 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Delivered in 0.5.0: structural gates separate operational evidence from vocabulary. |
 | 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Delivered in 0.5.0: repository evidence in the handoff with bounded recovery. |
 | 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Real-host measurement now covers standalone versus QAMap review on synthetic, product and real regressions with graded quality (0.5.1). The provider-API three-arm cold/warm comparison remains unmeasured. |
-| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | 0.5.2 was published to npm and GitHub on 2026-10-13 after its local release gate passed; both exact-version registry smokes passed. Directory updates remain separate. 0.5.1 was published on 2026-09-28 after the scope fix, with exact-version installation verified. |
+| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | 0.5.2 was published to npm and GitHub on 2026-10-13 after its local release gate passed; both exact-version registry smokes passed. The Claude directory published 0.5.2 the same day; the OpenAI portal is not accepting skills-only updates, so its earlier listing stays in place. 0.5.1 was published on 2026-09-28 after the scope fix, with exact-version installation verified. |
 
 Each delivery stays reviewable and independently tested. A unit-test pass is not
 a product benchmark pass. Token comparisons count only complete host receipts and
