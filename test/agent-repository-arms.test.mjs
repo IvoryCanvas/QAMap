@@ -253,8 +253,8 @@ test("optional config is offline harness-only and missing-provider runs stay ski
       const diagnostics = (run) => JSON.stringify({ task: task.id,
         commandFailures: run.io.commandFailures, commandTimeouts: run.io.commandTimeouts,
         truncatedResponses: run.io.truncatedResponses, calls: run.io.exploration.callsByTool });
-      assert.equal(cold.io.exploration.afterCompact.callsByTool.qamap_qa, 1, diagnostics(cold));
-      assert.equal(warm.io.exploration.afterCompact.callsByTool.qamap_qa, 1, diagnostics(warm));
+      assert.equal(cold.io.exploration.afterCompact?.callsByTool.qamap_qa, 1, diagnostics(cold));
+      assert.equal(warm.io.exploration.afterCompact?.callsByTool.qamap_qa, 1, diagnostics(warm));
       assert.equal(task.arms.generic.runs[0].io.exploration.afterCompact, null);
     }
     assert.doesNotMatch(JSON.stringify(report), /\/var\/folders|\/private\/var|\/tmp\//);

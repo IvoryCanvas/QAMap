@@ -28,8 +28,8 @@ LLM call and uploads nothing.
 | Runs that started a test runner or package install in a static review | 5 of 48 | 0 of 48 |
 | Runs that found a regression the project fixed later (6 regressions, 2 runs each), found + partly found | 3 + 0 | 5 + 5 |
 
-With QAMap is the build that became 0.5.2, measured before one later fix that changes one
-flow line in 4 of the 42 briefs. Its changes were designed after reading the reviews and briefs of these 42 pull
+With QAMap is the build that became 0.5.2, measured before one later fix that changes a flow
+line in 4 of the 42 briefs and lowers one brief's confidence label. Its changes were designed after reading the reviews and briefs of these 42 pull
 requests, so no row is independent evidence. The last row's change signals target those six
 regressions, and this is the first of three measurements in which QAMap found more of them.
 The preference leans to Claude Code alone and is not statistically significant (p = 0.60).

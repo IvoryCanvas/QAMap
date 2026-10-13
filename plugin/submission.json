@@ -79,5 +79,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "QAMap 0.5.2 preserves removed lines, adds change signals and lists evidence not fully shown in the review brief. It improves module resolution, flow-stage splitting and large-repository index reuse, and adds repository marketplace installation and a fork-friendly contribution policy. Measured results describe the build that became 0.5.2, not a fresh measurement of the released package. Execution stays not-run; token savings and complete review coverage are not guaranteed. Use the matching 0.5.2 CLI."
+  "releaseNotes": "QAMap 0.5.2 preserves removed lines, adds change signals and lists evidence not fully shown in the review brief. It improves module resolution, flow-stage splitting and large-repository index reuse, and adds repository marketplace installation and a fork-friendly contribution policy. Token measurements used Claude Code with the build that became 0.5.2, not the released package; Codex was not measured. Execution stays not-run; token savings and complete review coverage are not guaranteed. Use the matching 0.5.2 CLI."
 }
