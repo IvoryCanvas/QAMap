@@ -56,6 +56,42 @@ test("invalid, failed, full, and truncated reports do not imply a compact handof
   assert.ok(io.snapshot().exploration.afterCompact, "stderr does not hide a successfully delivered report");
 });
 
+test("command timeouts remain distinct from other command failures", () => {
+  const io = createIORecorder({});
+  io.command("", "failure", 1);
+  io.command("", "timeout", 1, true);
+  io.command("ok", "", 0);
+  assert.equal(io.snapshot().commandFailures, 2);
+  assert.equal(io.snapshot().commandTimeouts, 1);
+});
+
+test("a timed-out command cannot establish a compact handoff", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-timeout-test-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const cli = path.join(root, "cli.mjs");
+  await fs.writeFile(cli, `process.stdout.write(${JSON.stringify(compact.slice(0, -"\n[exit 0]".length))}); setInterval(() => {}, 1000);`);
+  const executor = await createToolExecutor({ repositoryRoot: root, cliPath: cli,
+    measureIO: true, timeoutMs: 300 });
+  const output = await executor.execute("qamap_qa", { format: "agent" });
+  assert.match(output, /timed out; exit 1/);
+  assert.equal(executor.measurements().commandTimeouts, 1);
+  assert.equal(executor.measurements().commandFailures, 1);
+  assert.equal(executor.measurements().exploration.afterCompact, null);
+});
+
+test("output buffer failures are not counted as command timeouts", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-buffer-test-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const cli = path.join(root, "cli.mjs");
+  await fs.writeFile(cli, "process.stdout.write('x'.repeat(1024 * 1024)); setInterval(() => {}, 1000);");
+  const executor = await createToolExecutor({ repositoryRoot: root, cliPath: cli,
+    measureIO: true, maxOutputBytes: 64 });
+  await executor.execute("qamap_qa", { format: "agent" });
+  assert.equal(executor.measurements().commandFailures, 1);
+  assert.equal(executor.measurements().commandTimeouts, 0);
+  assert.equal(executor.measurements().exploration.afterCompact, null);
+});
+
 test("direct rereads match normalized paths and observed bytes, not just file names", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-exploration-test-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));

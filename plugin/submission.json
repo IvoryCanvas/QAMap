@@ -79,5 +79,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "QAMap 0.5.1 adds a bounded review brief: one local command returns the numbered diff, the tests and callers of changed code with their assertions, the history behind removed lines, QA focus and unknowns, so an agent reviews without rebuilding that evidence turn by turn. Execution stays not-run. Measured token results are sample-specific; general savings and full review coverage are not guaranteed. Verify the exact npm version before submitting this plugin."
+  "releaseNotes": "QAMap 0.5.2 preserves removed lines, adds change signals and lists evidence not fully shown in the review brief. It improves module resolution, flow-stage splitting and large-repository index reuse, and adds repository marketplace installation and a fork-friendly contribution policy. Token measurements used Claude Code with the build that became 0.5.2, not the released package; Codex was not measured. Execution stays not-run; token savings and complete review coverage are not guaranteed. Use the matching 0.5.2 CLI."
 }

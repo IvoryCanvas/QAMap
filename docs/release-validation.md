@@ -10,7 +10,58 @@ management portal on 2026-10-02; it does not constitute a new quality benchmark 
 a user-installation receipt. The dated measurements below are records of their
 own date and host version.
 
-## Unreleased - Review Benchmarks On Claude Code CLI 2.1.292 (2026-10-07)
+## 0.5.2 - Release Validation (2026-10-12)
+
+The release preparation passed the full local `pnpm release:check` gate from a
+clean committed checkout on Node.js 22.14.0 with pnpm 10.32.1. No tests were
+skipped or cancelled. The table records that clean run; only this receipt text
+was subsequently updated, with the full test command rerun after the update.
+Later documentation corrections also changed one harness test assertion and
+`plugin/submission.json`. On the final head, `pnpm test`, `pnpm plugin:check`,
+`pnpm scan`, `pnpm bench:ci`, `pnpm plugin:smoke`, `pnpm pack --dry-run`,
+`git diff --check` and the README line-limit check using `wc -l README.md README.ko.md`
+passed; coverage and `bench:execution` are from the earlier clean run and CI.
+
+| Check | Observed result |
+| --- | --- |
+| Tests | 837/837 passed |
+| Static QA contracts | 44 passed |
+| Repository index checks | 11/11 passed |
+| Offline agent harness | Contract passed; no provider usage measured |
+| Context checks | 10/10 passed |
+| Execution contracts | 3/3 passed; all 3 seeded regressions caught |
+| Repository scan | 0 findings |
+| Plugin metadata and package smoke | Passed; 276 files packed, local 0.5.2 installed |
+| Coverage test execution | 837/837 passed |
+| Coverage: lines / branches / functions | 92.11% / 88.80% / 95.73% |
+| Package dry-run | Passed for `@ivorycanvas/qamap@0.5.2` |
+
+The first gate attempt failed one offline warm-arm compact-call assertion. It
+passed in isolation under coverage and in a full diagnostic rerun; the original
+failure was not reproduced, so its historical cause is not established. The
+coverage command now limits workers to two while keeping every test and the
+same 80% floors. Controlled failure tests distinguish command timeouts from
+output-buffer failures and confirm that neither establishes a successful
+compact handoff. The original call-count expectations remain unchanged, with
+diagnostics added for future failures. Both failed and passing receipts were
+retained.
+
+This gate validates local commands and packaging, not fresh host review quality
+or token savings. No npm or directory publication is claimed by this section.
+
+## 0.5.2 - Review Benchmarks On Claude Code CLI 2.1.292 (2026-10-07)
+
+The measured candidate (local merge `e635d74`) and the release's analysis source
+differ by the joined-noun flow fix in `src/change-intent.ts` and the `--help`
+text, apart from version alignment, packaging/documentation and validation-harness
+updates. The prior fixture replay ran both builds with `qa brief` on the 42 external fixtures
+materialized by `scripts/agent-bench/external-review.mjs`: 38 briefs were
+byte-identical. Four differed in one "What to verify" flow line:
+`s1-twenty-22015`, `s2-twenty-24299`, `s3-documenso-3409` and
+`s3-twenty-26398`. The last case's scenario confidence also dropped from medium
+to low. The candidate reproduction matched all 48 briefs received by the host
+byte for byte. This is a record of the prior replay, not a new model comparison
+performed during release preparation.
 
 The host CLI changed after the 0.5.1 measurement, so the internal review-host
 suite was measured again with every arm on Claude Code CLI 2.1.292. Cases,

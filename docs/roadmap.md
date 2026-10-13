@@ -36,7 +36,14 @@ Before treating the next public release as ready, the golden demo must satisfy t
 - README demo shows the full loop: manifest-free PR QA draft, optional repo context baseline, PR mapping, E2E draft, and remaining validation gaps.
 - One manifest correction should improve future PR recommendations without another LLM prompt.
 
-## Now: 0.5.1 Review Brief
+## Now: 0.5.2 Review Brief
+
+The 0.5.2 patch passed its local release gate; npm publication and the registry
+smoke follow merge and are recorded on `main` after release. Its [release record](releases/0.5.2.md) separates the prior host
+measurement from the final source; the [validation record](release-validation.md)
+holds the gate results. Token savings are smaller than 0.5.1 in the one same-host
+comparison; quality and uncertainty remain part of the decision, not just token
+totals.
 
 QAMap 0.5.1 was published to npm and GitHub on 2026-09-28. A real-host comparison of 0.5.0
 showed that an agent using its paged JSON handoff could spend more tokens than
@@ -59,7 +66,7 @@ remain independent.
 | 3 | [#262](https://github.com/IvoryCanvas/QAMap/issues/262) | Delivered in 0.5.0: structural gates separate operational evidence from vocabulary. |
 | 4 | [#263](https://github.com/IvoryCanvas/QAMap/issues/263) | Delivered in 0.5.0: repository evidence in the handoff with bounded recovery. |
 | 5 | [#264](https://github.com/IvoryCanvas/QAMap/issues/264) | Real-host measurement now covers standalone versus QAMap review on synthetic, product and real regressions with graded quality (0.5.1). The provider-API three-arm cold/warm comparison remains unmeasured. |
-| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | 0.5.1 was published on 2026-09-28 after the release-scope fix in #291. Exact-version registry installation passed. The release record preserves the earlier measured candidate separately from the published artifact. |
+| Release gate | [#258](https://github.com/IvoryCanvas/QAMap/issues/258) | 0.5.2's local release gate passed; npm publication and the exact-version registry smoke follow merge. 0.5.1 was published on 2026-09-28 after the scope fix, with exact-version installation verified. |
 
 Each delivery stays reviewable and independently tested. A unit-test pass is not
 a product benchmark pass. Token comparisons count only complete host receipts and

@@ -23,7 +23,7 @@ the whole repository or the OpenAI archive as the Claude directory source.
 
 ## Product Boundary
 
-- The 0.5.1 workflow offers report-based review, respects refusal, and runs
+- The 0.5.2 workflow offers report-based review, respects refusal, and runs
   `qamap qa brief` only after consent or an explicit saved preference. Users
   record or remove a lasting preference with `qamap consent grant|revoke`
   (project) or `--global` (user-level host instructions); asking is the default.
@@ -38,7 +38,7 @@ the whole repository or the OpenAI archive as the Claude directory source.
 
 ## Submission Sources
 
-The 0.5.1 bundle requires the matching 0.5.1 CLI, which adds `qa brief`. Do not pair it with 0.5.0 or 0.4.17.
+The 0.5.2 bundle requires the matching 0.5.2 CLI. Do not pair it with an older CLI.
 Before uploading, verify the exact matching package from npm first. A host
 may send returned source excerpts to its own model; the local-analysis guarantee
 does not mean those excerpts stay outside the host's context.

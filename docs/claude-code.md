@@ -29,10 +29,10 @@ the skill is active.
 ## Install The Matching CLI
 
 The plugin does not bundle the CLI or install it automatically. With your
-permission, install the version required by its skill. The 0.5.1 skill requires:
+permission, install the version required by its skill. The 0.5.2 skill requires:
 
 ```sh
-npm install -g @ivorycanvas/qamap@0.5.1
+npm install -g @ivorycanvas/qamap@0.5.2
 qamap --version
 ```
 
