@@ -25,8 +25,8 @@ On 2026-10-13 the portal reported two blocking findings for the 0.5.2 upload.
 The missing support URL is fixed by `interface.supportURL` in
 `.codex-plugin/plugin.json`. The other finding, "We are not accepting more
 skills-only submissions at this time.", is a portal policy that the package
-cannot resolve, so the approved 0.5.1 listing stays served until OpenAI accepts
-the update.
+cannot resolve, so the previously approved listing stays in place until OpenAI
+accepts the update.
 
 ## Product Boundary
 
