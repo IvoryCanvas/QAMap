@@ -38,8 +38,8 @@ Before treating the next public release as ready, the golden demo must satisfy t
 
 ## Now: 0.5.2 Review Brief
 
-The 0.5.2 patch passed its local release gate and is ready for release, not yet
-published. Its [release record](releases/0.5.2.md) separates the prior host
+The 0.5.2 patch passed its local release gate; npm publication and the registry
+smoke follow merge and are recorded on `main` after release. Its [release record](releases/0.5.2.md) separates the prior host
 measurement from the final source; the [validation record](release-validation.md)
 holds the gate results. Token savings are smaller than 0.5.1 in the one same-host
 comparison; quality and uncertainty remain part of the decision, not just token

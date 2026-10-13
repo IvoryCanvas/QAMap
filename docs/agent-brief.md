@@ -121,14 +121,14 @@ The per-case table, sensitivity arms and limits are in the
 [validation record](release-validation.md).
 
 On Claude Code CLI 2.1.292, 0.5.1 used 65.4% fewer tokens on the same cases, and
-the 0.5.2 candidate 54.6% fewer. The candidate asks the host to check the code before
+a 0.5.2 candidate 54.6% fewer. The candidate asks the host to check the code before
 it concludes, which costs about one more request on these small cases. Every QAMap
 arm found every seeded regression in all 42 runs; standalone did in 41.
 
-On public pull requests chosen by a registered rule, the candidate used 33-50%
-fewer tokens per study. On six regressions the projects fixed later, 5 of its 12
-runs found the regression and 5 partly found it, against 3 and 0 for the host
-alone. Blind grading of 36 pull requests preferred the host alone 18 to 14 (4
-ties), with 19 valid findings against 16. The candidate's signals were designed
+On public pull requests chosen by a registered rule, the build that became 0.5.2
+used 33-50% fewer tokens per study. On six regressions the projects fixed later,
+5 of its 12 runs found the regression and 5 partly found it, against 3 and 0 for
+the host alone. Blind grading of 36 pull requests preferred the host alone 18 to
+14 (4 ties), with 19 valid findings against 16. That build's signals were designed
 after reading these cases, so none of this is independent evidence
 ([external results](../test/benchmarks/review-host/external/RESULTS.md)).

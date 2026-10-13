@@ -16,6 +16,11 @@ The release preparation passed the full local `pnpm release:check` gate from a
 clean committed checkout on Node.js 22.14.0 with pnpm 10.32.1. No tests were
 skipped or cancelled. The table records that clean run; only this receipt text
 was subsequently updated, with the full test command rerun after the update.
+Later documentation corrections also changed one harness test assertion and
+`plugin/submission.json`. On the final head, `pnpm test`, `pnpm plugin:check`,
+`pnpm scan`, `pnpm bench:ci`, `pnpm plugin:smoke`, `pnpm pack --dry-run`,
+`git diff --check` and the README line-limit check using `wc -l README.md README.ko.md`
+passed; coverage and `bench:execution` are from the earlier clean run and CI.
 
 | Check | Observed result |
 | --- | --- |
