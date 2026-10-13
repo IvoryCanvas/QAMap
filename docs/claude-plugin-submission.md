@@ -33,8 +33,9 @@ when the plugin path is left blank.
 
 The plugin path names the folder containing `.claude-plugin`, not the manifest
 file itself. Re-validate the source and check the displayed commit before
-continuing. For a version-pinned submission, use a future release tag that
-actually includes this folder. The existing `v0.5.1` tag predates the folder;
+continuing. For a version-pinned submission, `v0.5.2` is the first release tag
+that includes `plugins/claude` and can be used with this path. The existing
+`v0.5.1` tag predates the folder;
 do not move that tag or use it with this path.
 
 Tracking `main` allows subsequent commits on that branch to be picked up by the
