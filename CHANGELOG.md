@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The Codex plugin manifest declares its support URL. The OpenAI directory reads it from the uploaded package and refused the 0.5.2 upload without it; the listing copy already named the same URL.
+
 ## 0.5.2 - 2026-10-12
 
 npm and plugin publication are separate steps.

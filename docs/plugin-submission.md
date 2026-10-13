@@ -21,6 +21,13 @@ Use each directory's public listing for its served version. Claude packaging and
 updates use the [separate runbook](claude-plugin-submission.md); do not submit
 the whole repository or the OpenAI archive as the Claude directory source.
 
+On 2026-10-13 the portal reported two blocking findings for the 0.5.2 upload.
+The missing support URL is fixed by `interface.supportURL` in
+`.codex-plugin/plugin.json`. The other finding, "We are not accepting more
+skills-only submissions at this time.", is a portal policy that the package
+cannot resolve, so the approved 0.5.1 listing stays served until OpenAI accepts
+the update.
+
 ## Product Boundary
 
 - The 0.5.2 workflow offers report-based review, respects refusal, and runs
