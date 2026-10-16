@@ -462,7 +462,8 @@ export function changeSignals(file: { path?: string; hunks: { minimal: DiffHunk[
   // literals silently leave it at a zero value, undefined or missing.
   const untypedLiterals = /\.(?:go|[cm]?jsx?|py)$/.test(file.path ?? "");
   signals.push(...accessSignals(removed, added), ...(untypedLiterals ? initializerSignals(onlyRemoved, [...added, ...context], head ?? [], assigned) : []));
-  if (head) signals.push(...unassignedFieldSignals(file.path ?? "", added, head, assigned), ...unawaitedAsyncConditionSignals(file.path ?? "", onlyAdded, head));
+  if (head) signals.push(...resourceLifecycleSignals(file.path ?? "", file.hunks.minimal, added, head),
+    ...unassignedFieldSignals(file.path ?? "", added, head, assigned), ...unawaitedAsyncConditionSignals(file.path ?? "", onlyAdded, head));
   return signals.length ? clipSignals(`  change signals (pattern match; read these lines): ${signals.join("; ")}`) : undefined;
 }
 
@@ -567,6 +568,168 @@ function bindBriefSource(file: string, head: string[]): { source: ts.SourceFile;
   const program = ts.createProgram([filename], { allowJs: true, noLib: true, noResolve: true }, host);
   if (program.getSyntacticDiagnostics(source).length) return undefined;
   return { source, checker: program.getTypeChecker() };
+}
+
+interface LifecycleCall {
+  kind: "setTimeout" | "setInterval" | "addEventListener" | "subscribe";
+  cleanup: string;
+  line: number;
+  column: number;
+  owner: ts.Node;
+  handle?: ts.Identifier;
+  target?: ts.Expression;
+  callback?: ts.Expression;
+  event?: string;
+  capture?: boolean;
+}
+
+// Reconstruct only the compared text, retaining coordinates of surviving lines.
+// A removed cleanup must belong to an acquisition still present at head.
+function lifecycleBase(hunks: DiffHunk[], head: string[]): Array<{ text: string; headLine?: number }> | undefined {
+  const rows: Array<{ text: string; headLine?: number }> = head.map((text, index) => ({ text, headLine: index + 1 }));
+  for (const hunk of [...hunks].reverse()) {
+    const start = hunk.newStart - (hunk.newCount ? 1 : 0);
+    const current = hunk.lines.filter(line => !line.startsWith("-")).map(line => line.slice(1));
+    if (start < 0 || current.length !== hunk.newCount || current.some((text, index) => rows[start + index]?.text !== text)) return undefined;
+    let offset = 0;
+    const old = hunk.lines.flatMap(line => line.startsWith("+") ? (offset++, [])
+      : [{ text: line.slice(1), headLine: line.startsWith("-") ? undefined : rows[start + offset++]?.headLine }]);
+    rows.splice(start, hunk.newCount, ...old);
+  }
+  return rows;
+}
+
+function lifecycleCalls(file: string, lines: string[]): { acquisitions: LifecycleCall[]; releases: (resource: LifecycleCall) => ts.CallExpression[] } | undefined {
+  const binding = bindBriefSource(file, lines);
+  if (!binding) return undefined;
+  const { source, checker } = binding;
+  const calls: ts.CallExpression[] = [], acquisitions: LifecycleCall[] = [];
+  const written = new Set<ts.Symbol | string>();
+  const identity = (node: ts.Identifier): ts.Symbol | string => (ts.isShorthandPropertyAssignment(node.parent)
+    ? checker.getShorthandAssignmentValueSymbol(node.parent) : checker.getSymbolAtLocation(node)) ?? node.text;
+  const ownerOf = (node: ts.Node): ts.Node => {
+    let parent = node.parent;
+    while (parent && !ts.isFunctionLike(parent) && !ts.isSourceFile(parent)) parent = parent.parent;
+    return parent ?? source;
+  };
+  const same = (left: ts.Expression | undefined, right: ts.Expression | undefined): boolean => {
+    if (!left || !right || !ts.isIdentifier(left) || !ts.isIdentifier(right)) return false;
+    const symbol = checker.getSymbolAtLocation(left);
+    return !written.has(identity(left)) && (symbol ? symbol === checker.getSymbolAtLocation(right) : left.text === right.text && !checker.getSymbolAtLocation(right));
+  };
+  const globalCall = (call: ts.CallExpression, name: string): boolean => ts.isIdentifier(call.expression)
+    && call.expression.text === name && !checker.getSymbolAtLocation(call.expression) && !written.has(name);
+  const captureOf = (option: ts.Expression | undefined): boolean | undefined => {
+    if (!option || option.kind === ts.SyntaxKind.FalseKeyword) return false;
+    if (option.kind === ts.SyntaxKind.TrueKeyword) return true;
+    if (!ts.isObjectLiteralExpression(option)) return undefined;
+    let capture = false;
+    for (const property of option.properties) {
+      if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) return undefined;
+      if (property.name.text === "signal" || property.name.text === "once" && property.initializer.kind !== ts.SyntaxKind.FalseKeyword) return undefined;
+      if (property.name.text !== "capture") continue;
+      if (property.initializer.kind !== ts.SyntaxKind.TrueKeyword && property.initializer.kind !== ts.SyntaxKind.FalseKeyword) return undefined;
+      capture = property.initializer.kind === ts.SyntaxKind.TrueKeyword;
+    }
+    return capture;
+  };
+  const collect = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) calls.push(node);
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+      && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(node.left)) written.add(identity(node.left));
+    ts.forEachChild(node, collect);
+  };
+  collect(source);
+  for (const call of calls) {
+    const expression = call.expression;
+    const kind = globalCall(call, "setTimeout") ? "setTimeout" : globalCall(call, "setInterval") ? "setInterval"
+      : ts.isPropertyAccessExpression(expression) && ["addEventListener", "subscribe"].includes(expression.name.text) ? expression.name.text as "addEventListener" | "subscribe" : undefined;
+    if (!kind) continue;
+    const owner = ownerOf(call);
+    if (ts.isSourceFile(owner)) continue;
+    const position = source.getLineAndCharacterOfPosition(expression.getStart(source));
+    const resource: LifecycleCall = { kind, owner, line: position.line + 1, column: position.character,
+      cleanup: kind === "setTimeout" ? "clearTimeout" : kind === "setInterval" ? "clearInterval" : kind === "subscribe" ? "unsubscribe" : "removeEventListener" };
+    if (kind === "addEventListener" && ts.isPropertyAccessExpression(expression)) {
+      const [event, callback, options] = call.arguments;
+      const capture = captureOf(options);
+      if (!event || !ts.isStringLiteralLike(event) || !callback || !ts.isIdentifier(expression.expression) || capture === undefined) continue;
+      resource.target = expression.expression; resource.callback = callback; resource.event = event.text; resource.capture = capture;
+    } else {
+      const parent = call.parent;
+      if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name) && ts.isVariableDeclarationList(parent.parent)
+        && parent.parent.flags & ts.NodeFlags.Const) resource.handle = parent.name;
+      else if (!ts.isExpressionStatement(parent)) continue;
+    }
+    acquisitions.push(resource);
+  }
+  const within = (call: ts.CallExpression, owner: ts.Node): boolean => {
+    let scope = ownerOf(call);
+    while (scope !== owner) {
+      // Effect-style returned cleanup closures share the acquisition's lifetime.
+      if ((!ts.isArrowFunction(scope) && !ts.isFunctionExpression(scope)) || !ts.isReturnStatement(scope.parent)) return false;
+      scope = ownerOf(scope);
+    }
+    return true;
+  };
+  const releases = (resource: LifecycleCall): ts.CallExpression[] => calls.filter(call => {
+    if (!within(call, resource.owner)) return false;
+    if (resource.kind === "setTimeout" || resource.kind === "setInterval") return globalCall(call, resource.cleanup) && same(resource.handle, call.arguments[0]);
+    const expression = call.expression;
+    if (resource.kind === "subscribe" && ts.isIdentifier(expression)) return call.arguments.length === 0 && same(resource.handle, expression);
+    if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== resource.cleanup) return false;
+    if (resource.kind === "subscribe") return same(resource.handle, expression.expression);
+    const [event, callback, options] = call.arguments;
+    return same(resource.target, expression.expression) && !!event && ts.isStringLiteralLike(event) && event.text === resource.event
+      && same(resource.callback, callback) && captureOf(options) === resource.capture;
+  });
+  const escapes = (resource: LifecycleCall): boolean => {
+    if (!resource.handle) return false;
+    let escaped = false;
+    const visit = (node: ts.Node): void => {
+      if (ts.isIdentifier(node) && node !== resource.handle && identity(resource.handle!) === identity(node)) {
+        let value: ts.Node = node, parent = node.parent;
+        while (ts.isObjectLiteralExpression(parent) || ts.isArrayLiteralExpression(parent) || ts.isPropertyAssignment(parent)
+          || ts.isShorthandPropertyAssignment(parent) || ts.isParenthesizedExpression(parent)) { value = parent; parent = parent.parent; }
+        if (ts.isCallExpression(parent) && parent.arguments.some(arg => arg === value)) {
+          const callee = parent.expression;
+          const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : "";
+          if (!["clearTimeout", "clearInterval", "unsubscribe"].includes(name)) escaped = true;
+        }
+        if (ts.isReturnStatement(parent) || ts.isVariableDeclaration(parent) && parent.initializer === value
+          || ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && parent.right === value) escaped = true;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(resource.owner);
+    return escaped;
+  };
+  return { acquisitions: acquisitions.filter(resource => !escapes(resource)), releases };
+}
+
+function resourceLifecycleSignals(file: string, hunks: DiffHunk[], added: SignalRows["added"], head: string[]): string[] {
+  if (!/\.[cm]?[jt]sx?$/.test(file) || !head.some(line => /\b(?:setTimeout|setInterval|addEventListener|subscribe)\b/.test(line))) return [];
+  const current = lifecycleCalls(file, head);
+  if (!current?.acquisitions.length) return [];
+  const base = hunks.some(hunk => hunk.lines.some(line => line.startsWith("-"))) ? lifecycleBase(hunks, head) : undefined;
+  const previous = base ? lifecycleCalls(file, base.map(row => row.text)) : undefined;
+  const changed = new Set(added.map(row => row.line)), signals: string[] = [];
+  for (const resource of current.acquisitions) {
+    if (signals.length >= 2) break;
+    if (current.releases(resource).length) continue;
+    const old = previous?.acquisitions.find(candidate => candidate.kind === resource.kind && candidate.column === resource.column
+      && base?.[candidate.line - 1]?.headLine === resource.line);
+    const removed = old ? previous!.releases(old).find(call => {
+      const source = call.getSourceFile();
+      const start = source.getLineAndCharacterOfPosition(call.getStart(source)).line;
+      const end = source.getLineAndCharacterOfPosition(call.getEnd()).line;
+      return base!.slice(start, end + 1).some(row => row.headLine === undefined);
+    }) : undefined;
+    if (!changed.has(resource.line) && !removed) continue;
+    const removedAt = removed ? `; cleanup removed at base ${removed.getSourceFile().getLineAndCharacterOfPosition(removed.getStart()).line + 1}` : "";
+    signals.push(`lifecycle: \`${resource.kind}\` at ${resource.line} (\`${clip(head[resource.line - 1], 64)}\`) has no matching \`${resource.cleanup}\` in this function${removedAt}; check teardown or ownership`);
+  }
+  return signals;
 }
 
 function unawaitedAsyncConditionSignals(file: string, added: SignalRows["added"], head: string[]): string[] {

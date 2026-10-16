@@ -55,6 +55,25 @@ that propagation. JavaScript and TypeScript calls are checked against local
 bindings; other languages retain pattern-based matching. This is not complete
 control-flow or inter-module exception analysis.
 
+JavaScript and TypeScript lifecycle hints compare changed `setTimeout`,
+`setInterval`, `addEventListener` and `.subscribe` calls with visible cleanup in
+the same function or its directly returned cleanup closure. An unchanged
+acquisition can also be flagged when this diff removes its matching cleanup.
+The hint gives the acquisition line and a bounded snippet, the missing cleanup
+name and, for a removed cleanup, its base line. At most two hints per file fit
+within the existing signal and brief budgets.
+
+Timer and subscription handles use local bindings; subscription cleanup can be
+`.unsubscribe()` or a direct call to the returned teardown function. Listener
+matching checks the target, literal event, callback binding and capture flag.
+Unrelated functions and shadowed or reassigned bindings do not establish cleanup.
+Visible handle transfer (return, assignment or a call argument), listener
+`once`/`signal` options and dynamic options are excluded from this check. Custom
+timer wrappers, instance-field handles, dynamic event names and cleanup through
+other modules are not resolved. A missing hint is not proof of safe teardown;
+a hint asks about teardown or ownership, not whether a leak or bug exists.
+Even a visible cleanup call does not prove that it executes on every path.
+
 References come from `git grep` over every tracked file at the compared head,
 excluding documentation, lockfiles, vendored code, locale catalogs and build output. That includes files too
 large for the syntax index. Each candidate is then checked through the file's

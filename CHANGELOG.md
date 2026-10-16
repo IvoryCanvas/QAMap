@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Review briefs flag changed JavaScript and TypeScript timers, listeners and subscriptions without matching visible cleanup, or an unchanged acquisition whose cleanup was removed. Hints retain acquisition code and removed-cleanup coordinates, distinguish local bindings and listener identities, and exclude visible ownership transfers and delegated or dynamic listener options. They do not establish a leak or executed teardown.
 - Review-brief references omitted by detail limits retain their matched file and line coordinates, including callers' tests without excerpts. Changed markers follow the matched line; Python import bindings no longer inflate test or caller counts. Existing search caps and byte-budget omissions remain explicit.
 - Review-brief initializer and unassigned-field signals include bounded reading-site snippets. Same-file async calls used directly in changed JavaScript or TypeScript conditions gain a binding-aware review signal. New error paths follow existing same-file wrappers for up to three calls and include their callers without treating recognized error handling as unhandled propagation.
 
