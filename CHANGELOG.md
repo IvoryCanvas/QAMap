@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Review-brief initializer and unassigned-field signals include bounded reading-site snippets. Same-file async calls used directly in changed JavaScript or TypeScript conditions gain a binding-aware review signal. New error paths follow existing same-file wrappers for up to three calls and include their callers without treating recognized error handling as unhandled propagation.
+
 ### Fixed
 
 - The Codex plugin manifest declares its support URL. The OpenAI directory reads it from the uploaded package and refused the 0.5.2 upload without it; the listing copy already named the same URL.

@@ -75,13 +75,17 @@ New public reproductions must be neutral, never copied from private repositories
 
 #### Next Patch Focus
 
-1. Reject legal/document prose as executable evidence while preserving genuine
+1. Improve review-brief evidence at the reading site: bounded initializer and
+   field snippets, same-file async condition checks and existing wrapper error
+   paths. Validate positive and negative controls before attributing any token
+   or review-quality improvement; this work does not establish release readiness.
+2. Reject legal/document prose as executable evidence while preserving genuine
    extensionless scripts.
-2. Route display-only manifest changes to metadata validation, not invented
+3. Route display-only manifest changes to metadata validation, not invented
    product journeys or optional automation blockers.
-3. Improve indirect test evidence and verify important evidence retained under
+4. Improve indirect test evidence and verify important evidence retained under
    large-PR output limits; omitted counts do not establish complete review.
-4. Extend independent repository and repeated host comparisons in #264. Preserve
+5. Extend independent repository and repeated host comparisons in #264. Preserve
    quality and uncertainty before accepting measured token savings. The final
    single-run user-level arm scored 0.722 QA-plan coverage against the standalone
    mean of 0.731; earlier runs differed. Do not hide that variation behind an
