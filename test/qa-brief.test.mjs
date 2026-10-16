@@ -351,7 +351,7 @@ test("change signals name rewritten access rules, dropped initializers, unassign
   const literal = hunk(40, 40, ["   line := &Line{", "-\t\tType:    LineSection,", "-\t\tContent: \" \",", "+\t\tType: LineSection,", "   }"]);
   const head = ["package diff", ...Array(38).fill(""), "\tline := &Line{", "\t\tType: LineSection,", "\t}", "func marker(l *Line) string { return l.Content[0:1] }"];
   assert.match(changeSignals({ path: "diff.go", hunks: { minimal: [literal] } }, head),
-    /drops `Content` at base 42 \(still read at 43\) from an initializer; that read now gets the default value/);
+    /drops `Content` at base 42 \(still read at 43: `func marker\(l \*Line\) string \{ return l\.Content\[0:1\] \}`\) from an initializer; that read now gets the default value/);
   assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [literal] } }, head.slice(0, 42)) ?? "", /drops/);
   // A function removed whole is not a dropped initializer, and parameter types are not values.
   const removedFunction = hunk(5, 5, ["-function sync(", "-  url: string,", "-  options: { retry: 1, delay: 2 },", "-) {}"]);
@@ -362,7 +362,7 @@ test("change signals name rewritten access rules, dropped initializers, unassign
     "func tail(detail Detail) int {", "\treturn detail.leftCount", "}"];
   const fields = hunk(3, 3, ["+type Detail struct {", "+\tready bool", "+\tleftCount int", "+}"]);
   assert.match(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct),
-    /field `leftCount` \(line 5\) is read at 16 but never assigned in this file or the diff; a local of that name is set at 9/);
+    /field `leftCount` \(line 5\) is read at 16 \(`return detail\.leftCount`\) but never assigned in this file or the diff; a local of that name is set at 9 \(`var leftCount int`\)/);
   assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct.map((line) => line.replace("\tleftCount = count()", "\tret.leftCount = count()"))) ?? "", /field `leftCount`/);
   assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct, ["\t\tleftCount: 2,"]) ?? "", /field `leftCount`/);
   assert.doesNotMatch(changeSignals({ path: "diff.go", hunks: { minimal: [fields] } }, struct, ["\tout := Detail{ready: true, leftCount: 2}"]) ?? "", /field `leftCount`/);
@@ -374,6 +374,59 @@ test("change signals name rewritten access rules, dropped initializers, unassign
   const thrown = hunk(80, 80, ["   } else {", "-    throw new SyncError(\"missing events\");", "+    await status.markPending(id);", "   }"]);
   assert.match(changeSignals({ hunks: { minimal: [thrown] } }), /removes a throw or error exit at base 81: that case now continues, so check the state it leaves/);
   assert.match(changeSignals({ hunks: { minimal: [hunk(5, 5, ["+  if (left < 0) throw new InvalidInputError(\"too large\");"])] } }), /adds a throw or error exit at 5 \(InvalidInputError\)/);
+});
+
+test("initializer signals inline each reading site and keep snippets bounded", async () => {
+  const { changeSignals } = await import("../dist/qa-brief.js");
+  const hunk = { header: "@@ -1,5 +1,3 @@", oldStart: 1, newStart: 1, newCount: 3,
+    lines: [" const config = {", "-  retries: 3,", "-  timeout: 30,", "   enabled: true,", " };"] };
+  const head = ["const config = {", "  enabled: true,", "};", "consume(config.retries);", `consume(config.timeout, '${"x".repeat(120)}');`];
+  const output = changeSignals({ path: "config.js", hunks: { minimal: [hunk] } }, head);
+  assert.match(output, /`retries` at base 2 \(still read at 4: `consume\(config\.retries\);`\)/);
+  assert.match(output, /`timeout` at base 3 \(still read at 5: `[^`]{1,64}\.\.\.`\)/);
+  assert.ok(output.length <= 640);
+  assert.match(changeSignals({ path: "config.js", hunks: { minimal: [hunk] } }, head.slice(0, 3), ["consume(config.retries);"]), /still read at an added line/);
+  assert.match(changeSignals({ path: "config.py", hunks: { minimal: [hunk] } }, head), /consume\(config\.retries\)/);
+});
+
+test("async condition signals bind same-file calls and distinguish each awaited call", async () => {
+  const { changeSignals } = await import("../dist/qa-brief.js");
+  const head = ["async function permitted(actor) { return Boolean(actor); }", "const available = async () => false;", "async function gate(actor) {",
+    "  if (await permitted(actor) || permitted(actor)) return true;", "  while (!available()) break;", "}"];
+  const hunk = { header: "@@ -4,2 +4,2 @@", oldStart: 4, newStart: 4, newCount: 2, lines: head.slice(3, 5).map(line => `+${line}`) };
+  for (const file of ["gate.ts", "gate.mjs"]) {
+    const output = changeSignals({ path: file, hunks: { minimal: [hunk] } }, head);
+    assert.match(output, /checks unawaited async call `permitted` in a condition at 4/);
+    assert.match(output, /checks unawaited async call `available` in a condition at 5/);
+    assert.match(output, /a Promise is always truthy/);
+  }
+});
+
+test("async condition signals exclude shadows, awaited calls, comparisons and non-code", async () => {
+  const { changeSignals } = await import("../dist/qa-brief.js");
+  const cases = [
+    ["async function permitted() { return true; }", "async function gate() {", "  if (await permitted()) return true;", "}"],
+    ["async function permitted() { return true; }", "function gate(permitted) {", "  if (permitted()) return true;", "}"],
+    ["async function permitted() { return true; }", "function gate() {", "  const permitted = () => true;", "  if (permitted()) return true;", "}"],
+    ["async function permitted() { return true; }", "function gate(service) {", "  if (service.permitted()) return true;", "}"],
+    ["async function permitted() { return true; }", "function gate(saved) {", "  if (permitted() === saved) return true;", "}"],
+    ["async function permitted() { return true; }", "function gate() {", "  if (true) permitted();", "}"],
+    ["const sample = `async function permitted() { return true; }`;", "function gate() {", "  if (permitted()) return true;", "}"],
+    ["/* async function permitted() { return true; } */", "function gate() {", "  if (permitted()) return true;", "}"],
+    ["let permitted = async () => true;", "permitted = () => false;", "if (permitted()) run();"],
+    ["async function* permitted() { yield true; }", "if (permitted()) run();"],
+    ["import { permitted } from './elsewhere';", "if (permitted()) run();"],
+    ["async function permitted() { return true; }", "function gate( {", "if (permitted()) run();"],
+  ];
+  for (const head of cases) {
+    const hunk = { header: "@@ -1 +1 @@", oldStart: 1, newStart: 1, newCount: head.length, lines: head.map(line => `+${line}`) };
+    assert.doesNotMatch(changeSignals({ path: "gate.ts", hunks: { minimal: [hunk] } }, head) ?? "", /unawaited async call/, head.join("\n"));
+  }
+  const head = ["async function permitted() { return true; }", "if (permitted()) run();"];
+  const unchanged = { header: "@@ -1 +1 @@", oldStart: 1, newStart: 1, newCount: 1, lines: [`+${head[0]}`] };
+  assert.doesNotMatch(changeSignals({ path: "gate.ts", hunks: { minimal: [unchanged] } }, head) ?? "", /unawaited async call/);
+  const added = { ...unchanged, newCount: 2, lines: head.map(line => `+${line}`) };
+  assert.doesNotMatch(changeSignals({ path: "gate.py", hunks: { minimal: [added] } }, head) ?? "", /unawaited async call/);
 });
 
 test("each caller's handling of an error is read from its function", async () => {
@@ -409,6 +462,55 @@ test("qa brief lists callers of a function that now throws through a changed hel
   assert.match(output, /src\/service\.ts:4 in list \[inside try\]\|/);
   assert.match(output, /src\/export\.ts:4 in exportAll \[no try\/catch in its function\]\|/);
   assert.doesNotMatch(output, /src\/export\.ts:2/);
+});
+
+test("new throws reach unchanged same-file wrappers without crossing handled calls", async () => {
+  for (const language of ["ts", "py"]) {
+    const helper = language === "ts"
+      ? "function validateCount(count: number) {\n  return count;\n}\nfunction checkBudget(count: number) {\n  return validateCount(count);\n}\nexport function inspectBatch(count: number) {\n  return checkBudget(count);\n}\nexport function safeBatch(count: number) {\n  try {\n    return validateCount(count);\n  } catch (error) {\n    return 0;\n  }\n}\n"
+      : "def validate_count(count):\n    return count\n\ndef check_budget(count):\n    return validate_count(count)\n\ndef inspect_batch(count):\n    return check_budget(count)\n\ndef safe_batch(count):\n    try:\n        return validate_count(count)\n    except ValueError:\n        return 0\n";
+    const consumer = language === "ts"
+      ? "import { inspectBatch, safeBatch } from './capacity';\nexport function inspectOrders(count: number) {\n  return inspectBatch(count);\n}\nexport function safeOrders(count: number) {\n  return safeBatch(count);\n}\n"
+      : "from capacity import inspect_batch, safe_batch\n\ndef inspect_orders(count):\n    return inspect_batch(count)\n\ndef safe_orders(count):\n    return safe_batch(count)\n";
+    const changed = language === "ts" ? helper.replace("  return count;", "  if (count < 0) throw new RangeError('negative');\n  return count;")
+      : helper.replace("    return count", "    if count < 0:\n        raise ValueError('negative')\n    return count");
+    const { root } = await repository({ [`src/capacity.${language}`]: helper, [`src/orders.${language}`]: consumer }, { [`src/capacity.${language}`]: changed });
+    const output = await brief(root);
+    assert.match(output, language === "ts" ? /inspectBatch: callers \(now throws RangeError/ : /inspect_batch: callers \(now throws ValueError/);
+    assert.match(output, language === "ts" ? /src\/orders\.ts:3 in inspectOrders \[no try\/catch in its function\]/ : /src\/orders\.py:4 in inspect_orders \[no try in its function\]/);
+    assert.doesNotMatch(output, /safeBatch: callers \(now throws|safe_batch: callers \(now throws/);
+  }
+});
+
+test("throw propagation excludes shadowed calls, comment examples and caught rejections", async () => {
+  const base = "async function validateCount(count: number) {\n  return count;\n}\nexport async function safeBatch(count: number) {\n  return validateCount(count).catch(() => 0);\n}\nexport function shadowBatch(validateCount: () => number) {\n  return validateCount();\n}\nexport function sampleBatch() {\n  /*\n    validateCount(0);\n  */\n  return 0;\n}\n";
+  const { root } = await repository({
+    "src/capacity.ts": base,
+    "src/orders.ts": "import { safeBatch, shadowBatch, sampleBatch } from './capacity';\nexport function inspectOrders() {\n  return [safeBatch(0), shadowBatch(() => 0), sampleBatch()];\n}\n",
+  }, { "src/capacity.ts": base.replace("  return count;", "  if (count < 0) throw new RangeError('negative');\n  return count;") });
+  const output = await brief(root);
+  assert.match(output, /validateCount: callers \(now throws RangeError/);
+  assert.doesNotMatch(output, /(?:safeBatch|shadowBatch|sampleBatch): callers \(now throws/);
+});
+
+test("same-file throw propagation stops after three wrapper edges", async () => {
+  const base = "export function outermost(value: number) {\n  return outer(value);\n}\nfunction outer(value: number) {\n  return middle(value);\n}\nfunction middle(value: number) {\n  return inner(value);\n}\nfunction inner(value: number) {\n  return validateCount(value);\n}\nfunction validateCount(value: number) {\n  return value;\n}\n";
+  const { root } = await repository({ "src/chain.ts": base }, { "src/chain.ts": base.replace("  return value;", "  if (value < 0) throw new RangeError('negative');\n  return value;") });
+  const output = await brief(root);
+  assert.match(output, /outer: callers \(now throws RangeError/);
+  assert.doesNotMatch(output, /outermost: callers \(now throws/);
+});
+
+test("Go error returns reach existing wrappers but checked errors do not", async () => {
+  const base = "package capacity\nimport \"errors\"\nfunc validateCount(value int) error {\n  return nil\n}\nfunc inspectQueue(value int) error {\n  return validateCount(value)\n}\nfunc safeQueue(value int) error {\n  err := validateCount(value)\n  if err != nil {\n    return nil\n  }\n  return nil\n}\n";
+  const { root } = await repository({
+    "src/capacity.go": base,
+    "src/orders.go": "package capacity\nfunc inspectOrders(value int) error {\n  return inspectQueue(value)\n}\n",
+  }, { "src/capacity.go": base.replace("  return nil", "  if value < 0 { return errors.New(\"negative\") }\n  return nil") });
+  const output = await brief(root);
+  assert.match(output, /inspectQueue: callers \(now throws or returns an error here/);
+  assert.match(output, /src\/orders\.go:3 in inspectOrders \[error returned to its caller\]/);
+  assert.doesNotMatch(output, /safeQueue: callers \(now throws/);
 });
 
 test("a brief that cannot fit every file still names each one with its change signals", async () => {

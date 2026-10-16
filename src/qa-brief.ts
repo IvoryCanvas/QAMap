@@ -2,6 +2,7 @@ import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
+import ts from "typescript";
 import type { QaDraftResult } from "./qa.js";
 import type { RepositoryIndexBlock } from "./repository-index.js";
 
@@ -105,9 +106,12 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
   const blocks = indexBlocks(result, workspacePrefix);
 
   const changedSymbols = new Map<string, string[]>();
+  const fileThrows = new Map<string, Map<string, string[]>>();
   for (const file of files) {
     if (file.kind !== "source" || file.status.startsWith("D")) continue;
-    changedSymbols.set(file.path, changedDeclarations(file, blocks.get(file.path)));
+    const thrown = await thrownBy(file, blocks.get(file.path), reader);
+    fileThrows.set(file.path, thrown);
+    changedSymbols.set(file.path, [...new Set([...changedDeclarations(file, blocks.get(file.path)), ...[...thrown.keys()].filter(usefulSymbol)])]);
   }
   const deletedSymbols = new Map<string, string[]>();
   for (const file of files) {
@@ -127,7 +131,7 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
     file.signals = changeSignals(file, await reader(file.path), diffAdded);
     file.spans = await changedSpans(file, blocks.get(file.path), reader);
     // Callers of a declaration that now throws are listed with how each one handles it.
-    const thrown = await thrownBy(file, blocks.get(file.path), reader);
+    const thrown = fileThrows.get(file.path)!;
     for (const usage of usages.get(file.path) ?? []) {
       const names = thrown.get(usage.symbol);
       if (!names) continue;
@@ -387,7 +391,7 @@ function changedDeclarations(file: DiffFile, block?: RepositoryIndexBlock): stri
   return [...new Set(names)].filter(usefulSymbol);
 }
 
-// Syntax-free signals of behavior that is easy to miss in a long diff. They name
+// Bounded signals of behavior that is easy to miss in a long diff. They name
 // lines to read; they do not claim a defect.
 const errorLogPattern = /(?:\b(?:console|log|logger|logging|slog|zap|klog|glog|LOG|Log)|\blog\w*|\.logger|\.log)\s*\.\s*(error|errorf|errorw|errorln|warn|warning|warnf|warnln|fatal|fatalf|critical|exception)\s*\(/i;
 const quietLogPattern = /(?:\b(?:console|log|logger|logging|slog|zap|klog|glog|LOG|Log)|\blog\w*|\.logger|\.log)\s*\.\s*(info|infof|infoln|debug|debugf|debugln|trace|tracef|log)\s*\(/i;
@@ -458,7 +462,7 @@ export function changeSignals(file: { path?: string; hunks: { minimal: DiffHunk[
   // literals silently leave it at a zero value, undefined or missing.
   const untypedLiterals = /\.(?:go|[cm]?jsx?|py)$/.test(file.path ?? "");
   signals.push(...accessSignals(removed, added), ...(untypedLiterals ? initializerSignals(onlyRemoved, [...added, ...context], head ?? [], assigned) : []));
-  if (head) signals.push(...unassignedFieldSignals(file.path ?? "", added, head, assigned));
+  if (head) signals.push(...unassignedFieldSignals(file.path ?? "", added, head, assigned), ...unawaitedAsyncConditionSignals(file.path ?? "", onlyAdded, head));
   return signals.length ? clipSignals(`  change signals (pattern match; read these lines): ${signals.join("; ")}`) : undefined;
 }
 
@@ -500,10 +504,11 @@ function initializerSignals(onlyRemoved: SignalRows["removed"], surviving: Array
     if (!surviving.some((other) => other.hunk === row.hunk && initializerPattern.test(other.text))) return [];
     const reader = new RegExp(`\\.${key.replace(/\$/g, "\\$")}(?![\\w$])(?!\\s*(?::?=(?!=)|[+\\-*/%&|^]=))`);
     const read = head.findIndex((text) => reader.test(stripStrings(text)));
-    return read >= 0 ? [{ key, line: row.line, read: `${read + 1}` }] : assigned.some((text) => reader.test(stripStrings(text))) ? [{ key, line: row.line, read: "an added line" }] : [];
+    const snippet = read >= 0 ? `: \`${clip(head[read], 64)}\`` : "";
+    return read >= 0 ? [{ key, line: row.line, read: `${read + 1}`, snippet }] : assigned.some((text) => reader.test(stripStrings(text))) ? [{ key, line: row.line, read: "an added line", snippet }] : [];
   });
   if (!dropped.length) return [];
-  return [`drops ${dropped.slice(0, 3).map((entry) => `\`${entry.key}\` at base ${entry.line} (still read at ${entry.read})`).join(", ")} from an initializer; that read now gets the default value`];
+  return [`drops ${dropped.slice(0, 3).map((entry) => `\`${entry.key}\` at base ${entry.line} (still read at ${entry.read}${entry.snippet})`).join(", ")} from an initializer; that read now gets the default value`];
 }
 
 // A field this diff declares and reads as a value, with no assignment in its file or the diff.
@@ -543,9 +548,101 @@ function unassignedFieldSignals(file: string, added: SignalRows["added"], head: 
     for (const text of assigned) if (!written && text !== field.text) scan(text);
     if (written || read === undefined) continue;
     const local = head.findIndex((text) => new RegExp(`(?:\\b(?:var|let|const)\\s+(?:[\\w$]+\\s*,\\s*)*${escaped}\\b|(?<![.\\w$])${escaped}\\s*(?:,\\s*[\\w$.]+\\s*)*:?=(?!=))`).test(stripStrings(text)));
-    signals.push(`field \`${field.name}\` (line ${field.line}) is read at ${read} but never assigned in this file or the diff${local >= 0 ? `; a local of that name is set at ${local + 1}` : ""}`);
+    signals.push(`field \`${field.name}\` (line ${field.line}) is read at ${read} (\`${clip(head[read - 1], 60)}\`) but never assigned in this file or the diff${local >= 0 ? `; a local of that name is set at ${local + 1} (\`${clip(head[local], 60)}\`)` : ""}`);
   }
   return signals;
+}
+
+function bindBriefSource(file: string, head: string[]): { source: ts.SourceFile; checker: ts.TypeChecker } | undefined {
+  const filename = `/${file}`, text = head.join("\n");
+  const source = ts.createSourceFile(filename, text, ts.ScriptTarget.Latest, true);
+  // Bind only this file's text; never load imports, libraries or project configuration.
+  const host: ts.CompilerHost = {
+    getSourceFile: name => name === filename ? source : undefined,
+    getDefaultLibFileName: () => "", writeFile: () => {}, getCurrentDirectory: () => "/",
+    getDirectories: () => [], fileExists: name => name === filename,
+    readFile: name => name === filename ? text : undefined,
+    getCanonicalFileName: name => name, useCaseSensitiveFileNames: () => true, getNewLine: () => "\n",
+  };
+  const program = ts.createProgram([filename], { allowJs: true, noLib: true, noResolve: true }, host);
+  if (program.getSyntacticDiagnostics(source).length) return undefined;
+  return { source, checker: program.getTypeChecker() };
+}
+
+function unawaitedAsyncConditionSignals(file: string, added: SignalRows["added"], head: string[]): string[] {
+  if (!/\.[cm]?[jt]sx?$/.test(file) || !added.length || !head.some(line => /\basync\b/.test(line))) return [];
+  const binding = bindBriefSource(file, head);
+  if (!binding) return [];
+  const { source, checker } = binding;
+  const asyncSymbols = new Set<ts.Symbol>(), written = new Set<ts.Symbol>();
+  const collect = (node: ts.Node): void => {
+    const declaration = ts.isFunctionDeclaration(node) ? node : ts.isVariableDeclaration(node) ? node.initializer : undefined;
+    if (declaration && (ts.isFunctionDeclaration(declaration) || ts.isArrowFunction(declaration) || ts.isFunctionExpression(declaration))
+      && !declaration.asteriskToken && ts.getModifiers(declaration)?.some(modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword)
+      && (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) && node.name && ts.isIdentifier(node.name)) {
+      const symbol = checker.getSymbolAtLocation(node.name);
+      if (symbol) asyncSymbols.add(symbol);
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+      && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(node.left)) {
+      const symbol = checker.getSymbolAtLocation(node.left);
+      if (symbol) written.add(symbol);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(source);
+  const changed = new Set(added.map(row => row.line)), signals: string[] = [];
+  const condition = (expression: ts.Expression): void => {
+    if (signals.length >= 2) return;
+    if (ts.isParenthesizedExpression(expression)) return condition(expression.expression);
+    if (ts.isPrefixUnaryExpression(expression) && expression.operator === ts.SyntaxKind.ExclamationToken) return condition(expression.operand);
+    if (ts.isBinaryExpression(expression) && (expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+      || expression.operatorToken.kind === ts.SyntaxKind.BarBarToken)) {
+      condition(expression.left); condition(expression.right); return;
+    }
+    if (!ts.isCallExpression(expression) || !ts.isIdentifier(expression.expression)) return;
+    const name = expression.expression, symbol = checker.getSymbolAtLocation(name);
+    const line = source.getLineAndCharacterOfPosition(name.getStart(source)).line + 1;
+    if (!symbol || !asyncSymbols.has(symbol) || written.has(symbol) || !changed.has(line)) return;
+    const signal = `checks unawaited async call \`${name.text}\` in a condition at ${line} (a Promise is always truthy)`;
+    if (!signals.includes(signal)) signals.push(signal);
+  };
+  const visit = (node: ts.Node): void => {
+    if (signals.length >= 2) return;
+    if (ts.isIfStatement(node) || ts.isWhileStatement(node)) condition(node.expression);
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return signals;
+}
+
+function sameFileCalls(file: string, head: string[]): Array<{ line: number; text: string; callee?: string }> {
+  if (!/\.[cm]?[jt]sx?$/.test(file)) return head.map((text, index) => ({ text, line: index + 1 }));
+  const binding = bindBriefSource(file, head);
+  if (!binding) return [];
+  const { source, checker } = binding;
+  const definitions = new Map<string, ts.Symbol>();
+  for (const statement of source.statements) {
+    const declarations = ts.isVariableStatement(statement) ? statement.declarationList.declarations : [statement];
+    for (const node of declarations) {
+      if ((!ts.isFunctionDeclaration(node) && !ts.isVariableDeclaration(node)) || !node.name || !ts.isIdentifier(node.name)) continue;
+      const symbol = checker.getSymbolAtLocation(node.name);
+      if (symbol) definitions.set(node.name.text, symbol);
+    }
+  }
+  const calls: Array<{ line: number; text: string; callee: string }> = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const name = node.expression;
+      if (definitions.has(name.text) && definitions.get(name.text) === checker.getSymbolAtLocation(name)) {
+        const line = source.getLineAndCharacterOfPosition(name.getStart(source)).line + 1;
+        calls.push({ line, text: head[line - 1], callee: name.text });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return calls;
 }
 
 // Whether the innermost block enclosing `line` opens on a line matching `opener`.
@@ -608,16 +705,23 @@ async function thrownBy(file: DiffFile, block: RepositoryIndexBlock | undefined,
     if (name && !names.includes(name)) names.push(name);
     result.set(owner, names);
   }
-  // An added call to a declaration that now throws passes the throw on to its own owner.
+  // Existing same-file calls can gain an error path even though their lines did not change.
+  const head = result.size ? await read(file.path) : undefined;
+  const calls: Array<{ line: number; text: string; callee?: string }> = head ? sameFileCalls(file.path, head) : added;
   for (let round = 0; round < 3 && result.size; round++) {
+    const previous = new Map(result);
     let grew = false;
-    for (const row of added) {
+    for (const row of calls) {
       const code = stripStrings(row.text);
-      const callee = [...result.keys()].find((name) => new RegExp(`(?<![\\w$.])${name.replace(/\$/g, "\\$")}\\s*\\(`).test(code));
+      if (/^\s*(?:\/\/|#|\*)/.test(code)) continue;
+      const callee = row.callee ? (previous.has(row.callee) ? row.callee : undefined)
+        : [...previous.keys()].find((name) => new RegExp(`(?<![\\w$.])${name.replace(/\$/g, "\\$")}\\s*\\(`).test(code));
       if (!callee) continue;
       const owner = ownerOf(block, row.line) ?? await ownerFromText(read, file.path, row.line);
-      if (!owner || result.has(owner)) continue;
-      result.set(owner, [...result.get(callee)!]);
+      if (!owner || owner === callee || result.has(owner)) continue;
+      const guard = head ? callGuard(head, row.line, file.path) : undefined;
+      if (guard === "inside try" || guard === ".catch on the call" || guard === "err checked" || guard === "error discarded") continue;
+      result.set(owner, [...previous.get(callee)!]);
       grew = true;
     }
     if (!grew) break;

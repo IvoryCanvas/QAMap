@@ -37,6 +37,24 @@ does not ask the agent to read it.
 | Unknowns | Runtime-selected modules, ambiguous re-exports, and changed declarations no test file names. |
 | Not fully shown | Every file whose diff is not shown in full, with the removed and added lines left out, and the `git diff` command that shows them. |
 
+Initializer signals include each retained reading site's code, capped at 64
+characters. Unassigned-field signals include the reading line and any same-name
+local declaration, capped at 60 characters each. The existing per-file signal
+limit and total brief budget still apply.
+
+In JavaScript and TypeScript, an added direct call to a same-file `async` function
+used as an `if` or `while` condition is flagged without `await`. Local bindings
+distinguish shadowed names; awaited calls, explicit comparisons, imported
+functions, generators and reassigned bindings are excluded. At most two such
+signals are shown per file. These are review hints, not executed defect checks.
+
+New error paths also trace through up to three existing same-file wrapper calls,
+so the wrapper's callers can be listed even when its own lines did not change.
+Recognized try blocks, `.catch` calls and Go error checks or discarded errors stop
+that propagation. JavaScript and TypeScript calls are checked against local
+bindings; other languages retain pattern-based matching. This is not complete
+control-flow or inter-module exception analysis.
+
 References come from `git grep` over every tracked file at the compared head,
 excluding documentation, lockfiles, vendored code, locale catalogs and build output. That includes files too
 large for the syntax index. Each candidate is then checked through the file's
