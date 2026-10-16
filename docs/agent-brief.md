@@ -74,6 +74,31 @@ other modules are not resolved. A missing hint is not proof of safe teardown;
 a hint asks about teardown or ownership, not whether a leak or bug exists.
 Even a visible cleanup call does not prove that it executes on every path.
 
+State drafts connect a strict literal equality guard or a switch case to a
+string/boolean write of the same binding or simple property path, including
+`this` fields inside named classes. They retain
+guard and write lines, including base locations when a guarded relation is
+removed. Intermediate assignments, increments, an `await` gap or possible case
+fallthrough produce an unresolved draft requiring human review. Shadows,
+delayed callbacks, coercive comparisons and alternative-value guards do not
+establish an edge. At most two state hints per file are shown. These are
+syntax-backed candidates, not a complete state machine, product specification,
+or proof of the runtime value at the write. Arbitrary call side effects, alias
+mutation and transitions across functions are not modeled.
+
+Shared-cache scope hints require a module-level `const` initialized with the
+unshadowed built-in `new Map()` and a same-function read and write of a
+structurally matching key. The
+hint names function inputs used by the stored value but absent from that key,
+with module, read, write and value lines. Simple property paths and constant
+aliases retain input identity; alias resolution stops after five bindings.
+Per-call maps, replaced methods, mutable or computed keys and opaque key builders
+are not resolved. A direct `clear()` before the read suppresses the hint only
+without an intervening `await`. Up to two Map hints share the existing per-file
+and whole-brief budgets. This is an input-scope question, not a data-leak verdict
+or evidence that a cache is safe. Classes, imported stores, cross-function
+ownership, hidden dependencies and arbitrary invalidation paths remain unmodeled.
+
 References come from `git grep` over every tracked file at the compared head,
 excluding documentation, lockfiles, vendored code, locale catalogs and build output. That includes files too
 large for the syntax index. Each candidate is then checked through the file's

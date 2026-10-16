@@ -5,6 +5,8 @@ import { promisify } from "node:util";
 import ts from "typescript";
 import type { QaDraftResult } from "./qa.js";
 import type { RepositoryIndexBlock } from "./repository-index.js";
+import { bindBriefSource, comparedBaseLines } from "./qa-brief-syntax.js";
+import { stateCacheSignals } from "./qa-brief-state.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -463,6 +465,7 @@ export function changeSignals(file: { path?: string; hunks: { minimal: DiffHunk[
   const untypedLiterals = /\.(?:go|[cm]?jsx?|py)$/.test(file.path ?? "");
   signals.push(...accessSignals(removed, added), ...(untypedLiterals ? initializerSignals(onlyRemoved, [...added, ...context], head ?? [], assigned) : []));
   if (head) signals.push(...resourceLifecycleSignals(file.path ?? "", file.hunks.minimal, added, head),
+    ...stateCacheSignals(file.path ?? "", file.hunks.minimal, head),
     ...unassignedFieldSignals(file.path ?? "", added, head, assigned), ...unawaitedAsyncConditionSignals(file.path ?? "", onlyAdded, head));
   return signals.length ? clipSignals(`  change signals (pattern match; read these lines): ${signals.join("; ")}`) : undefined;
 }
@@ -554,22 +557,6 @@ function unassignedFieldSignals(file: string, added: SignalRows["added"], head: 
   return signals;
 }
 
-function bindBriefSource(file: string, head: string[]): { source: ts.SourceFile; checker: ts.TypeChecker } | undefined {
-  const filename = `/${file}`, text = head.join("\n");
-  const source = ts.createSourceFile(filename, text, ts.ScriptTarget.Latest, true);
-  // Bind only this file's text; never load imports, libraries or project configuration.
-  const host: ts.CompilerHost = {
-    getSourceFile: name => name === filename ? source : undefined,
-    getDefaultLibFileName: () => "", writeFile: () => {}, getCurrentDirectory: () => "/",
-    getDirectories: () => [], fileExists: name => name === filename,
-    readFile: name => name === filename ? text : undefined,
-    getCanonicalFileName: name => name, useCaseSensitiveFileNames: () => true, getNewLine: () => "\n",
-  };
-  const program = ts.createProgram([filename], { allowJs: true, noLib: true, noResolve: true }, host);
-  if (program.getSyntacticDiagnostics(source).length) return undefined;
-  return { source, checker: program.getTypeChecker() };
-}
-
 interface LifecycleCall {
   kind: "setTimeout" | "setInterval" | "addEventListener" | "subscribe";
   cleanup: string;
@@ -581,22 +568,6 @@ interface LifecycleCall {
   callback?: ts.Expression;
   event?: string;
   capture?: boolean;
-}
-
-// Reconstruct only the compared text, retaining coordinates of surviving lines.
-// A removed cleanup must belong to an acquisition still present at head.
-function lifecycleBase(hunks: DiffHunk[], head: string[]): Array<{ text: string; headLine?: number }> | undefined {
-  const rows: Array<{ text: string; headLine?: number }> = head.map((text, index) => ({ text, headLine: index + 1 }));
-  for (const hunk of [...hunks].reverse()) {
-    const start = hunk.newStart - (hunk.newCount ? 1 : 0);
-    const current = hunk.lines.filter(line => !line.startsWith("-")).map(line => line.slice(1));
-    if (start < 0 || current.length !== hunk.newCount || current.some((text, index) => rows[start + index]?.text !== text)) return undefined;
-    let offset = 0;
-    const old = hunk.lines.flatMap(line => line.startsWith("+") ? (offset++, [])
-      : [{ text: line.slice(1), headLine: line.startsWith("-") ? undefined : rows[start + offset++]?.headLine }]);
-    rows.splice(start, hunk.newCount, ...old);
-  }
-  return rows;
 }
 
 function lifecycleCalls(file: string, lines: string[]): { acquisitions: LifecycleCall[]; releases: (resource: LifecycleCall) => ts.CallExpression[] } | undefined {
@@ -711,7 +682,7 @@ function resourceLifecycleSignals(file: string, hunks: DiffHunk[], added: Signal
   if (!/\.[cm]?[jt]sx?$/.test(file) || !head.some(line => /\b(?:setTimeout|setInterval|addEventListener|subscribe)\b/.test(line))) return [];
   const current = lifecycleCalls(file, head);
   if (!current?.acquisitions.length) return [];
-  const base = hunks.some(hunk => hunk.lines.some(line => line.startsWith("-"))) ? lifecycleBase(hunks, head) : undefined;
+  const base = hunks.some(hunk => hunk.lines.some(line => line.startsWith("-"))) ? comparedBaseLines(hunks, head) : undefined;
   const previous = base ? lifecycleCalls(file, base.map(row => row.text)) : undefined;
   const changed = new Set(added.map(row => row.line)), signals: string[] = [];
   for (const resource of current.acquisitions) {
