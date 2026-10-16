@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Review-brief references omitted by detail limits retain their matched file and line coordinates, including callers' tests without excerpts. Changed markers follow the matched line; Python import bindings no longer inflate test or caller counts. Existing search caps and byte-budget omissions remain explicit.
 - Review-brief initializer and unassigned-field signals include bounded reading-site snippets. Same-file async calls used directly in changed JavaScript or TypeScript conditions gain a binding-aware review signal. New error paths follow existing same-file wrappers for up to three calls and include their callers without treating recognized error handling as unhandled propagation.
 
 ### Fixed
