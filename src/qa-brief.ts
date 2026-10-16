@@ -85,7 +85,7 @@ const goMethodPattern = /\bfunc\s+\([^)]*\)\s*([A-Za-z_]\w*)/g;
 const testTitlePattern = /\b(?:it|test|testWidgets|specify|scenario)(?:\.(?:only|skip|todo|concurrent|each\([^)]*\)))?\s*\(\s*(['"`])((?:\\.|(?!\1).)*)\1|^\s*(?:async\s+)?def\s+(test\w*)\s*\(|^\s*func\s+(Test\w+)\s*\(|^\s*def\s+(test_\w+)/;
 const groupTitlePattern = /\b(?:describe|context|group|suite)(?:\.(?:only|skip))?\s*\(\s*(['"`])((?:\\.|(?!\1).)*)\1/;
 const assertionPattern = /\b(?:assert\w*|expect|should|toBe\w*|toEqual|toMatch\w*|toHave\w*|toThrow\w*|assertEquals|assertThat|XCTAssert\w*|require\.\w+|t\.(?:Error|Errorf|Fatal|Fatalf)|verify|check)\b/;
-const bindingPattern = /^\s*(?:import\b|export\s*(?:\*|\{|type\s*\{)|from\s+['"]|.*\brequire\s*\()|^\s*(?:type\s+)?[A-Za-z_$][\w$]*(?:\s+as\s+[A-Za-z_$][\w$]*)?,?\s*$|^\s*\}\s*from\s+['"]/;
+const bindingPattern = /^\s*(?:import\b|export\s*(?:\*|\{|type\s*\{)|from\s+(?:['"]|[.\w]+\s+import\b)|.*\brequire\s*\()|^\s*(?:type\s+)?[A-Za-z_$][\w$]*(?:\s+as\s+[A-Za-z_$][\w$]*)?,?\s*$|^\s*\}\s*from\s+['"]/;
 
 export async function buildQaBrief(result: QaDraftResult, options: QaBriefOptions = {}): Promise<string> {
   const maxBytes = Math.max(qaBriefMinimumBytes, Math.trunc(options.maxBytes ?? qaBriefDefaultBytes));
@@ -1630,6 +1630,8 @@ function renderUsage(usage: SymbolUsage, level: Level, changed: Map<string, Set<
   const lines: string[] = [];
   // Marks references this diff adds or edits; unmarked ones are unchanged and may still use the old contract.
   const mark = (file: string, line: number): string => changed.get(file)?.has(line) ? " (changed)" : "";
+  const at = (file: string, line: number): string => `${file}:${line}${mark(file, line)}`;
+  const testLocations = (tests: TestUse[]): string => tests.map(test => at(test.file, test.hitLine)).join(", ");
   if (usage.exports.length) lines.push(`  ${usage.symbol}: re-exported at ${usage.exports.map((entry) => `${entry.file}:${entry.line}`).join(", ")}`);
   if (!usage.tests.length && !usage.callers.length && !usage.other.length) {
     lines.push(`  ${usage.symbol}: no references found outside the changed lines`);
@@ -1642,7 +1644,7 @@ function renderUsage(usage: SymbolUsage, level: Level, changed: Map<string, Set<
   if (usage.tests.length) {
     lines.push(`  ${usage.symbol}: tests naming it`);
     for (const test of usage.tests.slice(0, level.tests)) lines.push(...renderTest(test, "    "));
-    if (usage.tests.length > level.tests) lines.push(`    ... ${usage.tests.length - level.tests} more tests: ${summarizeFiles(usage.tests.slice(level.tests).map((test) => test.file))}`);
+    if (usage.tests.length > level.tests) lines.push(`    ... ${usage.tests.length - level.tests} more tests at ${testLocations(usage.tests.slice(level.tests))}`);
   }
   if (usage.callers.length) {
     // For a declaration that now throws, callers without a handler come first; more of them
@@ -1653,12 +1655,16 @@ function renderUsage(usage: SymbolUsage, level: Level, changed: Map<string, Set<
     lines.push(`  ${usage.symbol}: callers${usage.throws ? ` (now throws${usage.throws.length ? ` ${usage.throws.join(", ")}` : " or returns an error"} here or in a changed callee; [handling] is a pattern match: follow unhandled callers to their entry point)` : ""}`);
     for (const [index, caller] of callers.slice(0, level.callers + extra).entries()) {
       lines.push(`    ${caller.file}:${caller.line}${caller.owner ? ` in ${caller.owner}` : ""}${caller.alias ? ` (as ${caller.alias})` : ""}${mark(caller.file, caller.line)}${usage.throws && caller.guard ? ` [${caller.guard}]` : ""}${index < level.callers ? `| ${clip(caller.text)}` : ""}`);
-      if (!level.callerTests || index >= level.callers) continue;
-      for (const test of caller.tests.slice(0, level.callerTests)) lines.push(...renderTest(test, "      "));
-      if (caller.tests.length > level.callerTests) lines.push(`      ... ${caller.tests.length - level.callerTests} more tests of ${caller.owner}`);
+      const testLimit = index < level.callers ? level.callerTests : 0;
+      for (const test of caller.tests.slice(0, testLimit)) lines.push(...renderTest(test, "      "));
+      if (caller.tests.length > testLimit) lines.push(`      ... ${caller.tests.length - testLimit} more tests of ${caller.owner} at ${testLocations(caller.tests.slice(testLimit))}`);
     }
     const rest = callers.slice(level.callers + extra);
-    if (rest.length) lines.push(`    ... ${rest.length} more callers${usage.throws && rest.every(handled) ? " with a handler" : ""}: ${summarizeFiles(rest.map((caller) => caller.file))}`);
+    if (rest.length) {
+      lines.push(`    ... ${rest.length} more callers${usage.throws && rest.every(handled) ? " with a handler" : ""} at ${rest.map(caller => at(caller.file, caller.line)).join(", ")}`);
+      const tests = [...new Map(rest.flatMap(caller => caller.tests).map(test => [`${test.file}\0${test.titleLine}`, test])).values()];
+      if (tests.length) lines.push(`      ... ${tests.length} tests of omitted callers at ${testLocations(tests)}`);
+    }
   }
   if (!usage.tests.length && !usage.callers.some((caller) => caller.tests.length)) lines.push(`  ${usage.symbol}: no test file names it (indirect coverage not checked)`);
   for (const other of usage.other.slice(0, 2)) lines.push(`  ${usage.symbol}: also in ${other.file}:${other.line}${mark(other.file, other.line)}| ${clip(other.text, 100)}`);

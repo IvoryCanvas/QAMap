@@ -141,6 +141,87 @@ test("qa brief lists everything it omits when the byte limit is reached", async 
   await assert.rejects(brief(root, ["--max-bytes", "100"]), /--max-bytes must be an integer of at least 4000/);
 });
 
+test("brief reference overflow keeps direct tests, callers and caller tests at their matched lines", async () => {
+  const source = "export function remaining(value) {\n  return Math.max(0, value);\n}\n";
+  const callers = "import { remaining as available } from './capacity.mjs';\n" + Array.from({ length: 18 }, (_, index) =>
+    `export function consumer${index}(value) {\n  return available(value + ${index});\n}\n`).join("");
+  const directTests = "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { remaining } from '../src/capacity.mjs';\n" + Array.from({ length: 14 }, (_, index) =>
+    `test('capacity case ${index}', () => {\n  const value = remaining(${index});\n  assert.equal(value, ${index});\n});\n`).join("");
+  const callerTests = "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { consumer0, consumer16, consumer17 } from '../src/consumers.mjs';\n" + [0, 17].flatMap(consumer => Array.from({ length: 4 }, (_, index) =>
+    `test('consumer ${consumer} case ${index}', () => {\n  const value = consumer${consumer}(${index});\n${consumer === 17 && index === 0 ? "  assert.equal(consumer16(0), 16);\n" : ""}  assert.equal(value, ${consumer + index});\n});\n`)).join("");
+  const changedCallers = callers.replace("return available(value + 17);", "return available(value + 18);");
+  const changedTests = directTests.replace("remaining(13)", "remaining(14)").replace("'capacity case 12'", "'capacity case 12 renamed'");
+  const { root } = await repository({
+    "src/capacity.mjs": source, "src/consumers.mjs": callers,
+    "test/capacity.test.mjs": directTests, "test/consumers.test.mjs": callerTests,
+    "src/unrelated.mjs": "import { remaining } from './unrelated-capacity.mjs';\nexport function unrelated(value) { return remaining(value); }\n",
+    "src/unrelated-capacity.mjs": "export function remaining(value) { return String(value); }\n",
+  }, {
+    "src/capacity.mjs": source.replace("Math.max(0, value)", "value"),
+    "src/consumers.mjs": changedCallers, "test/capacity.test.mjs": changedTests,
+  });
+  const output = await brief(root);
+  const line = (text, match) => text.split("\n").findIndex(row => row.includes(match)) + 1;
+  const directLine = index => line(changedTests, `remaining(${index})`);
+  assert.match(output, new RegExp(`\\.\\.\\. 2 more tests at test/capacity\\.test\\.mjs:${directLine(12)}, test/capacity\\.test\\.mjs:${directLine(14)} \\(changed\\)`));
+  assert.match(output, new RegExp(`\\.\\.\\. 2 more callers at src/consumers\\.mjs:${line(changedCallers, "available(value + 16)")}, src/consumers\\.mjs:${line(changedCallers, "available(value + 18)")} \\(changed\\)`));
+  assert.match(output, new RegExp(`2 more tests of consumer0 at test/consumers\\.test\\.mjs:${line(callerTests, "consumer0(2)")}, test/consumers\\.test\\.mjs:${line(callerTests, "consumer0(3)")}`));
+  assert.match(output, new RegExp(`4 tests of omitted callers at test/consumers\\.test\\.mjs:${line(callerTests, "consumer17(0)")}`));
+  assert.doesNotMatch(output, /src\/unrelated\.mjs:/);
+  assert.ok(Buffer.byteLength(output) <= 24000);
+});
+
+test("brief reference overflow preserves Python test and caller coordinates without changed markers", async () => {
+  const source = "def allowance(value):\n    return max(0, value)\n";
+  const callers = "from capacity import allowance\n" + Array.from({ length: 18 }, (_, index) =>
+    `\ndef consumer_${index}(value):\n    return allowance(value + ${index})\n`).join("");
+  const tests = "from capacity import allowance\n" + Array.from({ length: 14 }, (_, index) =>
+    `\ndef test_allowance_${index}():\n    assert allowance(${index}) == ${index}\n`).join("");
+  const { root } = await repository({ "capacity.py": source, "consumers.py": callers, "tests/test_capacity.py": tests },
+    { "capacity.py": source.replace("max(0, value)", "value") });
+  const output = await brief(root);
+  const summaries = output.split("\n").filter(row => /more (?:tests|callers) at/.test(row));
+  assert.ok(summaries.some(row => /2 more tests at tests\/test_capacity\.py:40, tests\/test_capacity\.py:43/.test(row)), summaries.join("\n"));
+  assert.ok(summaries.some(row => /2 more callers at consumers\.py:52, consumers\.py:55/.test(row)), summaries.join("\n"));
+  assert.ok(summaries.every(row => !row.includes("(changed)")));
+  assert.doesNotMatch(output, /(?:tests\/test_capacity\.py|consumers\.py):1(?:\D|$)/, "import bindings are not test or caller sites");
+});
+
+test("compact briefs keep caller test coordinates when test excerpts are disabled", async () => {
+  const source = "export function allowance(value) {\n" + Array.from({ length: 80 }, (_, index) =>
+    `  const entry${index} = '${"x".repeat(1400)}';\n`).join("") + "  return Math.max(0, value);\n}\n";
+  const tests = "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { visibleSlots } from '../src/view.mjs';\n" + Array.from({ length: 12 }, (_, index) =>
+    `test('visible slots case ${index}', () => {\n  const value = visibleSlots(${index});\n  assert.equal(value, ${index});\n});\n`).join("");
+  const { root } = await repository({
+    "src/capacity.mjs": source,
+    "src/view.mjs": "import { allowance } from './capacity.mjs';\nexport function visibleSlots(value) {\n  return allowance(value);\n}\n",
+    "test/view.test.mjs": tests,
+  }, { "src/capacity.mjs": source.replace("Math.max(0, value)", "value") });
+  const output = await brief(root, ["--max-bytes", "4000"]);
+  assert.ok(Buffer.byteLength(output) <= 4000);
+  assert.match(output, /12 more tests of visibleSlots at test\/view\.test\.mjs:5, test\/view\.test\.mjs:9/);
+  assert.match(output, /test\/view\.test\.mjs:49/);
+  assert.doesNotMatch(output, /diff and references not shown/);
+});
+
+test("reference coordinates keep search caps and byte-budget omissions explicit", async () => {
+  const source = "export function allowance(value) {\n  return Math.max(0, value);\n}\n";
+  const base = { "src/capacity.mjs": source };
+  for (let index = 0; index < 86; index++) base[`src/consumers/long-consumer-name-${String(index).padStart(2, "0")}.mjs`] =
+    `import { allowance } from '../capacity.mjs';\nexport function consumer${index}(value) {\n  return allowance(value);\n}\n`;
+  const { root } = await repository(base, { "src/capacity.mjs": source.replace("Math.max(0, value)", "value") });
+  const output = await brief(root);
+  assert.match(output, /64 more callers at src\/consumers\/long-consumer-name-16\.mjs:3,/);
+  assert.match(output, /long-consumer-name-79\.mjs:3/);
+  assert.doesNotMatch(output, /long-consumer-name-80\.mjs:3/);
+  assert.match(output, /Reference search was capped for: allowance/);
+  const bounded = await brief(root, ["--max-bytes", "4000"]);
+  assert.ok(Buffer.byteLength(bounded) <= 4000);
+  assert.match(bounded, /Reference search was capped for: allowance/);
+  assert.match(bounded, /src\/capacity\.mjs: diff and references not shown/);
+  assert.match(bounded, /Not everything fits/);
+});
+
 test("qa brief names the commit and tests behind removed lines", async () => {
   const { root } = await repository({
     "src/limit.mjs": "export function cap(items) {\n  return items;\n}\n",

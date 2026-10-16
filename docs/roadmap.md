@@ -83,8 +83,9 @@ New public reproductions must be neutral, never copied from private repositories
    extensionless scripts.
 3. Route display-only manifest changes to metadata validation, not invented
    product journeys or optional automation blockers.
-4. Improve indirect test evidence and verify important evidence retained under
-   large-PR output limits; omitted counts do not establish complete review.
+4. Improve indirect test evidence and retain compact matched reference coordinates
+   under detail limits. Search caps and byte-budget omissions remain visible;
+   coordinates and omitted counts do not establish complete review.
 5. Extend independent repository and repeated host comparisons in #264. Preserve
    quality and uncertainty before accepting measured token savings. The final
    single-run user-level arm scored 0.722 QA-plan coverage against the standalone

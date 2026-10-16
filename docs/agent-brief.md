@@ -62,6 +62,17 @@ import bindings (JavaScript/TypeScript, Python): a same-named symbol imported fr
 a different module is dropped, and `export { a as b }` or `import { a as b }`
 aliases are followed. Languages without import bindings keep name matches.
 
+References omitted by per-section detail limits keep compact `file:line` lists,
+including callers' tests when their excerpts are disabled. A compact test
+coordinate names its matched use, not its title; `(changed)` marks that exact
+line. Test cases shared by omitted callers are listed once.
+Python `from ... import ...` lines are bindings, not test or caller sites.
+
+These lists cover collected references, not every possible use in the repository.
+Search caps still appear under Unknowns. The overall byte budget is unchanged;
+when a whole file block does not fit, Not fully shown says its diff and references
+were omitted. Coordinates do not prove coverage or test execution.
+
 Change shapes that repeat across many files and differ only in one number are
 printed once for a concrete member, followed by the exact list of other values,
 for example `N = 0..9, 11..159`. No member is sampled or dropped.
