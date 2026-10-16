@@ -510,6 +510,164 @@ test("async condition signals exclude shadows, awaited calls, comparisons and no
   assert.doesNotMatch(changeSignals({ path: "gate.py", hunks: { minimal: [added] } }, head) ?? "", /unawaited async call/);
 });
 
+async function lifecycleChange(before, after, file = "lifetime.ts") {
+  const { changeSignals } = await import("../dist/qa-brief.js");
+  const base = before.split("\n"), head = after.split("\n");
+  let first = 0, last = 0;
+  while (first < base.length && first < head.length && base[first] === head[first]) first++;
+  while (last < base.length - first && last < head.length - first && base.at(-last - 1) === head.at(-last - 1)) last++;
+  const oldRows = base.slice(first, base.length - last), newRows = head.slice(first, head.length - last);
+  const hunk = { header: "@@ lifetime @@", oldStart: first + (oldRows.length ? 1 : 0),
+    newStart: first + (newRows.length ? 1 : 0), newCount: newRows.length,
+    lines: [...oldRows.map(line => `-${line}`), ...newRows.map(line => `+${line}`)] };
+  return changeSignals({ path: file, hunks: { minimal: [hunk] } }, head) ?? "";
+}
+
+test("lifecycle signals cite changed timers and subscriptions without claiming a leak", async () => {
+  for (const [statement, resource, cleanup] of [
+    ["const timer = setInterval(tick, 100);", "setInterval", "clearInterval"],
+    ["setTimeout(flush, 100);", "setTimeout", "clearTimeout"],
+    ["const subscription = updates.subscribe(render);", "subscribe", "unsubscribe"],
+  ]) {
+    const output = await lifecycleChange("export function mount(updates) {\n}", `export function mount(updates) {\n  ${statement}\n}`);
+    assert.match(output, new RegExp(`lifecycle:.*${resource}.*at 2.*${cleanup}`));
+    assert.ok(output.includes(statement));
+    assert.match(output, /check teardown or ownership/);
+    assert.doesNotMatch(output, /memory leak|will leak|is broken/i);
+  }
+});
+
+test("lifecycle signals detect removed cleanup while acquisitions stay unchanged", async () => {
+  for (const [acquire, release] of [
+    ["const timer = setTimeout(flush, 100);", "clearTimeout(timer);"],
+    ["const subscription = updates.subscribe(render);", "subscription.unsubscribe();"],
+    ["target.addEventListener('change', render);", "target.removeEventListener('change', render);"],
+  ]) {
+    const after = `export function mount(target, updates) {\n  ${acquire}\n}`;
+    const before = after.replace("\n}", `\n  return () => {\n    ${release}\n  };\n}`);
+    const output = await lifecycleChange(before, after);
+    assert.match(output, /lifecycle:.*at 2.*cleanup removed at base 4/);
+    assert.match(output, /check teardown or ownership/);
+  }
+});
+
+test("lifecycle matching accepts visible cleanup and explicitly transferred ownership", async () => {
+  for (const body of [
+    "  const timer = setInterval(tick, 100);\n  return () => clearInterval(timer);",
+    "  const timer = setTimeout(flush, 100);\n  clearTimeout(timer);",
+    "  const subscription = updates.subscribe(render);\n  return () => subscription.unsubscribe();",
+    "  const timer = setInterval(tick, 100);\n  return timer;",
+    "  return updates.subscribe(render);",
+    "  const timer = setTimeout(flush, 100);\n  owner.track(timer);",
+    "  const subscription = updates.subscribe(render);\n  owner.subscription = subscription;",
+    "  this.timer = setInterval(tick, 100);",
+    "  return setTimeout(flush, 100);",
+  ]) {
+    const output = await lifecycleChange("function mount(updates, owner) {\n}", `function mount(updates, owner) {\n${body}\n}`);
+    assert.doesNotMatch(output, /lifecycle:/, body);
+  }
+});
+
+test("listener cleanup matches target, event, callback and capture rather than method names", async () => {
+  const acquire = "  target.addEventListener('change', render);";
+  for (const release of [
+    "  return () => target.removeEventListener('change', render);",
+    "  return () => target.removeEventListener('change', render, false);",
+    "  return () => target.removeEventListener('change', render, { capture: false });",
+  ]) assert.doesNotMatch(await lifecycleChange("function mount(target, render) {\n}", `function mount(target, render) {\n${acquire}\n${release}\n}`), /lifecycle:/);
+  for (const release of [
+    "  other.removeEventListener('change', render);",
+    "  target.removeEventListener('click', render);",
+    "  target.removeEventListener('change', other);",
+    "  target.removeEventListener('change', render, true);",
+    "  target.removeEventListener('change', () => render());",
+    "  function unrelated() { target.removeEventListener('change', render); }",
+  ]) assert.match(await lifecycleChange("function mount(target, render, other) {\n}", `function mount(target, render, other) {\n${acquire}\n${release}\n}`), /lifecycle:.*addEventListener.*removeEventListener/, release);
+  for (const options of ["{ once: true }", "{ signal: controller.signal }", "options"]) {
+    assert.doesNotMatch(await lifecycleChange("function mount(target, render, controller, options) {\n}",
+      `function mount(target, render, controller, options) {\n  target.addEventListener('change', render, ${options});\n}`), /lifecycle:/, options);
+  }
+});
+
+test("lifecycle matching keeps shadowed bindings and unrelated function scopes separate", async () => {
+  for (const body of [
+    "  const timer = setInterval(tick, 100);\n  function unrelated(timer) { clearInterval(timer); }",
+    "  const timer = setInterval(tick, 100);\n  return (timer) => clearInterval(timer);",
+    "  const timer = setTimeout(flush, 100);\n  clearInterval(timer);",
+    "  const a = updates.subscribe(render);\n  const b = other.subscribe(render);\n  b.unsubscribe();",
+    "  const timer = setInterval(tick, 100);\n  function clearInterval() {}\n  clearInterval(timer);",
+  ]) assert.match(await lifecycleChange("function mount(updates, other) {\n}", `function mount(updates, other) {\n${body}\n}`), /lifecycle:/, body);
+  const shadowed = "function mount(setInterval) {\n  const timer = setInterval(tick, 100);\n}";
+  assert.doesNotMatch(await lifecycleChange("function mount(setInterval) {\n}", shadowed), /lifecycle:/);
+});
+
+test("lifecycle signals exclude non-code, invalid syntax, unsupported ownership and unchanged acquisitions", async () => {
+  for (const body of [
+    "  // setInterval(tick, 100);",
+    "  const example = 'target.addEventListener(\"change\", render)';",
+    "  const example = `updates.subscribe(render)`;",
+    "  function mount( { setInterval(tick, 100);",
+    "  const timers = { setInterval() {} };\n  timers.setInterval(tick, 100);",
+  ]) assert.doesNotMatch(await lifecycleChange("function mount() {\n}", `function mount() {\n${body}\n}`), /lifecycle:/, body);
+  const before = "function mount() {\n  const timer = setInterval(tick, 100);\n  show('old');\n}";
+  assert.doesNotMatch(await lifecycleChange(before, before.replace("'old'", "'new'")), /lifecycle:/);
+  assert.doesNotMatch(await lifecycleChange("function mount() {\n}", "function mount() {\n  setInterval(tick, 100);\n}", "sample.py"), /lifecycle:/);
+});
+
+test("lifecycle matching recognizes callable teardown and object-shaped ownership transfer", async () => {
+  for (const body of [
+    "  const stop = updates.subscribe(render);\n  return () => stop();",
+    "  const timer = setInterval(tick, 100);\n  return { timer };",
+    "  const timer = setTimeout(flush, 100);\n  owner.track({ timer });",
+  ]) assert.doesNotMatch(await lifecycleChange("function mount(updates, owner) {\n}", `function mount(updates, owner) {\n${body}\n}`), /lifecycle:/, body);
+});
+
+test("lifecycle matching does not mistake reassigned listener identities for cleanup", async () => {
+  for (const assignment of ["target = other;", "render = other;"]) {
+    const body = `function mount(target, render, other) {\n  target.addEventListener('change', render);\n  ${assignment}\n  target.removeEventListener('change', render);\n}`;
+    assert.match(await lifecycleChange("function mount(target, render, other) {\n}", body), /lifecycle:.*removeEventListener/);
+  }
+});
+
+test("lifecycle signals follow effect-local ownership in TSX without crossing sibling effects", async () => {
+  const before = "export function Widget() {\n  return <div />;\n}";
+  const after = "export function Widget() {\n  useEffect(() => {\n    const timer = setInterval(tick, 100);\n    return () => clearInterval(timer);\n  }, []);\n  useEffect(() => {\n    setTimeout(flush, 100);\n  }, []);\n  return <div />;\n}";
+  const output = await lifecycleChange(before, after, "widget.tsx");
+  assert.match(output, /lifecycle: `setTimeout` at 7/);
+  assert.doesNotMatch(output, /lifecycle: `setInterval`/);
+});
+
+test("lifecycle signals retain the base location when a multiline cleanup argument is replaced", async () => {
+  const before = "function mount(other) {\n  const timer = setInterval(tick, 100);\n  clearInterval(\n    timer\n  );\n}";
+  assert.match(await lifecycleChange(before, before.replace("    timer", "    other")), /lifecycle:.*at 2.*cleanup removed at base 3/);
+});
+
+test("lifecycle signals distinguish two acquisitions sharing one unchanged line", async () => {
+  const before = "function mount() {\n  const a = setTimeout(tick, 100); const b = setTimeout(flush, 200);\n  clearTimeout(a);\n  clearTimeout(b);\n}";
+  assert.match(await lifecycleChange(before, before.replace("  clearTimeout(b);\n", "")), /lifecycle:.*at 2.*cleanup removed at base 4/);
+});
+
+test("lifecycle signals stay bounded and do not flag cleanup moved within its scope", async () => {
+  const before = "function mount() {\n  const timer = setInterval(tick, 100);\n  clearInterval(timer);\n  ready();\n}";
+  const after = "function mount() {\n  const timer = setInterval(tick, 100);\n  ready();\n  clearInterval(timer);\n}";
+  assert.doesNotMatch(await lifecycleChange(before, after), /lifecycle:/);
+  const output = await lifecycleChange("function mount() {\n}", "function mount() {\n" + Array.from({ length: 10 }, (_, i) =>
+    `  const timer${i} = setInterval(tick, ${i});`).join("\n") + "\n}");
+  assert.ok(output.length <= 640);
+  assert.equal((output.match(/lifecycle:/g) ?? []).length, 2);
+});
+
+test("qa brief retains lifecycle signals for removed cleanup in a real multi-hunk diff", async () => {
+  const before = "export function mount(target, render) {\n  target.addEventListener('change', render);\n" + Array.from({ length: 18 }, (_, i) =>
+    `  const value${i} = ${i};`).join("\n") + "\n  return () => {\n    target.removeEventListener('change', render);\n  };\n}\n";
+  const after = before.replace("const value0 = 0", "const value0 = 1").replace("    target.removeEventListener('change', render);\n", "");
+  const { root } = await repository({ "src/widget.ts": before }, { "src/widget.ts": after });
+  const output = await brief(root);
+  assert.match(output, /lifecycle:.*addEventListener.*at 2.*cleanup removed at base 22/);
+  assert.match(output, /Static analysis only: no tests were run, no LLM was called/);
+  assert.ok(Buffer.byteLength(output) <= 24000);
+});
+
 test("each caller's handling of an error is read from its function", async () => {
   const { callGuard } = await import("../dist/qa-brief.js");
   const js = ["async function load(id) {", "  try {", "    const where = build(id);", "  } catch (error) {", "    report(error);", "    build(id);", "  }", "  return build(id);", "}",

@@ -86,7 +86,12 @@ New public reproductions must be neutral, never copied from private repositories
 4. Improve indirect test evidence and retain compact matched reference coordinates
    under detail limits. Search caps and byte-budget omissions remain visible;
    coordinates and omitted counts do not establish complete review.
-5. Extend independent repository and repeated host comparisons in #264. Preserve
+5. Add bounded JavaScript and TypeScript resource-lifecycle hints: compare changed
+   timers, listeners and subscriptions with same-function cleanup, and retain
+   removed-cleanup coordinates. Keep ownership transfer and unsupported dynamic
+   cases explicit. Broader state models and shared-cache key scope remain future
+   work; a static hint does not establish a leak or a correct runtime transition.
+6. Extend independent repository and repeated host comparisons in #264. Preserve
    quality and uncertainty before accepting measured token savings. The final
    single-run user-level arm scored 0.722 QA-plan coverage against the standalone
    mean of 0.731; earlier runs differed. Do not hide that variation behind an
