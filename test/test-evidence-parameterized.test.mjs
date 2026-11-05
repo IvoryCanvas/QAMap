@@ -65,3 +65,32 @@ test("suite inventory collects parameterized source titles without executing the
   const inventory = await collectTestSuiteInventory(root);
   assert.deepEqual(inventory.files[0].testNames, ["retains %s"]);
 });
+
+test("serial and failing modifiers retain source declarations beside each tables", () => {
+  const source = [
+    "test.serial('keeps serial evidence', () => {})",
+    "test.failing('keeps expected-failure evidence', () => {})",
+    "test.serial.failing('keeps combined evidence', () => {})",
+    "test.failing.each([1])('keeps %s failure evidence', () => {})",
+    "test.step('helper step is not a test declaration', () => {})",
+    "test.describe('group is not a test declaration', () => {})",
+  ].join("\n");
+  assert.deepEqual(collectChangedTestContracts(evidence(source)).map(({ line, title }) => ({ line, title })), [
+    { line: 20, title: "keeps serial evidence" },
+    { line: 21, title: "keeps expected-failure evidence" },
+    { line: 22, title: "keeps combined evidence" },
+    { line: 23, title: "keeps %s failure evidence" },
+  ]);
+});
+
+test("TSX suite inventory keeps each titles after JSX without executing its source", async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-parameterized-tsx-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.writeFile(path.join(root, "view.test.tsx"), [
+    "throw new Error('do not execute fixture code')",
+    "const renderView = () => <Panel><Content /></Panel>",
+    "test.each([1, 2])(", "  'renders %s item', () => {}", ")",
+  ].join("\n"));
+  const inventory = await collectTestSuiteInventory(root);
+  assert.deepEqual(inventory.files[0].testNames, ["renders %s item"]);
+});

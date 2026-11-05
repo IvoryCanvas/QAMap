@@ -54,6 +54,8 @@ jobs:
         run: pnpm build
       - name: Run tests
         run: pnpm test:compiled
+      - name: Check coverage
+        run: pnpm coverage:compiled
       - name: Validate plugin metadata
         run: pnpm plugin:check
       - name: Smoke-test the packed plugin
@@ -68,6 +70,10 @@ jobs:
         run: pnpm bench:repository:compiled
       - name: Scan repository policy
         run: pnpm scan:compiled
+      - name: Check package contents and whitespace
+        run: |
+          pnpm pack --dry-run
+          git diff --check
 
   execution-benchmark:
     needs: test

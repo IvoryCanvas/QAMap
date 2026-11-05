@@ -119,7 +119,7 @@ export function collectChangedTestContracts(evidence: AddedDiffEvidence): Change
       for (const [line, text] of [...lines].sort(([left], [right]) => left - right)) {
         const declared = collected.find(contract => contract.line === line);
         if (declared) {
-          active = !declared.assertion && /^\s*(?:it|test)(?:\.(?:only|skip|todo|concurrent|sequential|fails))*\s*\(\s*["'`]/.test(text)
+          active = !declared.assertion && /^\s*(?:it|test)(?:\.(?:only|skip|todo|concurrent|sequential|fails|serial|failing))*\s*\(\s*["'`]/.test(text)
             ? { contract: declared, indentation: leadingWhitespaceLength(text) } : undefined;
           continue;
         }
@@ -181,7 +181,7 @@ function javascriptTestContracts(file: string, text: string, firstLine: number):
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true,
     /\.[cm]?[jt]sx$/i.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const contracts: ChangedTestContract[] = [];
-  const modifiers = new Set(["only", "skip", "todo", "concurrent", "sequential", "fails"]);
+  const modifiers = new Set(["only", "skip", "todo", "concurrent", "sequential", "fails", "serial", "failing"]);
   const testCallee = (node: ts.Expression): boolean =>
     ts.isIdentifier(node) ? node.text === "it" || node.text === "test"
       : ts.isPropertyAccessExpression(node) && modifiers.has(node.name.text) && testCallee(node.expression);
@@ -367,7 +367,7 @@ function evaluateCoverageTarget(
 
 function toTestEvidenceFile(file: ProjectFile): TestSuiteEvidenceFile {
   const text = file.text ?? "";
-  const testNames = extractTestNames(text);
+  const testNames = extractTestNames(text, file.path);
   const imports = extractImports(text);
   return {
     path: file.path,
@@ -506,7 +506,7 @@ function normalizePathForMatch(value: string): string {
     .toLowerCase();
 }
 
-function extractTestNames(text: string): string[] {
+function extractTestNames(text: string, file: string): string[] {
   const names: string[] = [];
   const matcher = /\b(?:describe|it|test|testWidgets)\s*(?:\.\w+)?\s*\(\s*/g;
   for (let match = matcher.exec(text); match; match = matcher.exec(text)) {
@@ -515,7 +515,7 @@ function extractTestNames(text: string): string[] {
     names.push(normalizeText(literal.title));
     matcher.lastIndex = literal.end;
   }
-  names.push(...javascriptTestContracts("test.ts", text, 1).map(contract => contract.title));
+  if (isJavaScriptTestFileName(file)) names.push(...javascriptTestContracts(file, text, 1).map(contract => contract.title));
   const pythonMatcher = /^(?:async\s+)?def\s+(test_[\p{L}\p{N}_]+)\s*\(/gmu;
   for (const match of text.matchAll(pythonMatcher)) {
     names.push(normalizeText(match[1].replace(/^test_/, "").replaceAll("_", " ")));

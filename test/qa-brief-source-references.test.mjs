@@ -10,7 +10,7 @@ import { promisify } from "node:util";
 const exec = promisify(execFile);
 const cli = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 const roots = [];
-after(async () => { for (const root of roots) await fs.rm(root, { recursive: true, force: true }); });
+after(async () => { for (const root of roots) await fs.rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); });
 
 async function briefFixture(base, head, args = []) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-source-reference-"));
