@@ -63,7 +63,8 @@ interface SymbolUsage {
   throws?: string[];
 }
 interface Level { context: "full" | "wide" | "normal" | "minimal"; tests: number; callers: number; callerTests: number;
-  lowPriorityHunks: "show" | "cap" | "list"; testHunks: "show" | "cap" | "list"; hunkLineCap: number; scenarios: number }
+  lowPriorityHunks: "show" | "cap" | "list"; testHunks: "show" | "cap" | "list"; hunkLineCap: number; scenarios: number;
+  referenceBytes?: number }
 
 // References shrink before source diff does: added lines can be reread from the head
 // file, but removed lines exist only in the diff.
@@ -71,9 +72,12 @@ const levels: Level[] = [
   { context: "full", tests: 12, callers: 16, callerTests: 2, lowPriorityHunks: "show", testHunks: "show", hunkLineCap: 400, scenarios: 4 },
   { context: "full", tests: 4, callers: 6, callerTests: 1, lowPriorityHunks: "show", testHunks: "cap", hunkLineCap: 400, scenarios: 3 },
   { context: "normal", tests: 3, callers: 4, callerTests: 1, lowPriorityHunks: "cap", testHunks: "cap", hunkLineCap: 240, scenarios: 3 },
+  // Compact even coordinate-only overflow before dropping small source/test diffs.
+  { context: "normal", tests: 3, callers: 4, callerTests: 1, lowPriorityHunks: "cap", testHunks: "show", hunkLineCap: 240, scenarios: 3, referenceBytes: 2_000 },
   { context: "normal", tests: 2, callers: 3, callerTests: 0, lowPriorityHunks: "list", testHunks: "list", hunkLineCap: 160, scenarios: 3 },
   { context: "minimal", tests: 2, callers: 2, callerTests: 0, lowPriorityHunks: "list", testHunks: "list", hunkLineCap: 100, scenarios: 2 },
   { context: "minimal", tests: 1, callers: 2, callerTests: 0, lowPriorityHunks: "list", testHunks: "list", hunkLineCap: 60, scenarios: 2 },
+  { context: "minimal", tests: 1, callers: 2, callerTests: 0, lowPriorityHunks: "list", testHunks: "list", hunkLineCap: 60, scenarios: 2, referenceBytes: 800 },
 ];
 
 const excludedPathspecs = ["**/*.md", "**/*.mdx", "**/*.txt", "**/*.rst", "**/node_modules/**", "**/dist/**", "**/build/**",
@@ -131,7 +135,7 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
   const usages = await collectUsages(top, headSha, files, new Map([...changedSymbols, ...deletedSymbols]), blocks, reader, graph);
   await collectCallees(top, headSha, files, changedSymbols, reader, graph);
   await collectRelatedTests(top, headSha, files, usages, reader);
-  if (!result.includeWorkingTree) await collectHistory(top, result.base, result.head, files, reader);
+  const historyIssue = result.includeWorkingTree ? undefined : await collectHistory(top, result.base, result.head, files);
   const diffAdded = files.flatMap((file) => file.hunks.minimal.flatMap((hunk) => hunk.lines.filter((line) => line.startsWith("+")).map((line) => line.slice(1))));
   for (const file of files) {
     if (file.kind !== "source" || file.status.startsWith("D")) continue;
@@ -157,7 +161,7 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
 
   const header = briefHeader(result, files, usages);
   if (scoped) header[0] += ` limited to ${scoped}/`;
-  const tail = briefTail(result, files, usages, range);
+  const tail = briefTail(result, files, usages, range, historyIssue);
   // Keep each optional focus section bounded before reserving room for the diff
   // and its recovery tail. Contract identities take priority over assertions.
   const focusBudget = Math.floor(maxBytes / 4);
@@ -1598,14 +1602,34 @@ async function collectRelatedTests(top: string, headSha: string | undefined, fil
   }
 }
 
-// Removed or rewritten lines usually came with the tests that guard them. Blame
-// the base side and name those tests; this restores the previous intent cheaply.
-async function collectHistory(top: string, base: string, head: string, files: DiffFile[], read: Reader): Promise<void> {
+// Historical co-changes are review evidence, not proof of a test's intent.
+// Optional history must not fetch missing objects or hold the brief indefinitely.
+async function collectHistory(top: string, base: string, head: string, files: DiffFile[]): Promise<string | undefined> {
+  if (!files.some(file => file.kind === "source" && file.deleted > 0)) return undefined;
+  const deadline = performance.now() + 3_000;
+  let issue: "time limit reached" | "local Git data unavailable or command failed" | undefined;
+  const historyGit = async (args: string[], maxBuffer = 8 * 1024 * 1024): Promise<string> => {
+    const remaining = Math.ceil(deadline - performance.now());
+    if (remaining <= 0) { issue = "time limit reached"; throw new Error("History time budget exhausted"); }
+    try {
+      const { stdout } = await execFileAsync("git", ["--no-lazy-fetch", "-c", "core.quotePath=false", ...args], {
+        cwd: top, maxBuffer, timeout: Math.min(1_000, remaining), killSignal: "SIGKILL",
+        env: { ...process.env, GIT_NO_LAZY_FETCH: "1", GIT_TERMINAL_PROMPT: "0" },
+      });
+      return stdout;
+    } catch (error) {
+      if ((error as { killed?: boolean }).killed) issue = "time limit reached";
+      else issue ??= "local Git data unavailable or command failed";
+      throw error;
+    }
+  };
+  const incomplete = (): string | undefined => issue ? `History evidence is incomplete: ${issue} (bounded local reads; no lazy fetch).` : undefined;
   let mergeBase: string;
-  try { mergeBase = (await git(top, ["merge-base", base, head])).trim(); } catch { return; }
+  try { mergeBase = (await historyGit(["merge-base", base, head])).trim(); } catch { return incomplete(); }
   const commits = new Map<string, { subject: string; files: string[]; root: boolean }>();
   let budget = 400;
   for (const file of files) {
+    if (performance.now() >= deadline) { issue = "time limit reached"; break; }
     if (file.kind !== "source" || file.status.startsWith("A") || budget <= 0) continue;
     const ranges: string[] = [];
     for (const hunk of file.hunks.minimal) {
@@ -1617,7 +1641,7 @@ async function collectHistory(top: string, base: string, head: string, files: Di
     }
     if (!ranges.length) continue;
     let output = "";
-    try { output = await git(top, ["blame", "--porcelain", ...ranges, mergeBase, "--", file.previousPath ?? file.path], 8 * 1024 * 1024); } catch { continue; }
+    try { output = await historyGit(["blame", "--no-textconv", "--porcelain", ...ranges, mergeBase, "--", file.previousPath ?? file.path]); } catch { continue; }
     const counts = new Map<string, number>();
     for (const line of output.split("\n")) {
       const match = /^([0-9a-f]{40}) \d+ \d+/.exec(line);
@@ -1626,7 +1650,7 @@ async function collectHistory(top: string, base: string, head: string, files: Di
     for (const [commit, lines] of [...counts].sort((a, b) => b[1] - a[1]).slice(0, 2)) {
       if (!commits.has(commit)) {
         try {
-          const shown = await git(top, ["show", "--no-color", "--format=%P%x00%s", "--name-only", commit], 4 * 1024 * 1024);
+          const shown = await historyGit(["show", "--no-ext-diff", "--no-textconv", "--no-color", "--format=%P%x00%s", "--name-only", commit], 4 * 1024 * 1024);
           const [meta, ...rest] = shown.split("\n");
           const [parents, subject] = meta.split("\0");
           commits.set(commit, { subject: subject ?? "", files: rest.filter(Boolean), root: !parents?.trim() });
@@ -1639,12 +1663,14 @@ async function collectHistory(top: string, base: string, head: string, files: Di
         .sort((a, b) => Number(!isTestFileName(b)) - Number(!isTestFileName(a)) || (a < b ? -1 : 1)).reverse();
       for (const testFile of candidates.sort((a, b) => Number(isTestFileName(b)) - Number(isTestFileName(a))).slice(0, 3)) {
         let patch = "";
-        try { patch = await git(top, ["show", "--no-color", "--format=", "--unified=0", commit, "--", testFile], 8 * 1024 * 1024); } catch { continue; }
+        try { patch = await historyGit(["show", "--no-ext-diff", "--no-textconv", "--no-color", "--format=", "--unified=0", commit, "--", testFile]); } catch { continue; }
         const titles = patch.split("\n").filter((line) => line.startsWith("+") && /^\s{0,4}(?:(?:it|test|testWidgets|specify)\b|(?:async\s+)?def\s+test|func\s+Test)/.test(line.slice(1))).flatMap((line) => {
           const match = testTitlePattern.exec(line.slice(1));
           return match ? [match[2] ?? match[3] ?? match[4] ?? match[5] ?? ""] : [];
         }).filter(Boolean);
-        const lines = await read(testFile);
+        // Coordinate lookup is part of the same bounded, local-only history read.
+        let lines: string[] | undefined;
+        try { lines = (await historyGit(["show", `${head}:${testFile}`])).split("\n"); } catch { /* Retain the historical title without a head coordinate. */ }
         tests.push({ file: testFile, titles: titles.map((title) => {
           const index = lines?.findIndex((line) => line.includes(`'${title}'`) || line.includes(`"${title}"`) || line.includes(`\`${title}\``)) ?? -1;
           return index >= 0 ? { title, line: index + 1 } : { title };
@@ -1653,6 +1679,7 @@ async function collectHistory(top: string, base: string, head: string, files: Di
       file.history.push({ commit: commit.slice(0, 7), subject: info.subject, lines, tests });
     }
   }
+  return incomplete();
 }
 
 // Same-named symbols in another language are not references to the changed one.
@@ -1907,7 +1934,7 @@ function renderFile(file: DiffFile, usages: SymbolUsage[], level: Level, listedC
       notes++;
     }
   }
-  for (const usage of usages) lines.push(...renderUsage(usage, level, changed));
+  lines.push(...boundReferenceLines(usages.flatMap(usage => renderUsage(usage, level, changed)), level.referenceBytes));
   if (file.calls.length) {
     const known = file.calls.filter((call) => call.definition), unknown = file.calls.filter((call) => !call.definition && call.unresolvedAt === undefined);
     for (const [index, call] of known.slice(0, level.callers).entries()) {
@@ -1940,6 +1967,22 @@ function renderFile(file: DiffFile, usages: SymbolUsage[], level: Level, listedC
     if (related.tests.length > Math.max(1, Math.floor(level.tests / 2))) lines.push(`    ... ${related.tests.length - Math.max(1, Math.floor(level.tests / 2))} more tests: ${summarizeFiles(related.tests.map((test) => test.file))}`);
   }
   return { lines: lines.map(safeText), ...(hidden ? { hidden } : {}) };
+}
+
+// Detail limits retain all collected coordinates normally. When even those
+// lists overwhelm the brief, preserve the diff and make the lost detail explicit.
+function boundReferenceLines(lines: string[], budget?: number): string[] {
+  if (budget === undefined || Buffer.byteLength(`${lines.join("\n")}\n`) <= budget) return lines;
+  const note = (count: number): string => `  ... ${count} reference detail lines omitted by byte budget; rerun with a larger --max-bytes for references`;
+  const kept: string[] = [];
+  let used = 0;
+  for (const line of lines) {
+    const size = Buffer.byteLength(`${safeText(line)}\n`);
+    if (used + size + Buffer.byteLength(`${note(lines.length)}\n`) > budget) break;
+    kept.push(line);
+    used += size;
+  }
+  return [...kept, note(lines.length - kept.length)];
 }
 
 function renderUsage(usage: SymbolUsage, level: Level, changed: Map<string, Set<number>> = new Map()): string[] {
@@ -2120,8 +2163,8 @@ function renderChangedTestContracts(result: QaDraftResult, shownTests: Set<strin
   return section([...kept, note(pending.length - kept.length)]);
 }
 
-function briefTail(result: QaDraftResult, files: DiffFile[], usages: Map<string, SymbolUsage[]>, range: string[]): (omitted: string[], partial?: Map<string, Hidden>) => string[] {
-  const unknown: string[] = [];
+function briefTail(result: QaDraftResult, files: DiffFile[], usages: Map<string, SymbolUsage[]>, range: string[], historyIssue?: string): (omitted: string[], partial?: Map<string, Hidden>) => string[] {
+  const unknown: string[] = historyIssue ? [`- ${historyIssue}`] : [];
   const reasons = new Map<string, number>();
   const changed = new Set(files.map((file) => file.path));
   const prefix = toPosix(path.relative(result.root, result.analysisScope.workspaceRoot || result.root));
