@@ -3352,7 +3352,7 @@ test("generateE2eDraft keeps Expo native version changes in one mobile build con
   const agentSchema = JSON.parse(await readFile(path.join(repositoryRoot, "schema/qamap-agent.schema.json"), "utf8"));
   assert.deepEqual(collectSchemaViolations(agentSchema, agentSummary), []);
   assert.deepEqual(plan.suggestedCommands.slice(0, 2), ["npm run build:apk", "npm run build:ios"]);
-  assert.equal(qa.bootstrap.steps.some((step) => step.title === "Create the first changed-flow E2E draft"), false);
+  assert.equal(qa.bootstrap.steps.some((step) => step.title === "Locate existing tests or create a changed-flow draft"), false);
   assert.match(qaMarkdown, /Repository verification stage: ready to run `npm run build:apk`; QAMap has not executed it/);
   assert.match(qaMarkdown, /Optional automation readiness: not applicable/);
   assert.doesNotMatch(qaMarkdown, /Automation stage: setup needed/);
@@ -3834,7 +3834,7 @@ test("generateE2ePlan treats Maestro-only changes as test evidence", async () =>
   assert.equal(qa.missingEvidence.some((item) => item.kind === "selector"), false);
   assert.equal(qa.missingEvidence.some((item) => item.kind === "manifest"), false);
   assert.equal(qa.missingEvidence.some((item) => /entrypoint/i.test(`${item.title} ${item.detail}`)), false);
-  assert.equal(qa.bootstrap.steps.some((step) => step.title === "Create the first changed-flow E2E draft"), false);
+  assert.equal(qa.bootstrap.steps.some((step) => step.title === "Locate existing tests or create a changed-flow draft"), false);
   assert.match(qa.prChecklist[0], /Run the changed test evidence:/);
   assert.equal(qa.agentHandoff.some((item) => /Run the changed test evidence/.test(item)), true);
   assert.match(qaMarkdown, /Existing test evidence:/);
@@ -5867,7 +5867,7 @@ test("generateE2ePlan builds a bootstrap plan for projects without tests", async
   assert.match(markdown, /## Bootstrap Plan/);
   assert.match(markdown, /## Runner Setup Proposal/);
   assert.match(markdown, /Accept setup with: `qamap e2e setup \. --runner playwright`/);
-  assert.match(markdown, /Create the first changed-flow E2E draft/);
+  assert.match(markdown, /Locate existing tests or create a changed-flow draft/);
   assert.match(markdown, /Add deterministic fixture or mock responses/);
   assert.match(markdown, /qamap e2e draft \. --base main --head HEAD/);
   const draftMarkdown = formatMarkdownE2eDraft(draft);

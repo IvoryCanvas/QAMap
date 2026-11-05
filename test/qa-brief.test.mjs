@@ -66,7 +66,7 @@ test("qa brief connects a changed declaration to its tests, callers and caller t
   const output = await brief(root);
   assert.match(output, /^QAMap brief: main\.\.\.HEAD\n/);
   assert.match(output, /Static analysis only: no tests were run, no LLM was called\./);
-  assert.match(output, /Changed declarations named by a test file: 1\/1 \(name match: a listed test may not reach the change/);
+  assert.match(output, /Changed declarations with collected test references: 1\/1 \(direct or through callers; JavaScript\/TypeScript bindings are checked, other languages may use name matches; references do not establish executed coverage\)/);
   assert.match(output, /Only \+ lines are new; code outside these hunks existed at base\./);
   // Removed lines keep base numbering and added lines head numbering, so citations need no reread.
   assert.match(output, /\n-2\|  return Math\.max\(0, limit - used\);\n\+2\|  return limit - used;\n/);
@@ -118,7 +118,7 @@ test("qa brief prints repeated change shapes once with every value", async () =>
   assert.match(output, /-1\|export function check10\(value\) \{ return Math\.max\(0, value\); \}/);
   assert.match(output, /test\/rule-10\.test\.mjs:4 "rule 10 keeps its bound"/);
   assert.match(output, /### Same change in 29 more files: identical to the block above except that each standalone number 10 becomes N, for N = 0\.\.9, 11\.\.29\n/);
-  assert.match(output, /Changed declarations named by a test file: 30\/30 /);
+  assert.match(output, /Changed declarations with collected test references: 30\/30 /);
   assert.ok(Buffer.byteLength(output) < 4000);
 });
 
@@ -243,7 +243,8 @@ test("qa brief resolves what the new code calls", async () => {
   }, { "src/save.mjs": "import { persist } from './store.mjs';\nexport function save(record) {\n  audit(record);\n  return persist(record);\n}\n" });
   const output = await brief(root);
   assert.match(output, /calls persist: src\/store\.mjs:1\| export function persist\(record\) \{/);
-  assert.match(output, /calls audit: external or built-in \(no definition in this repository\)/);
+  assert.match(output, /calls audit: binding not resolved at src\/save\.mjs:3/);
+  assert.doesNotMatch(output, /calls audit: external or built-in/);
 });
 
 test("qa brief resolves Python imports and includes untracked working-tree files on request", async () => {
@@ -664,6 +665,149 @@ test("qa brief retains lifecycle signals for removed cleanup in a real multi-hun
   const { root } = await repository({ "src/widget.ts": before }, { "src/widget.ts": after });
   const output = await brief(root);
   assert.match(output, /lifecycle:.*addEventListener.*at 2.*cleanup removed at base 22/);
+  assert.match(output, /Static analysis only: no tests were run, no LLM was called/);
+  assert.ok(Buffer.byteLength(output) <= 24000);
+});
+
+test("state drafts connect literal guards and writes with exact evidence, not a specification", async () => {
+  for (const [guard, write, expected] of [
+    ["phase === 'idle'", "phase = 'running'", /`phase`.*idle.*running.*guard 2.*write 3/],
+    ["job.mode === 'open'", "job.mode = 'closed'", /`job.mode`.*open.*closed.*guard 2.*write 3/],
+    ["enabled === false", "enabled = true", /`enabled`.*false.*true.*guard 2.*write 3/],
+  ]) {
+    const output = await lifecycleChange("function advance(phase, job, enabled) {\n}",
+      `function advance(phase, job, enabled) {\n  if (${guard}) {\n    ${write};\n  }\n}`);
+    assert.match(output, /state draft:/);
+    assert.match(output, expected);
+    assert.match(output, /review intended transition/);
+    assert.doesNotMatch(output, /invalid transition|is broken|specification proves/i);
+  }
+});
+
+test("state drafts retain switch cases and changed guards around unchanged writes", async () => {
+  const before = "function advance(phase) {\n  if (phase === 'idle') {\n    phase = 'running';\n  }\n}";
+  assert.match(await lifecycleChange(before, before.replace("=== 'idle'", "=== 'paused'")), /state draft:.*paused.*running.*guard 2.*write 3/);
+  const after = "function advance(phase) {\n  switch (phase) {\n    case 'running':\n      phase = 'done';\n      break;\n  }\n}";
+  assert.match(await lifecycleChange("function advance(phase) {\n}", after), /state draft:.*running.*done.*guard 3.*write 4/);
+});
+
+test("state drafts bind instance fields to their named class", async () => {
+  const before = "class Worker {\n  advance() {\n  }\n}";
+  const after = "class Worker {\n  advance() {\n    if (this.mode === 'idle') this.mode = 'running';\n  }\n}";
+  assert.match(await lifecycleChange(before, after), /state draft: `this.mode`.*idle.*running.*guard 3.*write 3/);
+});
+
+test("state drafts expose removed guard evidence without claiming the write was deleted", async () => {
+  const before = "function advance(phase) {\n  if (phase === 'idle') {\n    phase = 'running';\n  }\n}";
+  const after = "function advance(phase) {\n    phase = 'running';\n}";
+  const output = await lifecycleChange(before, after);
+  assert.match(output, /state draft removed:.*idle.*running.*base guard 2.*base write 3/);
+  assert.match(output, /review replacement/);
+  assert.doesNotMatch(output, /write was deleted|always reaches/);
+});
+
+test("state drafts stop at competing writes and asynchronous gaps", async () => {
+  for (const middle of ["phase = 'paused';", "await wait();"]) {
+    const after = `async function advance(phase) {\n  if (phase === 'idle') {\n    ${middle}\n    phase = 'running';\n  }\n}`;
+    const output = await lifecycleChange("async function advance(phase) {\n}", after);
+    assert.match(output, /state draft unresolved:/);
+    assert.doesNotMatch(output, /state draft:.*idle.*running/);
+    assert.match(output, /human review/);
+  }
+});
+
+test("state drafts exclude unrelated, shadowed, delayed and unsupported state evidence", async () => {
+  for (const body of [
+    "  if (phase === 'idle') { other = 'running'; }",
+    "  if (phase === 'idle') { const phase = 'paused'; phase = 'running'; }",
+    "  if (phase === 'idle') { return () => { phase = 'running'; }; }",
+    "  if (phase === 'idle' || phase === 'paused') { phase = 'running'; }",
+    "  if (phase === 'idle') {} else { phase = 'running'; }",
+    "  // if (phase === 'idle') phase = 'running';",
+    "  const example = `if (phase === 'idle') phase = 'running'`;",
+    "  if (phase === START) { phase = next(); }",
+    "  if (job.mode === 'open') { job = other; job.mode = 'closed'; }",
+  ]) assert.doesNotMatch(await lifecycleChange("function advance(phase, other, job) {\n}",
+    `function advance(phase, other, job) {\n${body}\n}`), /state draft:/, body);
+  const before = "function advance(phase) {\n  if (phase === 'idle') phase = 'running';\n  show('old');\n}";
+  assert.doesNotMatch(await lifecycleChange(before, before.replace("'old'", "'new'")), /state draft/);
+});
+
+test("state drafts do not treat coercive guards, mutation or case fallthrough as a proven edge", async () => {
+  assert.doesNotMatch(await lifecycleChange("function advance(phase) {\n}",
+    "function advance(phase) {\n  if (phase == 'idle') phase = 'running';\n}"), /state draft:/);
+  for (const body of [
+    "  if (phase === 'idle') { phase++; phase = 'running'; }",
+    "  switch (phase) { case 'idle': case 'paused': phase = 'running'; }",
+  ]) {
+    const output = await lifecycleChange("function advance(phase) {\n}", `function advance(phase) {\n${body}\n}`);
+    assert.match(output, /state draft unresolved:/);
+    assert.doesNotMatch(output, /state draft:/);
+  }
+});
+
+test("shared Map scope hints compare key inputs with value inputs rather than names", async () => {
+  for (const [parameter, load] of [["region", "loadText(region, id)"], ["context", "fetchRecord(context.owner, id)"]]) {
+    const before = `const memo = new Map();\nasync function read(${parameter}, id) {\n  return ${load};\n}`;
+    const after = `const memo = new Map();\nasync function read(${parameter}, id) {\n  const hit = memo.get(id);\n  if (hit) return hit;\n  const value = await ${load};\n  memo.set(id, value);\n  return value;\n}`;
+    const output = await lifecycleChange(before, after);
+    assert.match(output, /shared Map scope: `memo`.*module 1.*key read 3.*write 6/);
+    assert.ok(output.includes(parameter === "context" ? "context.owner" : "region"));
+    assert.match(output, /value 5.*review key scope/);
+    assert.doesNotMatch(output, /data leak|cross-user|unsafe cache/i);
+  }
+});
+
+test("shared Map scope follows constant key and value aliases with field-sensitive inputs", async () => {
+  const before = "const memo = new Map();\nfunction read(context, id) {\n  return fetchRecord(context.owner, id);\n}";
+  const after = "const memo = new Map();\nfunction read(context, id) {\n  const key = context.item;\n  const hit = memo.get(key);\n  if (hit) return hit;\n  const owner = context.owner;\n  const value = fetchRecord(owner, id);\n  memo.set(key, value);\n  return value;\n}";
+  const output = await lifecycleChange(before, after);
+  assert.match(output, /shared Map scope:.*context.owner.*id.*value 7/);
+  const scoped = after.replace("const key = context.item;", "const key = `${context.owner}:${id}`;");
+  assert.doesNotMatch(await lifecycleChange(before, scoped), /shared Map scope:/);
+});
+
+test("shared Map scope checks a changed loader even when cache reads and writes are unchanged", async () => {
+  const before = "const memo = new Map();\nfunction read(owner, id) {\n  const hit = memo.get(id);\n  if (hit) return hit;\n  const value = fetchRecord(id);\n  memo.set(id, value);\n  return value;\n}";
+  assert.match(await lifecycleChange(before, before.replace("fetchRecord(id)", "fetchRecord(owner, id)")), /shared Map scope:.*owner.*value 5/);
+});
+
+test("shared Map scope excludes local maps, bound shadows, complete keys and constant values", async () => {
+  for (const after of [
+    "function read(owner, id) {\n  const memo = new Map();\n  const hit = memo.get(id);\n  const value = fetchRecord(owner, id);\n  memo.set(id, value);\n}",
+    "const memo = new Map();\nfunction read(memo, owner, id) {\n  const hit = memo.get(id);\n  const value = fetchRecord(owner, id);\n  memo.set(id, value);\n}",
+    "const Map = Custom;\nconst memo = new Map();\nfunction read(owner, id) {\n  const hit = memo.get(id);\n  const value = fetchRecord(owner, id);\n  memo.set(id, value);\n}",
+    "const memo = new Map();\nfunction read(owner, id) {\n  const key = `${owner}:${id}`;\n  const hit = memo.get(key);\n  const value = fetchRecord(owner, id);\n  memo.set(key, value);\n}",
+    "const memo = new Map();\nfunction read(id) {\n  const hit = memo.get(id);\n  memo.set(id, 'constant');\n}",
+    "const memo = new Map();\nfunction read(owner, id) {\n  memo.clear();\n  const hit = memo.get(id);\n  const value = fetchRecord(owner, id);\n  memo.set(id, value);\n}",
+    "// const memo = new Map();\nconst example = 'memo.get(id); memo.set(id, fetchRecord(owner, id))';",
+  ]) assert.doesNotMatch(await lifecycleChange("export {};", after), /shared Map scope:/, after);
+});
+
+test("shared Map scope does not guess through mutable or computed dependencies", async () => {
+  for (const key of ["let key = id;", "const key = context[field];", "const key = makeKey(owner, id);"]) {
+    const after = `const memo = new Map();\nfunction read(owner, id, context, field) {\n  ${key}\n  const hit = memo.get(key);\n  const value = fetchRecord(owner, id);\n  memo.set(key, value);\n}`;
+    assert.doesNotMatch(await lifecycleChange("export {};", after), /shared Map scope:/, key);
+  }
+});
+
+test("shared Map scope handles primitive key spellings and does not trust reset across await", async () => {
+  const after = "const memo = new Map();\nasync function read(owner, id) {\n  memo.clear();\n  await wait();\n  const hit = memo.get('fixed');\n  const value = fetchRecord(owner, id);\n  memo.set(\"fixed\", value);\n}";
+  assert.match(await lifecycleChange("export {};", after), /shared Map scope:.*owner.*id/);
+});
+
+test("shared Map scope abstains when the Map methods are replaced", async () => {
+  const after = "const memo = new Map();\nmemo.get = other;\nfunction read(owner, id) {\n  const hit = memo.get(id);\n  const value = fetchRecord(owner, id);\n  memo.set(id, value);\n}";
+  assert.doesNotMatch(await lifecycleChange("export {};", after), /shared Map scope:/);
+});
+
+test("qa brief retains state and shared Map evidence as static review drafts", async () => {
+  const before = "const memo = new Map();\nexport async function read(owner, id, phase) {\n  return fetchRecord(owner, id);\n}\n";
+  const after = "const memo = new Map();\nexport async function read(owner, id, phase) {\n  if (phase === 'idle') phase = 'running';\n  const hit = memo.get(id);\n  if (hit) return hit;\n  const value = await fetchRecord(owner, id);\n  memo.set(id, value);\n  return value;\n}\n";
+  const { root } = await repository({ "src/reader.ts": before }, { "src/reader.ts": after });
+  const output = await brief(root);
+  assert.match(output, /state draft:.*idle.*running/);
+  assert.match(output, /shared Map scope:.*owner/);
   assert.match(output, /Static analysis only: no tests were run, no LLM was called/);
   assert.ok(Buffer.byteLength(output) <= 24000);
 });

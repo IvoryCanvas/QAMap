@@ -12,6 +12,7 @@ import { collectProjectFiles } from "./fs.js";
 import { collectChangedFiles, resolveBaseRef, resolveMergeBase } from "./git-context.js";
 import type { BaseRefResolution } from "./git-context.js";
 import { TOOL_NAME, VERSION } from "./version.js";
+import { isJavaScriptTestFileName } from "./test-file-paths.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -1260,7 +1261,7 @@ function normalizeValidationCommands(commands: string[] | undefined): string[] {
 function isTestLikeFile(filePath: string): boolean {
   return (
     /(?:^|\/)(__tests__|tests?|specs?|e2e)\//i.test(filePath) ||
-    /(\.|-)(test|spec)\.[cm]?[jt]sx?$/i.test(filePath) ||
+    isJavaScriptTestFileName(filePath) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(filePath) ||
     /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(filePath) ||
     /(?:^|\/)[^/]+_test\.dart$/i.test(filePath) ||
@@ -1399,6 +1400,7 @@ export async function collectAddedDiffEvidence(
       await mergeUntrackedDiffEvidence(byFile, gitRoot, relativeRoot);
     }
     const { stdout } = await git(gitRoot, [
+      "-c", "core.quotePath=false",
       "diff",
       "--no-color",
       "--find-renames",
@@ -1437,6 +1439,7 @@ async function mergePriorityDiffEvidence(
     }
     // Prioritize recent files using the current comparison's hunks and coordinates.
     const { stdout } = await git(gitRoot, [
+      "-c", "core.quotePath=false",
       "--literal-pathspecs",
       "diff",
       "--no-color",

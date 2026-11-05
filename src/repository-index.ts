@@ -9,6 +9,7 @@ import { comparePaths, createRepositoryTextReader, discoverRepositoryPaths } fro
 import { collectSourceStructure, safeModule, safeRuntimeModule, safeSymbol, structureLimit, structurePolicy } from "./source-structure.js";
 import type { SourceStructure } from "./source-structure.js";
 import { createRepositoryModuleResolver } from "./repository-impact.js";
+import { isJavaScriptTestFileName } from "./test-file-paths.js";
 
 const excluded = new Set([".git", "node_modules", "vendor", "dist", "build", "out", "coverage", ".next", ".nuxt", ".turbo", ".cache", ".qamap", ".worktrees"]);
 const limits = { files: 12000, fileBytes: 300_000, metadataPerField: structureLimit };
@@ -72,7 +73,7 @@ export async function repositoryIndexMatchesRef(root: string, index: RepositoryE
 
 function classify(file: string): RepositoryIndexBlock["kind"] | "documentation" | "generated" | "unsupported-language" | "non-source" {
   if (/(?:\.generated\.|\.min\.|(?:^|\/)generated\/|(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$)/.test(file)) return "generated";
-  if (/\.[cm]?[jt]sx?$/.test(file)) return /(?:^|\/)(?:test|tests|__tests__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file) ? "test" : "source";
+  if (/\.[cm]?[jt]sx?$/.test(file)) return /(?:^|\/)(?:test|tests|__tests__)\//.test(file) || isJavaScriptTestFileName(file) ? "test" : "source";
   if (/(?:^|\/)(?:package|[jt]sconfig(?:\.[\w-]+)?)\.json$/.test(file) || /(?:^|\/)(?:qamap\.)?manifest\.(?:json|ya?ml)$/.test(file)) return "configuration";
   if (/\.(?:json|ya?ml)$/.test(file) && /(?:^|[/._-])(?:openapi|swagger|schema)(?:[/._-]|$)/i.test(file)) return "contract";
   if (/\.(?:md|mdx|txt|rst)$/.test(file)) return "documentation";

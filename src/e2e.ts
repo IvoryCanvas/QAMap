@@ -1746,9 +1746,9 @@ function buildE2eBootstrapPlan(input: E2eBootstrapPlanInput): E2eBootstrapPlan {
       bootstrapStep(
         "draft",
         "required",
-        "Create the first changed-flow E2E draft",
-        "No existing test files were detected, so this branch needs a concrete first draft before QAMap can compare coverage evidence.",
-        "Generate the first draft, replace TODO selectors and setup values, then decide which paths should become required regression coverage.",
+        "Locate existing tests or create a changed-flow draft",
+        "No test files matched QAMap's supported collection patterns. Existing tests may be outside that collection; locate them before deciding whether a new draft is needed.",
+        "Check existing tests and validation commands first. If a draft is needed, generate it, replace TODO selectors and setup values, then decide which paths should become required regression coverage.",
         [draftCommand],
         input.flows.flatMap((flow) => flow.files).slice(0, maxFilesPerFlow),
       ),

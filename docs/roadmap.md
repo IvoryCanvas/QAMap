@@ -89,8 +89,11 @@ New public reproductions must be neutral, never copied from private repositories
 5. Add bounded JavaScript and TypeScript resource-lifecycle hints: compare changed
    timers, listeners and subscriptions with same-function cleanup, and retain
    removed-cleanup coordinates. Keep ownership transfer and unsupported dynamic
-   cases explicit. Broader state models and shared-cache key scope remain future
-   work; a static hint does not establish a leak or a correct runtime transition.
+   cases explicit. Extend this with binding-aware literal state drafts and
+   module-level Map key/value input comparisons. Keep ambiguous transitions
+   unresolved; general state machines, cross-function stores and hidden scope
+   dependencies remain future work. A static hint does not establish a leak
+   or a correct runtime transition.
 6. Extend independent repository and repeated host comparisons in #264. Preserve
    quality and uncertainty before accepting measured token savings. The final
    single-run user-level arm scored 0.722 QA-plan coverage against the standalone
