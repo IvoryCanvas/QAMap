@@ -627,13 +627,28 @@ async function collectCommitEvidence(
     args.push("--", relativeRoot);
   }
   try {
+    // Git presents a shallow boundary as a root: --name-only then lists the
+    // whole tree, even when the real commit changed unrelated files. Such a
+    // synthetic diff cannot connect its subject to the current change.
+    const shallowPath = (await execFileAsync("git", ["rev-parse", "--git-path", "shallow"], { cwd: root })).stdout.trim();
+    let shallowCommits = new Set<string>();
+    try {
+      shallowCommits = new Set((await readFile(path.resolve(root, shallowPath), "utf8")).trim().split(/\r?\n/));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
     const { stdout } = await execFileAsync("git", args, { cwd: root, maxBuffer: 4 * 1024 * 1024 });
-    return stdout
+    const commits = stdout
       .split("\u001e")
       .map((record) => record.trim())
       .filter(Boolean)
       .map((record) => parseCommitRecord(record, relativeRoot))
       .filter((commit) => !/^merge\b/i.test(commit.subject));
+    const boundaries = commits.filter((commit) => shallowCommits.has(commit.sha));
+    if (boundaries.length) diagnostics.push(
+      `Commit intent evidence is incomplete: ${boundaries.length} shallow history boundary commit(s) omitted because their changed files cannot be established locally.`,
+    );
+    return commits.filter((commit) => !shallowCommits.has(commit.sha));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     diagnostics.push(`Could not read commit intent evidence: ${message}`);

@@ -2165,6 +2165,9 @@ function renderChangedTestContracts(result: QaDraftResult, shownTests: Set<strin
 
 function briefTail(result: QaDraftResult, files: DiffFile[], usages: Map<string, SymbolUsage[]>, range: string[], historyIssue?: string): (omitted: string[], partial?: Map<string, Hidden>) => string[] {
   const unknown: string[] = historyIssue ? [`- ${historyIssue}`] : [];
+  for (const diagnostic of result.changeAnalysis.diagnostics) {
+    if (/^Commit intent evidence is incomplete:/.test(diagnostic)) unknown.push(`- ${safeText(diagnostic)}`);
+  }
   const reasons = new Map<string, number>();
   const changed = new Set(files.map((file) => file.path));
   const prefix = toPosix(path.relative(result.root, result.analysisScope.workspaceRoot || result.root));

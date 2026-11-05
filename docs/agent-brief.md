@@ -168,6 +168,13 @@ an explicit count. Contract and heuristic sections each have a share of the
 existing byte budget so they leave room for diff omissions and recovery commands.
 The saved full JSON retains the collected contracts; a compact list is not their
 complete source or a test execution result.
+JavaScript and TypeScript contracts parse contiguous added lines, including
+multiline `it.each` / `test.each` tables, tagged tables and standard modifiers.
+Each source declaration keeps one title and call-start coordinate; table rows
+and title placeholders are never evaluated or expanded. A short recognized
+assertion in the added callback can be retained after long setup code. Sparse
+diffs with unchanged declarations or gaps in a declaration can still omit a
+contract, and the excerpt is not every assertion or proof of execution.
 The diff evidence collector requests unquoted UTF-8 paths for these contracts;
 this does not add complete decoding for every special-character Git path.
 
@@ -225,6 +232,10 @@ session costs more than a brief, so the packaged review workflow uses the brief.
   whole analysis. Shallow clones can stop before the original commit; Git versions
   without `--no-lazy-fetch` also report incomplete history and continue the diff
   analysis.
+- A shallow history boundary can make Git list a commit's entire tree as its
+  changed files. Commit-intent analysis omits such boundary commits and reports
+  incomplete evidence under Unknowns rather than attaching their subjects to
+  the current diff. Other available commits and the current diff remain usable.
 - Test excerpts are selected lines, not the whole test. The brief never runs tests.
 - Savings are not guaranteed. The host still spends tokens to read the brief and
   write the review, and an agent may choose to read more.

@@ -1,4 +1,5 @@
 import path from "node:path";
+import ts from "typescript";
 import { isBenchmarkRevisionFixturePath } from "./benchmark-paths.js";
 import { collectProjectFiles } from "./fs.js";
 import { isJavaScriptTestFileName } from "./test-file-paths.js";
@@ -95,6 +96,41 @@ export function collectChangedTestContracts(evidence: AddedDiffEvidence): Change
     if (!isTestLikeFile(file) || isBenchmarkRevisionFixturePath(file)) {
       continue;
     }
+    if (isJavaScriptTestFileName(file)) {
+      // Parse contiguous added runs only. Joining across unchanged gaps can
+      // invent a declaration or attach another test's assertions.
+      const lines = new Map(hunks.flatMap(hunk => hunk.lines).map(line => [line.line, line.text]));
+      const collected: ChangedTestContract[] = [];
+      let run: string[] = [], start = 0;
+      const flush = (): void => {
+        if (run.length) collected.push(...javascriptTestContracts(file, run.join("\n"), start));
+        run = [];
+      };
+      for (const [line, text] of [...lines].sort(([left], [right]) => left - right)) {
+        if (run.length && line !== start + run.length) flush();
+        if (!run.length) start = line;
+        run.push(text);
+      }
+      flush();
+      // Preserve the existing bounded hint for a one-line declaration with a
+      // nearby assertion in another zero-context hunk. It must not bridge an
+      // incomplete multiline declaration or relax the old six-line bound.
+      let active: { contract: ChangedTestContract; indentation: number } | undefined;
+      for (const [line, text] of [...lines].sort(([left], [right]) => left - right)) {
+        const declared = collected.find(contract => contract.line === line);
+        if (declared) {
+          active = !declared.assertion && /^\s*(?:it|test)(?:\.(?:only|skip|todo|concurrent|sequential|fails))*\s*\(\s*["'`]/.test(text)
+            ? { contract: declared, indentation: leadingWhitespaceLength(text) } : undefined;
+          continue;
+        }
+        if (!active || !text.trim()) continue;
+        if (line - active.contract.line > 6 || leadingWhitespaceLength(text) <= active.indentation) { active = undefined; continue; }
+        const assertion = changedAssertionSummary("javascript", text);
+        if (assertion) { active.contract.assertion = assertion; active = undefined; }
+      }
+      contracts.push(...collected);
+      continue;
+    }
     let active: { contract: ChangedTestContract; indentation: number } | undefined;
     for (const hunk of hunks) {
       if (active && hunk.startLine - active.contract.line > 6) {
@@ -137,6 +173,49 @@ export function collectChangedTestContracts(evidence: AddedDiffEvidence): Change
     seen.add(key);
     return true;
   });
+}
+
+// Keep the source title and one declaration coordinate, never runtime row
+// expansion. TypeScript parses tables and callbacks without importing code.
+function javascriptTestContracts(file: string, text: string, firstLine: number): ChangedTestContract[] {
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true,
+    /\.[cm]?[jt]sx$/i.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const contracts: ChangedTestContract[] = [];
+  const modifiers = new Set(["only", "skip", "todo", "concurrent", "sequential", "fails"]);
+  const testCallee = (node: ts.Expression): boolean =>
+    ts.isIdentifier(node) ? node.text === "it" || node.text === "test"
+      : ts.isPropertyAccessExpression(node) && modifiers.has(node.name.text) && testCallee(node.expression);
+  const eachCallee = (node: ts.Expression): boolean =>
+    ts.isPropertyAccessExpression(node) && node.name.text === "each" && testCallee(node.expression);
+  const registeredTest = (node: ts.Expression): boolean => testCallee(node) ||
+    ts.isCallExpression(node) && eachCallee(node.expression) ||
+    ts.isTaggedTemplateExpression(node) && eachCallee(node.tag);
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && registeredTest(node.expression) && node.arguments.length) {
+      const title = node.arguments[0];
+      const literal = quotedTestTitle(text, title.getStart(source));
+      if (literal && literal.end === title.end) {
+        const contract: ChangedTestContract = { file,
+          line: firstLine + source.getLineAndCharacterOfPosition(node.getStart(source)).line,
+          framework: "javascript", title: normalizeText(literal.title) };
+        const callback = node.arguments.find(argument => ts.isArrowFunction(argument) || ts.isFunctionExpression(argument));
+        if (callback && (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))) {
+          const assertion = (part: ts.Node): void => {
+            if (contract.assertion || ts.isFunctionLike(part)) return;
+            if (ts.isExpressionStatement(part)) contract.assertion = changedAssertionSummary("javascript", normalizeText(part.getText(source)));
+            ts.forEachChild(part, assertion);
+          };
+          assertion(callback.body);
+          // Do not add an undefined field to otherwise unchanged contracts.
+          if (!contract.assertion) delete contract.assertion;
+        }
+        contracts.push(contract);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return contracts;
 }
 
 function changedAssertionSummary(
@@ -436,6 +515,7 @@ function extractTestNames(text: string): string[] {
     names.push(normalizeText(literal.title));
     matcher.lastIndex = literal.end;
   }
+  names.push(...javascriptTestContracts("test.ts", text, 1).map(contract => contract.title));
   const pythonMatcher = /^(?:async\s+)?def\s+(test_[\p{L}\p{N}_]+)\s*\(/gmu;
   for (const match of text.matchAll(pythonMatcher)) {
     names.push(normalizeText(match[1].replace(/^test_/, "").replaceAll("_", " ")));
@@ -541,18 +621,6 @@ function changedTestContractsFromLine(
     return contracts;
   }
 
-  if (isJavaScriptTestFileName(file)) {
-    const match = /^\s*(?:it|test)\s*(?:\.\w+)?\s*\(\s*/.exec(text);
-    const literal = match && quotedTestTitle(text, match[0].length);
-    if (literal) {
-      contracts.push({
-        file,
-        line,
-        framework: "javascript",
-        title: normalizeText(literal.title),
-      });
-    }
-  }
   return contracts;
 }
 
