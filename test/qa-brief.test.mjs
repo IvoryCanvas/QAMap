@@ -66,7 +66,7 @@ test("qa brief connects a changed declaration to its tests, callers and caller t
   const output = await brief(root);
   assert.match(output, /^QAMap brief: main\.\.\.HEAD\n/);
   assert.match(output, /Static analysis only: no tests were run, no LLM was called\./);
-  assert.match(output, /Changed declarations named by a test file: 1\/1 \(name match: a listed test may not reach the change/);
+  assert.match(output, /Changed declarations with collected test references: 1\/1 \(direct or through callers; JavaScript\/TypeScript bindings are checked, other languages may use name matches; references do not establish executed coverage\)/);
   assert.match(output, /Only \+ lines are new; code outside these hunks existed at base\./);
   // Removed lines keep base numbering and added lines head numbering, so citations need no reread.
   assert.match(output, /\n-2\|  return Math\.max\(0, limit - used\);\n\+2\|  return limit - used;\n/);
@@ -118,7 +118,7 @@ test("qa brief prints repeated change shapes once with every value", async () =>
   assert.match(output, /-1\|export function check10\(value\) \{ return Math\.max\(0, value\); \}/);
   assert.match(output, /test\/rule-10\.test\.mjs:4 "rule 10 keeps its bound"/);
   assert.match(output, /### Same change in 29 more files: identical to the block above except that each standalone number 10 becomes N, for N = 0\.\.9, 11\.\.29\n/);
-  assert.match(output, /Changed declarations named by a test file: 30\/30 /);
+  assert.match(output, /Changed declarations with collected test references: 30\/30 /);
   assert.ok(Buffer.byteLength(output) < 4000);
 });
 
@@ -243,7 +243,8 @@ test("qa brief resolves what the new code calls", async () => {
   }, { "src/save.mjs": "import { persist } from './store.mjs';\nexport function save(record) {\n  audit(record);\n  return persist(record);\n}\n" });
   const output = await brief(root);
   assert.match(output, /calls persist: src\/store\.mjs:1\| export function persist\(record\) \{/);
-  assert.match(output, /calls audit: external or built-in \(no definition in this repository\)/);
+  assert.match(output, /calls audit: binding not resolved at src\/save\.mjs:3/);
+  assert.doesNotMatch(output, /calls audit: external or built-in/);
 });
 
 test("qa brief resolves Python imports and includes untracked working-tree files on request", async () => {

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { isBenchmarkRevisionFixturePath } from "./benchmark-paths.js";
 import { collectProjectFiles } from "./fs.js";
+import { isJavaScriptTestFileName } from "./test-file-paths.js";
 import type { AddedDiffEvidence } from "./test-plan.js";
 import type { ProjectFile } from "./types.js";
 
@@ -229,7 +230,7 @@ function evaluateCoverageTarget(
       confidence: "high",
       files: [],
       signals: [],
-      reason: "No existing test files were detected, so QAMap cannot find coverage evidence for this target.",
+      reason: "No test files matched QAMap's supported collection patterns, so coverage evidence for this target is unavailable; tests may exist outside that collection.",
     };
   }
 
@@ -428,9 +429,12 @@ function normalizePathForMatch(value: string): string {
 
 function extractTestNames(text: string): string[] {
   const names: string[] = [];
-  const matcher = /\b(?:describe|it|test|testWidgets)\s*(?:\.\w+)?\s*\(\s*(["'`])([^"'`]+)\1/g;
-  for (const match of text.matchAll(matcher)) {
-    names.push(normalizeText(match[2]));
+  const matcher = /\b(?:describe|it|test|testWidgets)\s*(?:\.\w+)?\s*\(\s*/g;
+  for (let match = matcher.exec(text); match; match = matcher.exec(text)) {
+    const literal = quotedTestTitle(text, match.index + match[0].length);
+    if (!literal) continue;
+    names.push(normalizeText(literal.title));
+    matcher.lastIndex = literal.end;
   }
   const pythonMatcher = /^(?:async\s+)?def\s+(test_[\p{L}\p{N}_]+)\s*\(/gmu;
   for (const match of text.matchAll(pythonMatcher)) {
@@ -445,6 +449,29 @@ function extractTestNames(text: string): string[] {
     names.push(normalizeText(match[1].replace(/^test_/, "").replaceAll("_", " ")));
   }
   return uniqueStrings(names).slice(0, 40);
+}
+
+// Read a literal's source spelling, not a runtime test name. Only its own
+// delimiter closes it; an escape consumes the next character without eval or
+// decoding. Only simple identifier/property substitutions are kept as source;
+// complex template expressions are omitted rather than partially interpreted.
+function quotedTestTitle(text: string, start: number): { title: string; end: number } | undefined {
+  const delimiter = text[start];
+  if (delimiter !== '"' && delimiter !== "'" && delimiter !== "`") return undefined;
+  for (let index = start + 1; index < text.length; index++) {
+    const character = text[index];
+    if (character === "\\") {
+      if (index + 1 >= text.length) return undefined;
+      index++;
+    } else if (delimiter === "`" && character === "$" && text[index + 1] === "{") {
+      const end = text.indexOf("}", index + 2);
+      if (end < 0 || !/^\s*[A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*\s*$/.test(text.slice(index + 2, end))) return undefined;
+      index = end;
+    } else if (character === delimiter) {
+      return index > start + 1 ? { title: text.slice(start + 1, index), end: index + 1 } : undefined;
+    } else if (delimiter !== "`" && (character === "\n" || character === "\r")) return undefined;
+  }
+  return undefined;
 }
 
 function changedTestContractsFromLine(
@@ -514,14 +541,15 @@ function changedTestContractsFromLine(
     return contracts;
   }
 
-  if (/(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file)) {
-    const matcher = /^\s*(?:it|test)\s*(?:\.\w+)?\s*\(\s*(["'`])([^"'`]+)\1/g;
-    for (const match of text.matchAll(matcher)) {
+  if (isJavaScriptTestFileName(file)) {
+    const match = /^\s*(?:it|test)\s*(?:\.\w+)?\s*\(\s*/.exec(text);
+    const literal = match && quotedTestTitle(text, match[0].length);
+    if (literal) {
       contracts.push({
         file,
         line,
         framework: "javascript",
-        title: normalizeText(match[2]),
+        title: normalizeText(literal.title),
       });
     }
   }
@@ -690,7 +718,7 @@ function isTestLikeFile(file: string): boolean {
     return false;
   }
   return (
-    /(?:\.|-)(?:test|spec)\.[cm]?[jt]sx?$/i.test(file) ||
+    isJavaScriptTestFileName(file) ||
     /(?:^|\/)test_[^/]+\.py$/i.test(file) ||
     /(?:^|\/)[^/]+_test\.(?:py|go)$/i.test(file) ||
     /(?:^|\/)[^/]+_test\.rb$/i.test(file) ||

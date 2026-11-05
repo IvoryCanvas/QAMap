@@ -26,15 +26,16 @@ does not ask the agent to read it.
 
 | Section | Content |
 | --- | --- |
-| Header | Compared range, changed-file counts, how many changed declarations a test file names (a name match, not proof the test reaches the change), the detected project and its existing validation commands. When something does not fit, a line says so. |
+| Header | Compared range, changed-file counts, how many changed declarations have collected test references, directly or through callers (not executed coverage), the detected project and its existing validation commands. When something does not fit, a line says so. |
 | Changes | Each changed file's diff with line numbers: context and `+` lines use head numbering, `-` lines use base numbering. Small files (150 lines or fewer) are shown whole; small enclosing functions are shown whole; otherwise eight lines of context. A file over its line cap keeps every removed line and folds long runs of added lines into their head line range, because a file read at head still has added lines but not removed ones. |
 | Change signals | Per source file, pattern matches for behavior that is easy to miss: fewer error or warning log calls, removed or added error handling, new throws or error returns (with the thrown name), removed throws whose case now continues, new early exits, removed conditions, dropped `await`, removed transactions or locks, rewritten access conditions (the clauses dropped and added), a key dropped from a Go, JavaScript or Python initializer while the field is still read, and a field this diff declares and reads but never assigns. They name lines to read, not defects. When the brief cannot show every file, each one still keeps its header and signals. |
 | Unshown lines | When two hunks fall inside one declaration and ten or more unchanged lines between them are not shown, the declaration's head range and those lines. |
 | References | For each changed declaration: test files that name it (title, the call, locals derived from it, and the assertions that use them), callers with their enclosing declaration, and the tests of those callers. References on lines this diff changes are marked `(changed)`; unmarked ones are unchanged. Same-named symbols in another language and comment lines are not listed. When a declaration now throws, directly or through a changed function it calls, callers without a try block, `.catch` or Go error check come first, each marked with the handling found by pattern. |
-| Calls | What new or removed code calls: the definition's location, a short body (12 lines or fewer), an import from outside the repository, or "external or built-in". Test helpers are not offered as definitions for production code. |
+| Calls | JavaScript and TypeScript calls on changed head lines: a binding-backed definition and short body (12 lines or fewer), a literal import specifier whose module location is unresolved, or a positioned unresolved binding. Removed calls remain in the diff. Other languages retain pattern-based call lookup. Test helpers are not offered as definitions for production code. |
 | History | For removed or rewritten lines, the commit that introduced them and the tests that commit added, with line numbers. |
 | What to verify | For each inferred change intent: the behavior flow (trigger, condition, action, state, outcome) and every check of its critical scenarios, including edge cases. These are heuristic pattern checks: the reviewer turns each one that fits into action and expected result, or dismisses it in one line. A critical scenario of an intent below high confidence is labeled `[check]`. |
-| Unknowns | Runtime-selected modules, ambiguous re-exports, and changed declarations no test file names. |
+| Changed test contracts | When a test diff is not fully printed, its collected test titles and declaration locations remain in a bounded compact list. Assertions shrink before identities; a byte-budget omission names the number of identities left out. These repository expectations remain unexecuted. |
+| Unknowns | Runtime-selected modules, ambiguous re-exports, and changed declarations with no collected test references. |
 | Not fully shown | Every file whose diff is not shown in full, with the removed and added lines left out, and the `git diff` command that shows them. |
 
 Initializer signals include each retained reading site's code, capped at 64
@@ -85,6 +86,14 @@ establish an edge. At most two state hints per file are shown. These are
 syntax-backed candidates, not a complete state machine, product specification,
 or proof of the runtime value at the write. Arbitrary call side effects, alias
 mutation and transitions across functions are not modeled.
+Changes to an intervening write or gap remain relevant when the guard and final
+write are unchanged. Direct variable initializers, destructuring targets and
+loop-target assignments also invalidate a resolved draft; unrelated bindings
+and delayed callbacks do not.
+Switch selectors are part of the evidence, with their own line coordinates when
+changed. Replacing a literal guard can retain the new and removed base relation
+within the two-hint budget; equivalent literal spelling does not add a removed
+relation, and a retained write is not described as deleted.
 
 Shared-cache scope hints require a module-level `const` initialized with the
 unshadowed built-in `new Map()` and a same-function read and write of a
@@ -92,19 +101,50 @@ structurally matching key. The
 hint names function inputs used by the stored value but absent from that key,
 with module, read, write and value lines. Simple property paths and constant
 aliases retain input identity; alias resolution stops after five bindings.
+This includes constant aliases used as parameter callees or property bases.
 Per-call maps, replaced methods, mutable or computed keys and opaque key builders
 are not resolved. A direct `clear()` before the read suppresses the hint only
-without an intervening `await`. Up to two Map hints share the existing per-file
+without an intervening `await`. Removing that reset retains its base coordinate
+beside the current Map evidence. Literal bracket notation for a replaced method
+has the same exclusion as dotted notation. Up to two Map hints share the existing per-file
 and whole-brief budgets. This is an input-scope question, not a data-leak verdict
 or evidence that a cache is safe. Classes, imported stores, cross-function
 ownership, hidden dependencies and arbitrary invalidation paths remain unmodeled.
+A changed await between the latest same-function direct reset and read can also
+make a scope question relevant, retaining reset and await locations. An effective
+later reset still suppresses it; unrelated awaits do not establish scope evidence.
 
 References come from `git grep` over every tracked file at the compared head,
 excluding documentation, lockfiles, vendored code, locale catalogs and build output. That includes files too
 large for the syntax index. Each candidate is then checked through the file's
 import bindings (JavaScript/TypeScript, Python): a same-named symbol imported from
 a different module is dropped, and `export { a as b }` or `import { a as b }`
-aliases are followed. Languages without import bindings keep name matches.
+aliases are followed. JavaScript and TypeScript candidates also require the
+binding at the actual use: parameters and local shadows do not name a module's
+declaration, and private helpers do not become another module's exports. Named
+and namespace imports follow bounded export paths; literal CommonJS bindings
+retain the same distinction. Unresolved candidates keep their coordinates and
+an unresolved label, outside confirmed caller/test lists. A callee without a
+proven binding no longer borrows an unrelated same-named definition. Languages
+without import bindings keep name matches.
+A missing collected test reference does not establish that tests are absent.
+JavaScript test-file collection recognizes canonical `test.js` and `spec.mjs`
+names alongside `.test`, `.spec`, `-test`, and `-spec` suffixes. These filename
+conventions do not prove execution; other names may remain outside collection.
+Unresolved bindings retain their reason and location; build-output imports are
+not mapped to source declarations without evidence.
+An unresolved bare import may be a workspace or compiler-path alias; its spelling
+alone does not establish that the module is outside the repository.
+
+JavaScript and TypeScript caller entries require a bound call or constructor
+callee at the use site, including transparent parentheses and type assertions.
+Type annotations, generic arguments, stored values and callback values remain
+under `source references (invocation not established)` with source coordinates;
+their owners do not acquire a runtime caller/test or throw-handling relation.
+Calling a member of a function value, such as `.bind`, `.call` or `.apply`, also
+stays a source reference; a resolved namespace export call remains a caller.
+Markup mentions are also references rather than calls. Other source languages
+retain invocation-shaped heuristic matching, without proving runtime execution.
 
 References omitted by per-section detail limits keep compact `file:line` lists,
 including callers' tests when their excerpts are disabled. A compact test
@@ -116,6 +156,16 @@ These lists cover collected references, not every possible use in the repository
 Search caps still appear under Unknowns. The overall byte budget is unchanged;
 when a whole file block does not fit, Not fully shown says its diff and references
 were omitted. Coordinates do not prove coverage or test execution.
+
+Changed-test contracts keep titles and declaration coordinates beyond the first
+eight entries when space permits. The brief drops assertion detail, then shortens
+titles at code point boundaries, before omitting whole entries with
+an explicit count. Contract and heuristic sections each have a share of the
+existing byte budget so they leave room for diff omissions and recovery commands.
+The saved full JSON retains the collected contracts; a compact list is not their
+complete source or a test execution result.
+The diff evidence collector requests unquoted UTF-8 paths for these contracts;
+this does not add complete decoding for every special-character Git path.
 
 Change shapes that repeat across many files and differ only in one number are
 printed once for a concrete member, followed by the exact list of other values,

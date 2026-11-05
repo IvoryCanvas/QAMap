@@ -102,7 +102,9 @@ export async function materializeFixtureRepo({
   return {
     tempRoot,
     repositoryRoot,
-    cleanup: () => fs.rm(tempRoot, { recursive: true, force: true }),
+    // Bound retries for transient removal races in this owned temporary tree.
+    // Persistent cleanup failures still reject and fail the benchmark run.
+    cleanup: () => fs.rm(tempRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
   };
 }
 

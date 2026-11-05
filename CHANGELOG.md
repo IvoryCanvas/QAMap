@@ -11,6 +11,12 @@
 
 ### Fixed
 
+- Canonical JavaScript test filenames such as `test.js` and `spec.mjs` contribute to collected suite evidence, repository classification and review references. Missing collection is described as a collection limit rather than proof that tests do not exist.
+- Review briefs distinguish direct function and constructor calls from type, callback-value and text references. Non-call source coordinates remain available without claiming invocation or propagating their owners' tests as caller evidence.
+- State evidence includes changed switch selectors and can retain a replaced literal guard's base relation within the existing two-hint limit. Shared Map hints retain changed await gaps after the latest direct reset, with reset and await coordinates rather than a leak verdict.
+- Changed-test contract lists retain titles and declaration coordinates beyond eight entries within bounded output. Assertion detail shrinks first, titles shorten at code point boundaries, and tight budgets report exact omitted identity counts. Diff evidence requests unquoted UTF-8 paths so these test contracts reach the renderer.
+- Review-brief references distinguish JavaScript and TypeScript lexical bindings, private declarations and import/export origins. Unresolved uses retain positions without inflating confirmed tests or callers; unresolved callees no longer borrow unrelated same-named definitions.
+- Review briefs retain changed intermediate state evidence, removed direct Map resets and multiline input changes. Direct binding writes and literal method replacements keep uncertainty and exclusion checks consistent; bounded constant aliases preserve callable and property-base inputs.
 - The Codex plugin manifest declares its support URL. The OpenAI directory reads it from the uploaded package and refused the 0.5.2 upload without it; the listing copy already named the same URL.
 
 ## 0.5.2 - 2026-10-12

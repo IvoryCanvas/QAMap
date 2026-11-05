@@ -2219,14 +2219,14 @@ function buildIntentQaScenarios(
   }
   if (removedAccessGuardEvidence.length > 0) {
     scenarios.push(makeScenario(intentId, "removed-guard", "failure", "critical", "Removed guard or validation behavior", [
-      "Prepare valid, invalid, unauthorized, and previously rejected inputs or identities.",
+      "Identify the inputs or states handled by the removed check at the cited source locations.",
     ], [
-      "Repeat the changed behavior for each state that the removed guard previously handled.",
-      "Attempt the same operation through every affected entry point.",
+      "Ask a reviewer which of those inputs or states the changed behavior should accept or reject.",
+      "Exercise the agreed cases through the affected entry points.",
     ], [
-      "Verify invalid or unauthorized behavior remains blocked by an intentional replacement.",
-      "Verify valid behavior still succeeds without bypassing required validation.",
-    ], ["Removed validation", "Unauthorized access", "Alternative entry point"], removedAccessGuardEvidence));
+      "Verify observed acceptance and rejection match the reviewer-confirmed behavior.",
+      "Verify any replacement check or intentional removal follows that decision.",
+    ], ["Previously accepted input", "Previously rejected input", "Alternative entry point"], removedAccessGuardEvidence));
   }
 
   const changedAccessEvidence = evidence.filter((item) =>
@@ -3598,16 +3598,14 @@ function collectDiffRiskEvidence(
               ));
             }
           }
-          const guardMatch = code.match(
-            /(guard\w*|validat\w*|permission\w*|authoriz\w*|authenticat\w*|isAllowed|isDenied|protected)/i,
-          );
-          if (guardMatch) {
+          const guardSymbol = guardBehaviorSymbol(file, code, structure, line.line);
+          if (guardSymbol) {
             evidence.push(diffRiskEvidence(
               file,
               hunk,
               line.line,
-              guardMatch[1],
-              `${side === "base" ? "Removed" : "Changed"} line contains guard or validation evidence for ${guardMatch[1]}.`,
+              guardSymbol,
+              `${side === "base" ? "Removed" : "Changed"} line contains guard or validation evidence for ${guardSymbol}.`,
               side,
             ));
           }
@@ -5186,6 +5184,20 @@ function diffTextForRoleClassification(hunks: AddedDiffHunk[]): string {
 interface VocabularyStructure {
   calls: Array<{ symbol: string; line: number }>;
   codeLines: string[];
+  guardPredicates?: Array<{ symbol: string; line: number }>;
+  guardDeclarations?: Array<{ symbol: string; line: number }>;
+}
+
+const guardVocabulary = /guard\w*|validat\w*|permission\w*|authoriz\w*|authenticat\w*|isAllowed|isDenied|protected/i;
+const accessGuardVocabulary = /permission\w*|authoriz\w*|authenticat\w*|isAllowed|isDenied|protected/i;
+
+function guardBehaviorSymbol(file: string, code: string, structure: VocabularyStructure | undefined, line: number): string | undefined {
+  if (!/\.[cm]?[jt]sx?$/i.test(file)) return code.match(guardVocabulary)?.[0];
+  // A compiler node called `guard`, its property, or a call argument does not
+  // establish a validator. Require a callable declaration, invocation or gate.
+  return structure?.calls.find(call => call.line === line && guardVocabulary.test(call.symbol.split(".").at(-1)!))?.symbol
+    ?? structure?.guardPredicates?.find(predicate => predicate.line === line)?.symbol
+    ?? structure?.guardDeclarations?.find(declaration => declaration.line === line)?.symbol;
 }
 
 function locatedVocabularyText(hunks: AddedDiffHunk[]): string | undefined {
@@ -5303,6 +5315,27 @@ function parseVocabularyStructure(file: string, text: string | undefined): Vocab
     return undefined;
   };
   const calls: VocabularyStructure["calls"] = [];
+  const guardPredicates: NonNullable<VocabularyStructure["guardPredicates"]> = [];
+  const guardDeclarations: NonNullable<VocabularyStructure["guardDeclarations"]> = [];
+  const rejects = (node: ts.Statement): boolean => ts.isThrowStatement(node)
+    || ts.isReturnStatement(node) && node.expression?.kind === ts.SyntaxKind.FalseKeyword
+    || ts.isBlock(node) && node.statements.some(rejects);
+  const retainGuardPredicate = (expression: ts.Expression, rejecting: boolean): void => {
+    if (ts.isParenthesizedExpression(expression)) {
+      retainGuardPredicate(expression.expression, rejecting);
+    } else if (ts.isPrefixUnaryExpression(expression)) {
+      retainGuardPredicate(expression.operand, rejecting);
+    } else if (ts.isBinaryExpression(expression)) {
+      retainGuardPredicate(expression.left, rejecting); retainGuardPredicate(expression.right, rejecting);
+    } else if (ts.isIdentifier(expression) || ts.isPropertyAccessExpression(expression)) {
+      const symbol = callName(expression);
+      if (!symbol || !(accessGuardVocabulary.test(symbol) || rejecting && guardVocabulary.test(symbol))) return;
+      const start = source.getLineAndCharacterOfPosition(expression.getStart(source)).line + 1;
+      const end = source.getLineAndCharacterOfPosition(expression.getEnd() - 1).line + 1;
+      for (let line = start; line <= end; line++) guardPredicates.push({ symbol, line });
+    }
+    // Call arguments are inputs to a predicate, not predicates themselves.
+  };
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && !(ts.isPropertyAccessExpression(node.expression)
       && node.expression.name.text === "update" && builtinReceiver(node.expression))) {
@@ -5310,10 +5343,17 @@ function parseVocabularyStructure(file: string, text: string | undefined): Vocab
       const target = ts.isPropertyAccessExpression(node.expression) ? node.expression.name : node.expression;
       if (symbol && symbol !== "import") calls.push({ symbol, line: source.getLineAndCharacterOfPosition(target.getStart(source)).line + 1 });
     }
+    if (ts.isIfStatement(node)) retainGuardPredicate(node.expression, rejects(node.thenStatement));
+    const declaration = ts.isFunctionDeclaration(node) && node.body ? node.name
+      : ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+        && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) ? node.name : undefined;
+    if (declaration && guardVocabulary.test(declaration.text)) {
+      guardDeclarations.push({ symbol: declaration.text, line: source.getLineAndCharacterOfPosition(declaration.getStart(source)).line + 1 });
+    }
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return { calls, codeLines: masked.join("").split(/\r?\n/) };
+  return { calls, guardPredicates, guardDeclarations, codeLines: masked.join("").split(/\r?\n/) };
 }
 
 function goVocabularyStructure(text: string): VocabularyStructure {
