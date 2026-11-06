@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.3 - 2026-11-06
+
+npm and plugin publication are separate steps.
+See the [0.5.3 release record](docs/releases/0.5.3.md).
+
 ### Changed
 
 - Review briefs retain guarded literal state-write drafts and removed relations, with explicit uncertainty for intervening writes, async gaps and case fallthrough. Shared module-level Map hints compare key inputs with stored-value inputs, retaining property paths and bounded constant aliases. These bounded, local syntax hints do not define a product state machine or establish a cache leak.

@@ -1,6 +1,6 @@
 {
   "name": "qamap",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Review a pull request from one local brief: the diff, the tests and callers of changed code, and change signals. No LLM call, no upload.",
   "author": {
     "name": "IvoryCanvas",
@@ -40,5 +40,13 @@
     "brandColor": "#0E7490",
     "composerIcon": "./skills/qamap-pr-qa/assets/qamap-logo.png",
     "logo": "./skills/qamap-pr-qa/assets/qamap-logo.png"
+  },
+  "requires_local_executor": true,
+  "extensions": {
+    "com.openai": {
+      "publication": {
+        "release_notes": "QAMap 0.5.3 improves binding-aware caller and test evidence, bounded state/cache/lifecycle hints, parameterized test contracts and recovery of omitted diffs. Optional Git history has time limits and discloses shallow or missing evidence. The plugin requires the matching 0.5.3 CLI. Consent and execution boundaries remain unchanged; tests do not run automatically. No new token, speed, cost or review-quality improvement has been measured for this version."
+      }
+    }
   }
 }

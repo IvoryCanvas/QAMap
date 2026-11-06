@@ -1,5 +1,13 @@
 # Claude Directory Submission
 
+For release preparation, `pnpm release:prepare --version X.Y.Z --date YYYY-MM-DD`
+refreshes the directory copy and version pins. `pnpm plugin:bundle` generates
+an inspection ZIP and copyable source/data-handling fields. The
+[review preparation guide](plugin-review-preparation.md) links the management
+portal and the source-folder shortcut that fills the branch and path.
+Submit the Git source, not this inspection ZIP, and validate the displayed
+commit after the release PR is merged.
+
 For installation and first-use consent, read the [Claude Code setup guide](claude-code.md)
 ([한국어](ko/claude-code.md)). This document is for maintainers.
 

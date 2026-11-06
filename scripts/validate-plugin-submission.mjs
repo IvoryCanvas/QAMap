@@ -67,6 +67,8 @@ assert.equal(claudePlugin.version, packageJson.version);
 assert.equal(sourceVersionMatch[1], packageJson.version);
 assert.equal(codexPlugin.name, "qamap");
 assert.equal(codexPlugin.skills, "./skills/");
+assert.equal(codexPlugin.requires_local_executor, true, "The local CLI workflow requires a desktop executor");
+assert.equal(codexPlugin.extensions["com.openai"].publication.release_notes, submission.releaseNotes);
 assert.equal(submission.submissionType, "skills-only");
 assert.equal("mcpServers" in codexPlugin, false, "skills-only package must not declare MCP servers");
 assert.equal("apps" in codexPlugin, false, "skills-only package must not declare an app");

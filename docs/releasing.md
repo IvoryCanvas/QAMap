@@ -42,6 +42,50 @@ Before publishing, confirm:
 - Representative repository smoke notes in [release validation](release-validation.md) do not hit any stop condition.
 - npm login is available for a maintainer with publish permission for the `@ivorycanvas/qamap` package.
 
+## Prepare Versions And Review Bundles
+
+Write `docs/releases/X.Y.Z.md` first, including a `Plugin release notes` section.
+Then run the explicit, repeatable preparation command (no Git tag or publication):
+
+```sh
+pnpm release:prepare --version 0.5.3 --date 2026-11-06
+pnpm plugin:check
+pnpm plugin:bundle
+```
+
+Preparation aligns package and CLI versions, both plugin manifests, current
+skill pins, the directory copy, submission release notes and the changelog.
+It preserves historical release records and measurements. Review the diff.
+The npm lockfile is maintained separately from the pnpm frozen install contract;
+refresh it with `npm install --package-lock-only --ignore-scripts` if dependencies
+change. Do not silently carry an old dependency contract into release metadata.
+
+`plugin:bundle` writes two allowlisted ZIPs, copyable JSON submission fields,
+a reviewer guide and SHA-256 checksums to ignored `release-artifacts/`.
+CI also builds these materials without submitting or publishing them. Rebuild
+from the final clean commit before handing an archive to a directory.
+OpenAI takes the OpenAI ZIP; Claude reads the `plugins/claude` Git source.
+See [plugin review preparation](plugin-review-preparation.md) for URLs and fields.
+
+### npm Token Transition
+
+As of 2026-11-06, npm's announced transition restricts bypass-2FA tokens:
+account and permission administration requires interactive 2FA from August 2026;
+direct publication with these tokens is targeted for removal in January 2027.
+Read/write access is not proof that a token can publish directly: stage-only
+tokens return `E_STAGE_REQUIRED` for direct publishing. Do not weaken package
+2FA settings or alter maintainer access to work around a publish failure.
+
+For a future automated release, configure either trusted publishing (OIDC) or
+the staged workflow: automation runs `npm stage publish`, then an authorized
+maintainer inspects and approves the stage with 2FA. Staging requires npm
+11.15.0+ and Node 22.14.0+. It does not make the version public until approval.
+Never put a publishing token in the repository, package, ZIP or review fields.
+
+References: [npm token policies](https://docs.npmjs.com/about-access-tokens/),
+[transition announcement](https://github.blog/changelog/2026-07-31-restricting-npm-bypass-2fa-granular-access-tokens/),
+[stage-only release](https://github.blog/changelog/2026-09-18-stage-only-npm-tokens-for-safer-automation/).
+
 ## Local Release Gate
 
 Run the full local gate:

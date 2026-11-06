@@ -1,5 +1,12 @@
 # OpenAI Plugin Submission
 
+For 0.5.3 preparation, run `pnpm plugin:bundle`. It creates a complete upload
+ZIP, a reviewer guide, a copyable field sheet and checksums. See
+[plugin review preparation](plugin-review-preparation.md) for both management
+URLs and exactly which fields the portals import. The source manifest now
+declares `requires_local_executor: true` and embeds publication release notes;
+the source check rejects missing or stale values.
+
 QAMap packages one `skills-only` plugin for the shared OpenAI Plugins Directory. It reuses the same local CLI and `qamap.qa` contract as every other QAMap integration. It does not add an MCP server, hosted service, background hook, or second QA engine.
 
 QAMap is [published in the OpenAI Plugin Directory](https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629). npm, GitHub, and directory releases move independently. The public listing is the source of truth for the currently approved directory version; a newer npm or GitHub release requires a fresh upload and review before it appears there.
@@ -30,7 +37,7 @@ accepts the update.
 
 ## Product Boundary
 
-- The 0.5.2 workflow offers report-based review, respects refusal, and runs
+- The 0.5.3 workflow offers report-based review, respects refusal, and runs
   `qamap qa brief` only after consent or an explicit saved preference. Users
   record or remove a lasting preference with `qamap consent grant|revoke`
   (project) or `--global` (user-level host instructions); asking is the default.
@@ -45,7 +52,7 @@ accepts the update.
 
 ## Submission Sources
 
-The 0.5.2 bundle requires the matching 0.5.2 CLI. Do not pair it with an older CLI.
+The 0.5.3 bundle requires the matching 0.5.3 CLI. Do not pair it with an older CLI.
 Before uploading, verify the exact matching package from npm first. A host
 may send returned source excerpts to its own model; the local-analysis guarantee
 does not mean those excerpts stay outside the host's context.
