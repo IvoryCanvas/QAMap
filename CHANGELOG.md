@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- Review briefs bound oversized reference detail before dropping small source and test diffs, with explicit omitted-line counts and a larger-budget recovery hint. Optional history reads disable lazy fetching and use a bounded Git-command time budget; unavailable or timed-out history is reported as incomplete evidence.
 - Canonical JavaScript test filenames such as `test.js` and `spec.mjs` contribute to collected suite evidence, repository classification and review references. Missing collection is described as a collection limit rather than proof that tests do not exist.
 - Review briefs distinguish direct function and constructor calls from type, callback-value and text references. Non-call source coordinates remain available without claiming invocation or propagating their owners' tests as caller evidence.
 - State evidence includes changed switch selectors and can retain a replaced literal guard's base relation within the existing two-hint limit. Shared Map hints retain changed await gaps after the latest direct reset, with reset and await coordinates rather than a leak verdict.

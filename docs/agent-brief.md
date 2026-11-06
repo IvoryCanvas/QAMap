@@ -153,9 +153,13 @@ line. Test cases shared by omitted callers are listed once.
 Python `from ... import ...` lines are bindings, not test or caller sites.
 
 These lists cover collected references, not every possible use in the repository.
-Search caps still appear under Unknowns. The overall byte budget is unchanged;
-when a whole file block does not fit, Not fully shown says its diff and references
-were omitted. Coordinates do not prove coverage or test execution.
+Search caps still appear under Unknowns. The overall byte budget is unchanged.
+If even coordinate-only reference lists are too large, the brief bounds reference
+detail before dropping small source and test diffs. It counts omitted reference
+detail lines (not reference identities) and suggests a larger `--max-bytes` for
+those references. When a whole file block still does not fit, Not fully shown
+says its diff and references were omitted. Coordinates do not prove coverage or
+test execution.
 
 Changed-test contracts keep titles and declaration coordinates beyond the first
 eight entries when space permits. The brief drops assertion detail, then shortens
@@ -214,8 +218,13 @@ session costs more than a brief, so the packaged review workflow uses the brief.
 - Name search plus import checks is not a type checker. Dynamic dispatch,
   dependency injection, reflection and string-built module paths can hide a
   caller; the brief reports what it found, not proof that nothing else exists.
-- The history section needs local Git history. Shallow clones can stop before the
-  commit that introduced a line.
+- The history section needs local Git history. Optional history reads disable lazy
+  fetching and have a one-second per-command timeout within a three-second total
+  Git-command budget. Missing local objects, failed commands and time limits are
+  reported as incomplete history under Unknowns. This is not a timeout for the
+  whole analysis. Shallow clones can stop before the original commit; Git versions
+  without `--no-lazy-fetch` also report incomplete history and continue the diff
+  analysis.
 - Test excerpts are selected lines, not the whole test. The brief never runs tests.
 - Savings are not guaranteed. The host still spends tokens to read the brief and
   write the review, and an agent may choose to read more.

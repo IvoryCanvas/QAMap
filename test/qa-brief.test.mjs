@@ -218,8 +218,9 @@ test("reference coordinates keep search caps and byte-budget omissions explicit"
   const bounded = await brief(root, ["--max-bytes", "4000"]);
   assert.ok(Buffer.byteLength(bounded) <= 4000);
   assert.match(bounded, /Reference search was capped for: allowance/);
-  assert.match(bounded, /src\/capacity\.mjs: diff and references not shown/);
-  assert.match(bounded, /Not everything fits/);
+  assert.match(bounded, /-2\|  return Math.max\(0, value\);\n\+2\|  return value;/);
+  assert.match(bounded, /reference detail lines omitted by byte budget/);
+  assert.doesNotMatch(bounded, /src\/capacity\.mjs: diff and references not shown/);
 });
 
 test("qa brief names the commit and tests behind removed lines", async () => {
