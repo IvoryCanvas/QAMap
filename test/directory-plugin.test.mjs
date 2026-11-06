@@ -44,6 +44,20 @@ test("directory listing preserves the display name and explicit documentation li
   }
 });
 
+test("installed review guidance uses the existing CLI and has no package launcher", async () => {
+  const reference = await readFile(path.join(root, directoryPluginPath, "skills/qamap-pr-qa/references/advanced-workflow.md"), "utf8");
+  const readme = await readFile(path.join(root, directoryPluginPath, "README.md"), "utf8");
+  for (const text of [reference, readme]) {
+    assert.doesNotMatch(text, /\b(?:npm\s+(?:exec|install)|pnpm\s+(?:exec|dlx|install)|npx|bunx|uvx)\b/);
+  }
+  assert.match(reference, /Check `qamap --version` first/);
+  assert.match(reference, /qamap qa run \. --base <base> --head HEAD --format agent/);
+  assert.match(reference, /Do not inspect\s+credential stores/);
+  assert.match(reference, /do not\s+discover, copy or configure credentials/);
+  const manifest = JSON.parse(await readFile(path.join(root, directoryPluginPath, ".claude-plugin/plugin.json"), "utf8"));
+  for (const field of ["mcpServers", "hooks", "userConfig", "env"]) assert.equal(field in manifest, false);
+});
+
 test("directory packaging rejects development files and install configuration", async t => {
   for (const file of ["scripts/provider.mjs", "package.json", "package-lock.json", ".npmrc"]) {
     await t.test(file, async t => {

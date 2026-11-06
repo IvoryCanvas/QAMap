@@ -23,19 +23,23 @@ more than a brief; prefer `qa brief` for review. For save-only requests, omit
 1. Detect the comparison base.
    - Prefer the target PR base branch when known.
    - Otherwise use `origin/main`, then `origin/master`, then the repository default branch.
-2. Run QAMap from the repository root. Prefer an already installed local binary:
+2. Run QAMap from the repository root with the already installed
+   `@ivorycanvas/qamap@0.5.3` CLI. Check `qamap --version` first. If it is missing
+   or incompatible, stop and ask the user to complete CLI setup separately.
+   Do not install, upgrade or launch a downloaded package in this workflow.
 
    ```sh
-   pnpm exec qamap qa . --base <base> --head HEAD --format agent
+   qamap qa . --base <base> --head HEAD --format agent
    ```
 
-   If QAMap is not installed, disclose that the next command downloads the pinned package from the npm registry and follow the host's network approval policy before running it:
-
-   ```sh
-   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.5.3 -- qamap qa . --base <base> --head HEAD --format agent
-   ```
-
-   This one-off form runs outside the target repository's package-manager contract, so it does not invoke Corepack or add a `packageManager` field. QAMap's analysis does not upload source code or make another LLM call. The calling agent still uses its own model tokens to invoke the skill and interpret the compact result.
+   CLI installation is a separate user setup task, documented in the
+   [setup guide](https://github.com/IvoryCanvas/QAMap/blob/main/docs/claude-code.md).
+   The installed skill does not invoke a package manager or its saved
+   authentication settings to acquire QAMap. Separately authorized project
+   validation commands can invoke project tools, as described below.
+   Local QAMap analysis does not upload source code or
+   make another LLM call. The calling agent still uses its own model tokens to
+   invoke the skill and interpret the result.
 
    Prefer the compact agent format because it carries the decision contract in a fraction of the tokens. Drop `--format agent` for concise human-readable text, or use `--format markdown` for the full trace report.
    The agent JSON is a versioned contract (`schema: qamap.qa` v1, additive-only): see docs/agent-format.md in the QAMap repository.
@@ -48,7 +52,7 @@ more than a brief; prefer `qa brief` for review. For save-only requests, omit
    - Use an explicit scoped pass only when a human wants to override that decision:
 
    ```sh
-   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.5.3 -- qamap qa <package-path> --workspace-root . --base <base> --head HEAD
+   qamap qa <package-path> --workspace-root . --base <base> --head HEAD
    ```
 
 4. Read and verify intent before generating code. In agent format:
@@ -73,7 +77,7 @@ more than a brief; prefer `qa brief` for review. For save-only requests, omit
    - `run-repository-command` — when policy permits repository code execution, prefer QAMap's bounded executor so analysis and execution share one receipt:
 
      ```sh
-     npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.5.3 -- qamap qa run . --base <base> --head HEAD --format agent
+     qamap qa run . --base <base> --head HEAD --format agent
      ```
 
      It re-analyzes the change and runs only the exact selected existing repository command. Do not substitute another command or run it again when `execution.performed` is true.
@@ -83,10 +87,12 @@ more than a brief; prefer `qa brief` for review. For save-only requests, omit
 6. Only after a human or team accepts the scenario and automation adapter, create or preview executable coverage:
 
    ```sh
-   npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.5.3 -- qamap e2e draft . --base <base> --head HEAD --dry-run
+   qamap e2e draft . --base <base> --head HEAD --dry-run
    ```
 
-   If the selected adapter is absent, inspect and explicitly accept the `automation.setupCommand` proposal. Never install a runner merely because QAMap detected a web or mobile surface.
+   If the selected adapter is absent, stop and show the missing prerequisite.
+   Runner installation is a separate user setup task; do not execute
+   `automation.setupCommand` from this plugin workflow.
 7. Include the useful parts in the PR body, review note, or handoff summary.
 
 ## Agent Action Contract
@@ -100,6 +106,19 @@ more than a brief; prefer `qa brief` for review. For save-only requests, omit
 - Treat QAMap's top-level `execution` receipt as authoritative for this invocation. Plain `qa` is `not-run`; only explicit `qa run` or a command the agent independently executed can produce pass, fail, or blocked evidence.
 - Keep static mapping and repository-command execution as separate facts even when `qa run` returns them together. A generated or structurally runnable draft is not a passing test.
 - Never modify a shared manifest automatically. Present the proposed correction target and require human approval.
+
+## Credentials And External Services
+
+Local brief and report analysis require no service credentials. Do not inspect
+credential stores or read secret values from the user's environment or files.
+Do not send an existing machine credential to a server or invent a credential
+prompt for this plugin: it has no authenticated service or MCP server.
+
+A separately requested repository validation command can have its own network
+access, authentication and side effects. Review its action contract and obtain
+the applicable authorization before execution. If it needs service setup,
+stop and have the user complete that setup as a separate project task; do not
+discover, copy or configure credentials on the user's behalf.
 
 ## Output Rules
 
@@ -120,7 +139,7 @@ When the recommendation is wrong or too broad, do not repeatedly re-prompt for t
 If the team accepts QAMap for ongoing use, suggest this follow-up:
 
 ```sh
-npm exec --yes --registry=https://registry.npmjs.org --package=@ivorycanvas/qamap@0.5.3 -- qamap manifest init .
+qamap manifest init .
 ```
 
 Then humans should review `.qamap/manifest.yaml` and keep only durable team QA language.
