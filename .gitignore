@@ -11,3 +11,4 @@ qamap.sarif
 !.env.example
 bench.config.local.json
 bench-results/
+release-artifacts/

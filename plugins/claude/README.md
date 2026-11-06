@@ -9,6 +9,8 @@ On 42 public pull requests from 12 open-source projects, Claude Code used 44%
 fewer tokens with the brief than alone; the blind-graded review preference leaned
 slightly to Claude Code alone and was not significant. See the
 [measured results](https://github.com/IvoryCanvas/QAMap/blob/main/test/benchmarks/review-host/external/RESULTS.md).
+These receipts describe the earlier build that became 0.5.2, not a measurement
+of 0.5.3. No new token or review-quality improvement is claimed for this release.
 Source, issues and documentation: [IvoryCanvas/QAMap](https://github.com/IvoryCanvas/QAMap).
 
 ![QAMap](.claude-plugin/icon.svg)
@@ -16,7 +18,7 @@ Source, issues and documentation: [IvoryCanvas/QAMap](https://github.com/IvoryCa
 ## Requirements
 
 Use Claude Code with a local checkout, a terminal, Git, Node.js 20 or later, and
-the matching CLI: `@ivorycanvas/qamap@0.5.2`. A chat without local repository and
+the matching CLI: `@ivorycanvas/qamap@0.5.3`. A chat without local repository and
 terminal access cannot run this workflow.
 
 This bundle supplies the skill, not the CLI. It has no automatic installer,
@@ -24,7 +26,7 @@ dependency lockfile, hook, background service or MCP server. With the user's
 permission, install the CLI separately:
 
 ```sh
-npm install -g @ivorycanvas/qamap@0.5.2
+npm install -g @ivorycanvas/qamap@0.5.3
 ```
 
 Installation downloads QAMap and its dependencies from the npm registry under

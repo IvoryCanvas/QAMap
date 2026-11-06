@@ -1,6 +1,6 @@
 {
   "name": "@ivorycanvas/qamap",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Local pull-request review brief for coding agents such as Claude Code and Codex: the diff, the tests and callers of changed code, and change signals in one bounded report. No LLM call, no upload.",
   "type": "module",
   "main": "./dist/index.js",
@@ -45,6 +45,8 @@
     "scan:compiled": "node dist/cli.js scan .",
     "scan": "pnpm build && pnpm scan:compiled",
     "plugin:check": "node scripts/validate-plugin-submission.mjs",
+    "plugin:bundle": "node scripts/plugin-bundle.mjs",
+    "release:prepare": "node scripts/prepare-release.mjs",
     "plugin:smoke:compiled": "node scripts/plugin-smoke.mjs",
     "plugin:smoke": "pnpm build && pnpm plugin:smoke:compiled",
     "report": "pnpm build && node dist/cli.js report . --output QAMAP_REPORT.md",

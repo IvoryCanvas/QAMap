@@ -58,6 +58,8 @@ jobs:
         run: pnpm coverage:compiled
       - name: Validate plugin metadata
         run: pnpm plugin:check
+      - name: Build plugin review bundles and field sheets
+        run: pnpm plugin:bundle
       - name: Smoke-test the packed plugin
         run: pnpm plugin:smoke:compiled
       - name: Run deterministic QA benchmarks
