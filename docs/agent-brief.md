@@ -22,6 +22,12 @@ bytes; `--max-bytes <n>` changes it (minimum 4,000). The full report is still
 saved under `~/QAMap-reports/qa-*` (or `--output <directory>`), but the brief
 does not ask the agent to read it.
 
+When omitted evidence belongs to an untracked working-tree file, the recovery
+hint uses `git diff --no-index -- /dev/null '<file>'`. Normal tracked-file
+recovery remains separate. A no-index diff returns exit code 1 for differences;
+it does not stage or execute the file. For several omitted untracked files,
+replace `<untracked-file>` with each listed path.
+
 ## What The Brief Contains
 
 | Section | Content |

@@ -2186,6 +2186,7 @@ function briefTail(result: QaDraftResult, files: DiffFile[], usages: Map<string,
   const truncated = [...usages.values()].flat().filter((usage) => usage.truncated).map((usage) => usage.symbol);
   if (truncated.length) unknown.push(`- Reference search was capped for: ${truncated.join(", ")}`);
   const kinds = new Map(files.map((file) => [file.path, file.kind]));
+  const untracked = new Set(files.filter(file => file.status.startsWith("A?")).map(file => file.path));
   const order: Record<FileKind, number> = { source: 0, test: 1, config: 2, docs: 3, generated: 4, binary: 5 };
   return (omitted, partial = new Map()) => {
     // Every file the brief does not show in full is named with the command that shows it:
@@ -2194,13 +2195,20 @@ function briefTail(result: QaDraftResult, files: DiffFile[], usages: Map<string,
       ...[...partial].map(([file, hidden]) => ({ file, text: `${safeText(file)}: ${hidden.removed} removed and ${hidden.added} added diff lines not shown` }))]
       .sort((a, b) => order[kinds.get(a.file) ?? "config"] - order[kinds.get(b.file) ?? "config"] || (a.file < b.file ? -1 : 1));
     const listed = entries.slice(0, 40);
-    const sources = entries.filter((entry) => kinds.get(entry.file) === "source").map((entry) => entry.file);
+    const tracked = entries.filter(entry => !untracked.has(entry.file));
+    const missingUntracked = entries.filter(entry => untracked.has(entry.file));
+    const sources = tracked.filter((entry) => kinds.get(entry.file) === "source").map((entry) => entry.file);
     const command = `git diff ${range[0]} -- ${sources.length && sources.length <= 8 ? sources.map((file) => `'${file.replace(/'/g, "'\\''")}'`).join(" ") : "<file>"}`;
+    const untrackedFile = missingUntracked.length === 1 ? `'${missingUntracked[0].file.replace(/'/g, "'\\''")}'` : "<untracked-file>";
     return [
       ...(unknown.length ? ["== Unknowns ==", ...unknown, ""] : []),
       ...(entries.length ? ["== Not fully shown (removed lines appear only in the diff) ==", ...listed.map((entry) => `- ${entry.text}`),
         ...(entries.length > listed.length ? [`- ${entries.length - listed.length} more files: ${summarizeFiles(entries.slice(listed.length).map((entry) => entry.file))}`] : []),
-        `- Show them with: ${safeText(command)}`, ""] : []),
+        ...(tracked.length ? [`- Show them with: ${safeText(command)}`] : []),
+        ...(missingUntracked.length ? [
+          `- Show untracked files with: git diff --no-index -- /dev/null ${safeText(untrackedFile)}`,
+          "- A no-index diff returns exit code 1 when it finds differences; it does not stage or execute the file.",
+        ] : []), ""] : []),
       "References: matched by name in tracked files at the compared head (docs, lockfiles, vendored and build output excluded) and confirmed through import bindings where the language has them. Non-call source references do not establish invocation. Calls through strings, routing, dependency injection or reflection are not traced, so caller lists can be incomplete.",
     ];
   };

@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- Review brief recovery hints distinguish omitted untracked files from tracked diffs, preserve quoted filenames, and explain the expected no-index difference exit code.
 - Shallow history boundary commits no longer attach synthetic whole-tree intent evidence to an unrelated diff; briefs disclose that incomplete evidence. Changed JavaScript/TypeScript test contracts recognize multiline and tagged `it.each` / `test.each` declarations, retain source coordinates without expanding rows, and can collect short callback assertions after long setup code.
 - Review briefs bound oversized reference detail before dropping small source and test diffs, with explicit omitted-line counts and a larger-budget recovery hint. Optional history reads disable lazy fetching and use a bounded Git-command time budget; unavailable or timed-out history is reported as incomplete evidence.
 - Canonical JavaScript test filenames such as `test.js` and `spec.mjs` contribute to collected suite evidence, repository classification and review references. Missing collection is described as a collection limit rather than proof that tests do not exist.
