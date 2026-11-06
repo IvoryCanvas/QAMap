@@ -22,17 +22,17 @@ the matching CLI: `@ivorycanvas/qamap@0.5.3`. A chat without local repository an
 terminal access cannot run this workflow.
 
 This bundle supplies the skill, not the CLI. It has no automatic installer,
-dependency lockfile, hook, background service or MCP server. With the user's
-permission, install the CLI separately:
+dependency lockfile, hook, background service or MCP server. Complete the
+[separate CLI setup](https://github.com/IvoryCanvas/QAMap/blob/main/docs/claude-code.md)
+before using this plugin. That user setup downloads QAMap and its dependencies
+from npm; the installed skill does not install or upgrade packages and does not
+run a package-manager launcher. If the required binary is missing or
+incompatible, it stops.
 
-```sh
-npm install -g @ivorycanvas/qamap@0.5.3
-```
-
-Installation downloads QAMap and its dependencies from the npm registry under
-the package manager's network and authentication settings. The plugin does not
-ask for an API key or read a credential store. It does not bundle the project's
-developer-only model benchmarks or their provider clients.
+Local analysis needs no service credential. The skill does not inspect credential
+stores, read secret values or send an existing machine credential to a server.
+No API key or authenticated service is declared by the plugin. Developer-only
+model benchmarks and their provider clients are outside this bundle.
 
 ## Review A Pull Request
 
@@ -49,8 +49,9 @@ with `qamap consent revoke` or `qamap consent revoke --global`.
 
 Test execution, dependency installation, source edits and automation require
 separate permission. The [advanced workflow](skills/qamap-pr-qa/references/advanced-workflow.md)
-documents these optional commands, including version-pinned downloads. They
-are not automatic follow-ups to a review.
+documents these optional commands using the installed CLI. They are not
+automatic follow-ups to a review; service authentication for a project command
+remains a separate user setup task.
 
 ## Data And Model Use
 

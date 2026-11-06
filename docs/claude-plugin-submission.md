@@ -100,6 +100,37 @@ required merely because unrelated development files triggered an earlier scan.
 
 ## Submission Details
 
+### 0.5.3 Credential Policy Hold
+
+On 2026-11-06 the owner supplied a directory report for source `9f36a02`:
+validation passed with warnings and the security scan passed, but directory
+policy held the version under `MCP_FORWARDS_CREDENTIAL_ENV`. It cited the shared
+advanced workflow and the manifest. This is a hold, not a confirmed credential
+disclosure or a final rejection. The existing live version continues serving.
+
+Neither cited file declares an MCP server, credential environment variable,
+credential file read or authenticated endpoint. The advanced workflow did offer
+package-manager launchers; they can consult the user's package-manager settings.
+That is a possible source of the finding, not a confirmed explanation of the
+directory's classifier. The pending source now removes those launcher commands
+and keeps installation outside the installed skill. Advanced commands use the
+existing CLI and stop when setup is missing. Credential discovery is explicitly
+excluded; service setup for a separately requested project command stays with
+the user. This changes the workflow, rather than concealing an active install.
+
+Keep `documentationUrl`, `privacyPolicyUrl`, `supportUrl` and `termsOfServiceUrl`:
+the supplied report says the directory reads them and no action is needed.
+Do not add an unused `userConfig` secret field to a plugin with no authenticated
+service. If a future component actually needs a credential, implement the
+directory's explicit user-supplied configuration contract for that component.
+
+After this source is merged, use the existing submission's update/revalidation
+flow and check the displayed commit. Local tests cannot establish that the hold
+has cleared. If it persists, give the reviewer the cited file contents, the
+absence of MCP/hook/env credential declarations and the exact new commit; the
+reviewer must resolve the finding. Do not withdraw the live listing or claim
+approval merely because the package validates locally.
+
 The manifest sets `displayName` to `QAMap` while keeping the installation name
 `qamap`. Its `privacyPolicyUrl`, `termsOfServiceUrl`, `supportUrl` and
 `documentationUrl` point directly to the maintained public documents. After
