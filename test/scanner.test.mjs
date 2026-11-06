@@ -10093,9 +10093,11 @@ test("package metadata includes the portable PR QA skill template", async () => 
   assert.match(
     advancedText,
     new RegExp(
-      `npm exec --yes --registry=https://registry\\.npmjs\\.org --package=@ivorycanvas/qamap@${packageJson.version.replaceAll(".", "\\.")} -- qamap qa`,
+      `@ivorycanvas/qamap@${packageJson.version.replaceAll(".", "\\.")}`,
     ),
   );
+  assert.match(advancedText, /qamap qa \. --base <base> --head HEAD --format agent/);
+  assert.doesNotMatch(advancedText, /\b(?:npm|pnpm) exec\b/);
   assert.doesNotMatch(skillText + advancedText, /@ivorycanvas\/qamap@latest/);
   assert.doesNotMatch(skillText + advancedText, /pnpm dlx/);
   assert.match(skillText, /\(references\/advanced-workflow\.md\)/);
