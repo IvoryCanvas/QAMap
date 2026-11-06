@@ -80,10 +80,17 @@ test("release preparation aligns current pins, preserves history and can be repe
     await cp(path.join(root, name), path.join(copy, name), { recursive: true });
   }
   const history = await readFile(path.join(copy, "docs/releases/0.5.2.md"));
+  const manifestPath = path.join(copy, ".codex-plugin/plugin.json");
+  const manifest = await json(manifestPath);
+  manifest.extensions["com.openai"].publication.countries = ["KR", "US"];
+  manifest.extensions["com.openai"].publication.translations = { "ko-KR": { subtitle: "변경 근거로 PR 검토" } };
+  await writeFile(manifestPath, JSON.stringify(manifest));
   await writeFile(path.join(copy, "docs/releases/0.5.4.md"), "# QAMap 0.5.4\n\n## Plugin release notes\n\nQAMap 0.5.4 preserves the local evidence boundary.\n");
   await prepareRelease(copy, "0.5.4", "2026-11-07");
   await prepareRelease(copy, "0.5.4", "2026-11-07");
   assert.equal((await json(path.join(copy, "package.json"))).version, "0.5.4");
+  assert.deepEqual((await json(manifestPath)).extensions["com.openai"].publication.countries, ["KR", "US"]);
+  assert.deepEqual((await json(manifestPath)).extensions["com.openai"].publication.translations, manifest.extensions["com.openai"].publication.translations);
   assert.equal((await json(path.join(copy, "package-lock.json"))).packages[""].version, "0.5.4");
   assert.match(await readFile(path.join(copy, "skills/qamap-pr-qa/SKILL.md"), "utf8"), /@ivorycanvas\/qamap@0\.5\.4/);
   assert.match(await readFile(path.join(copy, "docs/ko/claude-code.md"), "utf8"), /@ivorycanvas\/qamap@0\.5\.4/);

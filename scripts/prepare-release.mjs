@@ -32,7 +32,10 @@ export async function prepareRelease(directory, version, date) {
       data.requires_local_executor = true;
       data.extensions ??= {};
       data.extensions["com.openai"] ??= {};
-      data.extensions["com.openai"].publication = { release_notes: releaseNotes };
+      data.extensions["com.openai"].publication = {
+        ...data.extensions["com.openai"].publication,
+        release_notes: releaseNotes,
+      };
     }
     edits.set(file, `${JSON.stringify(data, null, 2)}\n`);
   }
