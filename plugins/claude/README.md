@@ -1,9 +1,14 @@
-# QAMap
+# QAMap — PR Analysis
 
 QAMap helps review pull requests by gathering the changed code, related tests,
 callers and Git history into one bounded local report. Claude uses that evidence
 to explain possible regressions and what still needs testing. Missing evidence
-stays visible; a static report is not proof that tests passed.
+stays visible; a static report is not proof that tests passed. This Claude plugin
+only analyzes and reads evidence. It does not execute project validation,
+generate automation, edit source or configure the project.
+
+Claude plugin version: **0.5.4**. Required CLI: **@ivorycanvas/qamap@0.5.3**.
+The plugin revision and the CLI version are independent.
 
 On 42 public pull requests from 12 open-source projects, Claude Code used 44%
 fewer tokens with the brief than alone; the blind-graded review preference leaned
@@ -44,14 +49,17 @@ unanalyzed by QAMap.
 The skill runs `qamap qa brief --require-consent` once and waits for completion.
 It reviews that report rather than repeatedly searching the same source. An
 explicit request for QAMap can authorize a single run. Lasting preferences are
-managed with `qamap consent grant` or `qamap consent grant --global`, and removed
-with `qamap consent revoke` or `qamap consent revoke --global`.
+managed separately by the user; the plugin does not modify those preferences.
 
-Test execution, dependency installation, source edits and automation require
-separate permission. The [advanced workflow](skills/qamap-pr-qa/references/advanced-workflow.md)
-documents these optional commands using the installed CLI. They are not
-automatic follow-ups to a review; service authentication for a project command
-remains a separate user setup task.
+The plugin reports suggested checks as a checklist and then stops. It does not
+execute a command recommended by the report. Requests to run tests, install
+dependencies, generate automation, edit files or change lasting preferences
+must use a separate workflow outside this plugin. The advanced CLI execution
+guide is not included or loaded by this plugin.
+
+The CLI continues to offer separate execution and configuration features. This
+plugin does not invoke them. Its scope is an instruction boundary, not a sandbox
+for arbitrary commands the user runs separately.
 
 ## Data And Model Use
 
@@ -64,8 +72,9 @@ separate retention rules in the [privacy notice](PRIVACY.md).
 
 The analysis engine does not upload source or call a model. Claude receives the
 returned evidence under the host's data policies and uses model tokens to
-interpret it. Savings and complete bug coverage are not guaranteed. An approved
-repository test command may have its own network access and side effects.
+interpret it. Savings and complete bug coverage are not guaranteed. The shared
+privacy notice also describes broader CLI commands; those execution features
+are outside this plugin's analysis-only scope.
 
 [Source](https://github.com/IvoryCanvas/QAMap) | [Support](SUPPORT.md) |
 [Security](SECURITY.md) | [Privacy](PRIVACY.md) | [Terms](TERMS.md) | [MIT License](LICENSE)

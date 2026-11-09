@@ -1,8 +1,8 @@
 {
   "name": "qamap",
   "displayName": "QAMap",
-  "version": "0.5.3",
-  "description": "Review a pull request from one local brief: the diff, the tests and callers of changed code, and change signals. No LLM call, no upload.",
+  "version": "0.5.4",
+  "description": "Analyze a pull request from one local brief: changed code, related tests and callers, and suggested checks. Analysis only; no project test execution, LLM call or upload.",
   "author": {
     "name": "IvoryCanvas",
     "url": "https://github.com/IvoryCanvas"
@@ -19,7 +19,6 @@
     "code-review",
     "pull-request",
     "local-first",
-    "agent-skill",
-    "e2e"
+    "agent-skill"
   ]
 }

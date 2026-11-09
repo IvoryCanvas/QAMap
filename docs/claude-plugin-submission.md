@@ -1,7 +1,8 @@
 # Claude Directory Submission
 
 For release preparation, `pnpm release:prepare --version X.Y.Z --date YYYY-MM-DD`
-refreshes the directory copy and version pins. `pnpm plugin:bundle` generates
+refreshes shared policies and required CLI pins. Use `--claude-version X.Y.Z`
+when the Claude plugin revision differs from the CLI release. `pnpm plugin:bundle` generates
 an inspection ZIP and copyable source/data-handling fields. The
 [review preparation guide](plugin-review-preparation.md) links the management
 portal and the source-folder shortcut that fills the branch and path.
@@ -58,21 +59,29 @@ a new CLI version or move the existing `v0.5.1` tag.
 
 ## What Is Included
 
-The folder contains ten files: the manifest, the square SVG icon, the shared
-skill and advanced guide, a README, and five license, support and policy files.
+The folder contains nine files: its own manifest and analysis-only skill, the
+square SVG icon, a README, and five license, support and policy files.
 It has no package manifest, lockfile, development scripts, test fixtures, hooks
 or MCP server. The QAMap CLI is installed separately with the user's permission.
 
-This is packaging separation, not a claim that downloads never occur. The
-README and advanced guide retain the actual version-pinned installation
-commands. CLI installation downloads npm packages; the caller still uses model
-tokens when interpreting the local report. The skill's consent and execution
-boundaries are unchanged.
+The skill runs a consented brief and targeted evidence reads. It stops after
+findings, suggested verification and unknowns. Report recommendations do not
+authorize project commands, E2E generation, preference changes or manifest repair.
+Those features remain available through the separate CLI, outside this plugin.
+There is no advanced execution guide in the installed Claude bundle and no
+delegation to one. Local reports and analysis caches are still written; this is
+not a claim that analysis performs no filesystem writes or a sandbox around the CLI.
+
+Installation is a separate user task and downloads npm packages. The caller
+still uses model tokens when interpreting the local report.
 
 ## Keep The Folder Current
 
-Edit the canonical files at the repository root, then refresh their committed
-copies. Update the CLI version in the dedicated README when preparing a release.
+Edit the Claude-specific manifest, skill and README in `plugins/claude` directly.
+The root portable skill and legacy manifest remain separate and follow the CLI
+release. Refresh only the shared icon and policy copies with the command below.
+Update the required CLI pin when preparing a CLI release; bump the Claude
+manifest version for every Claude plugin release, including plugin-only changes.
 
 ```sh
 node scripts/directory-plugin.mjs --write
@@ -82,7 +91,8 @@ claude plugin validate plugins/claude
 ```
 
 The normal CI plugin check rejects extra files, symbolic links, oversized files,
-missing icons, version mismatches and drift from the shared skill or policies.
+missing icons, invalid versions, stale CLI pins and drift from the shared policies.
+It preserves the Claude-specific skill instead of restoring the portable execution guide.
 The npm smoke also checks that this directory-only copy stays out of the npm
 package. Do not add ignore rules to conceal files from the directory scanner.
 
@@ -100,6 +110,30 @@ required merely because unrelated development files triggered an earlier scan.
 
 ## Submission Details
 
+### 0.5.4 Analysis-Only Candidate
+
+The owner supplied another policy hold for `9b9e56e` on 2026-11-08, so the
+earlier launcher removal did not resolve the reported finding. The classifier's
+exact credential flow remains unconfirmed. The CLI's optional project executor
+inherits its process environment; that is a real reason not to describe every
+CLI execution path as credential-free, even though local analysis needs no key.
+
+Claude plugin 0.5.4 requires the already published CLI 0.5.3. It narrows the
+plugin's actual workflow to PR analysis: remove the advanced execution reference
+and its skill links, prohibit following executable next actions, and stop for
+requests to run project commands, generate automation or change configuration.
+The portable CLI/OpenAI skill retains its existing scope. The native Claude
+manifest, README, archive and generated field sheet disclose this distinction.
+This is a workflow restriction, not an operating-system execution sandbox.
+
+After the PR is merged to the tracked `main`, open the existing submission and
+select **Check for new commits**. Verify the displayed commit and plugin 0.5.4;
+do not create a duplicate submission or select a new repository to escape a hold.
+`Resubmit for review` applies only if the submission has been rejected. Stop at
+the recheck handoff unless the owner separately asks to request review or publish.
+Local validation does not prove the directory hold has cleared; a new version
+can still require an Anthropic reviewer.
+
 ### 0.5.3 Credential Policy Hold
 
 On 2026-11-06 the owner supplied a directory report for source `9f36a02`:
@@ -111,8 +145,8 @@ disclosure or a final rejection. The existing live version continues serving.
 Neither cited file declares an MCP server, credential environment variable,
 credential file read or authenticated endpoint. The advanced workflow did offer
 package-manager launchers; they can consult the user's package-manager settings.
-That is a possible source of the finding, not a confirmed explanation of the
-directory's classifier. The pending source now removes those launcher commands
+That was a possible source of the finding, not a confirmed explanation of the
+directory's classifier. The `9b9e56e` change removed those launcher commands
 and keeps installation outside the installed skill. Advanced commands use the
 existing CLI and stop when setup is missing. Credential discovery is explicitly
 excluded; service setup for a separately requested project command stays with
@@ -148,8 +182,8 @@ in that repository. The local analysis engine does not call a model or upload
 source; Claude's handling of the returned content is governed by the host.
 
 No provider API key is required by the plugin. Developer-only paid model
-benchmarks are not included. Optional installs or user-approved repository
-commands can have network access and must not be described as offline analysis.
+benchmarks are not included. Separate CLI installation and project commands can
+have network access and must not be described as plugin analysis.
 
 Official references: [submission steps](https://claude.com/docs/plugins/submit)
 and [pre-submission checks](https://claude.com/docs/plugins/pre-submission-checklist).

@@ -33,7 +33,7 @@ test("review bundles omit development and publishing inputs and expose usable ma
   t.after(() => rm(output, { recursive: true, force: true }));
   const result = await buildPluginBundles(root, output);
   const openai = unzipStored(await readFile(path.join(output, `qamap-openai-${result.version}.zip`)));
-  const claude = unzipStored(await readFile(path.join(output, `qamap-claude-${result.version}.zip`)));
+  const claude = unzipStored(await readFile(path.join(output, `qamap-claude-${result.claudeVersion}.zip`)));
   const manifest = JSON.parse(openai.get(".codex-plugin/plugin.json"));
   for (const files of [openai, claude]) {
     assert.ok(files.has("skills/qamap-pr-qa/SKILL.md"));
@@ -41,12 +41,18 @@ test("review bundles omit development and publishing inputs and expose usable ma
     for (const name of files.keys()) assert.doesNotMatch(name, /^(?:scripts|test|dist|node_modules)\/|(?:^|\/)(?:\.npmrc|\.env|package(?:-lock)?\.json)$/);
   }
   assert.ok(claude.has(".claude-plugin/plugin.json"));
-  assert.equal(claude.size, 10);
+  assert.equal(claude.size, 9);
+  assert.equal(claude.has("skills/qamap-pr-qa/references/advanced-workflow.md"), false);
+  assert.ok(openai.has("skills/qamap-pr-qa/references/advanced-workflow.md"));
+  assert.equal(JSON.parse(claude.get(".claude-plugin/plugin.json")).version, result.claudeVersion);
   assert.equal(manifest.requires_local_executor, true);
   assert.ok(openai.has(manifest.interface.logo.slice(2)));
   const fields = await json(path.join(output, `qamap-submission-fields-${result.version}.json`));
   assert.equal(fields.openai.portal, "https://platform.openai.com/plugins");
   assert.equal(fields.claude.portal, "https://claude.ai/directory/manage");
+  assert.equal(fields.claude.version, result.claudeVersion);
+  assert.equal(fields.claude.requiredCLI, result.version);
+  assert.equal(fields.claude.scope, "analysis-only");
   assert.equal(fields.releaseNotes, manifest.extensions["com.openai"].publication.release_notes);
   assert.equal(fields.reviewCases.positive.length, 5);
   assert.equal(fields.reviewCases.negative.length, 3);
@@ -86,16 +92,25 @@ test("release preparation aligns current pins, preserves history and can be repe
   manifest.extensions["com.openai"].publication.translations = { "ko-KR": { subtitle: "변경 근거로 PR 검토" } };
   await writeFile(manifestPath, JSON.stringify(manifest));
   await writeFile(path.join(copy, "docs/releases/0.5.4.md"), "# QAMap 0.5.4\n\n## Plugin release notes\n\nQAMap 0.5.4 preserves the local evidence boundary.\n");
-  await prepareRelease(copy, "0.5.4", "2026-11-07");
+  await prepareRelease(copy, "0.5.4", "2026-11-07", "0.5.5");
   await prepareRelease(copy, "0.5.4", "2026-11-07");
   assert.equal((await json(path.join(copy, "package.json"))).version, "0.5.4");
   assert.deepEqual((await json(manifestPath)).extensions["com.openai"].publication.countries, ["KR", "US"]);
   assert.deepEqual((await json(manifestPath)).extensions["com.openai"].publication.translations, manifest.extensions["com.openai"].publication.translations);
   assert.equal((await json(path.join(copy, "package-lock.json"))).packages[""].version, "0.5.4");
   assert.match(await readFile(path.join(copy, "skills/qamap-pr-qa/SKILL.md"), "utf8"), /@ivorycanvas\/qamap@0\.5\.4/);
+  assert.equal((await json(path.join(copy, "plugins/claude/.claude-plugin/plugin.json"))).version, "0.5.5");
+  const claudeSkill = await readFile(path.join(copy, "plugins/claude/skills/qamap-pr-qa/SKILL.md"), "utf8");
+  assert.match(claudeSkill, /@ivorycanvas\/qamap@0\.5\.4/);
+  assert.doesNotMatch(claudeSkill, /references\/advanced-workflow/);
+  assert.match(await readFile(path.join(copy, "plugins/claude/README.md"), "utf8"), /Claude plugin version: \*\*0\.5\.5\*\*/);
   assert.match(await readFile(path.join(copy, "docs/ko/claude-code.md"), "utf8"), /@ivorycanvas\/qamap@0\.5\.4/);
   assert.equal((await readFile(path.join(copy, "CHANGELOG.md"), "utf8")).split("## 0.5.4 -").length, 2);
   assert.deepEqual(await readFile(path.join(copy, "docs/releases/0.5.2.md")), history);
   await assert.rejects(prepareRelease(copy, "0.5.5", "2026-11-08"), /ENOENT/);
   assert.equal((await json(path.join(copy, "package.json"))).version, "0.5.4");
+  await writeFile(path.join(copy, "docs/releases/0.5.5.md"), "# QAMap 0.5.5\n\n## Plugin release notes\n\nQAMap 0.5.5 preserves the local evidence boundary.\n");
+  await assert.rejects(prepareRelease(copy, "0.5.5", "2026-11-09"), /--claude-version/);
+  assert.equal((await json(path.join(copy, "package.json"))).version, "0.5.4");
+  assert.equal((await json(path.join(copy, "plugins/claude/.claude-plugin/plugin.json"))).version, "0.5.5");
 });

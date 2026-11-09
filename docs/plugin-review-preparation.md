@@ -1,6 +1,9 @@
 # Plugin Review Preparation
 
-The same release has three independent deliveries: npm, OpenAI and Claude.
+The same project has three independent deliveries: npm, OpenAI and Claude.
+Claude plugin revisions can differ from the required CLI version. The generated
+field sheet records both; use the Claude-specific archive version rather than
+assuming every artifact has the npm version.
 Generated files contain public metadata, not developer credentials, legal
 attestations or claims that reviewers have executed the supplied examples.
 
@@ -21,7 +24,8 @@ Run again from the clean final release commit. A dirty guide identifies
 uncommitted inputs; a packaging success does not imply readiness to submit.
 The guide's public fixture URLs point to its recorded commit. The field sheet
 contains five positive and three negative review instructions and honest data
-handling copy; these are not host-execution results.
+handling copy for CLI/OpenAI, plus separate Claude analysis-only cases; these
+are not host-execution results.
 
 ## Portals And Source Fields
 
@@ -67,8 +71,8 @@ decisions; generated metadata must not silently replace them.
 
 ## Before Either Submission
 
-1. Publish the exact CLI version after its release gates pass.
-2. Run `node scripts/release-smoke.mjs --version X.Y.Z` against public npm.
+1. Verify that the exact required CLI version is published after its release gates pass.
+2. Use its public npm smoke receipt, or run `node scripts/release-smoke.mjs --version X.Y.Z` if a fresh receipt is needed. A plugin-only update does not require republishing an unchanged CLI.
 3. Rebuild from the final clean commit and verify the hashes.
 4. Open the existing submissions; upload the OpenAI ZIP and validate Claude's
    Git source. Confirm the imported version, links and scan results.

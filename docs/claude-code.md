@@ -2,8 +2,10 @@
 
 [한국어](ko/claude-code.md) | [Documentation](README.md)
 
-The Claude Code plugin supplies the review skill. The QAMap CLI gathers local
-evidence; Claude interprets it. You need a local checkout, Git, a terminal and
+The Claude Code plugin supplies an analysis-only review skill. The QAMap CLI gathers local
+evidence; Claude interprets it. The plugin reports suggested checks but does not
+execute project commands, generate automation or edit configuration and source.
+You need a local checkout, Git, a terminal and
 Node.js 20 or newer. A web-only chat without local repository and terminal access
 cannot run this workflow. Support on Cowork or ordinary Claude chat is not claimed.
 
@@ -29,7 +31,7 @@ the skill is active.
 ## Install The Matching CLI
 
 The plugin does not bundle the CLI or install it automatically. With your
-permission, install the version required by its skill. The 0.5.3 skill requires:
+permission, install the version required by its skill. The current Claude plugin requires:
 
 ```sh
 npm install -g @ivorycanvas/qamap@0.5.3
@@ -49,7 +51,8 @@ Check this PR for bugs.
 ```
 
 With no recorded choice, the skill offers QAMap and waits for your answer: this
-time only, always, or not now. Installation is not consent. A refusal leaves the
+time only or not now. Lasting preferences are a separate user setup task.
+Installation is not consent. A refusal leaves the
 change unanalyzed by QAMap. You can also request QAMap explicitly for one review.
 
 After consent, the skill runs the brief once, waits for completion, and reviews
@@ -73,8 +76,10 @@ qamap consent revoke --global
 ```
 
 `grant` applies to this project; `--global` applies to supported user instructions.
-These choices do not authorize test runs, edits or installations. Tests remain
-`not-run` until a separately authorized command is actually executed.
+These choices do not authorize test runs, edits or installations. The Claude
+plugin stops after analysis even when its report suggests an executable next
+action. Execution requires a separate workflow outside this plugin. Tests remain
+`not-run` until a command is actually executed in that separate workflow.
 
 ## Without A Directory Install
 
@@ -86,7 +91,9 @@ qamap init --agent .
 
 This adds QAMap's marked instructions, project skills and starter configuration
 while preserving existing content. It is a project setup alternative, not a
-directory plugin installation. It still asks before analysis. See
+directory plugin installation. It installs the broader portable CLI skill,
+which includes optional advanced workflows; it does not have the Claude
+directory plugin's reduced scope. It still asks before analysis. See
 [agent integration](agent-skill.md) for saved preferences and other hosts.
 
 ## Tokens, Reports And Updates
