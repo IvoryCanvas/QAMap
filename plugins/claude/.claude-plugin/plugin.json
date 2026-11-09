@@ -1,7 +1,7 @@
 {
   "name": "qamap",
   "displayName": "QAMap",
-  "version": "0.5.4",
+  "version": "0.5.3",
   "description": "Analyze a pull request from one local brief: changed code, related tests and callers, and suggested checks. Analysis only; no project test execution, LLM call or upload.",
   "author": {
     "name": "IvoryCanvas",

@@ -110,7 +110,13 @@ required merely because unrelated development files triggered an earlier scan.
 
 ## Submission Details
 
-### 0.5.4 Analysis-Only Candidate
+### 0.5.3 Analysis-Only Update
+
+On 2026-11-09, the owner reported that the analysis-only source `36ec0c0`
+passed directory policy and security scanning and that Publish update had been
+requested. The release version is 0.5.3. This update retains that analysis-only
+workflow and restores the plugin manifest and README to 0.5.3. Version changes
+require an explicit maintainer instruction.
 
 The owner supplied another policy hold for `9b9e56e` on 2026-11-08, so the
 earlier launcher removal did not resolve the reported finding. The classifier's
@@ -118,7 +124,7 @@ exact credential flow remains unconfirmed. The CLI's optional project executor
 inherits its process environment; that is a real reason not to describe every
 CLI execution path as credential-free, even though local analysis needs no key.
 
-Claude plugin 0.5.4 requires the already published CLI 0.5.3. It narrows the
+Claude plugin 0.5.3 requires the already published CLI 0.5.3. It narrows the
 plugin's actual workflow to PR analysis: remove the advanced execution reference
 and its skill links, prohibit following executable next actions, and stop for
 requests to run project commands, generate automation or change configuration.
@@ -127,7 +133,7 @@ manifest, README, archive and generated field sheet disclose this distinction.
 This is a workflow restriction, not an operating-system execution sandbox.
 
 After the PR is merged to the tracked `main`, open the existing submission and
-select **Check for new commits**. Verify the displayed commit and plugin 0.5.4;
+select **Check for new commits**. Verify the displayed commit and plugin 0.5.3;
 do not create a duplicate submission or select a new repository to escape a hold.
 `Resubmit for review` applies only if the submission has been rejected. Stop at
 the recheck handoff unless the owner separately asks to request review or publish.
