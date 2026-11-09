@@ -89,10 +89,9 @@ export async function buildPluginBundles(root, output) {
   const pkg = await readJson("package.json");
   const submission = await readJson("plugin/submission.json");
   const openai = await readJson(".codex-plugin/plugin.json");
-  const claude = await readJson(".claude-plugin/plugin.json");
+  const claude = await readJson("plugins/claude/.claude-plugin/plugin.json");
   assert.match(pkg.version, /^\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?$/);
   assert.equal(openai.version, pkg.version);
-  assert.equal(claude.version, pkg.version);
   assert.equal(openai.requires_local_executor, true);
   assert.equal(openai.extensions["com.openai"].publication.release_notes, submission.releaseNotes);
   assert.ok(!openai.mcpServers && !openai.apps && !openai.hooks, "The public bundle must stay skills-only");
@@ -115,15 +114,23 @@ export async function buildPluginBundles(root, output) {
   const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
   const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: root, encoding: "utf8" }).trim().length > 0;
   const version = pkg.version;
+  const claudeVersion = claude.version;
   const fields = {
     version, sourceCommit, dirty, publicationStatus: "not-verified-by-packaging",
     openai: { portal: portals.openai, existingListing: "https://chatgpt.com/plugins/plugins_6a752ca134a481919b90c45c09ab1629",
       upload: `qamap-openai-${version}.zip`, manifest: ".codex-plugin/plugin.json",
       automaticFields: ["interface", "requires_local_executor", "extensions.com.openai.publication.release_notes"],
       manualChecks: ["Verified developer and owning organization", "Desktop-only eligibility and portal findings", "Exact public npm install smoke", "Policy attestations and submit/publish decisions"] },
-    claude: { portal: portals.claude, repository: sourceURL, pluginPath: "plugins/claude", branch: "main",
-      sourceURL: `${sourceURL}/tree/main/plugins/claude`, pinnedSourceAfterTag: `${sourceURL}/tree/v${version}/plugins/claude`,
-      archive: `qamap-claude-${version}.zip`,
+    claude: { version: claudeVersion, requiredCLI: version, scope: "analysis-only",
+      portal: portals.claude, repository: sourceURL, pluginPath: "plugins/claude", branch: "main",
+      sourceURL: `${sourceURL}/tree/main/plugins/claude`, pinnedSource: `${sourceURL}/tree/${sourceCommit}/plugins/claude`,
+      archive: `qamap-claude-${claudeVersion}.zip`,
+      releaseNotes: `QAMap Claude plugin ${claudeVersion} only analyzes PR evidence and suggests verification. It requires CLI ${version}. Project command execution, automation generation and configuration changes are outside this plugin.`,
+      reviewCases: [
+        { prompt: "Review this PR with QAMap.", expected: "Run one consented local brief, read targeted evidence, report findings and suggested checks with tests not-run." },
+        { prompt: "Use QAMap to run the suggested test command and generate automation.", expected: "Explain that execution and changes require a separate workflow outside this plugin; do not run project commands or load the CLI execution guide." },
+        { prompt: "QAMap is missing; install it and continue.", expected: "Report the missing prerequisite and stop; this plugin does not install or upgrade the CLI." },
+      ],
       automaticFields: ["name", "displayName", "version", "description", "privacyPolicyUrl", "termsOfServiceUrl", "supportUrl", "documentationUrl", "README"],
       manualChecks: ["Validate the displayed source commit after merge", "Claude Code surface", "Data handling answers", "Contact email and legal attestations", "Review and publication settings"] },
     dataHandling: {
@@ -140,7 +147,7 @@ export async function buildPluginBundles(root, output) {
       claudeGuide: "https://claude.com/docs/plugins/submit" },
   };
   const guide = [
-    `# QAMap ${version} reviewer handoff`, "", `Source commit: ${sourceCommit}; uncommitted changes: ${dirty ? "yes" : "no"}.`,
+    `# QAMap reviewer handoff — CLI/OpenAI ${version}; Claude ${claudeVersion}`, "", `Source commit: ${sourceCommit}; uncommitted changes: ${dirty ? "yes" : "no"}.`,
     "This is a generated preparation record, not a publication or approval receipt.", "",
     "## Submission routes", "", "| Channel | Portal | Input |", "| --- | --- | --- |",
     `| OpenAI / ChatGPT / Codex | ${portals.openai} | qamap-openai-${version}.zip; update the existing plugin |`,
@@ -152,32 +159,34 @@ export async function buildPluginBundles(root, output) {
     "Claude reads listing copy, version, document URLs and README from the selected source revision.",
     "The companion submission-fields JSON includes copyable source fields, data handling notes and review cases.", "",
     "## Owner checks before submission", "",
-    `1. Merge and validate the versioned candidate; publish @ivorycanvas/qamap@${version} and verify that exact public version.`,
-    `2. Run node scripts/release-smoke.mjs --version ${version}. Local tarball smoke is not this registry receipt.`,
+    `1. Merge and validate the candidate; verify the exact public @ivorycanvas/qamap@${version}. Do not republish an unchanged CLI for a plugin-only update.`,
+    `2. Check the public npm smoke receipt for ${version}, or run node scripts/release-smoke.mjs --version ${version} when a fresh receipt is needed. Local tarball smoke is not a registry receipt.`,
     "3. Rebuild these bundles from the clean final commit. Check checksums and source revision.",
     "4. Open the existing portal entries, validate all findings, and confirm identity, contact, data handling and attestations.",
     "5. Submit the replacement for review. Publication is a separate step; keep the last approved version available.", "",
     "Skills-only OpenAI plugins do not need MCP test-case or demo-video fields. The cases below are supplementary reviewer guidance; they are not fabricated MCP results.",
     "Desktop execution must be supported by the selected OpenAI surface; a successful archive check does not establish portal acceptance.", "",
     "## Data handling", "", ...Object.values(fields.dataHandling).map(value => `${value}\n`),
-    "## Release notes", "", submission.releaseNotes, "",
-    "## Positive review cases", "",
+    "## Claude analysis-only scope", "", fields.claude.releaseNotes, "",
+    ...fields.claude.reviewCases.flatMap(entry => [`Prompt: ${entry.prompt}`, "", `Expected: ${entry.expected}`, ""]),
+    "## CLI / OpenAI release notes", "", submission.releaseNotes, "",
+    "## CLI / OpenAI positive review cases", "",
     ...submission.positiveTests.flatMap(entry => [`### ${entry.id}`, "", `Prompt: ${entry.prompt}`, "", `Public fixture: ${sourceURL}/tree/${sourceCommit}/${entry.fixture}`, "", `Expected: ${entry.expectedBehavior} ${entry.expectedResultShape}`, ""]),
-    "## Negative review cases", "",
+    "## CLI / OpenAI negative review cases", "",
     ...submission.negativeTests.flatMap(entry => [`### ${entry.id}`, "", `Prompt: ${entry.prompt}`, "", `Expected: ${entry.expectedBehavior}`, "", `Reason: ${entry.reason}`, ""]),
     "## Links", "", ...Object.entries(fields.urls).map(([label, url]) => `- ${label}: ${url}`), "",
   ].join("\n");
   await mkdir(output, { recursive: true });
   const artifacts = [
     [`qamap-openai-${version}.zip`, zipFiles(openaiEntries)],
-    [`qamap-claude-${version}.zip`, zipFiles(claudeEntries)],
+    [`qamap-claude-${claudeVersion}.zip`, zipFiles(claudeEntries)],
     [`qamap-submission-fields-${version}.json`, Buffer.from(`${JSON.stringify(fields, null, 2)}\n`)],
     [`qamap-review-guide-${version}.md`, Buffer.from(guide)],
   ];
   for (const [name, bytes] of artifacts) await writeFile(path.join(output, name), bytes);
   const checksums = artifacts.map(([name, bytes]) => `${createHash("sha256").update(bytes).digest("hex")}  ${name}`).join("\n");
   await writeFile(path.join(output, "SHA256SUMS"), `${checksums}\n`);
-  return { version, sourceCommit, dirty, output, openaiFiles: openaiEntries.length, claudeFiles: claudeEntries.length, files: artifacts.map(([name]) => name) };
+  return { version, claudeVersion, sourceCommit, dirty, output, openaiFiles: openaiEntries.length, claudeFiles: claudeEntries.length, files: artifacts.map(([name]) => name) };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

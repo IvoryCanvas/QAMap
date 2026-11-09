@@ -166,6 +166,13 @@ assert.match(skill, /does not upload source code or make another LLM call/i);
 assert.match(skill, /calling agent still uses its own model tokens/i);
 
 const directoryPlugin = await checkDirectoryPlugin(repositoryRoot);
+const claudeSkill = await readText(`${directoryPlugin.path}/skills/qamap-pr-qa/SKILL.md`);
+const claudeFrontmatter = claudeSkill.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+assert.ok(claudeFrontmatter, "Claude skill must have YAML frontmatter");
+const claudeMetadata = parseYaml(claudeFrontmatter[1]);
+assert.equal(claudeMetadata.name, "qamap-pr-qa");
+assert.equal(typeof claudeMetadata.description, "string");
+assert.ok(claudeMetadata.description.trim());
 console.log(`Directory plugin valid: ${directoryPlugin.path}, ${directoryPlugin.files} files.`);
 
 console.log(
