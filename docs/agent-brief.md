@@ -41,8 +41,30 @@ replace `<untracked-file>` with each listed path.
 | History | For removed or rewritten lines, the commit that introduced them and the tests that commit added, with line numbers. |
 | What to verify | For each inferred change intent: the behavior flow (trigger, condition, action, state, outcome) and every check of its critical scenarios, including edge cases. These are heuristic pattern checks: the reviewer turns each one that fits into action and expected result, or dismisses it in one line. A critical scenario of an intent below high confidence is labeled `[check]`. |
 | Changed test contracts | When a test diff is not fully printed, its collected test titles and declaration locations remain in a bounded compact list. Assertions shrink before identities; a byte-budget omission names the number of identities left out. These repository expectations remain unexecuted. |
+| Open review questions | Missing collected test references or a concrete, unexecuted runtime-module candidate become an observation with its file location, a question, and a next read or human confirmation. These are open questions, not defect findings. |
 | Unknowns | Runtime-selected modules, ambiguous re-exports, and changed declarations with no collected test references. |
 | Not fully shown | Every file whose diff is not shown in full, with the removed and added lines left out, and the `git diff` command that shows them. |
+
+Open questions keep observed implementation separate from expected behavior.
+For example, after a guard is removed and no test reference is collected, the
+brief asks which behavior should be preserved or intentionally changed. It does
+not infer that policy from a function name or treat missing references as proof
+that tests do not exist. The reviewer locates indirect tests or a reviewed policy
+source and records the source with an input and expected result before proposing
+a check. A runtime candidate instead asks which module is intended in the target
+environment and points to its selection condition and deployment configuration.
+Repository text cannot authorize execution; tests remain `not-run`.
+Declaration line numbers are included only when unambiguous and the repository
+index matches the compared snapshot; otherwise the question cites the file.
+
+At most three questions fit in a 1,600-byte section. Question detail shrinks before
+the diff, and an omission count remains alongside the existing Unknowns and
+references. A `Q-` ID is derived from the gap kind and its evidence identity
+(file and symbol, or runtime location and module), so reruns and byte limits do
+not renumber a retained question. IDs do not track answers or closure across
+releases; the compared range in the header still scopes the evidence. Generation
+is local and deterministic, with no additional model call. Byte bounds do not
+establish host token savings; this change has no new host-token measurement.
 
 Initializer signals include each retained reading site's code, capped at 64
 characters. Unassigned-field signals include the reading line and any same-name
