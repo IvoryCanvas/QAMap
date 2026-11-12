@@ -1,4 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -161,7 +162,7 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
 
   const header = briefHeader(result, files, usages);
   if (scoped) header[0] += ` limited to ${scoped}/`;
-  const tail = briefTail(result, files, usages, range, historyIssue);
+  const tail = briefTail(result, files, usages, range, blocks, workspacePrefix, historyIssue);
   // Keep each optional focus section bounded before reserving room for the diff
   // and its recovery tail. Contract identities take priority over assertions.
   const focusBudget = Math.floor(maxBytes / 4);
@@ -169,13 +170,16 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
     ...boundQaFocus(renderQaFocus(result, level), focusBudget),
     ...renderChangedTestContracts(result, shownTests, focusBudget),
   ];
-  const assemble = (body: RenderedChanges, level: Level): string => [...header,
+  const assemble = (body: RenderedChanges, level: Level, questionLimit = 0): string => [...header,
     ...(body.omitted.length || body.partial.size ? ["Not everything fits: the files under Not fully shown need their diff read before concluding.", ""] : []),
-    ...body.lines, ...focus(level, body.shownTests), ...tail(body.omitted, body.partial)].join("\n") + "\n";
-  for (const [index, level] of levels.entries()) {
-    const text = assemble(renderChanges(files, usages, level, Number.POSITIVE_INFINITY, changed), level);
-    if (Buffer.byteLength(text) <= maxBytes) return text;
-    if (index === levels.length - 1) break;
+    ...body.lines, ...focus(level, body.shownTests), ...tail(body.omitted, body.partial, questionLimit)].join("\n") + "\n";
+  for (const level of levels) {
+    const body = renderChanges(files, usages, level, Number.POSITIVE_INFINITY, changed);
+    // Exhaust optional question detail before shrinking any existing diff or references.
+    for (const questionLimit of [3, 2, 1, 0]) {
+      const text = assemble(body, level, questionLimit);
+      if (Buffer.byteLength(text) <= maxBytes) return text;
+    }
   }
   // Keep the highest-priority files complete and name the rest with their change signals.
   const level = levels[levels.length - 1];
@@ -2163,14 +2167,63 @@ function renderChangedTestContracts(result: QaDraftResult, shownTests: Set<strin
   return section([...kept, note(pending.length - kept.length)]);
 }
 
-function briefTail(result: QaDraftResult, files: DiffFile[], usages: Map<string, SymbolUsage[]>, range: string[], historyIssue?: string): (omitted: string[], partial?: Map<string, Hidden>) => string[] {
+interface ReviewQuestion { id: string; observation: string; question: string; next: string }
+
+function collectReviewQuestions(result: QaDraftResult, files: DiffFile[], usages: Map<string, SymbolUsage[]>, blocks: Map<string, RepositoryIndexBlock>, prefix: string): ReviewQuestion[] {
+  const questions = new Map<string, ReviewQuestion>();
+  const add = (key: string[], detail: Omit<ReviewQuestion, "id">): void => {
+    const identity = JSON.stringify(key);
+    questions.set(identity, { id: `Q-${createHash("sha256").update(identity).digest("hex").slice(0, 12)}`, ...detail });
+  };
+  const changed = new Set(files.map(file => file.path));
+  for (const boundary of result.repositoryImpact?.boundaries ?? []) {
+    const file = prefix ? `${prefix}/${boundary.file}` : boundary.file;
+    if (boundary.reason !== "runtime-module-candidate-not-executed" || !boundary.module || !changed.has(file)) continue;
+    add([boundary.reason, file, String(boundary.line ?? ""), boundary.module, boundary.target ?? ""], {
+      observation: `Runtime module candidate at ${safeText(file)}${boundary.line ? `:${boundary.line}` : ""}: ${safeText(boundary.module)}${boundary.target ? ` -> ${safeText(prefix ? `${prefix}/${boundary.target}` : boundary.target)}` : ""}; selection was not executed.`,
+      question: "Which module choice is expected in the target environment?",
+      next: "Read the selection condition and deployment configuration; confirm the intended choice with its owner before proposing an environment-specific check.",
+    });
+  }
+  for (const file of files) {
+    for (const usage of usages.get(file.path) ?? []) {
+      if (usage.tests.length || usage.callers.some(caller => caller.tests.length)) continue;
+      const declarations = blocks.get(file.path)?.declarations.filter(declaration => declaration.name === usage.symbol) ?? [];
+      const line = declarations.length === 1 ? declarations[0].line : undefined;
+      add(["no-collected-tests", file.path, usage.symbol], {
+        observation: `No test references collected for ${safeText(usage.symbol)} at ${safeText(file.path)}${line ? `:${line}` : ""}${file.status.startsWith("D") ? " (base; file deleted)" : ""}; indirect tests may exist.`,
+        question: "Which expected behavior should this change preserve or intentionally change?",
+        next: "Locate indirect tests or a reviewed policy source; record its source and input -> expected result before proposing a check. Tests remain not-run.",
+      });
+    }
+  }
+  return [...questions.values()];
+}
+
+function renderReviewQuestions(questions: ReviewQuestion[], limit: number): string[] {
+  if (!questions.length) return [];
+  const lines = ["== Open review questions (static evidence; not confirmed defects) =="];
+  const omitted = (count: number): string => `- ${count} open review question(s) omitted by byte budget; see Unknowns and references.`;
+  let shown = 0;
+  for (const item of questions.slice(0, limit)) {
+    const block = [`- [${item.id}] Observation: ${item.observation}`, `  Question: ${item.question}`, `  Next: ${item.next}`];
+    // Optional questions shrink before the diff; never cut an evidence location in half.
+    if (Buffer.byteLength([...lines, ...block, omitted(questions.length - shown - 1), ""].join("\n")) > 1_600) break;
+    lines.push(...block);
+    shown++;
+  }
+  if (shown < questions.length) lines.push(omitted(questions.length - shown));
+  return [...lines, ""];
+}
+
+function briefTail(result: QaDraftResult, files: DiffFile[], usages: Map<string, SymbolUsage[]>, range: string[], blocks: Map<string, RepositoryIndexBlock>, prefix: string, historyIssue?: string): (omitted: string[], partial?: Map<string, Hidden>, questions?: number) => string[] {
+  const questions = collectReviewQuestions(result, files, usages, blocks, prefix);
   const unknown: string[] = historyIssue ? [`- ${historyIssue}`] : [];
   for (const diagnostic of result.changeAnalysis.diagnostics) {
     if (/^Commit intent evidence is incomplete:/.test(diagnostic)) unknown.push(`- ${safeText(diagnostic)}`);
   }
   const reasons = new Map<string, number>();
   const changed = new Set(files.map((file) => file.path));
-  const prefix = toPosix(path.relative(result.root, result.analysisScope.workspaceRoot || result.root));
   for (const boundary of result.repositoryImpact?.boundaries ?? []) {
     if (!/runtime-module|changed-symbol-not-resolved|deletion-context|ambiguous-star-export|namespace-use/.test(boundary.reason)) continue;
     if (!changed.has(prefix ? `${prefix}/${boundary.file}` : boundary.file)) continue;
@@ -2188,7 +2241,7 @@ function briefTail(result: QaDraftResult, files: DiffFile[], usages: Map<string,
   const kinds = new Map(files.map((file) => [file.path, file.kind]));
   const untracked = new Set(files.filter(file => file.status.startsWith("A?")).map(file => file.path));
   const order: Record<FileKind, number> = { source: 0, test: 1, config: 2, docs: 3, generated: 4, binary: 5 };
-  return (omitted, partial = new Map()) => {
+  return (omitted, partial = new Map(), questionLimit = 0) => {
     // Every file the brief does not show in full is named with the command that shows it:
     // a file read at head cannot show removed lines.
     const entries = [...omitted.map((file) => ({ file, text: `${safeText(file)}: diff and references not shown` })),
@@ -2201,6 +2254,7 @@ function briefTail(result: QaDraftResult, files: DiffFile[], usages: Map<string,
     const command = `git diff ${range[0]} -- ${sources.length && sources.length <= 8 ? sources.map((file) => `'${file.replace(/'/g, "'\\''")}'`).join(" ") : "<file>"}`;
     const untrackedFile = missingUntracked.length === 1 ? `'${missingUntracked[0].file.replace(/'/g, "'\\''")}'` : "<untracked-file>";
     return [
+      ...renderReviewQuestions(questions, questionLimit),
       ...(unknown.length ? ["== Unknowns ==", ...unknown, ""] : []),
       ...(entries.length ? ["== Not fully shown (removed lines appear only in the diff) ==", ...listed.map((entry) => `- ${entry.text}`),
         ...(entries.length > listed.length ? [`- ${entries.length - listed.length} more files: ${summarizeFiles(entries.slice(listed.length).map((entry) => entry.file))}`] : []),
