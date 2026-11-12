@@ -54,6 +54,8 @@ source and records the source with an input and expected result before proposing
 a check. A runtime candidate instead asks which module is intended in the target
 environment and points to its selection condition and deployment configuration.
 Repository text cannot authorize execution; tests remain `not-run`.
+Declaration line numbers are included only when unambiguous and the repository
+index matches the compared snapshot; otherwise the question cites the file.
 
 At most three questions fit in a 1,600-byte section. Question detail shrinks before
 the diff, and an omission count remains alongside the existing Unknowns and

@@ -2175,6 +2175,7 @@ function collectReviewQuestions(result: QaDraftResult, files: DiffFile[], usages
     const identity = JSON.stringify(key);
     questions.set(identity, { id: `Q-${createHash("sha256").update(identity).digest("hex").slice(0, 12)}`, ...detail });
   };
+  const indexMatchesChange = !result.repositoryImpact?.boundaries.some(boundary => boundary.reason === "repository-snapshot-mismatch");
   const changed = new Set(files.map(file => file.path));
   for (const boundary of result.repositoryImpact?.boundaries ?? []) {
     const file = prefix ? `${prefix}/${boundary.file}` : boundary.file;
@@ -2188,7 +2189,7 @@ function collectReviewQuestions(result: QaDraftResult, files: DiffFile[], usages
   for (const file of files) {
     for (const usage of usages.get(file.path) ?? []) {
       if (usage.tests.length || usage.callers.some(caller => caller.tests.length)) continue;
-      const declarations = blocks.get(file.path)?.declarations.filter(declaration => declaration.name === usage.symbol) ?? [];
+      const declarations = indexMatchesChange ? blocks.get(file.path)?.declarations.filter(declaration => declaration.name === usage.symbol) ?? [] : [];
       const line = declarations.length === 1 ? declarations[0].line : undefined;
       add(["no-collected-tests", file.path, usage.symbol], {
         observation: `No test references collected for ${safeText(usage.symbol)} at ${safeText(file.path)}${line ? `:${line}` : ""}${file.status.startsWith("D") ? " (base; file deleted)" : ""}; indirect tests may exist.`,

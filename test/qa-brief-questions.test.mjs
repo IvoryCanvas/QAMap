@@ -62,6 +62,19 @@ test("unrelated Python code gets its own evidence question and same-named files 
   assert.deepEqual(questions(await buildQaBrief(result)), section);
 });
 
+test("a mismatched working-tree index cannot lend its line numbers to a committed-head question", async t => {
+  const changed = "export function remaining(value) {\n" + "  // unchanged context\n".repeat(30) + "  return value;\n}\n";
+  const { root } = await repository(t, {
+    "src/capacity.mjs": changed.replace("return value;", "return Math.max(0, value);"),
+  }, { "src/capacity.mjs": changed });
+  await fs.writeFile(path.join(root, "src/capacity.mjs"), "\n\n" + changed);
+  const result = await generateQaDraft(root, { base: "main", head: "HEAD" });
+  assert.ok(result.repositoryImpact.boundaries.some(boundary => boundary.reason === "repository-snapshot-mismatch"));
+  const section = questions(await buildQaBrief(result));
+  assert.match(section, /remaining at src\/capacity\.mjs; indirect tests may exist/);
+  assert.doesNotMatch(section, /src\/capacity\.mjs:\d/);
+});
+
 test("a confirmed caller test suppresses the missing-test question without executing it", async t => {
   const { output } = await repository(t, {
     "src/capacity.mjs": "export function remaining(value) { return Math.max(0, value); }\n",
