@@ -294,9 +294,10 @@ export async function generateQaDraft(rootInput: string, options: QaDraftOptions
   const gitRoot = options.workspaceRoot ? undefined : await resolveGitRepositoryRoot(rootInput);
   if (gitRoot) {
     const canonicalRoot = await realpath(rootInput);
-    if (canonicalRoot !== gitRoot) {
+    const canonicalWorkspace = await realpath(gitRoot);
+    if (canonicalRoot !== canonicalWorkspace) {
       rootInput = canonicalRoot;
-      options = { ...options, workspaceRoot: gitRoot };
+      options = { ...options, workspaceRoot: canonicalWorkspace };
     }
   }
   return withProjectScanMemo(() => {
