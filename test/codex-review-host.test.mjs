@@ -18,10 +18,11 @@ test("Codex cached input is counted once and unavailable metrics stay unknown", 
   assert.equal(run.costUsd, null);
   assert.deepEqual(run.models, []);
   assert.equal(run.receiptScope, "CLI-reported-turn");
+  assert.equal(summarizeCodexRun(transcript(answer, receipt({ ...validUsage, total_tokens: 110 }))).completed, true);
 });
 
 test("Codex incomplete, contradictory, negative and overflowing receipts are ineligible", () => {
-  for (const usage of [null, { input_tokens: 1 }, { ...validUsage, cached_input_tokens: 101 },
+  for (const usage of [null, { input_tokens: 1 }, { ...validUsage, cached_input_tokens: 101 }, { ...validUsage, total_tokens: 111 },
     { ...validUsage, input_tokens: -1 }, { ...validUsage, output_tokens: 0.5 },
     { ...validUsage, input_tokens: Number.MAX_SAFE_INTEGER }]) {
     const run = summarizeCodexRun(transcript(answer, receipt(usage)));

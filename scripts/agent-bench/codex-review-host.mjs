@@ -27,7 +27,8 @@ export function summarizeCodexRun(stdout) {
   const usage = receipts.length === 1 ? receipts[0].usage : null;
   const valid = !malformed && usage && ["input_tokens", "cached_input_tokens", "output_tokens"].every(field =>
     Number.isSafeInteger(usage[field]) && usage[field] >= 0)
-    && usage.cached_input_tokens <= usage.input_tokens && Number.isSafeInteger(usage.input_tokens + usage.output_tokens);
+    && usage.cached_input_tokens <= usage.input_tokens && Number.isSafeInteger(usage.input_tokens + usage.output_tokens)
+    && (usage.total_tokens === undefined || usage.total_tokens === usage.input_tokens + usage.output_tokens);
   const failed = events.some(event => event.type === "turn.failed" || event.type === "error");
   const policyViolations = [...new Set(tools.filter(tool => ["mcp_tool_call", "web_search", "file_change"].includes(tool)))];
   return {
