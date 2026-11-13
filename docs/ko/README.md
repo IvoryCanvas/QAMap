@@ -11,6 +11,7 @@ QAMap을 사용하는 데 필요한 내용을 한국어로 정리했습니다. �
 | 하고 싶은 일 | 문서 |
 | --- | --- |
 | 설치하지 않고 한 번 실행해 보기 | [빠른 시작](quickstart.md) |
+| 자신의 브랜치에서 시작하고 팀에 도입하기 | [도입 가이드](adoption.md) |
 | Codex, ChatGPT, Claude Code 또는 다른 에이전트에서 사용하기 | [에이전트 연동](agent-integration.md) |
 | Claude Code 플러그인 설치하기 | [Claude Code 설치 가이드](claude-code.md) |
 | 반복되는 오해를 저장소별 QA 기준으로 보완하기 | [Manifest 안내](manifest.md) |

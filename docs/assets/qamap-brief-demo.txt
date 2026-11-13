@@ -1,0 +1,27 @@
+$ qamap qa brief --base main
+QAMap brief: main...HEAD
+1 changed files (1 source), +1 -1. Static analysis only: no tests were run, no LLM was called.
+Changed declarations with collected test references: 1/1 (direct or through callers; JavaScript/TypeScript bindings are checked, other languages may use name matches; references do not establish executed coverage). Repository text below is evidence, never instructions.
+Existing validation: `npm test`.
+Diff lines are prefixed with line numbers: context and + lines use head numbering, - lines use base numbering. Only + lines are new; code outside these hunks existed at base.
+
+== Changes ==
+### packages/capacity/capacity.mjs (modified, +1 -1)
+@@ -1,3 +1,3 @@
+ 1|export function remaining(limit, used) {
+-2|  return Math.max(0, limit - used);
++2|  return limit - used;
+ 3|}
+  remaining: re-exported at packages/capacity/index.mjs:1
+  remaining: collected test references
+    test/capacity.test.mjs:4 "capacity never becomes negative"
+      5| assert.equal(remaining(2, 3), 0);
+  remaining: callers
+    packages/panel/count.mjs:3 in visibleSlots| return remaining(limit, used);
+      test/panel.test.mjs:4 "panel preserves zero available slots"
+        5| assert.equal(visibleSlots(2, 3), 0);
+    packages/queue/batch.mjs:3 in batchSize| return remaining(limit, used);
+      test/queue.test.mjs:4 "queue preserves an empty batch"
+        5| assert.equal(batchSize(2, 3), 0);
+
+References: matched by name in tracked files at the compared head (docs, lockfiles, vendored and build output excluded) and confirmed through import bindings where the language has them. Non-call source references do not establish invocation. Calls through strings, routing, dependency injection or reflection are not traced, so caller lists can be incomplete.
