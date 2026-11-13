@@ -52,6 +52,25 @@ See [Benchmarking](../../docs/benchmarking.md#compare-a-review-host-with-and-wit
 for the protocol and commands. Real runs incur provider charges; `--dry-run`
 only materializes fixtures.
 
+The native Codex adapter is explicit: add `--host codex --model <fixed-model>`.
+It uses a fresh ephemeral read-only exec session, disables web search and user
+configuration, and leaves authentication to the CLI. It never copies auth files
+or changes account configuration. Check writable CLI state and executable access
+before the pilot; an existing login alone does not establish readiness.
+Use `--concurrency 1 --timeout-ms 120000 --fail-fast` for a bounded first pilot.
+The timeout is not a monetary or token cap. Native JSON records CLI-reported
+turn usage; cached input is a subset. Request counts, cache-write counts,
+provider model identity and billing stay unknown when the receipt omits them.
+Do not mix hosts in one summary or present their tool sets as equivalent.
+`--disable-skills` is rejected for Codex because equivalent restrictions have
+not been established. The automatic judge still uses its separately configured
+Claude host; manual frozen verdicts can be summarized with `--oracles <path>`.
+
+The [2026-11-13 pilot](../../test/benchmarks/review-host/independent-2026-11-13/RESULTS.md)
+contains frozen public regression snapshots and an ineligible setup attempt,
+not a new savings result. Native schema reference:
+https://learn.chatgpt.com/docs/non-interactive-mode
+
 `external-review.mjs` runs the same comparison on public pull requests chosen
 by a fixed rule. It covers regressions that the project fixed later, and a
 seeded random sample. The rules were registered before selection in

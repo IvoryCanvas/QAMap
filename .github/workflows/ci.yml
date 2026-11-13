@@ -54,6 +54,8 @@ jobs:
         run: pnpm build
       - name: Run tests
         run: pnpm test:compiled
+      - name: Check bounded reports with a long temp path
+        run: node scripts/test-long-temp.mjs
       - name: Check coverage
         run: pnpm coverage:compiled
       - name: Validate plugin metadata

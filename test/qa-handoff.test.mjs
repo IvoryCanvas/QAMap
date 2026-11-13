@@ -489,7 +489,8 @@ for (const id of ["shared-capacity", "separated-predicate", "independent-changes
         assert.ok(handoff.reviewEvidence.sourceDigest.fileCount >= 24);
         const { buildLocalQaHandoff } = await import("../dist/qa-handoff.js");
         const trimmed = await buildLocalQaHandoff(analyzed, { analysis: handoff.analysis, execution: handoff.execution,
-          noLlmToken: true, files: handoff.files }, { execution: handoff.summary.execution, padding: "x".repeat(14092) });
+          noLlmToken: true, files: { report: "report.md", summary: "summary.json", full: "report.json" } },
+        { execution: handoff.summary.execution, padding: "x".repeat(14092) });
         assert.ok(trimmed.reviewEvidence.paths.length > 0);
         assert.ok(trimmed.reviewEvidence.sourceDigest.fileCount < handoff.reviewEvidence.sourceDigest.fileCount);
         const integrity = gradeReportEvidence(trimmed, { ...scenario.base, ...scenario.head }, { anchors: [] },

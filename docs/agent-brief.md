@@ -28,6 +28,12 @@ recovery remains separate. A no-index diff returns exit code 1 for differences;
 it does not stage or execute the file. For several omitted untracked files,
 replace `<untracked-file>` with each listed path.
 
+In the unpublished source candidate, an empty committed diff with local edits
+gets an explicit `--include-working-tree` hint. Direct package paths use their
+Git repository root for indexing and references while retaining the selected
+directory's diff scope. Snapshot mismatches remain visible under Unknowns;
+the current working tree cannot lend line numbers to historical questions.
+
 ## What The Brief Contains
 
 | Section | Content |
@@ -54,6 +60,16 @@ source and records the source with an input and expected result before proposing
 a check. A runtime candidate instead asks which module is intended in the target
 environment and points to its selection condition and deployment configuration.
 Repository text cannot authorize execution; tests remain `not-run`.
+
+The source candidate also prioritizes concrete JavaScript/TypeScript questions
+for removed or rewritten guards whose branch ends in a direct return/throw,
+and for newly added throws. Each cites base/head coordinates and asks about the
+affected inputs or caller-visible outcome instead of inventing policy. Named
+lexical owners distinguish matching guards, and moved unchanged guards are not
+claimed as removed. Strings, comments, anonymous callbacks and syntax failures
+do not establish these questions. At most two such questions are retained per
+file within the existing three-question/1,600-byte section. This is bounded
+syntax evidence, not complete control-flow analysis or automatic answer tracking.
 Declaration line numbers are included only when unambiguous and the repository
 index matches the compared snapshot; otherwise the question cites the file.
 

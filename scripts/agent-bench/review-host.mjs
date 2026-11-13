@@ -18,6 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { codexArguments, summarizeCodexRun } from "./codex-review-host.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const suiteFiles = { regression: "cases.mjs", extended: "extended-cases.mjs", confirmation: "confirmation-cases.mjs",
@@ -155,21 +156,25 @@ export function toolArguments(disableSkills = false) {
   return ["--allowedTools", ...allowed, "--disallowedTools", ...disallowed];
 }
 
-export function runHost({ cwd, home, pathPrefix, prompt, model, transcript, timeoutMs, disableSkills, maxTurns = 60 }) {
-  const env = { ...process.env, HOME: home, GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"), GIT_CONFIG_NOSYSTEM: "1" };
+export function runHost({ cwd, home, pathPrefix, prompt, model, transcript, timeoutMs, disableSkills, maxTurns = 60, host = "claude" }) {
+  if (!["claude", "codex"].includes(host)) throw new Error("Unknown review host");
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"), GIT_CONFIG_NOSYSTEM: "1" };
+  // Codex reuses its own existing CLI authentication; never copy auth files.
+  if (host === "claude") env.HOME = home;
   for (const key of hostEnvironment) delete env[key];
   if (pathPrefix) env.PATH = `${pathPrefix}${path.delimiter}${process.env.PATH}`;
-  const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", ...(model ? ["--model", model] : []), "--no-session-persistence",
+  const args = host === "codex" ? codexArguments({ prompt, model, disableSkills }) : ["-p", prompt, "--output-format", "stream-json", "--verbose", ...(model ? ["--model", model] : []), "--no-session-persistence",
     "--strict-mcp-config", "--max-turns", String(maxTurns), ...toolArguments(disableSkills)];
   return new Promise((resolve) => {
     const started = Date.now();
     // An empty stdin pipe keeps print mode from reading anything but the prompt.
-    const child = spawn("claude", args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(host, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     child.stdin.end();
     const out = [], err = [];
     child.stdout.on("data", (chunk) => out.push(chunk));
     child.stderr.on("data", (chunk) => err.push(chunk));
     const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
+    child.on("error", error => err.push(Buffer.from(`${host} unavailable: ${error.code ?? "spawn-error"}`)));
     child.on("close", async (code) => {
       clearTimeout(timer);
       const stdout = Buffer.concat(out).toString();
@@ -179,8 +184,10 @@ export function runHost({ cwd, home, pathPrefix, prompt, model, transcript, time
   });
 }
 
-export async function runOne(entry, { suite, arm, run, engine, model, out, dryRun = false, timeoutMs = 900_000, disableSkills = false }) {
-  const label = `${entry.id}.${arm}${disableSkills ? "-noskills" : ""}.run${run}`;
+export async function runOne(entry, { suite, arm, run, engine, model, out, dryRun = false, timeoutMs = 900_000, disableSkills = false, host = "claude" }) {
+  if (!["claude", "codex"].includes(host)) throw new Error("Unknown review host");
+  if (host === "codex") codexArguments({ prompt: "", model, disableSkills });
+  const label = `${entry.id}.${host === "codex" ? "codex." : ""}${arm}${disableSkills ? "-noskills" : ""}.run${run}`;
   const outDir = path.join(out, label);
   // A rerun keeps finished runs and repeats only those that never wrote a result.
   if (await fs.stat(path.join(outDir, "result.json")).then(() => true, () => false)) return { label, status: "kept" };
@@ -196,19 +203,21 @@ export async function runOne(entry, { suite, arm, run, engine, model, out, dryRu
     const { repo, base, head } = await materializeCase(entry, { directory, home, engineBin, arm: setup });
     const prompt = setup === "qamap" ? `${suite.qamapPrefix} ${suite.prompt}` : suite.prompt;
     const engineVersion = setup === "qamap" ? execFileSync(path.join(engineBin, "qamap"), ["--version"], { input: "", stdio: ["pipe", "pipe", "pipe"] }).toString().trim() : null;
-    const record = { schema: { name: "qamap.review-host-run", version: 1 }, case: entry.id, arm, run, model, base, head, engineVersion,
-      promptSha256: createHash("sha256").update(prompt).digest("hex"), tools: toolArguments(disableSkills), disableSkills };
+    const hostVersion = dryRun ? null : execFileSync(host, ["--version"], { input: "", stdio: ["pipe", "pipe", "pipe"] }).toString().trim();
+    const record = { schema: { name: "qamap.review-host-run", version: 1 }, case: entry.id, arm, run, model, base, head, engineVersion, host, hostVersion,
+      promptSha256: createHash("sha256").update(prompt).digest("hex"),
+      tools: host === "codex" ? codexArguments({ prompt: "", model, disableSkills }) : toolArguments(disableSkills), disableSkills };
     if (dryRun) {
       await fs.writeFile(path.join(outDir, "result.json"), JSON.stringify({ ...record, status: "dry-run" }, null, 2));
       return { label, status: "dry-run" };
     }
-    const host = await runHost({ cwd: repo, home, pathPrefix: setup === "qamap" ? engineBin : undefined, prompt, model,
-      transcript: path.join(outDir, "transcript.jsonl"), timeoutMs, disableSkills });
-    const summary = summarizeHostRun(host.stdout);
+    const response = await runHost({ cwd: repo, home, pathPrefix: setup === "qamap" ? engineBin : undefined, prompt, model,
+      transcript: path.join(outDir, "transcript.jsonl"), timeoutMs, disableSkills, host });
+    const summary = host === "codex" ? summarizeCodexRun(response.stdout) : summarizeHostRun(response.stdout);
     const changed = execFileSync("git", ["status", "--porcelain"], { cwd: repo }).toString();
-    const status = host.code === 0 && summary.completed && summary.totalTokens !== null ? "completed" : "ineligible";
-    await fs.writeFile(path.join(outDir, "result.json"), JSON.stringify({ ...record, status, exitCode: host.code, wallMs: host.wallMs,
-      workingTreeChanged: changed.length > 0, stderrTail: host.stderr, ...summary }, null, 2));
+    const status = response.code === 0 && summary.completed && summary.totalTokens !== null && changed.length === 0 ? "completed" : "ineligible";
+    await fs.writeFile(path.join(outDir, "result.json"), JSON.stringify({ ...record, status, exitCode: response.code, wallMs: response.wallMs,
+      workingTreeChanged: changed.length > 0, stderrTail: response.stderr, ...summary }, null, 2));
     await fs.writeFile(path.join(outDir, "answer.md"), summary.answer);
     return { label, status, totalTokens: summary.totalTokens, requests: summary.requests, tools: summary.tools.join(",") };
   } finally {
@@ -218,16 +227,24 @@ export async function runOne(entry, { suite, arm, run, engine, model, out, dryRu
 
 async function main() {
   const { values } = parseArgs({ options: { engine: { type: "string" }, out: { type: "string" }, runs: { type: "string", default: "3" },
+    host: { type: "string", default: "claude" }, "timeout-ms": { type: "string", default: "900000" },
+    "fail-fast": { type: "boolean", default: false },
     arms: { type: "string", default: "standalone,qamap" }, candidate: { type: "string" }, case: { type: "string" }, model: { type: "string" },
     concurrency: { type: "string", default: "4" }, "dry-run": { type: "boolean", default: false }, suite: { type: "string" },
     "disable-skills": { type: "boolean", default: false } } });
   if (!values.engine || !values.out) throw new Error("--engine and --out are required");
+  if (!["claude", "codex"].includes(values.host)) throw new Error("--host must be claude or codex");
+  for (const field of ["runs", "concurrency", "timeout-ms"]) if (!Number.isSafeInteger(Number(values[field])) || Number(values[field]) <= 0) {
+    throw new Error(`--${field} must be a positive integer`);
+  }
+  if (values.host === "codex") codexArguments({ prompt: "", model: values.model, disableSkills: values["disable-skills"] });
   const out = path.resolve(values.out);
   const relative = path.relative(root, out);
   if (!relative.startsWith("..") && !path.isAbsolute(relative)) throw new Error("Keep measurement output outside the repository");
   await fs.mkdir(out, { recursive: true });
   const suite = await loadSuite(values.suite);
   const cases = suite.cases.filter((entry) => !values.case || entry.id === values.case);
+  if (!cases.length) throw new Error("No matching review cases");
   const arms = values.arms.split(",");
   if (arms.includes("candidate") && !values.candidate) throw new Error("--candidate is required for the candidate arm");
   const engines = { standalone: values.engine, qamap: values.engine, candidate: values.candidate };
@@ -237,15 +254,17 @@ async function main() {
     for (const arm of armOrder(arms, index, run)) jobs.push({ entry, arm, run });
   });
   let next = 0;
+  let failed = false;
   const worker = async () => {
-    while (next < jobs.length) {
+    while (next < jobs.length && !failed) {
       const job = jobs[next++];
       let line;
       try { line = await runOne(job.entry, { suite, arm: job.arm, run: job.run, engine: engines[job.arm], model: values.model, out,
-        dryRun: values["dry-run"], disableSkills: values["disable-skills"] }); }
+        dryRun: values["dry-run"], disableSkills: values["disable-skills"], host: values.host, timeoutMs: Number(values["timeout-ms"]) }); }
       catch (error) { line = { label: `${job.entry.id}.${job.arm}.run${job.run}`, status: "harness-error", message: String(error.message ?? error) }; }
       await fs.appendFile(path.join(out, "runs.jsonl"), `${JSON.stringify(line)}\n`);
       process.stdout.write(`${JSON.stringify(line)}\n`);
+      if (values["fail-fast"] && ["harness-error", "ineligible"].includes(line.status)) { failed = true; process.exitCode = 1; }
     }
   };
   await Promise.all(Array.from({ length: Number(values.concurrency) }, worker));

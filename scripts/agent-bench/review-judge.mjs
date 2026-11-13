@@ -83,6 +83,9 @@ const median = (values) => {
 };
 
 export function aggregateRuns(records) {
+  if (new Set(records.map(record => record.host ?? "claude")).size > 1) {
+    throw new Error("Keep different review hosts in separate summaries");
+  }
   const cases = new Map();
   for (const record of records) {
     const entry = cases.get(record.case) ?? { case: record.case, arms: {} };
@@ -96,7 +99,9 @@ export function aggregateRuns(records) {
       const eligible = runs.filter((run) => run.status === "completed" && Number.isSafeInteger(run.totalTokens) && run.score);
       const tokens = eligible.map((run) => run.totalTokens);
       arms[arm] = { runs: runs.length, eligible: eligible.length, medianTokens: median(tokens), maxTokens: tokens.length ? Math.max(...tokens) : null,
-        minTokens: tokens.length ? Math.min(...tokens) : null, medianRequests: median(eligible.map((run) => run.requests)),
+        minTokens: tokens.length ? Math.min(...tokens) : null,
+        medianRequests: eligible.length && eligible.every(run => Number.isSafeInteger(run.requests) && run.requests >= 0)
+          ? median(eligible.map(run => run.requests)) : null,
         medianUncachedInput: median(eligible.map((run) => run.uncachedInputTokens)),
         recall: eligible.some((run) => run.score.recall !== null) ? median(eligible.map((run) => run.score.recall ?? 0)) : null,
         qaRecall: eligible.some((run) => run.score.qaRecall !== null) ? median(eligible.map((run) => run.score.qaRecall ?? 0)) : null,
@@ -110,9 +115,9 @@ export function aggregateRuns(records) {
 
 async function main() {
   const { values } = parseArgs({ options: { runs: { type: "string" }, model: { type: "string" },
-    concurrency: { type: "string", default: "3" }, summary: { type: "string" }, force: { type: "boolean", default: false } } });
+    concurrency: { type: "string", default: "3" }, summary: { type: "string" }, oracles: { type: "string" }, force: { type: "boolean", default: false } } });
   if (!values.runs) throw new Error("--runs is required");
-  const oracles = JSON.parse(await fs.readFile(path.join(root, "test/benchmarks/review-host/oracles.json"), "utf8"));
+  const oracles = JSON.parse(await fs.readFile(values.oracles ?? path.join(root, "test/benchmarks/review-host/oracles.json"), "utf8"));
   const directories = (await fs.readdir(values.runs, { withFileTypes: true })).filter((item) => item.isDirectory()).map((item) => item.name).sort();
   if (values.summary) {
     const records = [];

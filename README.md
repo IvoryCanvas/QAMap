@@ -98,11 +98,13 @@ the [command reference](docs/commands.md).
 
 ## See A Real Run
 
-The human QA plan, `qamap qa`, for a public fixture that changes a subscription renewal flow:
+The agent review brief, `qamap qa brief`, for a public shared-capacity fixture:
 
-![QAMap reads a branch diff and returns an evidence-backed QA summary](docs/assets/qamap-quickstart.gif)
+![QAMap shows changed code and its test evidence in one actual review brief](docs/assets/qamap-brief-demo.gif)
 
-[Open the exact CLI output and first-run walkthrough](docs/quickstart-demo.md).
+[Captured output](docs/assets/qamap-brief-demo.txt), recorded from the unpublished source candidate. Reproduce from a source checkout with `pnpm build && node scripts/record-brief-demo.mjs` (Python + Pillow and DejaVu Sans Mono required). Playback timing is illustrative.
+
+[Open the human QA-plan walkthrough](docs/quickstart-demo.md).
 
 ## How It Works
 

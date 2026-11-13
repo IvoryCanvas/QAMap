@@ -1,5 +1,18 @@
 # Release Validation
 
+## Unpublished Source Candidate, 2026-11-13
+
+No version, tag or publication was performed. The bounded handoff tests passed
+42/42 with a 250-character `TMPDIR` after replacing path-dependent fixture file
+names with fixed relative names (#316). CI now runs that long-path contract.
+The focused offline warm-arm case also passed under coverage; this does not
+identify the sporadic #317 failure's cause. Keep its concurrency bound and open
+diagnostic status.
+
+The [registered independent pilot](../test/benchmarks/review-host/independent-2026-11-13/RESULTS.md)
+did not produce an eligible paired receipt or quality grade. No new savings or
+quality claim follows from its dry run, fixture hashes or host startup failure.
+
 > **Maintainer reference:** an unreleased candidate may appear before the current
 > public release. Older released sections are preserved as historical receipts
 > and are not required reading for contributors or users.

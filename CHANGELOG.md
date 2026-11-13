@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Align direct-package review indexing with Git paths and explain empty committed diffs with local edits.
+- Ask bounded, source-linked questions about changed exit guards and new error paths without inventing policy.
+- Prepare native Codex receipt validation and frozen public regression snapshots; the initial independent pilot is ineligible, with no new savings claim.
+- Make bounded handoff tests independent of temporary path length and exercise long paths in CI.
+- Record the actual review brief demo and add a Korean adoption guide.
+- Preview explicit-channel release edits by default; require a matching plan hash and reviewed inputs before metadata writes.
+
 ## 0.5.3 - 2026-11-06
 
 npm and plugin publication are separate steps.
