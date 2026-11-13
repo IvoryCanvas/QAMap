@@ -1,0 +1,52 @@
+[
+  {
+    "file": "click-gettext/base/src/click/core.py",
+    "gitBlobSha": "a7d4a6f8912d8f7b5f85911093914fd99f9def77",
+    "sha256": "a9f099eb5f6c99144d8f78712f61ad9376088a3e93b31220204be2a4343c8394"
+  },
+  {
+    "file": "click-gettext/head/src/click/core.py",
+    "gitBlobSha": "cf6f5fca98e9ef34f861c60d0e00e53bacb12e14",
+    "sha256": "3ae698050f978a5bf7ff018d9cbc2842dac5dcb0946bedcb80cc248a1aee68ba"
+  },
+  {
+    "file": "click-gettext/base/tests/test_commands.py",
+    "gitBlobSha": "c55da8de1d2f1d646c1c49a01296242020bbcce7",
+    "sha256": "bea4b852a088ce9305d89baf4cdd4e8f49b3292c9f9f6138254a14b7521dc590"
+  },
+  {
+    "file": "click-gettext/base/LICENSE.txt",
+    "gitBlobSha": "d12a849186982399c537c5b9a8fd77bf2edd5eab",
+    "sha256": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d"
+  },
+  {
+    "file": "p-limit-clear/base/index.js",
+    "gitBlobSha": "b74d48ab0e37788e657e5ad12d90e281ef1f39d1",
+    "sha256": "63239cd9ae80b1433e05014fe6ec501475c6fa59fad06418cb5972dbc7cc14e2"
+  },
+  {
+    "file": "p-limit-clear/head/index.js",
+    "gitBlobSha": "5ecd39257c623b6dd4df204bbd7c94fbdf0b8d12",
+    "sha256": "30fa94b6aebe7f044f7383feee7931fc7c1a4912affadac97539cda67c14057d"
+  },
+  {
+    "file": "p-limit-clear/base/test.js",
+    "gitBlobSha": "356c4d8194eb451df3aa932ab9fc493b51f95833",
+    "sha256": "9c9fe3a3d5054ac742d60db9684f076fe9f3ac538eba5c2884944caa418d1a52"
+  },
+  {
+    "file": "p-limit-clear/base/index.d.ts",
+    "gitBlobSha": "1a20857eadff3f14d22cbf94fb740c6e728cb0b8",
+    "sha256": "7b1abaeec6af1540ed700b39fd5b6c0aa0b7dd1a17b5f82d0d1e6f2bf87ae1e4"
+  },
+  {
+    "file": "p-limit-clear/base/package.json.fixture",
+    "gitBlobSha": "77daf847424ab0af12350aeda27d810a60c92562",
+    "sha256": "1076341808f20cb854314a2b8e121ee8b0b269a7060c9e26ec37572d06bd29bd"
+  },
+  {
+    "file": "p-limit-clear/base/license",
+    "gitBlobSha": "fa7ceba3eb4a9657a9db7f3ffca4e4e97a9019de",
+    "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
+  }
+]
