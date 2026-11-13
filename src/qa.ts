@@ -2,7 +2,7 @@ import { constants as fsConstants } from "node:fs";
 import { assessScenarioExecutability } from "./e2e-run.js";
 import { isBenchmarkValidationStructurePath } from "./benchmark-paths.js";
 import type { QAMapConfig } from "./types.js";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import {
   formatDraftReadinessStage,
@@ -22,7 +22,7 @@ import type {
   E2eWorkspaceTarget,
 } from "./e2e.js";
 import type { ChangeIntentAnalysis, ChangeIntentEvidence, IntentQaScenario } from "./change-intent.js";
-import { collectChangedFiles, readFileAtRef, repositoryNamespace } from "./git-context.js";
+import { collectChangedFiles, readFileAtRef, repositoryNamespace, resolveGitRepositoryRoot } from "./git-context.js";
 import { buildAgentContextContract, collectRepositoryValidationFacts } from "./agent-context.js";
 import type { AgentContextContract, AgentContextReference } from "./agent-context.js";
 import { loadVerificationManifest } from "./manifest.js";
@@ -289,6 +289,17 @@ interface QaRuntimePrerequisiteTestGap {
 // The repository index is built once the diff is known, so a capped inventory keeps the
 // files nearest the change; the scoped and repository-root passes share that one build.
 export async function generateQaDraft(rootInput: string, options: QaDraftOptions = {}): Promise<QaDraftResult> {
+  // Git diff paths are repository-relative even when invoked inside a package.
+  // Keep the selected package narrow, with the same root for index and evidence.
+  const gitRoot = options.workspaceRoot ? undefined : await resolveGitRepositoryRoot(rootInput);
+  if (gitRoot) {
+    const canonicalRoot = await realpath(rootInput);
+    const canonicalWorkspace = await realpath(gitRoot);
+    if (canonicalRoot !== canonicalWorkspace) {
+      rootInput = canonicalRoot;
+      options = { ...options, workspaceRoot: canonicalWorkspace };
+    }
+  }
   return withProjectScanMemo(() => {
     let index: Promise<RepositoryEvidenceIndex> | undefined;
     return generateQaDraftWithIndex(rootInput, options, (changedFiles) =>

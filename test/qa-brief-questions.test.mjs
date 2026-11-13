@@ -70,7 +70,9 @@ test("a mismatched working-tree index cannot lend its line numbers to a committe
   await fs.writeFile(path.join(root, "src/capacity.mjs"), "\n\n" + changed);
   const result = await generateQaDraft(root, { base: "main", head: "HEAD" });
   assert.ok(result.repositoryImpact.boundaries.some(boundary => boundary.reason === "repository-snapshot-mismatch"));
-  const section = questions(await buildQaBrief(result));
+  const output = await buildQaBrief(result);
+  assert.match(output, /Repository index does not match the compared head; indexed impact paths are unavailable/);
+  const section = questions(output);
   assert.match(section, /remaining at src\/capacity\.mjs; indirect tests may exist/);
   assert.doesNotMatch(section, /src\/capacity\.mjs:\d/);
 });
@@ -84,6 +86,17 @@ test("a confirmed caller test suppresses the missing-test question without execu
   assert.equal(questions(output), "");
   assert.match(output, /Changed declarations with collected test references: 1\/1/);
   assert.match(output, /test\/panel\.test\.mjs:3 "bounded"/);
+});
+
+test("an observed guard change gets a concrete policy question even when a test reference exists", async t => {
+  const { output } = await repository(t, {
+    "src/capacity.mjs": "export function remaining(value) {\n  if (value < 0) return 0;\n  return value;\n}\n",
+    "test/capacity.test.mjs": "import { remaining } from '../src/capacity.mjs';\ntest('keeps positive inputs', () => { assert.equal(remaining(1), 1); });\n",
+  }, { "src/capacity.mjs": "export function remaining(value) {\n  return value;\n}\n" });
+  assert.match(output, /Changed declarations with collected test references: 1\/1/);
+  assert.match(questions(output), /Base guard at src\/capacity\.mjs:2 \(base\): if \(value < 0\)/);
+  assert.match(questions(output), /Should inputs matching this base guard still return before the remaining work\?/);
+  assert.doesNotMatch(questions(output), /No test references collected/);
 });
 
 test("a runtime candidate asks about the target environment and deduplicates identical gaps", async t => {

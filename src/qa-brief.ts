@@ -10,6 +10,7 @@ import { bindBriefSource, comparedBaseLines } from "./qa-brief-syntax.js";
 import { stateCacheSignals } from "./qa-brief-state.js";
 import { collectBriefBindings, type BriefBindings } from "./qa-brief-bindings.js";
 import { isJavaScriptTestFileName } from "./test-file-paths.js";
+import { controlFlowQuestions, type ReviewQuestionDraft } from "./qa-review-questions.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -41,6 +42,7 @@ interface DiffFile {
   history: Array<{ commit: string; subject: string; lines: number; tests: Array<{ file: string; titles: Array<{ title: string; line?: number }> }> }>;
   spans?: Span[];
   signals?: string;
+  questions?: ReviewQuestionDraft[];
 }
 // A changed declaration's head-side extent, so a reader can tell which of its lines the hunks leave out.
 interface Span { name: string; line: number; endLine: number }
@@ -140,7 +142,9 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
   const diffAdded = files.flatMap((file) => file.hunks.minimal.flatMap((hunk) => hunk.lines.filter((line) => line.startsWith("+")).map((line) => line.slice(1))));
   for (const file of files) {
     if (file.kind !== "source" || file.status.startsWith("D")) continue;
-    file.signals = changeSignals(file, await reader(file.path), diffAdded);
+    const headLines = await reader(file.path);
+    file.signals = changeSignals(file, headLines, diffAdded);
+    if (headLines) file.questions = controlFlowQuestions(file.path, file.hunks.minimal, headLines);
     file.spans = await changedSpans(file, blocks.get(file.path), reader);
     // Callers of a declaration that now throws are listed with how each one handles it.
     const thrown = fileThrows.get(file.path)!;
@@ -162,6 +166,10 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
 
   const header = briefHeader(result, files, usages);
   if (scoped) header[0] += ` limited to ${scoped}/`;
+  if (!result.includeWorkingTree && !files.length
+    && (await git(top, ["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--", scoped ? `:(literal)${scoped}` : "."])).length) {
+    header.push(`No committed change between ${safeText(result.base)} and ${safeText(result.head)}; uncommitted edits exist. Add --include-working-tree to review them.`, "");
+  }
   const tail = briefTail(result, files, usages, range, blocks, workspacePrefix, historyIssue);
   // Keep each optional focus section bounded before reserving room for the diff
   // and its recovery tail. Contract identities take priority over assertions.
@@ -2173,8 +2181,10 @@ function collectReviewQuestions(result: QaDraftResult, files: DiffFile[], usages
   const questions = new Map<string, ReviewQuestion>();
   const add = (key: string[], detail: Omit<ReviewQuestion, "id">): void => {
     const identity = JSON.stringify(key);
-    questions.set(identity, { id: `Q-${createHash("sha256").update(identity).digest("hex").slice(0, 12)}`, ...detail });
+    questions.set(identity, { id: `Q-${createHash("sha256").update(identity).digest("hex").slice(0, 12)}`,
+      observation: safeText(detail.observation), question: safeText(detail.question), next: safeText(detail.next) });
   };
+  for (const file of files) for (const item of file.questions ?? []) add(item.key, item);
   const indexMatchesChange = !result.repositoryImpact?.boundaries.some(boundary => boundary.reason === "repository-snapshot-mismatch");
   const changed = new Set(files.map(file => file.path));
   for (const boundary of result.repositoryImpact?.boundaries ?? []) {
@@ -2220,6 +2230,9 @@ function renderReviewQuestions(questions: ReviewQuestion[], limit: number): stri
 function briefTail(result: QaDraftResult, files: DiffFile[], usages: Map<string, SymbolUsage[]>, range: string[], blocks: Map<string, RepositoryIndexBlock>, prefix: string, historyIssue?: string): (omitted: string[], partial?: Map<string, Hidden>, questions?: number) => string[] {
   const questions = collectReviewQuestions(result, files, usages, blocks, prefix);
   const unknown: string[] = historyIssue ? [`- ${historyIssue}`] : [];
+  if (result.repositoryImpact?.boundaries.some(boundary => boundary.reason === "repository-snapshot-mismatch")) {
+    unknown.push("- Repository index does not match the compared head; indexed impact paths are unavailable. Read the compared diff and head files directly.");
+  }
   for (const diagnostic of result.changeAnalysis.diagnostics) {
     if (/^Commit intent evidence is incomplete:/.test(diagnostic)) unknown.push(`- ${safeText(diagnostic)}`);
   }
