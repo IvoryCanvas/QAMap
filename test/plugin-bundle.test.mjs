@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import { buildPluginBundles, zipFiles } from "../scripts/plugin-bundle.mjs";
 import { prepareRelease } from "../scripts/prepare-release.mjs";
 
@@ -92,8 +93,20 @@ test("release preparation aligns current pins, preserves history and can be repe
   manifest.extensions["com.openai"].publication.translations = { "ko-KR": { subtitle: "변경 근거로 PR 검토" } };
   await writeFile(manifestPath, JSON.stringify(manifest));
   await writeFile(path.join(copy, "docs/releases/0.5.4.md"), "# QAMap 0.5.4\n\n## Plugin release notes\n\nQAMap 0.5.4 preserves the local evidence boundary.\n");
-  await prepareRelease(copy, "0.5.4", "2026-11-07", "0.5.5");
-  await prepareRelease(copy, "0.5.4", "2026-11-07");
+  const apply = async (version, date, claudeVersion, channels) => {
+    const plan = await prepareRelease(copy, version, date, claudeVersion, { channels });
+    await prepareRelease(copy, version, date, claudeVersion, { channels, apply: true, expectedPlan: plan.planSha256 });
+  };
+  const before = await readFile(path.join(copy, "package.json"));
+  await assert.rejects(prepareRelease(copy, "0.5.4", "2026-11-07", "0.5.5"), /channels/);
+  const preview = await prepareRelease(copy, "0.5.4", "2026-11-07", "0.5.5", { channels: ["npm", "openai", "claude"] });
+  assert.equal(preview.applied, false);
+  assert.deepEqual(await readFile(path.join(copy, "package.json")), before);
+  await assert.rejects(prepareRelease(copy, "0.5.4", "2026-11-07", "0.5.5",
+    { channels: ["npm", "openai", "claude"], apply: true, expectedPlan: "0".repeat(64) }), /preview again/);
+  assert.deepEqual(await readFile(path.join(copy, "package.json")), before);
+  await apply("0.5.4", "2026-11-07", "0.5.5", ["npm", "openai", "claude"]);
+  await apply("0.5.4", "2026-11-07", undefined, ["npm", "openai"]);
   assert.equal((await json(path.join(copy, "package.json"))).version, "0.5.4");
   assert.deepEqual((await json(manifestPath)).extensions["com.openai"].publication.countries, ["KR", "US"]);
   assert.deepEqual((await json(manifestPath)).extensions["com.openai"].publication.translations, manifest.extensions["com.openai"].publication.translations);
@@ -107,10 +120,39 @@ test("release preparation aligns current pins, preserves history and can be repe
   assert.match(await readFile(path.join(copy, "docs/ko/claude-code.md"), "utf8"), /@ivorycanvas\/qamap@0\.5\.4/);
   assert.equal((await readFile(path.join(copy, "CHANGELOG.md"), "utf8")).split("## 0.5.4 -").length, 2);
   assert.deepEqual(await readFile(path.join(copy, "docs/releases/0.5.2.md")), history);
-  await assert.rejects(prepareRelease(copy, "0.5.5", "2026-11-08"), /ENOENT/);
+  await assert.rejects(prepareRelease(copy, "0.5.5", "2026-11-08", undefined, { channels: ["npm", "openai"] }), /ENOENT/);
   assert.equal((await json(path.join(copy, "package.json"))).version, "0.5.4");
   await writeFile(path.join(copy, "docs/releases/0.5.5.md"), "# QAMap 0.5.5\n\n## Plugin release notes\n\nQAMap 0.5.5 preserves the local evidence boundary.\n");
-  await assert.rejects(prepareRelease(copy, "0.5.5", "2026-11-09"), /--claude-version/);
+  await assert.rejects(prepareRelease(copy, undefined, "2026-11-09", undefined, { channels: ["claude"] }), /--claude-version/);
+  await assert.rejects(prepareRelease(copy, "0.5.5", "2026-11-09", undefined, { channels: ["npm"] }), /select both/);
+  const nativeOnly = await prepareRelease(copy, undefined, "2026-11-09", "0.5.6", { channels: ["claude"] });
+  assert.deepEqual(nativeOnly.files.map(item => item.path).sort(), ["plugins/claude/.claude-plugin/plugin.json", "plugins/claude/README.md"]);
+  const notesPath = path.join(copy, "docs/releases/0.5.4.md");
+  const notesBefore = await readFile(notesPath, "utf8");
+  await writeFile(notesPath, notesBefore + "\nChanged after preview.\n");
+  await assert.rejects(prepareRelease(copy, undefined, "2026-11-09", "0.5.6",
+    { channels: ["claude"], apply: true, expectedPlan: nativeOnly.planSha256 }), /preview again/);
+  await writeFile(notesPath, notesBefore);
+  await apply(undefined, "2026-11-09", "0.5.6", ["claude"]);
   assert.equal((await json(path.join(copy, "package.json"))).version, "0.5.4");
-  assert.equal((await json(path.join(copy, "plugins/claude/.claude-plugin/plugin.json"))).version, "0.5.5");
+  assert.equal((await json(path.join(copy, "plugins/claude/.claude-plugin/plugin.json"))).version, "0.5.6");
+  const preservedManifest = await readFile(manifestPath);
+  const aliasTarget = path.join(copy, "unselected-manifest.json");
+  await writeFile(aliasTarget, preservedManifest);
+  await rm(manifestPath);
+  await symlink(aliasTarget, manifestPath);
+  await assert.rejects(prepareRelease(copy, undefined, "2026-11-09", "0.5.7", { channels: ["claude"] }), /symbolic link/);
+  assert.deepEqual(await readFile(aliasTarget), preservedManifest);
+  await rm(manifestPath);
+  await writeFile(manifestPath, preservedManifest);
+  const git = (...args) => execFileSync("git", args, { cwd: copy, stdio: "ignore" });
+  git("init", "-b", "main");
+  git("add", "-A");
+  git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "-c", "core.hooksPath=/dev/null", "commit", "-m", "fixture baseline");
+  await writeFile(path.join(copy, "unreviewed-source.txt"), "Local edit after the source baseline\n");
+  const dirtyPlan = await prepareRelease(copy, undefined, "2026-11-09", "0.5.7", { channels: ["claude"] });
+  assert.equal(dirtyPlan.sourceDirty, true);
+  await assert.rejects(prepareRelease(copy, undefined, "2026-11-09", "0.5.7",
+    { channels: ["claude"], apply: true, expectedPlan: dirtyPlan.planSha256 }), /Commit or isolate/);
+  assert.equal((await json(path.join(copy, "plugins/claude/.claude-plugin/plugin.json"))).version, "0.5.6");
 });

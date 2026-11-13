@@ -45,16 +45,33 @@ Before publishing, confirm:
 ## Prepare Versions And Review Bundles
 
 Write `docs/releases/X.Y.Z.md` first, including a `Plugin release notes` section.
-Then run the explicit, repeatable preparation command (no Git tag or publication):
+Choose the target channels, versions and date explicitly. The command previews
+file changes and input hashes by default; it does not write, tag or publish.
+Replace the placeholders before running:
 
 ```sh
-pnpm release:prepare --version 0.5.3 --date 2026-11-06
+pnpm release:prepare --channels npm,openai --version X.Y.Z --date YYYY-MM-DD
+```
+
+The npm package and OpenAI portable manifest currently share a version contract;
+changing that version requires selecting both. A native Claude revision is a
+separate selection with a mandatory explicit `--claude-version A.B.C`. Omitting
+the Claude channel preserves its plugin version, including when CLI pins update.
+Do not remove metadata checks to force an unsupported single-channel bump.
+
+After reviewing the complete file list, before/after hashes and source commit,
+repeat the same selections with `--apply --plan-sha256 <preview-digest>`. A stale
+digest, changed input, symbolic link or dirty Git source stops before the first
+write. This preflight does not promise transactional recovery from an I/O failure.
+The apply step edits only the reviewed metadata; publication is still separate.
+
+```sh
 pnpm plugin:check
 pnpm plugin:bundle
 ```
 
-Preparation aligns package and CLI versions, both plugin manifests, current
-skill pins, the directory copy, submission release notes and the changelog.
+Preparation updates the explicitly selected release metadata and required CLI
+pins. Native Claude-only plans leave npm/OpenAI version fields unchanged.
 It preserves historical release records and measurements. Review the diff.
 The npm lockfile is maintained separately from the pnpm frozen install contract;
 refresh it with `npm install --package-lock-only --ignore-scripts` if dependencies
