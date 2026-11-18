@@ -961,5 +961,8 @@ test("qa brief attributes AVA async assertions to the callback of an imported ru
   const output = await brief(root);
   assert.match(output, /test\.js:5 "clearing rejects queued work"/);
   assert.match(output, /9\| await checks\.throwsAsync\(pending, \{ name: 'AbortError' \}\);/);
-  assert.doesNotMatch(output, /previous test|shadowed runner|one-line neighbor|extra argument|unrelated check/);
+  assert.match(output, /^    test\.js:16$/m);
+  assert.match(output, /^    test\.js:17$/m);
+  assert.doesNotMatch(output, /^    test\.js:\d+ "(?:previous test|shadowed runner|one-line neighbor|extra argument)"$/m);
+  assert.doesNotMatch(output, /unrelated check/);
 });
