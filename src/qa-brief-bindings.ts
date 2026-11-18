@@ -180,7 +180,8 @@ function collectAvaTestBodies(source: ts.SourceFile, checker: ts.TypeChecker,
       const symbol = alias ? checker.getSymbolAtLocation(node.name) : undefined;
       if (symbol) runners.add(symbol);
     }
-    if (ts.isExpressionStatement(node) && ts.isCallExpression(node.expression) && isRunner(node.expression.expression)) {
+    if (ts.isExpressionStatement(node) && ts.isCallExpression(node.expression)
+      && node.expression.arguments.length === 2 && isRunner(node.expression.expression)) {
       const [title, callback] = node.expression.arguments;
       if (title && ts.isStringLiteralLike(title) && callback && (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))) {
         const body = callback.body;
