@@ -80,7 +80,7 @@ export function controlFlowQuestions(file: string, hunks: Array<BriefHunk & { ol
   const questions: ReviewQuestionDraft[] = [];
   for (const guard of unmatched(oldExits.guards, newExits.guards).filter(item => removed.has(item.line))) {
     questions.push({ key: ["changed-exit-guard", file, guard.key],
-      observation: `Base guard at ${file}:${guard.line} (base): if (${excerpt(guard.text)}); its branch ended in ${guard.kind}. This condition was removed or rewritten.`,
+      observation: `Base guard at ${file}:${guard.line} (base): if (${excerpt(guard.text)}); its branch ended in ${guard.kind}. This guard or its exit changed.`,
       question: `Should inputs matching this base guard still ${guard.kind === "return" ? "return" : "raise an error"} before the remaining work?`,
       next: "Find the reviewed policy for these inputs; record its source and input -> expected result before proposing a check. Tests remain not-run.",
     });

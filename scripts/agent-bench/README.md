@@ -57,6 +57,10 @@ It uses a fresh ephemeral read-only exec session, disables web search and user
 configuration, and leaves authentication to the CLI. It never copies auth files
 or changes account configuration. Check writable CLI state and executable access
 before the pilot; an existing login alone does not establish readiness.
+The Codex QAMap arm requires a successful local `qamap qa brief --no-report`
+in its transcript. This uses a build that supports the flag and avoids the
+report write that a read-only review sandbox would reject. The local index
+caches are disabled for both Codex arms.
 Use `--concurrency 1 --timeout-ms 120000 --fail-fast` for a bounded first pilot.
 The timeout is not a monetary or token cap. Native JSON records CLI-reported
 turn usage; cached input is a subset. Request counts, cache-write counts,

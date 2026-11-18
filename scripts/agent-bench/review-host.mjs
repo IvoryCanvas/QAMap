@@ -161,6 +161,11 @@ export function runHost({ cwd, home, pathPrefix, prompt, model, transcript, time
   const env = { ...process.env, GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"), GIT_CONFIG_NOSYSTEM: "1" };
   // Codex reuses its own existing CLI authentication; never copy auth files.
   if (host === "claude") env.HOME = home;
+  else {
+    env.QAMAP_REPOSITORY_CACHE = "off";
+    env.QAMAP_IMPORT_CACHE = "off";
+    env.GIT_OPTIONAL_LOCKS = "0";
+  }
   for (const key of hostEnvironment) delete env[key];
   if (pathPrefix) env.PATH = `${pathPrefix}${path.delimiter}${process.env.PATH}`;
   const args = host === "codex" ? codexArguments({ prompt, model, disableSkills }) : ["-p", prompt, "--output-format", "stream-json", "--verbose", ...(model ? ["--model", model] : []), "--no-session-persistence",
@@ -201,7 +206,10 @@ export async function runOne(entry, { suite, arm, run, engine, model, out, dryRu
     const setup = arm === "candidate" ? "qamap" : arm;
     const engineBin = path.join(path.resolve(engine), "bin");
     const { repo, base, head } = await materializeCase(entry, { directory, home, engineBin, arm: setup });
-    const prompt = setup === "qamap" ? `${suite.qamapPrefix} ${suite.prompt}` : suite.prompt;
+    const codexBrief = host === "codex" && setup === "qamap";
+    const prompt = codexBrief
+      ? `${suite.qamapPrefix} Run the local executable once: qamap qa brief --no-report --base main --head HEAD. Use its output to guide the review. ${suite.prompt}`
+      : setup === "qamap" ? `${suite.qamapPrefix} ${suite.prompt}` : suite.prompt;
     const engineVersion = setup === "qamap" ? execFileSync(path.join(engineBin, "qamap"), ["--version"], { input: "", stdio: ["pipe", "pipe", "pipe"] }).toString().trim() : null;
     const hostVersion = dryRun ? null : execFileSync(host, ["--version"], { input: "", stdio: ["pipe", "pipe", "pipe"] }).toString().trim();
     const record = { schema: { name: "qamap.review-host-run", version: 1 }, case: entry.id, arm, run, model, base, head, engineVersion, host, hostVersion,
@@ -213,7 +221,7 @@ export async function runOne(entry, { suite, arm, run, engine, model, out, dryRu
     }
     const response = await runHost({ cwd: repo, home, pathPrefix: setup === "qamap" ? engineBin : undefined, prompt, model,
       transcript: path.join(outDir, "transcript.jsonl"), timeoutMs, disableSkills, host });
-    const summary = host === "codex" ? summarizeCodexRun(response.stdout) : summarizeHostRun(response.stdout);
+    const summary = host === "codex" ? summarizeCodexRun(response.stdout, { requireQamapBrief: codexBrief }) : summarizeHostRun(response.stdout);
     const changed = execFileSync("git", ["status", "--porcelain"], { cwd: repo }).toString();
     const status = response.code === 0 && summary.completed && summary.totalTokens !== null && changed.length === 0 ? "completed" : "ineligible";
     await fs.writeFile(path.join(outDir, "result.json"), JSON.stringify({ ...record, status, exitCode: response.code, wallMs: response.wallMs,

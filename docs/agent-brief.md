@@ -33,6 +33,8 @@ gets an explicit `--include-working-tree` hint. Direct package paths use their
 Git repository root for indexing and references while retaining the selected
 directory's diff scope. Snapshot mismatches remain visible under Unknowns;
 the current working tree cannot lend line numbers to historical questions.
+Use `--no-report` on the source candidate to print the brief without saving a
+full report, for example in a read-only review session.
 
 ## What The Brief Contains
 

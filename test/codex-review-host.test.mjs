@@ -48,6 +48,18 @@ test("Codex external tools or file changes make a static-only receipt ineligible
   }
 });
 
+test("a Codex QAMap arm requires a successfully emitted brief", () => {
+  const options = { requireQamapBrief: true };
+  const summarize = (...events) => summarizeCodexRun(transcript(...events, answer, receipt(validUsage)), options);
+  const tool = { type: "command_execution", command: "qamap qa brief --no-report --base main --head HEAD",
+    exit_code: 0, aggregated_output: "QAMap brief: main...HEAD\n" };
+  const completed = item => ({ type: "item.completed", item });
+  assert.equal(summarize().completed, false);
+  assert.equal(summarize(completed({ ...tool, exit_code: 1 })).completed, false);
+  assert.equal(summarize(completed({ ...tool, aggregated_output: "QAMap did not run" })).completed, false);
+  assert.equal(summarize(completed(tool)).completed, true);
+});
+
 test("Codex uses an explicit model, a fresh read-only session and no rules bypass", () => {
   const args = codexArguments({ model: "fixed-model", prompt: "Static review" });
   assert.ok(args.includes("read-only"));

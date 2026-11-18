@@ -6,9 +6,10 @@ export function codexArguments({ prompt, model, disableSkills = false }) {
     "-c", 'web_search="disabled"', "--model", model, prompt];
 }
 
-export function summarizeCodexRun(stdout) {
+export function summarizeCodexRun(stdout, { requireQamapBrief = false } = {}) {
   const events = [], tools = [], commands = [], answers = [];
   let malformed = false;
+  let qamapBriefObserved = false;
   for (const line of stdout.split("\n").filter(line => line.trim())) {
     try {
       const event = JSON.parse(line);
@@ -21,7 +22,12 @@ export function summarizeCodexRun(stdout) {
     const item = event.item;
     if (item.type === "agent_message" && typeof item.text === "string") answers.push(item.text);
     if (["command_execution", "mcp_tool_call", "web_search", "file_change"].includes(item.type)) tools.push(item.type);
-    if (item.type === "command_execution") commands.push(item.command);
+    if (item.type === "command_execution") {
+      commands.push(item.command);
+      if (item.exit_code === 0 && /\bqamap\s+qa\s+brief\s/.test(item.command ?? "")
+        && /\s--no-report\b/.test(item.command ?? "")
+        && /^QAMap brief:/m.test(item.aggregated_output ?? "")) qamapBriefObserved = true;
+    }
   }
   const receipts = events.filter(event => event.type === "turn.completed");
   const usage = receipts.length === 1 ? receipts[0].usage : null;
@@ -32,7 +38,9 @@ export function summarizeCodexRun(stdout) {
   const failed = events.some(event => event.type === "turn.failed" || event.type === "error");
   const policyViolations = [...new Set(tools.filter(tool => ["mcp_tool_call", "web_search", "file_change"].includes(tool)))];
   return {
-    completed: !!valid && !failed && !!answers.at(-1)?.trim() && policyViolations.length === 0,
+    completed: !!valid && !failed && !!answers.at(-1)?.trim() && policyViolations.length === 0
+      && (!requireQamapBrief || qamapBriefObserved),
+    qamapBriefObserved,
     usage: { input: valid ? usage.input_tokens - usage.cached_input_tokens : null,
       cacheRead: valid ? usage.cached_input_tokens : null, cacheWrite: null, output: valid ? usage.output_tokens : null },
     // Cached input is a subset of input, not an additional token category.
