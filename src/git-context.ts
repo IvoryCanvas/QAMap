@@ -161,6 +161,11 @@ export async function collectChangedFiles(
   );
 }
 
+/** Git's canonical root, including linked worktrees; absent outside a repository. */
+export async function resolveGitRepositoryRoot(root: string): Promise<string | undefined> {
+  return readOptionalGitValue(root, ["rev-parse", "--show-toplevel"]);
+}
+
 export async function resolveMergeBase(root: string, base: string, head: string): Promise<string> {
   const { stdout } = await git(root, ["merge-base", base, head]);
   const mergeBase = stdout.trim();
