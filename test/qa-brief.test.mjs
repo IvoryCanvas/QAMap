@@ -97,6 +97,7 @@ test("qa brief attributes AVA async assertions to the callback of an imported ru
     "    createQueue();",
     "  });",
     "}",
+    "ava('one-line neighbor', checks => checks.pass()); createQueue();",
     "ava('next test', async checks => {",
     "  await checks.throwsAsync(Promise.reject(new Error('unrelated check')));",
     "});",
@@ -111,7 +112,7 @@ test("qa brief attributes AVA async assertions to the callback of an imported ru
   const output = await brief(root);
   assert.match(output, /test\.js:5 "clearing rejects queued work"/);
   assert.match(output, /9\| await checks\.throwsAsync\(pending, \{ name: 'AbortError' \}\);/);
-  assert.doesNotMatch(output, /previous test|shadowed runner|unrelated check/);
+  assert.doesNotMatch(output, /previous test|shadowed runner|one-line neighbor|unrelated check/);
 });
 
 test("qa brief keeps same-named symbols from unrelated modules out of the reference list", async () => {

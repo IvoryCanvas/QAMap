@@ -200,8 +200,20 @@ function collectAvaTestBodies(source: ts.SourceFile, checker: ts.TypeChecker,
           };
           collectAssertions(body);
         }
-        tests.push({ title: title.text, titleLine: lineOf(title), firstLine: lineOf(body),
-          lastLine: source.getLineAndCharacterOfPosition(body.getEnd() - 1).line + 1, asyncThrowAssertions });
+        // The brief stores use coordinates by line. Leave shared boundary
+        // lines unassigned rather than attributing a neighboring statement.
+        let firstLine = lineOf(body);
+        let lastLine = source.getLineAndCharacterOfPosition(body.getEnd() - 1).line + 1;
+        const statementStart = node.getStart(source);
+        const statementEnd = node.getEnd();
+        if (lineOf(node) === firstLine
+          && source.text.slice(source.getPositionOfLineAndCharacter(firstLine - 1, 0), statementStart).trim()) firstLine++;
+        if (source.getLineAndCharacterOfPosition(statementEnd).line + 1 === lastLine) {
+          const newline = source.text.indexOf("\n", statementEnd);
+          const after = source.text.slice(statementEnd, newline === -1 ? undefined : newline).trimStart();
+          if (after && !after.startsWith("//")) lastLine--;
+        }
+        if (firstLine <= lastLine) tests.push({ title: title.text, titleLine: lineOf(title), firstLine, lastLine, asyncThrowAssertions });
       }
     }
     ts.forEachChild(node, visit);
