@@ -322,7 +322,9 @@ async function main(argv: string[]): Promise<number> {
     if (rest[0] === "brief") {
       if (rest.includes("--help") || rest.includes("-h")) { printQaHelp(); return 0; }
       const requireConsent = rest.includes("--require-consent");
-      const options = parseOptions(rest.slice(1).filter((arg) => arg !== "--require-consent"));
+      const noReport = rest.includes("--no-report");
+      const options = parseOptions(rest.slice(1).filter((arg) => arg !== "--require-consent" && arg !== "--no-report"));
+      if (noReport && options.output !== undefined) throw new Error("--no-report cannot be combined with --output");
       if (requireConsent) {
         // Checked before any analysis, so an unconsented agent run reads nothing from the repository.
         const status = await readConsentStatus(await consentRoot(options.path));
@@ -342,8 +344,8 @@ async function main(argv: string[]): Promise<number> {
         manifestPath: options.manifestPath,
         config: loadedConfig.config,
       });
-      const receipt = await writeLocalQaReport(result, options.output);
-      process.stdout.write(await buildQaBrief(result, { maxBytes: options.maxBytes, reportFile: receipt.files.report }));
+      const receipt = noReport ? undefined : await writeLocalQaReport(result, options.output);
+      process.stdout.write(await buildQaBrief(result, { maxBytes: options.maxBytes, reportFile: receipt?.files.report }));
       return 0;
     }
     if (rest[0] === "read") {
@@ -1226,7 +1228,7 @@ Usage:
     [--output <directory>] [--format text|json|agent] [--handoff]
 
   qamap qa brief [path] [--base <ref>] [--head <ref>] [--include-working-tree]
-    [--max-bytes <n>] [--output <directory>] [--require-consent]
+    [--max-bytes <n>] [--output <directory> | --no-report] [--require-consent]
 
   qamap qa read <report-file> --sha256 <receipt-hash> --bytes <receipt-bytes>
     [--offset <nextOffset>]
@@ -1236,7 +1238,8 @@ Behavior:
            diff, changed declarations with the tests and callers that use them
            (assertion lines included), QA focus, and unknowns. The base is
            auto-selected unless --base is given. Default limit: 24000 bytes.
-           Saves the full report locally. Tests remain not-run; no LLM calls.
+           Saves the full report locally unless --no-report is set.
+           Tests remain not-run; no LLM calls.
            --require-consent prints a consent notice instead, without analysis,
            unless QAMap review consent is recorded (see qamap consent status).
   qa read verifies an existing report and returns one bounded evidence page.

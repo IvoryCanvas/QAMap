@@ -1,5 +1,7 @@
 # Adopting QAMap
 
+[한국어](ko/adoption.md)
+
 QAMap works best when teams treat it as the local QA design pass for any PR, not as a replacement for review or security tooling.
 
 > **Fast path:** run the command in **First Run**, confirm that the change and

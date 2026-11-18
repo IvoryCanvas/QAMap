@@ -1,0 +1,20 @@
+{
+  "click-gettext": {
+    "kind": "regression",
+    "source": "https://github.com/pallets/click/pull/3901",
+    "fixedCommit": "5125851aaa19840c82b9811193b2c2d6cf245326",
+    "priorCommit": "6d34602f4b0668a61873af1c547bfd40cb7deffc",
+    "seeded": [{"id": "S1", "description": "At head, deprecated command help is passed through gettext even though it is application data. A translation function can alter both the short command listing and long help; only the deprecation label should be translated."}],
+    "anchors": ["src/click/core.py:get_short_help_str", "src/click/core.py:format_help_text", "tests/test_commands.py:test_deprecated_help_text_is_not_translated"],
+    "fixtureScope": "Selected public files; regression test retained, production fix reversed. No dependencies installed and no tests executed."
+  },
+  "p-limit-clear": {
+    "kind": "regression",
+    "source": "https://github.com/sindresorhus/p-limit/pull/109",
+    "fixedCommit": "f3e7f9ba364a9357bd912d136367d06c46660917",
+    "priorCommit": "df476048d023ff868cd45b35ee47f5fb0ca2b25a",
+    "seeded": [{"id": "S1", "description": "At head, limitFunction returns a bare wrapper without the clearQueue method required by its retained type declaration and regression test. Calling limitedFunction.clearQueue throws instead of clearing pending work and rejecting pending promises when configured."}],
+    "anchors": ["index.js:limitFunction", "index.d.ts:clearQueue", "test.js:limitFunction exposes clearQueue"],
+    "fixtureScope": "Selected public files; regression test and fixed declaration retained, production fix reversed. No dependencies installed and no tests executed."
+  }
+}

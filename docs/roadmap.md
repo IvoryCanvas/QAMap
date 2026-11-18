@@ -36,7 +36,25 @@ Before treating the next public release as ready, the golden demo must satisfy t
 - README demo shows the full loop: manifest-free PR QA draft, optional repo context baseline, PR mapping, E2E draft, and remaining validation gaps.
 - One manifest correction should improve future PR recommendations without another LLM prompt.
 
-## Now: 0.5.2 Review Brief
+## Current Source And Next Release
+
+Source metadata remains 0.5.3. The current source candidate adds empty-range
+working-tree guidance, aligned direct-package indexing, evidence-specific
+guard/error questions and guarded release preparation. These are source
+changes, not publication or release-readiness claims.
+
+The README now records actual `qa brief` output, with its regeneration script;
+the Korean adoption guide covers first use and optional team setup. A long-temp
+bounded-report check protects the path-length regression in #316. The sporadic
+coverage failure in #317 remains unresolved; retain the concurrency mitigation
+and diagnostics until a captured failure identifies the cause.
+
+The [independent pilot](../test/benchmarks/review-host/independent-2026-11-13/RESULTS.md)
+has frozen public snapshots and native Codex receipt support but no eligible
+paired result: the supplied CLI state directory was read-only, and Claude Code
+was unavailable. Existing 0.5.2 token results do not measure this candidate.
+
+## Published Measurement Baseline: 0.5.2 Review Brief
 
 QAMap 0.5.2 was published to npm and GitHub on 2026-10-13 after its local release
 gate passed. Both exact-version registry smokes passed. Its [release record](releases/0.5.2.md) separates the prior host

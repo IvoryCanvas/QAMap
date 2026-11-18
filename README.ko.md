@@ -56,7 +56,7 @@ qamap init --agent
 
 `init --agent`는 `AGENTS.md` 섹션, 스킬 파일, `qamap.config.json`을 추가합니다.
 `qa brief`는 저장소를 읽기만 하며 보고서를 `~/QAMap-reports/`에 저장합니다.
-다른 패키지 매니저나 커밋하지 않은 변경은 [도입 가이드](docs/adoption.md)를 참고하세요.
+다른 패키지 매니저나 커밋하지 않은 변경은 [도입 가이드](docs/ko/adoption.md)를 참고하세요.
 
 ### ChatGPT와 Codex 플러그인
 
@@ -97,11 +97,13 @@ qamap init --agent
 
 ## 실제 실행 예시
 
-공개 예제 저장소에서 구독 갱신 흐름을 바꾼 변경을 사람이 보는 QA 계획(`qamap qa`)입니다.
+공개 shared-capacity 예제의 변경 코드와 테스트·호출자를 보여주는 `qamap qa brief` 실제 출력입니다. 배포 전 소스 후보에서 기록했습니다.
 
-![QAMap이 브랜치 변경을 읽고 근거가 연결된 QA 요약을 만드는 모습](docs/assets/qamap-quickstart.gif)
+![QAMap이 변경 코드와 테스트 근거를 한 브리프로 보여주는 실제 출력](docs/assets/qamap-brief-demo.gif)
 
-[실제 CLI 출력과 첫 실행 과정을 자세히 보기](docs/ko/quickstart.md)
+[기록한 출력](docs/assets/qamap-brief-demo.txt). 소스 체크아웃에서 `pnpm build && node scripts/record-brief-demo.mjs`로 재생성합니다(Python·Pillow·DejaVu Sans Mono 필요). 재생 속도는 실행 성능 측정이 아닙니다.
+
+사람이 읽는 QA 계획과 첫 실행 과정은 [한국어 빠른 시작](docs/ko/quickstart.md)을 참고하세요.
 
 ## 동작 방식
 
@@ -117,7 +119,7 @@ QA 초점을 더해 브리프 하나에 담습니다. 넓은 추측보다 실제
 | 목적 | 문서 |
 | --- | --- |
 | 브랜치 하나를 처음 분석하기 | [한국어 빠른 시작](docs/ko/quickstart.md) |
-| 팀에서 반복해서 사용하기 | [도입 가이드](docs/adoption.md) |
+| 팀에서 반복해서 사용하기 | [도입 가이드](docs/ko/adoption.md) |
 | 에이전트와 함께 사용하기 | [한국어 에이전트 연동](docs/ko/agent-integration.md) |
 | Claude Code 플러그인 설치하기 | [Claude Code 설치 가이드](docs/ko/claude-code.md) |
 | 전체 명령 확인하기 | [명령어 안내](docs/commands.md) |

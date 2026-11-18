@@ -1,8 +1,12 @@
 # Claude Directory Submission
 
-For release preparation, `pnpm release:prepare --version X.Y.Z --date YYYY-MM-DD`
-refreshes shared policies and required CLI pins. Use `--claude-version X.Y.Z`
-when the Claude plugin revision differs from the CLI release. `pnpm plugin:bundle` generates
+Release preparation previews changes by default. Explicitly select
+`--channels claude --claude-version X.Y.Z --date YYYY-MM-DD` for a native Claude
+revision; no other channel's version is changed. A combined CLI/OpenAI release
+requires `--channels npm,openai --version A.B.C`; add the Claude channel and its
+explicit version only when intended. Apply only after reviewing the matching
+plan hash; see [release preparation](releasing.md#prepare-versions-and-review-bundles).
+`pnpm plugin:bundle` generates
 an inspection ZIP and copyable source/data-handling fields. The
 [review preparation guide](plugin-review-preparation.md) links the management
 portal and the source-folder shortcut that fills the branch and path.

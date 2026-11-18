@@ -9,6 +9,10 @@ attestations or claims that reviewers have executed the supplied examples.
 
 ## Generate
 
+Before a version edit, use the explicit-channel preview and plan-hash guard in
+[release preparation](releasing.md#prepare-versions-and-review-bundles). Bundle
+generation itself does not choose or increment a version.
+
 ```sh
 pnpm plugin:check
 pnpm plugin:bundle

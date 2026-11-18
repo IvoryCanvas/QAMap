@@ -365,6 +365,22 @@ test("qa brief help documents the bounded command", async () => {
   assert.match(stdout, /Default limit: 24000 bytes/);
 });
 
+test("qa brief can stream evidence without writing its report", async () => {
+  const { root, directory, env } = await repository({
+    "src/limit.mjs": "export const limit = value => Math.max(0, value);\n",
+  }, { "src/limit.mjs": "export const limit = value => value;\n" });
+  const fixtureHome = path.join(directory, "fixture-home");
+  await fs.mkdir(fixtureHome);
+  const args = [cli, "qa", "brief", "--base", "main", "--head", "HEAD", "--no-report"];
+  const options = { cwd: root, env: { ...env, HOME: fixtureHome, QAMAP_REPOSITORY_CACHE: "off" } };
+  const { stdout } = await exec(process.execPath, args, options);
+  assert.match(stdout, /^QAMap brief: main\.\.\.HEAD/);
+  assert.match(stdout, /Math\.max/);
+  await assert.rejects(fs.access(path.join(fixtureHome, "QAMap-reports")), { code: "ENOENT" });
+  await assert.rejects(exec(process.execPath, [...args, "--output", path.join(directory, "reports")], options),
+    /--no-report cannot be combined with --output/);
+});
+
 test("qa brief keeps every removed line when a file exceeds its line cap and folds added runs instead", async () => {
   const before = Array.from({ length: 120 }, (_, line) => `  const a${line} = input.a${line};`);
   before.splice(100, 0, '  const label = includeChildren ? "Export" : "Download";');
