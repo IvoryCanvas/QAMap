@@ -38,7 +38,7 @@ interface DiffFile {
   kind: FileKind;
   hunks: { full: DiffHunk[]; wide: DiffHunk[]; normal: DiffHunk[]; minimal: DiffHunk[] };
   calls: CalleeInfo[];
-  relatedTests: Array<{ literal: string; tests: TestUse[] }>;
+  relatedTests: Array<{ literal: string; tests: TestUse[]; pythonComment?: true }>;
   history: Array<{ commit: string; subject: string; lines: number; tests: Array<{ file: string; titles: Array<{ title: string; line?: number }> }> }>;
   spans?: Span[];
   signals?: string;
@@ -162,6 +162,7 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
       }
     }
   }
+  await collectPythonCommentTests(top, headSha, files, reader);
   const changed = new Map(files.map((file) => [file.path, new Set(changedLines(file).added)]));
 
   const header = briefHeader(result, files, usages);
@@ -1614,6 +1615,51 @@ async function collectRelatedTests(top: string, headSha: string | undefined, fil
   }
 }
 
+// Keep human-authored leads out of the collected-reference counts. A nearby
+// assertion shows what the test checks, while the comment does not bind a call.
+async function collectPythonCommentTests(top: string, headSha: string | undefined, files: DiffFile[], read: Reader): Promise<void> {
+  const owners = new Map<string, Set<DiffFile>>();
+  for (const file of files) {
+    if (file.kind !== "source" || !file.path.endsWith(".py") || !file.spans?.length) continue;
+    const lines = await read(file.path);
+    if (!lines) continue;
+    for (const span of file.spans) {
+      if (!usefulSymbol(span.name) || !/^\s*(?:async\s+)?def\s+/.test(lines[span.line - 1] ?? "")) continue;
+      const matches = owners.get(span.name);
+      if (matches) matches.add(file);
+      else if (owners.size < 24) owners.set(span.name, new Set([file]));
+    }
+  }
+  const searches = [...owners].filter(([, files]) => files.size === 1);
+  if (!searches.length) return;
+  const hits = await grepSymbols(top, headSha, searches.map(([name]) => name));
+  for (const [name, [file]] of searches) {
+    const candidates = hits.get(name) ?? [];
+    if (candidates.length > 60 || file.relatedTests.length >= 2) continue;
+    const quoted = new RegExp("(^|[^`])(`{1,2})" + name + "\\2(?!`)");
+    const tests: TestUse[] = [];
+    const seen = new Set<string>();
+    for (const hit of candidates) {
+      if (!hit.file.endsWith(".py") || !isTestPath(hit.file.toLowerCase()) || !quoted.test(hit.text)) continue;
+      const comment = /^(\s*)#/.exec(hit.text);
+      if (!comment) continue;
+      const lines = await read(hit.file);
+      const assertion = lines?.[hit.line];
+      if (!lines || !assertion || /^(\s*)assert\b/.exec(assertion)?.[1] !== comment[1]) continue;
+      const test = enclosingDefinition(lines, hit.line);
+      if (!test || !/^test_/.test(test.name) || hit.line >= test.endLine
+        || !/^\s*(?:async\s+)?def\s+test_/.test(lines[test.line - 1])) continue;
+      const key = hit.file + ":" + test.line;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tests.push({ file: hit.file, title: test.name, titleLine: test.line, hitLine: hit.line,
+        lines: [{ line: hit.line, text: hit.text }, { line: hit.line + 1, text: assertion }] });
+      if (tests.length >= 3) break;
+    }
+    if (tests.length) file.relatedTests.push({ literal: name, tests, pythonComment: true });
+  }
+}
+
 // Historical co-changes are review evidence, not proof of a test's intent.
 // Optional history must not fetch missing objects or hold the brief indefinitely.
 async function collectHistory(top: string, base: string, head: string, files: DiffFile[]): Promise<string | undefined> {
@@ -1971,7 +2017,9 @@ function renderFile(file: DiffFile, usages: SymbolUsage[], level: Level, listedC
     }
   }
   for (const related of file.relatedTests) {
-    lines.push(`  tests sharing the changed literal "${clip(related.literal, 60)}":`);
+    lines.push(related.pythonComment
+      ? `  heuristic leads from Python test comments mentioning "${clip(related.literal, 60)}" (binding not established):`
+      : `  tests sharing the changed literal "${clip(related.literal, 60)}":`);
     for (const test of related.tests.slice(0, Math.max(1, Math.floor(level.tests / 2)))) {
       lines.push(`    ${test.file}:${test.titleLine}${test.title ? ` "${clip(test.title, 120)}"` : ""}`);
       for (const line of test.lines) lines.push(`      ${line.line}| ${clip(line.text)}`);
