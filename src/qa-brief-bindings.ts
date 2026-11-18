@@ -12,9 +12,18 @@ export interface BriefReferenceBinding {
   imported?: SymbolImport;
 }
 
+export interface BriefTestBody {
+  title: string;
+  titleLine: number;
+  firstLine: number;
+  lastLine: number;
+  asyncThrowAssertions: Set<number>;
+}
+
 export interface BriefBindings {
   structure: SourceStructure;
   references: BriefReferenceBinding[];
+  avaTests?: BriefTestBody[];
 }
 
 // Bind only the supplied snapshot. Imports, compiler configuration and repository
@@ -139,5 +148,64 @@ export function collectBriefBindings(file: string, lines: string[]): BriefBindin
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return { structure, references };
+  const avaTests = collectAvaTestBodies(source, checker, lineOf);
+  return { structure, references, ...(avaTests ? { avaTests } : {}) };
+}
+
+// Recognize declarations through AVA's imported binding and immutable aliases.
+// A name or a call outside the callback cannot establish test ownership.
+function collectAvaTestBodies(source: ts.SourceFile, checker: ts.TypeChecker,
+  lineOf: (node: ts.Node) => number): BriefTestBody[] | undefined {
+  const runners = new Set<ts.Symbol>();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== "ava") continue;
+    const clause = statement.importClause;
+    const runner = clause?.name && !clause.isTypeOnly ? checker.getSymbolAtLocation(clause.name) : undefined;
+    if (runner) runners.add(runner);
+  }
+  if (!runners.size) return undefined;
+
+  const modifiers = new Set(["failing", "only", "serial", "skip"]);
+  const isRunner = (expression: ts.Expression): boolean => {
+    while (ts.isPropertyAccessExpression(expression) && modifiers.has(expression.name.text)) expression = expression.expression;
+    const symbol = ts.isIdentifier(expression) ? checker.getSymbolAtLocation(expression) : undefined;
+    return symbol !== undefined && runners.has(symbol);
+  };
+  const tests: BriefTestBody[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && ts.isVariableDeclarationList(node.parent)
+      && (node.parent.flags & ts.NodeFlags.Const) !== 0 && node.initializer) {
+      const value = node.initializer;
+      const alias = ts.isConditionalExpression(value) ? isRunner(value.whenTrue) && isRunner(value.whenFalse) : isRunner(value);
+      const symbol = alias ? checker.getSymbolAtLocation(node.name) : undefined;
+      if (symbol) runners.add(symbol);
+    }
+    if (ts.isExpressionStatement(node) && ts.isCallExpression(node.expression) && isRunner(node.expression.expression)) {
+      const [title, callback] = node.expression.arguments;
+      if (title && ts.isStringLiteralLike(title) && callback && (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))) {
+        const body = callback.body;
+        const parameter = callback.parameters[0]?.name;
+        const receiver = parameter && ts.isIdentifier(parameter) ? checker.getSymbolAtLocation(parameter) : undefined;
+        const asyncThrowAssertions = new Set<number>();
+        if (receiver) {
+          const collectAssertions = (child: ts.Node): void => {
+            if (ts.isCallExpression(child) && ts.isPropertyAccessExpression(child.expression)) {
+              const access = child.expression;
+              if ((access.name.text === "throwsAsync" || access.name.text === "notThrowsAsync")
+                && ts.isIdentifier(access.expression) && checker.getSymbolAtLocation(access.expression) === receiver) {
+                asyncThrowAssertions.add(lineOf(access));
+              }
+            }
+            ts.forEachChild(child, collectAssertions);
+          };
+          collectAssertions(body);
+        }
+        tests.push({ title: title.text, titleLine: lineOf(title), firstLine: lineOf(body),
+          lastLine: source.getLineAndCharacterOfPosition(body.getEnd() - 1).line + 1, asyncThrowAssertions });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return tests;
 }
