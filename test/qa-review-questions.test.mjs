@@ -40,6 +40,13 @@ test("a same-text guard in a different function cannot cancel a removed guard", 
   assert.match(result[0].key.join(" "), /allowance/);
 });
 
+test("an exit change does not claim that the guard condition changed", () => {
+  const result = questions("function select(ok) { if (!ok) return null; return 1; }",
+    "function select(ok) { if (!ok) throw new Error('unavailable'); return 1; }");
+  assert.match(result[0].observation, /if \(!ok\); its branch ended in return\. This guard or its exit changed\./);
+  assert.match(result[1].observation, /Added throw/);
+});
+
 test("new throws cite the head and ask for caller-visible behavior rather than assuming recovery", () => {
   const result = questions("function parseValue(value) { return value; }",
     "function parseValue(value) {\n if (value === null) throw new Error('missing');\n return value;\n}");
