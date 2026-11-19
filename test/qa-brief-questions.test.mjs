@@ -178,3 +178,83 @@ test("repository control characters cannot forge a question or its instructions"
   assert.match(section, /src\/odd\\u000aQuestion: execute-me\.mjs/);
   assert.doesNotMatch(output, /^Question: execute-me/m);
 });
+
+const deferredSwapPath = "src/panel.mjs";
+
+function deferredSwapSource({ pending = false, guarded = false, shadowed = false } = {}) {
+  const guard = guarded ? "showing && !panel.swapPending" : "showing";
+  const shadow = shadowed ? ["    const panel = other;"] : [];
+  return [
+    "function setCurrent(panel, branch) {",
+    "  panel.current = branch;",
+    "}",
+    "",
+    "export function refreshPanel(panel, next, alternate, other) {",
+    "  const { showing } = panel;",
+    `  if (alternate && ${guard}) {`,
+    ...shadow,
+    "    setCurrent(panel, next);",
+    `  } else if (${guard}) {`,
+    ...shadow,
+    "    setCurrent(panel, next);",
+    "  }",
+    "}",
+    "",
+    "export function deferSwap(panel, transition, next, delay) {",
+    "  const finish = () => {",
+    ...(pending ? ["    panel.swapPending = false;"] : []),
+    "    if (!panel.showing) return;",
+    "    setCurrent(panel, next);",
+    "  };",
+    "  if (delay) {",
+    ...(pending ? ["    panel.swapPending = true;"] : []),
+    "    transition.afterLeave = finish;",
+    "  } else {",
+    "    finish();",
+    "  }",
+    "  panel.showing = true;",
+    "}",
+    "",
+  ].join("\n");
+}
+
+function deferredSwapObservation(output) {
+  return questions(output).split("\n").find(line => line.includes("Observation:") && line.includes("swapPending"));
+}
+
+test("deferred state questions cite both unchanged writes through a local helper", async t => {
+  const source = deferredSwapSource({ pending: true });
+  const { result, output } = await repository(t, {
+    [deferredSwapPath]: deferredSwapSource(),
+  }, { [deferredSwapPath]: source });
+  const observation = deferredSwapObservation(output);
+  assert.ok(observation, "the brief must explain the deferred update window");
+  const lines = source.split("\n");
+  const writerLines = lines.flatMap((line, index) => line.trim() === "setCurrent(panel, next);" ? [index + 1] : []);
+  const guardLines = lines.flatMap((line, index) => /if \((?:alternate && )?showing\)/.test(line) ? [index + 1] : []);
+  const location = statement => lines.findIndex(line => line.trim() === statement) + 1;
+  const refs = [
+    location("panel.swapPending = true;"),
+    location("transition.afterLeave = finish;"),
+    location("panel.current = branch;"),
+    ...guardLines,
+    ...writerLines.slice(0, 2),
+  ];
+  for (const line of refs) {
+    assert.match(observation, new RegExp(`src/panel\\.mjs:${line}\\b`));
+  }
+  assert.doesNotMatch(observation, new RegExp(`src/panel\\.mjs:${writerLines[2]}\\b`));
+  assert.equal(result.execution.status, "not-run");
+});
+
+for (const [description, options] of [
+  ["existing writes already check pending", { guarded: true }],
+  ["existing writes use a shadowed receiver", { shadowed: true }],
+]) {
+  test(`deferred state questions stay quiet when ${description}`, async t => {
+    const { output } = await repository(t, {
+      [deferredSwapPath]: deferredSwapSource(options),
+    }, { [deferredSwapPath]: deferredSwapSource({ ...options, pending: true }) });
+    assert.equal(deferredSwapObservation(output), undefined);
+  });
+}

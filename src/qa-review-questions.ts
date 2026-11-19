@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { deferredUpdate } from "./qa-review-deferred.js";
 import { bindBriefSource, comparedBaseLines, type BriefHunk } from "./qa-brief-syntax.js";
 
 export interface ReviewQuestionDraft { key: string[]; observation: string; question: string; next: string }
@@ -61,7 +62,9 @@ function unmatched(previous: Exit[], current: Exit[]): Exit[] {
 /** Bounded syntax evidence, not product requirements or control-flow proof. */
 export function controlFlowQuestions(file: string, hunks: Array<BriefHunk & { oldStart: number }>, head: string[]): ReviewQuestionDraft[] {
   if (!/\.[cm]?[jt]sx?$/.test(file)) return [];
-  if (!hunks.some(hunk => hunk.lines.some(line => /^[+-]/.test(line) && /\b(?:if|throw)\b/.test(line)))) return [];
+  const hasExits = hunks.some(hunk => hunk.lines.some(line => /^[+-]/.test(line) && /\b(?:if|throw)\b/.test(line)));
+  const hasDeferredWrite = hunks.some(hunk => hunk.lines.some(line => line.startsWith("+") && /\.\s*[\w$]+\s*=\s*true\b/.test(line)));
+  if (!hasExits && !hasDeferredWrite) return [];
   const removed = new Set<number>(), added = new Set<number>();
   for (const hunk of hunks) {
     let oldLine = hunk.oldStart, newLine = hunk.newStart;
@@ -74,10 +77,26 @@ export function controlFlowQuestions(file: string, hunks: Array<BriefHunk & { ol
   if (!removed.size && !added.size) return [];
   const base = comparedBaseLines(hunks, head);
   if (!base) return [];
-  const before = bindBriefSource(file, base.map(row => row.text)), after = bindBriefSource(file, head);
-  if (!before || !after) return [];
-  const oldExits = exits(before.source), newExits = exits(after.source);
+  const after = bindBriefSource(file, head);
+  if (!after) return [];
   const questions: ReviewQuestionDraft[] = [];
+  if (hasDeferredWrite) {
+    const unchanged = new Set(base.flatMap(row => row.headLine === undefined ? [] : [row.headLine]));
+    const update = deferredUpdate(after, added, unchanged);
+    if (update) {
+      const at = (line: number): string => `${file}:${line}`;
+      const consumers = update.consumers.map(({ guard, call }) => `${at(call)} (guard ${at(guard)})`).join(" and ");
+      questions.push({ key: ["deferred-state-update", file, update.pending, update.helper, String(update.opened)],
+        observation: `New pending flag ${update.pending} at ${at(update.opened)} precedes callback registration at ${at(update.registered)}. Existing branches gated by ${update.companion} call ${update.helper} at ${consumers}. The helper writes state at ${at(update.write)}.`,
+        question: "Could an existing branch update the same state before the deferred callback runs?",
+        next: "Check whether the receivers can be the same object and exercise an update while the callback is pending.",
+      });
+    }
+  }
+  if (!hasExits) return questions;
+  const before = bindBriefSource(file, base.map(row => row.text));
+  if (!before) return questions;
+  const oldExits = exits(before.source), newExits = exits(after.source);
   for (const guard of unmatched(oldExits.guards, newExits.guards).filter(item => removed.has(item.line))) {
     questions.push({ key: ["changed-exit-guard", file, guard.key],
       observation: `Base guard at ${file}:${guard.line} (base): if (${excerpt(guard.text)}); its branch ended in ${guard.kind}. This guard or its exit changed.`,
