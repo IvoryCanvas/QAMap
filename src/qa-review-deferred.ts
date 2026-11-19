@@ -53,19 +53,18 @@ function sameField(field: StateField | undefined, expected: StateField): boolean
   return field?.receiver === expected.receiver && field.name === expected.name;
 }
 
-function positiveGuard(checker: ts.TypeChecker, condition: ts.Expression, field: StateField): boolean {
+// Follow only boolean forms that make the state value necessary on the chosen arm.
+function requiresField(checker: ts.TypeChecker, condition: ts.Expression, arm: boolean, field: StateField, value: boolean): boolean {
   const expression = unwrap(condition);
-  if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
-    return positiveGuard(checker, expression.left, field) || positiveGuard(checker, expression.right, field);
+  if (ts.isPrefixUnaryExpression(expression) && expression.operator === ts.SyntaxKind.ExclamationToken) {
+    return requiresField(checker, expression.operand, !arm, field, value);
   }
-  return sameField(guardField(checker, expression), field);
-}
-
-function mentionsField(checker: ts.TypeChecker, node: ts.Node, field: StateField): boolean {
-  if (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node)) {
-    if (sameField(guardField(checker, node), field)) return true;
+  const necessary = arm ? ts.SyntaxKind.AmpersandAmpersandToken : ts.SyntaxKind.BarBarToken;
+  if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === necessary) {
+    return requiresField(checker, expression.left, arm, field, value)
+      || requiresField(checker, expression.right, arm, field, value);
   }
-  return ts.forEachChild(node, child => mentionsField(checker, child, field) || undefined) === true;
+  return arm === value && sameField(guardField(checker, expression), field);
 }
 
 function earlyReturn(statement: ts.Statement): statement is ts.IfStatement {
@@ -80,13 +79,16 @@ function existingGuard(checker: ts.TypeChecker, call: ts.CallExpression, pending
   let companionGuard: ts.IfStatement | undefined;
   for (let child: ts.Node = call, parent = call.parent; parent && !ts.isFunctionLike(parent); child = parent, parent = parent.parent) {
     if (ts.isIfStatement(parent)) {
-      if (mentionsField(checker, parent.expression, pending)) return undefined;
-      if (child === parent.thenStatement && positiveGuard(checker, parent.expression, companion)) companionGuard ??= parent;
+      const inThen = child === parent.thenStatement;
+      if (inThen || child === parent.elseStatement) {
+        if (requiresField(checker, parent.expression, inThen, pending, false)) return undefined;
+        if (requiresField(checker, parent.expression, inThen, companion, true)) companionGuard ??= parent;
+      }
     }
     if (ts.isBlock(parent)) {
       for (const statement of parent.statements) {
         if (statement === child) break;
-        if (earlyReturn(statement) && mentionsField(checker, statement.expression, pending)) return undefined;
+        if (earlyReturn(statement) && requiresField(checker, statement.expression, false, pending, false)) return undefined;
       }
     }
   }

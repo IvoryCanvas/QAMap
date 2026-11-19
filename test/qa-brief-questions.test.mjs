@@ -181,8 +181,8 @@ test("repository control characters cannot forge a question or its instructions"
 
 const deferredSwapPath = "src/panel.mjs";
 
-function deferredSwapSource({ pending = false, guarded = false, shadowed = false } = {}) {
-  const guard = guarded ? "showing && !panel.swapPending" : "showing";
+function deferredSwapSource({ pending = false, pendingCondition = "", shadowed = false } = {}) {
+  const guard = pendingCondition ? `showing && ${pendingCondition}` : "showing";
   const shadow = shadowed ? ["    const panel = other;"] : [];
   return [
     "function setCurrent(panel, branch) {",
@@ -248,7 +248,7 @@ test("deferred state questions cite both unchanged writes through a local helper
 });
 
 for (const [description, options] of [
-  ["existing writes already check pending", { guarded: true }],
+  ["existing writes require pending to be false", { pendingCondition: "!panel.swapPending" }],
   ["existing writes use a shadowed receiver", { shadowed: true }],
 ]) {
   test(`deferred state questions stay quiet when ${description}`, async t => {
@@ -258,3 +258,11 @@ for (const [description, options] of [
     assert.equal(deferredSwapObservation(output), undefined);
   });
 }
+
+test("deferred state questions retain writes explicitly allowed while pending", async t => {
+  const options = { pendingCondition: "panel.swapPending" };
+  const { output } = await repository(t, {
+    [deferredSwapPath]: deferredSwapSource(options),
+  }, { [deferredSwapPath]: deferredSwapSource({ ...options, pending: true }) });
+  assert.ok(deferredSwapObservation(output));
+});

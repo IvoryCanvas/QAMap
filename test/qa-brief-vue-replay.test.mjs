@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -25,6 +26,7 @@ test("temporary verification: replay the landed Vue PR with both complete source
   const cli = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
   const timings = [];
   const sizes = [];
+  const hashes = [];
   let observation;
   for (let sample = 0; sample < 3; sample++) {
     const started = performance.now();
@@ -32,16 +34,18 @@ test("temporary verification: replay the landed Vue PR with both complete source
       { ...process.env, QAMAP_REPOSITORY_CACHE: "off" });
     timings.push(Math.round(performance.now() - started));
     sizes.push(Buffer.byteLength(brief));
+    hashes.push(createHash("sha256").update(brief).digest("hex"));
     observation = brief.split("\n").find(line => line.includes("Observation: New pending flag isFallbackMountPending"));
     assert.ok(observation, "the standard brief must include the deferred-state question");
     for (const line of [258, 277, 300, 327, 677, 678, 907]) {
       assert.ok(observation.includes(`${file}:${line}`), `missing Vue source evidence at ${file}:${line}`);
     }
     assert.match(brief, /if \(activeBranch && !suspense\.isFallbackMountPending\)/);
-    assert.match(brief, /Suspense\.spec\.ts/);
+    assert.match(brief, /Transition\.spec\.ts/);
+    assert.match(brief, /expect\(unmountSpy\)\.toBeCalledTimes\(1\)/);
   }
-  assert.equal(new Set(sizes).size, 1);
-  t.diagnostic(JSON.stringify({ observation, timings, sizes,
+  assert.equal(new Set(hashes).size, 1);
+  t.diagnostic(JSON.stringify({ observation, timings, sizes, sha256: hashes[0],
     baseTree: (await git("rev-parse", base + "^{tree}")).trim(),
     headTree: (await git("rev-parse", head + "^{tree}")).trim() }));
 });
