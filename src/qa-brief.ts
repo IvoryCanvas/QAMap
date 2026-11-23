@@ -484,6 +484,7 @@ export function changeSignals(file: { path?: string; hunks: { minimal: DiffHunk[
   if (lostRaises.length > raises.length) signals.push(`removes a throw or error exit at base ${at(lostRaises)}: that case now continues, so check the state it leaves`);
   const exits = onlyAdded.filter((row) => exitPattern.test(row.text) && (/\bif\b/.test(row.text) || row.previous.some((text) => conditionPattern.test(text))));
   if (exits.length) signals.push(`adds an early exit at ${at(exits)}`);
+  if (/\.[cm]?[jt]sx?$/.test(file.path ?? "")) signals.push(...arrayMutationSignals(onlyRemoved, onlyAdded));
   const conditions = onlyRemoved.filter((row) => conditionPattern.test(row.text));
   if (conditions.length) signals.push(`removes or rewrites a condition at base ${at(conditions)}`);
   const awaits = onlyRemoved.filter((row) => /\bawait\s/.test(row.text) && addedSet.has(normal(row.text.replace(/\bawait\s+/, ""))));
@@ -498,6 +499,54 @@ export function changeSignals(file: { path?: string; hunks: { minimal: DiffHunk[
     ...stateCacheSignals(file.path ?? "", file.hunks.minimal, head),
     ...unassignedFieldSignals(file.path ?? "", added, head, assigned), ...unawaitedAsyncConditionSignals(file.path ?? "", onlyAdded, head));
   return signals.length ? clipSignals(`  change signals (pattern match; read these lines): ${signals.join("; ")}`) : undefined;
+}
+
+const arrayReference = "[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*";
+const insertedItem = "(?:\\$\\{[A-Za-z_$][\\w$]*\\}|[A-Za-z_$][\\w$]*|\\d+)";
+const copiedArray = new RegExp(
+  "^\\s*(" + arrayReference + ")\\s*=\\s*(?:(" + arrayReference + ")\\s*\\?\\s*)?\\[([^\\[\\]]+)\\]"
+  + "(?:\\s*:\\s*\\[\\s*(" + insertedItem + ")\\s*\\])?\\s*;?\\s*$",
+);
+const copiedPrepend = new RegExp("^\\s*(" + insertedItem + ")\\s*,\\s*\\.\\.\\.\\s*(" + arrayReference + ")\\s*$");
+const copiedAppend = new RegExp("^\\s*\\.\\.\\.\\s*(" + arrayReference + ")\\s*,\\s*(" + insertedItem + ")\\s*$");
+const mutatedArray = new RegExp(
+  "^\\s*(?:if\\s*\\(\\s*(" + arrayReference + ")\\s*\\)\\s*)?(" + arrayReference + ")"
+  + "\\.(unshift|push)\\(\\s*(" + insertedItem + ")\\s*\\)\\s*;?\\s*$",
+);
+
+// Match a same-hunk copy replaced by insertion into the existing value.
+// Including simple template operands also covers code generators.
+function arrayMutationSignals(removed: SignalRows["removed"], added: SignalRows["added"]): string[] {
+  const mutations = new Map<string, number | undefined>();
+  for (const row of added) {
+    const match = mutatedArray.exec(row.text);
+    if (!match) continue;
+    const [, guard, receiver, operation, item] = match;
+    if (guard && guard !== receiver) continue;
+    const key = JSON.stringify([row.hunk, guard, receiver, operation, item]);
+    // Multiple same-shaped insertions in a hunk cannot be paired uniquely.
+    mutations.set(key, mutations.has(key) ? undefined : row.line);
+  }
+  const signals: string[] = [];
+  for (const row of removed) {
+    const match = copiedArray.exec(row.text);
+    if (!match) continue;
+    const [, target, guard, contents, fallback] = match;
+    if (guard ? guard !== target || !fallback : fallback !== undefined) continue;
+    const first = copiedPrepend.exec(contents);
+    const last = first ? null : copiedAppend.exec(contents);
+    const item = first?.[1] ?? last?.[2];
+    const previous = first?.[2] ?? last?.[1];
+    if (!item || previous !== target || (fallback !== undefined && fallback !== item)) continue;
+    const operation = first ? "unshift" : "push";
+    const key = JSON.stringify([row.hunk, guard, target, operation, item]);
+    const line = mutations.get(key);
+    if (line === undefined) continue;
+    mutations.delete(key);
+    signals.push(`replaces a copy of ${target} at base ${row.line} with ${operation} on the existing value at head ${line}. Check retained array references and repeat calls`);
+    if (signals.length === 2) break;
+  }
+  return signals;
 }
 
 function clipSignals(text: string): string {
