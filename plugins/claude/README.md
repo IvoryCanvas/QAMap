@@ -7,7 +7,7 @@ stays visible; a static report is not proof that tests passed. This Claude plugi
 only analyzes and reads evidence. It does not execute project validation,
 generate automation, edit source or configure the project.
 
-Claude plugin version: **0.5.3**. Required CLI: **@ivorycanvas/qamap@0.5.3**.
+Claude plugin version: **0.5.3**. Required CLI: **@ivorycanvas/qamap@0.5.4**.
 
 On 42 public pull requests from 12 open-source projects, Claude Code used 44%
 fewer tokens with the brief than alone; the blind-graded review preference leaned
@@ -22,7 +22,7 @@ Source, issues and documentation: [IvoryCanvas/QAMap](https://github.com/IvoryCa
 ## Requirements
 
 Use Claude Code with a local checkout, a terminal, Git, Node.js 20 or later, and
-the matching CLI: `@ivorycanvas/qamap@0.5.3`. A chat without local repository and
+the matching CLI: `@ivorycanvas/qamap@0.5.4`. A chat without local repository and
 terminal access cannot run this workflow.
 
 This bundle supplies the skill, not the CLI. It has no automatic installer,

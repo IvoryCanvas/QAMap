@@ -1,6 +1,6 @@
 # Detailed QA Workflow
 
-This reference is paired with QAMap 0.5.3. Use a compatible local binary first;
+This reference is paired with QAMap 0.5.4. Use a compatible local binary first;
 never retry a missing registry version or substitute `latest` without permission.
 
 Read this only for explicitly requested deeper review, older binaries without `qa brief`, optional repository
@@ -24,7 +24,7 @@ more than a brief; prefer `qa brief` for review. For save-only requests, omit
    - Prefer the target PR base branch when known.
    - Otherwise use `origin/main`, then `origin/master`, then the repository default branch.
 2. Run QAMap from the repository root with the already installed
-   `@ivorycanvas/qamap@0.5.3` CLI. Check `qamap --version` first. If it is missing
+   `@ivorycanvas/qamap@0.5.4` CLI. Check `qamap --version` first. If it is missing
    or incompatible, stop and ask the user to complete CLI setup separately.
    Do not install, upgrade or launch a downloaded package in this workflow.
 
