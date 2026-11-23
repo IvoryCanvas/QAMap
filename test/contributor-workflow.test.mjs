@@ -437,3 +437,19 @@ test("public READMEs present local setup before the optional plugin path", async
     }
   }
 });
+
+test("Korean documentation closes bold punctuation before Hangul particles", async () => {
+  // CommonMark treats ASCII punctuation and Unicode punctuation as closing
+  // delimiters only in the right context. A following Hangul word blocks this form.
+  const brokenBold = /(?<!\*)\*\*(?!\*)[^*\r\n]*[!-/:-@[-\x60{-~\p{P}]\*\*(?=\p{Script=Hangul})/u;
+  const koreanDirectory = path.join(repositoryRoot, "docs", "ko");
+  const koreanGuides = (await readdir(koreanDirectory))
+    .filter(file => file.endsWith(".md"))
+    .map(file => path.join("docs", "ko", file));
+  for (const file of ["README.ko.md", ...koreanGuides]) {
+    const source = await readFile(path.join(repositoryRoot, file), "utf8");
+    for (const [index, line] of source.split("\n").entries()) {
+      assert.doesNotMatch(line, brokenBold, file + ":" + (index + 1));
+    }
+  }
+});

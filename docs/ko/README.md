@@ -26,7 +26,7 @@ npx --yes @ivorycanvas/qamap@latest qa --format markdown
 npx --yes @ivorycanvas/qamap@latest qa brief --require-consent
 ```
 
-`qa`는 사람이 직접 실행하는 정적 분석입니다. 에이전트의 기본 검수는
+`qa`는 사람이 직접 실행하는 정적 분석입니다. 에이전트의 기본 리뷰는
 `qa brief`를 사용하며, 동의가 없으면 분석하지 않고 안내만 반환합니다.
 구조화된 JSON이 필요한 연동에서는 `qa --format agent`를 사용할 수 있습니다.
 
