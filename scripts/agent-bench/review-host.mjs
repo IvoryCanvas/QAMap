@@ -21,6 +21,7 @@ import { parseArgs } from "node:util";
 import { codexArguments, summarizeCodexRun } from "./codex-review-host.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
+const runSchema = "qamap.review-host-run";
 const suiteFiles = { regression: "cases.mjs", extended: "extended-cases.mjs", confirmation: "confirmation-cases.mjs",
   completeness: "completeness-cases.mjs", release: "release-cases.mjs" };
 const hostEnvironment = ["CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_MESSAGING_SOCKET",
@@ -28,6 +29,41 @@ const hostEnvironment = ["CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_I
   "CLAUDE_CODE_TEE_SDK_STDOUT", "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "CLAUDE_ADDITIONAL_DIRECTORIES", "GH_TOKEN", "GITHUB_TOKEN"];
 export const hostTools = { allowed: ["Bash", "Read", "Grep", "Glob", "Skill"],
   disallowed: ["Agent", "Task", "Write", "Edit", "NotebookEdit", "WebFetch", "WebSearch", "TodoWrite"] };
+
+// A run label is the same in rehearsal and live mode. Check the output before
+// any fixture or host starts, including directories made before the mode file.
+export async function prepareReviewOutput(out, { dryRun, schema }) {
+  const mode = dryRun ? "dry-run" : "live";
+  const expected = JSON.stringify({ schema, mode }) + "\n";
+  const marker = path.join(out, ".review-output.json");
+  const mismatch = () => new Error("Review output belongs to a different runner or measurement mode. Use a separate --out directory.");
+  const readOptional = (file) => fs.readFile(file, "utf8").catch(error => {
+    if (error.code !== "ENOENT") throw error;
+    return null;
+  });
+
+  await fs.mkdir(out, { recursive: true });
+  const previous = await readOptional(marker);
+  if (previous !== null) {
+    if (previous !== expected) throw mismatch();
+    return;
+  }
+
+  for (const entry of await fs.readdir(out, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const contents = await readOptional(path.join(out, entry.name, "result.json"));
+    if (contents === null) continue;
+    const record = JSON.parse(contents);
+    if (record.schema?.name !== schema || (record.status === "dry-run") !== dryRun) throw mismatch();
+  }
+
+  try {
+    await fs.writeFile(marker, expected, { flag: "wx" });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    if (await fs.readFile(marker, "utf8") !== expected) throw mismatch();
+  }
+}
 
 export async function loadSuite(file = path.join(root, "test/benchmarks/review-host/cases.json")) {
   return JSON.parse(await fs.readFile(file, "utf8"));
@@ -212,7 +248,7 @@ export async function runOne(entry, { suite, arm, run, engine, model, out, dryRu
       : setup === "qamap" ? `${suite.qamapPrefix} ${suite.prompt}` : suite.prompt;
     const engineVersion = setup === "qamap" ? execFileSync(path.join(engineBin, "qamap"), ["--version"], { input: "", stdio: ["pipe", "pipe", "pipe"] }).toString().trim() : null;
     const hostVersion = dryRun ? null : execFileSync(host, ["--version"], { input: "", stdio: ["pipe", "pipe", "pipe"] }).toString().trim();
-    const record = { schema: { name: "qamap.review-host-run", version: 1 }, case: entry.id, arm, run, model, base, head, engineVersion, host, hostVersion,
+    const record = { schema: { name: runSchema, version: 1 }, case: entry.id, arm, run, model, base, head, engineVersion, host, hostVersion,
       promptSha256: createHash("sha256").update(prompt).digest("hex"),
       tools: host === "codex" ? codexArguments({ prompt: "", model, disableSkills }) : toolArguments(disableSkills), disableSkills };
     if (dryRun) {
@@ -249,13 +285,13 @@ async function main() {
   const out = path.resolve(values.out);
   const relative = path.relative(root, out);
   if (!relative.startsWith("..") && !path.isAbsolute(relative)) throw new Error("Keep measurement output outside the repository");
-  await fs.mkdir(out, { recursive: true });
   const suite = await loadSuite(values.suite);
   const cases = suite.cases.filter((entry) => !values.case || entry.id === values.case);
   if (!cases.length) throw new Error("No matching review cases");
   const arms = values.arms.split(",");
   if (arms.includes("candidate") && !values.candidate) throw new Error("--candidate is required for the candidate arm");
   const engines = { standalone: values.engine, qamap: values.engine, candidate: values.candidate };
+  await prepareReviewOutput(out, { dryRun: values["dry-run"], schema: runSchema });
   // Rotate arm order per case and run so no arm always warms the host's prompt cache.
   const jobs = [];
   for (let run = 1; run <= Number(values.runs); run++) cases.forEach((entry, index) => {
