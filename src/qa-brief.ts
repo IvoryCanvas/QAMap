@@ -8,7 +8,7 @@ import type { QaDraftResult } from "./qa.js";
 import type { RepositoryIndexBlock } from "./repository-index.js";
 import { bindBriefSource, comparedBaseLines } from "./qa-brief-syntax.js";
 import { stateCacheSignals } from "./qa-brief-state.js";
-import { collectBriefBindings, type BriefBindings } from "./qa-brief-bindings.js";
+import { collectBriefBindings, type BriefBindings, type BriefTestBody } from "./qa-brief-bindings.js";
 import { isJavaScriptTestFileName } from "./test-file-paths.js";
 import { controlFlowQuestions, type ReviewQuestionDraft } from "./qa-review-questions.js";
 
@@ -137,7 +137,7 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
   const graph = createModuleGraph(tracked, reader);
   const usages = await collectUsages(top, headSha, files, new Map([...changedSymbols, ...deletedSymbols]), blocks, reader, graph);
   await collectCallees(top, headSha, files, changedSymbols, reader, graph);
-  await collectRelatedTests(top, headSha, files, usages, reader);
+  await collectRelatedTests(top, headSha, files, usages, reader, graph);
   const historyIssue = result.includeWorkingTree ? undefined : await collectHistory(top, result.base, result.head, files);
   const diffAdded = files.flatMap((file) => file.hunks.minimal.flatMap((hunk) => hunk.lines.filter((line) => line.startsWith("+")).map((line) => line.slice(1))));
   for (const file of files) {
@@ -1374,7 +1374,7 @@ async function collectUsages(top: string, headSha: string | undefined, files: Di
         const lines = await read(hitFile);
         const seen = new Set<number>();
         for (const hit of confirmed) {
-          const entry = lines ? testUse(hitFile, lines, hit.line, hit.name) : { file: hitFile, titleLine: hit.line, title: "", hitLine: hit.line, lines: [{ line: hit.line, text: hit.text }] };
+          const entry = lines ? testUse(hitFile, lines, hit.line, hit.name, parsed?.avaTests) : { file: hitFile, titleLine: hit.line, title: "", hitLine: hit.line, lines: [{ line: hit.line, text: hit.text }] };
           if (seen.has(entry.titleLine)) continue;
           seen.add(entry.titleLine);
           usage.tests.push(entry);
@@ -1417,7 +1417,7 @@ async function collectUsages(top: string, headSha: string | undefined, files: Di
         const verdict = await bindingVerdict(graph, hit.file, caller.owner, targets, hit.text, hit.line);
         if (verdict === "mismatch" || verdict === "unknown" && /\.[cm]?[jt]sx?$/.test(hit.file)) continue;
         const lines = await read(hit.file);
-        const entry = lines ? testUse(hit.file, lines, hit.line, caller.owner) : undefined;
+        const entry = lines ? testUse(hit.file, lines, hit.line, caller.owner, (await graph.syntax(hit.file))?.avaTests) : undefined;
         if (!entry || seen.has(`${entry.file}:${entry.titleLine}`)) continue;
         seen.add(`${entry.file}:${entry.titleLine}`);
         caller.tests.push(entry);
@@ -1568,7 +1568,8 @@ async function shortBody(read: Reader, hit: Hit): Promise<CalleeInfo["body"]> {
 
 // When no test reaches a changed declaration by name, tests that share a distinctive
 // changed literal are the next best review lead. They are labeled as such.
-async function collectRelatedTests(top: string, headSha: string | undefined, files: DiffFile[], usages: Map<string, SymbolUsage[]>, read: Reader): Promise<void> {
+async function collectRelatedTests(top: string, headSha: string | undefined, files: DiffFile[], usages: Map<string, SymbolUsage[]>,
+  read: Reader, graph: ModuleGraph): Promise<void> {
   const byLiteral = new Map<string, DiffFile[]>();
   for (const file of files) {
     if (file.kind !== "source") continue;
@@ -1604,7 +1605,7 @@ async function collectRelatedTests(top: string, headSha: string | undefined, fil
     for (const hit of found) {
       const lines = await read(hit.file);
       if (!lines) continue;
-      const entry = testUse(hit.file, lines, hit.line);
+      const entry = testUse(hit.file, lines, hit.line, undefined, (await graph.syntax(hit.file))?.avaTests);
       if (!entry.title || seen.has(`${entry.file}:${entry.titleLine}`)) continue;
       seen.add(`${entry.file}:${entry.titleLine}`);
       tests.push(entry);
@@ -1734,13 +1735,18 @@ async function ownerFromText(read: Reader, file: string, line: number): Promise<
   return undefined;
 }
 
-function testUse(file: string, lines: string[], hitLine: number, name?: string): TestUse {
-  let titleLine = hitLine, title = "";
-  for (let index = hitLine - 1; index >= Math.max(0, hitLine - 400); index--) {
+function testUse(file: string, lines: string[], hitLine: number, name?: string, avaTests?: BriefTestBody[]): TestUse {
+  const avaTest = avaTests?.find(test => test.firstLine <= hitLine && hitLine <= test.lastLine);
+  if (avaTests && !avaTest) {
+    return { file, titleLine: hitLine, title: "", hitLine, lines: [{ line: hitLine, text: lines[hitLine - 1] ?? "" }] };
+  }
+  let titleLine = avaTest?.titleLine ?? hitLine;
+  let title = avaTest?.title ?? "";
+  if (!avaTest) for (let index = hitLine - 1; index >= Math.max(0, hitLine - 400); index--) {
     const match = testTitlePattern.exec(lines[index] ?? "");
     if (match) { titleLine = index + 1; title = match[2] ?? match[3] ?? match[4] ?? match[5] ?? ""; break; }
   }
-  if (!title) {
+  if (!avaTest && !title) {
     for (let index = hitLine - 1; index >= Math.max(0, hitLine - 400); index--) {
       const match = groupTitlePattern.exec(lines[index] ?? "");
       if (match) { titleLine = index + 1; title = match[2] ?? ""; break; }
@@ -1750,14 +1756,14 @@ function testUse(file: string, lines: string[], hitLine: number, name?: string):
   let callLine = hitLine;
   const namePattern = name ? new RegExp(`(?<![\\w$'"\`])${name.replace(/\$/g, "\\$")}\\s*(?:\\(|\\.|<)`) : undefined;
   if (namePattern && !namePattern.test(stripStrings(lines[hitLine - 1] ?? ""))) {
-    for (let index = hitLine; index < Math.min(lines.length, hitLine + 40); index++) {
-      if (testTitlePattern.test(lines[index] ?? "") && index + 1 !== hitLine) break;
+    for (let index = hitLine; index < Math.min(avaTest?.lastLine ?? lines.length, hitLine + 40); index++) {
+      if (!avaTest && testTitlePattern.test(lines[index] ?? "") && index + 1 !== hitLine) break;
       if (namePattern.test(stripStrings(lines[index] ?? ""))) { callLine = index + 1; break; }
     }
   }
   // Keep the connected unit: call, the locals derived from it, and assertions using them.
-  let end = Math.min(lines.length, callLine + 60);
-  for (let index = callLine; index < end; index++) if (testTitlePattern.test(lines[index] ?? "")) { end = index; break; }
+  let end = Math.min(avaTest?.lastLine ?? lines.length, callLine + 60);
+  if (!avaTest) for (let index = callLine; index < end; index++) if (testTitlePattern.test(lines[index] ?? "")) { end = index; break; }
   const derived = new Set<string>();
   const declared = /^\s*(?:const|let|var)\s+(?:\{([^}]*)\}|\[([^\]]*)\]|([A-Za-z_$][\w$]*))\s*=/;
   const addDeclared = (text: string): void => {
@@ -1774,7 +1780,7 @@ function testUse(file: string, lines: string[], hitLine: number, name?: string):
   for (let index = callLine; index < end; index++) {
     const text = lines[index] ?? "";
     if (uses(text) && declared.test(text) && picked.size < 5) { picked.set(index + 1, text); addDeclared(text); continue; }
-    if (assertionPattern.test(text)) assertions.push(index + 1);
+    if (assertionPattern.test(text) || avaTest?.asyncThrowAssertions.has(index + 1)) assertions.push(index + 1);
   }
   const related = assertions.filter((line) => uses(lines[line - 1] ?? "") || (namePattern?.test(stripStrings(lines[line - 1] ?? "")) ?? false));
   for (const line of [...related, ...assertions.filter((line) => !related.includes(line))].slice(0, related.length ? Math.min(3, related.length) : 2)) {

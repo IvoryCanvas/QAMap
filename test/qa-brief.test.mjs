@@ -927,3 +927,42 @@ test("a brief that cannot fit every file still names each one with its change si
   assert.match(output, /### src\/z-status\.ts/);
   assert.match(output, /removes a throw or error exit at base 4/);
 });
+
+test("qa brief attributes AVA async assertions to the callback of an imported runner alias", async () => {
+  const testSource = [
+    "import ava from 'ava';",
+    "import { createQueue } from './queue.js';",
+    "ava('previous test', () => {});",
+    "const runQueueCase = process.env.FILTER ? ava.skip : ava;",
+    "runQueueCase('clearing rejects queued work', async checks => {",
+    "  const queue = createQueue();",
+    "  const pending = queue.enqueue();",
+    "  queue.clear();",
+    "  await checks.throwsAsync(pending, { name: 'AbortError' });",
+    "});",
+    "function useOtherRunner(runQueueCase) {",
+    "  runQueueCase('shadowed runner', () => {",
+    "    createQueue();",
+    "  });",
+    "}",
+    "ava('one-line neighbor', checks => checks.pass()); createQueue();",
+    "ava('extra argument', checks => checks.pass(), createQueue());",
+    "ava('next test', async checks => {",
+    "  await checks.throwsAsync(Promise.reject(new Error('unrelated check')));",
+    "});",
+  ].join("\n");
+  const original = "export function createQueue() {\n  return { enqueue: () => Promise.reject({ name: 'AbortError' }), clear: () => {} };\n}\n";
+  const changed = original.replace("Promise.reject({ name: 'AbortError' })", "Promise.resolve()");
+  const { root } = await repository({
+    "package.json": JSON.stringify({ name: "ava-brief-fixture", type: "module" }),
+    "queue.js": original,
+    "test.js": testSource,
+  }, { "queue.js": changed });
+  const output = await brief(root);
+  assert.match(output, /test\.js:5 "clearing rejects queued work"/);
+  assert.match(output, /9\| await checks\.throwsAsync\(pending, \{ name: 'AbortError' \}\);/);
+  assert.match(output, /^    test\.js:16$/m);
+  assert.match(output, /^    test\.js:17$/m);
+  assert.doesNotMatch(output, /^    test\.js:\d+ "(?:previous test|shadowed runner|one-line neighbor|extra argument)"$/m);
+  assert.doesNotMatch(output, /unrelated check/);
+});
