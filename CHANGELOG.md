@@ -2,12 +2,26 @@
 
 ## Unreleased
 
+## 0.5.4 - 2026-11-23
+
+npm and plugin publication are separate steps.
+See the [0.5.4 release record](docs/releases/0.5.4.md).
+
+### Changed
+
 - Align direct-package review indexing with Git paths and explain empty committed diffs with local edits.
 - Ask bounded, source-linked questions about changed exit guards and new error paths without inventing policy.
 - Prepare native Codex receipt validation and frozen public regression snapshots; the initial independent pilot is ineligible, with no new savings claim.
 - Make bounded handoff tests independent of temporary path length and exercise long paths in CI.
 - Record the actual review brief demo and add a Korean adoption guide.
 - Preview explicit-channel release edits by default; require a matching plan hash and reviewed inputs before metadata writes.
+
+### Fixed
+
+- Preserve the Python deprecation-help assertion in the Click review snapshot and attribute asynchronous AVA assertions to their owning test.
+- Highlight array copy replacements that now mutate a retained reference, and ask about competing writes during a pending callback using the unchanged callers' source lines.
+- Keep dry runs and host measurements from reusing the same output directory and reporting success without a model call.
+- Correct broken Markdown emphasis and use consistent Korean terminology in review guidance.
 
 ## 0.5.3 - 2026-11-06
 
