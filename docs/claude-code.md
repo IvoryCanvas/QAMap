@@ -34,7 +34,7 @@ The plugin does not bundle the CLI or install it automatically. With your
 permission, install the version required by its skill. The current Claude plugin requires:
 
 ```sh
-npm install -g @ivorycanvas/qamap@0.5.3
+npm install -g @ivorycanvas/qamap@0.5.4
 qamap --version
 ```
 

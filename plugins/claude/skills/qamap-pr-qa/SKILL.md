@@ -61,7 +61,7 @@ this plugin.
    change. Tests stay `not-run`: the brief proves nothing was executed. Test runs,
    edits and automation are outside this plugin's scope.
 
-`qa brief` ships with `@ivorycanvas/qamap@0.5.3`. The CLI must already be installed.
+`qa brief` ships with `@ivorycanvas/qamap@0.5.4`. The CLI must already be installed.
 If `qamap` is missing, rejects
 `brief`, or fails, report the blocker and stop. Do not retry, install, upgrade or
 switch to another workflow from this plugin.

@@ -79,5 +79,5 @@
       "reason": "The plugin must preserve the host's approval policy and QAMap's explicit action boundary."
     }
   ],
-  "releaseNotes": "QAMap 0.5.3 improves binding-aware caller and test evidence, bounded state/cache/lifecycle hints, parameterized test contracts and recovery of omitted diffs. Optional Git history has time limits and discloses shallow or missing evidence. The plugin requires the matching 0.5.3 CLI. Consent and execution boundaries remain unchanged; tests do not run automatically. No new token, speed, cost or review-quality improvement has been measured for this version."
+  "releaseNotes": "QAMap 0.5.4 surfaces more review evidence for changed guards, Python and AVA tests, in-place array updates, and competing writes while a callback is pending. The brief cites source and assertion lines so reviewers can verify each finding. The portable bundle requires QAMap CLI 0.5.4."
 }

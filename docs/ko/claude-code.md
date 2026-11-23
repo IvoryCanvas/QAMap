@@ -34,7 +34,7 @@ QAMap은 [Claude 플러그인 디렉터리](https://claude.com/marketplace/plugi
 버전이 필요합니다.
 
 ```sh
-npm install -g @ivorycanvas/qamap@0.5.3
+npm install -g @ivorycanvas/qamap@0.5.4
 qamap --version
 ```
 
