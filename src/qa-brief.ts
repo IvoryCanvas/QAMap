@@ -8,7 +8,7 @@ import type { QaDraftResult } from "./qa.js";
 import type { RepositoryIndexBlock } from "./repository-index.js";
 import { bindBriefSource, comparedBaseLines } from "./qa-brief-syntax.js";
 import { stateCacheSignals } from "./qa-brief-state.js";
-import { collectBriefBindings, type BriefBindings } from "./qa-brief-bindings.js";
+import { collectBriefBindings, type BriefBindings, type BriefTestBody } from "./qa-brief-bindings.js";
 import { isJavaScriptTestFileName } from "./test-file-paths.js";
 import { controlFlowQuestions, type ReviewQuestionDraft } from "./qa-review-questions.js";
 
@@ -38,7 +38,7 @@ interface DiffFile {
   kind: FileKind;
   hunks: { full: DiffHunk[]; wide: DiffHunk[]; normal: DiffHunk[]; minimal: DiffHunk[] };
   calls: CalleeInfo[];
-  relatedTests: Array<{ literal: string; tests: TestUse[] }>;
+  relatedTests: Array<{ literal: string; tests: TestUse[]; pythonComment?: true }>;
   history: Array<{ commit: string; subject: string; lines: number; tests: Array<{ file: string; titles: Array<{ title: string; line?: number }> }> }>;
   spans?: Span[];
   signals?: string;
@@ -137,7 +137,7 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
   const graph = createModuleGraph(tracked, reader);
   const usages = await collectUsages(top, headSha, files, new Map([...changedSymbols, ...deletedSymbols]), blocks, reader, graph);
   await collectCallees(top, headSha, files, changedSymbols, reader, graph);
-  await collectRelatedTests(top, headSha, files, usages, reader);
+  await collectRelatedTests(top, headSha, files, usages, reader, graph);
   const historyIssue = result.includeWorkingTree ? undefined : await collectHistory(top, result.base, result.head, files);
   const diffAdded = files.flatMap((file) => file.hunks.minimal.flatMap((hunk) => hunk.lines.filter((line) => line.startsWith("+")).map((line) => line.slice(1))));
   for (const file of files) {
@@ -162,6 +162,7 @@ export async function buildQaBrief(result: QaDraftResult, options: QaBriefOption
       }
     }
   }
+  await collectPythonCommentTests(top, headSha, files, reader);
   const changed = new Map(files.map((file) => [file.path, new Set(changedLines(file).added)]));
 
   const header = briefHeader(result, files, usages);
@@ -483,6 +484,7 @@ export function changeSignals(file: { path?: string; hunks: { minimal: DiffHunk[
   if (lostRaises.length > raises.length) signals.push(`removes a throw or error exit at base ${at(lostRaises)}: that case now continues, so check the state it leaves`);
   const exits = onlyAdded.filter((row) => exitPattern.test(row.text) && (/\bif\b/.test(row.text) || row.previous.some((text) => conditionPattern.test(text))));
   if (exits.length) signals.push(`adds an early exit at ${at(exits)}`);
+  if (/\.[cm]?[jt]sx?$/.test(file.path ?? "")) signals.push(...arrayMutationSignals(onlyRemoved, onlyAdded));
   const conditions = onlyRemoved.filter((row) => conditionPattern.test(row.text));
   if (conditions.length) signals.push(`removes or rewrites a condition at base ${at(conditions)}`);
   const awaits = onlyRemoved.filter((row) => /\bawait\s/.test(row.text) && addedSet.has(normal(row.text.replace(/\bawait\s+/, ""))));
@@ -497,6 +499,54 @@ export function changeSignals(file: { path?: string; hunks: { minimal: DiffHunk[
     ...stateCacheSignals(file.path ?? "", file.hunks.minimal, head),
     ...unassignedFieldSignals(file.path ?? "", added, head, assigned), ...unawaitedAsyncConditionSignals(file.path ?? "", onlyAdded, head));
   return signals.length ? clipSignals(`  change signals (pattern match; read these lines): ${signals.join("; ")}`) : undefined;
+}
+
+const arrayReference = "[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*";
+const insertedItem = "(?:\\$\\{[A-Za-z_$][\\w$]*\\}|[A-Za-z_$][\\w$]*|\\d+)";
+const copiedArray = new RegExp(
+  "^\\s*(" + arrayReference + ")\\s*=\\s*(?:(" + arrayReference + ")\\s*\\?\\s*)?\\[([^\\[\\]]+)\\]"
+  + "(?:\\s*:\\s*\\[\\s*(" + insertedItem + ")\\s*\\])?\\s*;?\\s*$",
+);
+const copiedPrepend = new RegExp("^\\s*(" + insertedItem + ")\\s*,\\s*\\.\\.\\.\\s*(" + arrayReference + ")\\s*$");
+const copiedAppend = new RegExp("^\\s*\\.\\.\\.\\s*(" + arrayReference + ")\\s*,\\s*(" + insertedItem + ")\\s*$");
+const mutatedArray = new RegExp(
+  "^\\s*(?:if\\s*\\(\\s*(" + arrayReference + ")\\s*\\)\\s*)?(" + arrayReference + ")"
+  + "\\.(unshift|push)\\(\\s*(" + insertedItem + ")\\s*\\)\\s*;?\\s*$",
+);
+
+// Match a same-hunk copy replaced by insertion into the existing value.
+// Including simple template operands also covers code generators.
+function arrayMutationSignals(removed: SignalRows["removed"], added: SignalRows["added"]): string[] {
+  const mutations = new Map<string, number | undefined>();
+  for (const row of added) {
+    const match = mutatedArray.exec(row.text);
+    if (!match) continue;
+    const [, guard, receiver, operation, item] = match;
+    if (guard && guard !== receiver) continue;
+    const key = JSON.stringify([row.hunk, guard, receiver, operation, item]);
+    // Multiple same-shaped insertions in a hunk cannot be paired uniquely.
+    mutations.set(key, mutations.has(key) ? undefined : row.line);
+  }
+  const signals: string[] = [];
+  for (const row of removed) {
+    const match = copiedArray.exec(row.text);
+    if (!match) continue;
+    const [, target, guard, contents, fallback] = match;
+    if (guard ? guard !== target || !fallback : fallback !== undefined) continue;
+    const first = copiedPrepend.exec(contents);
+    const last = first ? null : copiedAppend.exec(contents);
+    const item = first?.[1] ?? last?.[2];
+    const previous = first?.[2] ?? last?.[1];
+    if (!item || previous !== target || (fallback !== undefined && fallback !== item)) continue;
+    const operation = first ? "unshift" : "push";
+    const key = JSON.stringify([row.hunk, guard, target, operation, item]);
+    const line = mutations.get(key);
+    if (line === undefined) continue;
+    mutations.delete(key);
+    signals.push(`replaces a copy of ${target} at base ${row.line} with ${operation} on the existing value at head ${line}. Check retained array references and repeat calls`);
+    if (signals.length === 2) break;
+  }
+  return signals;
 }
 
 function clipSignals(text: string): string {
@@ -1374,7 +1424,7 @@ async function collectUsages(top: string, headSha: string | undefined, files: Di
         const lines = await read(hitFile);
         const seen = new Set<number>();
         for (const hit of confirmed) {
-          const entry = lines ? testUse(hitFile, lines, hit.line, hit.name) : { file: hitFile, titleLine: hit.line, title: "", hitLine: hit.line, lines: [{ line: hit.line, text: hit.text }] };
+          const entry = lines ? testUse(hitFile, lines, hit.line, hit.name, parsed?.avaTests) : { file: hitFile, titleLine: hit.line, title: "", hitLine: hit.line, lines: [{ line: hit.line, text: hit.text }] };
           if (seen.has(entry.titleLine)) continue;
           seen.add(entry.titleLine);
           usage.tests.push(entry);
@@ -1417,7 +1467,7 @@ async function collectUsages(top: string, headSha: string | undefined, files: Di
         const verdict = await bindingVerdict(graph, hit.file, caller.owner, targets, hit.text, hit.line);
         if (verdict === "mismatch" || verdict === "unknown" && /\.[cm]?[jt]sx?$/.test(hit.file)) continue;
         const lines = await read(hit.file);
-        const entry = lines ? testUse(hit.file, lines, hit.line, caller.owner) : undefined;
+        const entry = lines ? testUse(hit.file, lines, hit.line, caller.owner, (await graph.syntax(hit.file))?.avaTests) : undefined;
         if (!entry || seen.has(`${entry.file}:${entry.titleLine}`)) continue;
         seen.add(`${entry.file}:${entry.titleLine}`);
         caller.tests.push(entry);
@@ -1568,7 +1618,8 @@ async function shortBody(read: Reader, hit: Hit): Promise<CalleeInfo["body"]> {
 
 // When no test reaches a changed declaration by name, tests that share a distinctive
 // changed literal are the next best review lead. They are labeled as such.
-async function collectRelatedTests(top: string, headSha: string | undefined, files: DiffFile[], usages: Map<string, SymbolUsage[]>, read: Reader): Promise<void> {
+async function collectRelatedTests(top: string, headSha: string | undefined, files: DiffFile[], usages: Map<string, SymbolUsage[]>,
+  read: Reader, graph: ModuleGraph): Promise<void> {
   const byLiteral = new Map<string, DiffFile[]>();
   for (const file of files) {
     if (file.kind !== "source") continue;
@@ -1604,13 +1655,58 @@ async function collectRelatedTests(top: string, headSha: string | undefined, fil
     for (const hit of found) {
       const lines = await read(hit.file);
       if (!lines) continue;
-      const entry = testUse(hit.file, lines, hit.line);
+      const entry = testUse(hit.file, lines, hit.line, undefined, (await graph.syntax(hit.file))?.avaTests);
       if (!entry.title || seen.has(`${entry.file}:${entry.titleLine}`)) continue;
       seen.add(`${entry.file}:${entry.titleLine}`);
       tests.push(entry);
       if (tests.length >= 8) break;
     }
     if (tests.length) for (const file of owners) if (file.relatedTests.length < 2) file.relatedTests.push({ literal, tests });
+  }
+}
+
+// Keep human-authored leads out of the collected-reference counts. A nearby
+// assertion shows what the test checks, while the comment does not bind a call.
+async function collectPythonCommentTests(top: string, headSha: string | undefined, files: DiffFile[], read: Reader): Promise<void> {
+  const owners = new Map<string, Set<DiffFile>>();
+  for (const file of files) {
+    if (file.kind !== "source" || !file.path.endsWith(".py") || !file.spans?.length) continue;
+    const lines = await read(file.path);
+    if (!lines) continue;
+    for (const span of file.spans) {
+      if (!usefulSymbol(span.name) || !/^\s*(?:async\s+)?def\s+/.test(lines[span.line - 1] ?? "")) continue;
+      const matches = owners.get(span.name);
+      if (matches) matches.add(file);
+      else if (owners.size < 24) owners.set(span.name, new Set([file]));
+    }
+  }
+  const searches = [...owners].filter(([, files]) => files.size === 1);
+  if (!searches.length) return;
+  const hits = await grepSymbols(top, headSha, searches.map(([name]) => name));
+  for (const [name, [file]] of searches) {
+    const candidates = hits.get(name) ?? [];
+    if (candidates.length > 60 || file.relatedTests.length >= 2) continue;
+    const quoted = new RegExp("(^|[^`])(`{1,2})" + name + "\\2(?!`)");
+    const tests: TestUse[] = [];
+    const seen = new Set<string>();
+    for (const hit of candidates) {
+      if (!hit.file.endsWith(".py") || !isTestPath(hit.file.toLowerCase()) || !quoted.test(hit.text)) continue;
+      const comment = /^(\s*)#/.exec(hit.text);
+      if (!comment) continue;
+      const lines = await read(hit.file);
+      const assertion = lines?.[hit.line];
+      if (!lines || !assertion || /^(\s*)assert\b/.exec(assertion)?.[1] !== comment[1]) continue;
+      const test = enclosingDefinition(lines, hit.line);
+      if (!test || !/^test_/.test(test.name) || hit.line >= test.endLine
+        || !/^\s*(?:async\s+)?def\s+test_/.test(lines[test.line - 1])) continue;
+      const key = hit.file + ":" + test.line;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tests.push({ file: hit.file, title: test.name, titleLine: test.line, hitLine: hit.line,
+        lines: [{ line: hit.line, text: hit.text }, { line: hit.line + 1, text: assertion }] });
+      if (tests.length >= 3) break;
+    }
+    if (tests.length) file.relatedTests.push({ literal: name, tests, pythonComment: true });
   }
 }
 
@@ -1734,13 +1830,18 @@ async function ownerFromText(read: Reader, file: string, line: number): Promise<
   return undefined;
 }
 
-function testUse(file: string, lines: string[], hitLine: number, name?: string): TestUse {
-  let titleLine = hitLine, title = "";
-  for (let index = hitLine - 1; index >= Math.max(0, hitLine - 400); index--) {
+function testUse(file: string, lines: string[], hitLine: number, name?: string, avaTests?: BriefTestBody[]): TestUse {
+  const avaTest = avaTests?.find(test => test.firstLine <= hitLine && hitLine <= test.lastLine);
+  if (avaTests && !avaTest) {
+    return { file, titleLine: hitLine, title: "", hitLine, lines: [{ line: hitLine, text: lines[hitLine - 1] ?? "" }] };
+  }
+  let titleLine = avaTest?.titleLine ?? hitLine;
+  let title = avaTest?.title ?? "";
+  if (!avaTest) for (let index = hitLine - 1; index >= Math.max(0, hitLine - 400); index--) {
     const match = testTitlePattern.exec(lines[index] ?? "");
     if (match) { titleLine = index + 1; title = match[2] ?? match[3] ?? match[4] ?? match[5] ?? ""; break; }
   }
-  if (!title) {
+  if (!avaTest && !title) {
     for (let index = hitLine - 1; index >= Math.max(0, hitLine - 400); index--) {
       const match = groupTitlePattern.exec(lines[index] ?? "");
       if (match) { titleLine = index + 1; title = match[2] ?? ""; break; }
@@ -1750,14 +1851,14 @@ function testUse(file: string, lines: string[], hitLine: number, name?: string):
   let callLine = hitLine;
   const namePattern = name ? new RegExp(`(?<![\\w$'"\`])${name.replace(/\$/g, "\\$")}\\s*(?:\\(|\\.|<)`) : undefined;
   if (namePattern && !namePattern.test(stripStrings(lines[hitLine - 1] ?? ""))) {
-    for (let index = hitLine; index < Math.min(lines.length, hitLine + 40); index++) {
-      if (testTitlePattern.test(lines[index] ?? "") && index + 1 !== hitLine) break;
+    for (let index = hitLine; index < Math.min(avaTest?.lastLine ?? lines.length, hitLine + 40); index++) {
+      if (!avaTest && testTitlePattern.test(lines[index] ?? "") && index + 1 !== hitLine) break;
       if (namePattern.test(stripStrings(lines[index] ?? ""))) { callLine = index + 1; break; }
     }
   }
   // Keep the connected unit: call, the locals derived from it, and assertions using them.
-  let end = Math.min(lines.length, callLine + 60);
-  for (let index = callLine; index < end; index++) if (testTitlePattern.test(lines[index] ?? "")) { end = index; break; }
+  let end = Math.min(avaTest?.lastLine ?? lines.length, callLine + 60);
+  if (!avaTest) for (let index = callLine; index < end; index++) if (testTitlePattern.test(lines[index] ?? "")) { end = index; break; }
   const derived = new Set<string>();
   const declared = /^\s*(?:const|let|var)\s+(?:\{([^}]*)\}|\[([^\]]*)\]|([A-Za-z_$][\w$]*))\s*=/;
   const addDeclared = (text: string): void => {
@@ -1774,7 +1875,7 @@ function testUse(file: string, lines: string[], hitLine: number, name?: string):
   for (let index = callLine; index < end; index++) {
     const text = lines[index] ?? "";
     if (uses(text) && declared.test(text) && picked.size < 5) { picked.set(index + 1, text); addDeclared(text); continue; }
-    if (assertionPattern.test(text)) assertions.push(index + 1);
+    if (assertionPattern.test(text) || avaTest?.asyncThrowAssertions.has(index + 1)) assertions.push(index + 1);
   }
   const related = assertions.filter((line) => uses(lines[line - 1] ?? "") || (namePattern?.test(stripStrings(lines[line - 1] ?? "")) ?? false));
   for (const line of [...related, ...assertions.filter((line) => !related.includes(line))].slice(0, related.length ? Math.min(3, related.length) : 2)) {
@@ -1971,7 +2072,9 @@ function renderFile(file: DiffFile, usages: SymbolUsage[], level: Level, listedC
     }
   }
   for (const related of file.relatedTests) {
-    lines.push(`  tests sharing the changed literal "${clip(related.literal, 60)}":`);
+    lines.push(related.pythonComment
+      ? `  heuristic leads from Python test comments mentioning "${clip(related.literal, 60)}" (binding not established):`
+      : `  tests sharing the changed literal "${clip(related.literal, 60)}":`);
     for (const test of related.tests.slice(0, Math.max(1, Math.floor(level.tests / 2)))) {
       lines.push(`    ${test.file}:${test.titleLine}${test.title ? ` "${clip(test.title, 120)}"` : ""}`);
       for (const line of test.lines) lines.push(`      ${line.line}| ${clip(line.text)}`);

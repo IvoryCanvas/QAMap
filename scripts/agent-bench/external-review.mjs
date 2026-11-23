@@ -19,13 +19,14 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { armOrder, runHost, sessionAnswer, summarizeHostRun } from "./review-host.mjs";
+import { armOrder, prepareReviewOutput, runHost, sessionAnswer, summarizeHostRun } from "./review-host.mjs";
 import { redactArm } from "./review-judge.mjs";
 
 export { armOrder, sessionAnswer };
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const directory = path.join(root, "test/benchmarks/review-host/external");
+const runSchema = "qamap.external-review-run";
 const prompts = JSON.parse(await fs.readFile(path.join(root, "test/benchmarks/review-host/cases.json"), "utf8"));
 const day = 24 * 60 * 60 * 1000;
 
@@ -262,9 +263,9 @@ async function runCases({ cache, engines, arms: armList, out, study, only, model
       for (const arm of armOrder(arms, index, run)) jobs.push({ entry, arm, run });
     }
   });
-  await fs.mkdir(out, { recursive: true });
   const bins = Object.fromEntries(Object.entries(engines).map(([arm, prefix]) => [arm, path.join(path.resolve(prefix), "bin")]));
   for (const arm of arms) if (arm !== "standalone" && !bins[arm]) throw new Error(`No engine for arm ${arm}`);
+  await prepareReviewOutput(out, { dryRun, schema: runSchema });
   let next = 0;
   const worker = async () => {
     while (next < jobs.length) {
@@ -282,7 +283,7 @@ async function runCases({ cache, engines, arms: armList, out, study, only, model
         const { repo, base, head } = await materialize(entry, { cache, workspace, home, engineBin, arm, historyDays: protocol.fixtureHistoryDays });
         const prompt = arm !== "standalone" ? `${prompts.qamapPrefix} ${prompts.prompt}` : prompts.prompt;
         const engineVersion = engineBin ? execFileSync(path.join(engineBin, "qamap"), ["--version"], { input: "", stdio: ["pipe", "pipe", "pipe"] }).toString().trim() : null;
-        const record = { schema: { name: "qamap.external-review-run", version: 1 }, case: entry.id, study: entry.study, arm, run, model: model ?? null, base, head,
+        const record = { schema: { name: runSchema, version: 1 }, case: entry.id, study: entry.study, arm, run, model: model ?? null, base, head,
           engineVersion, promptSha256: createHash("sha256").update(prompt).digest("hex") };
         if (dryRun) {
           await fs.writeFile(path.join(outDir, "result.json"), JSON.stringify({ ...record, status: "dry-run" }, null, 2));

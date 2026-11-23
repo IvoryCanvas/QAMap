@@ -79,6 +79,64 @@ test("qa brief connects a changed declaration to its tests, callers and caller t
   assert.equal((await fs.readdir(path.join(path.dirname(root), "reports"))).length, 1, "the full report is still saved locally");
 });
 
+
+test("qa brief labels quoted Python method comments next to assertions as heuristic leads", async () => {
+  const original = [
+    "class Command:",
+    "    def render_hint(self):",
+    "        label = 'help'",
+    "        value = label.strip()",
+    "        return value",
+    "",
+    "    def unchanged_hint(self):",
+    "        return 'keep'",
+    "",
+  ].join("\n");
+  const testSource = [
+    "def test_rendered_hint(runner):",
+    "    output = runner.invoke().output",
+    "    # Output from ``render_hint``.",
+    "    assert 'help' in output",
+    "",
+    "def test_unquoted_mention(output):",
+    "    # render_hint could be relevant.",
+    "    assert 'different' in output",
+    "",
+    "def describe_render_hint(output):",
+    "    # Output from `render_hint`.",
+    "    assert 'helper only' in output",
+    "",
+    "def test_no_assert(output):",
+    "    # Output from `render_hint`.",
+    "    value = output.strip()",
+    "",
+    "def test_other_behavior(output):",
+    "    # Output from `unchanged_hint`.",
+    "    assert 'keep' in output",
+    "",
+  ].join("\n");
+  const { root } = await repository({ "src/commands.py": original, "tests/test_commands.py": testSource },
+    { "src/commands.py": original.replace("return value", "return value.upper()") });
+  const output = await brief(root);
+  assert.match(output, /heuristic leads from Python test comments mentioning "render_hint" \(binding not established\)/);
+  assert.match(output, /tests\/test_commands\.py:1 "test_rendered_hint"/);
+  assert.match(output, /4\| assert 'help' in output/);
+  assert.doesNotMatch(output, /test_unquoted_mention|describe_render_hint|test_no_assert|test_other_behavior/);
+  assert.match(output, /Changed declarations with collected test references: 0\/\d+/);
+});
+
+test("qa brief retains both help assertions from the public Click snapshot", async () => {
+  const fixture = new URL("./benchmarks/review-host/independent-2026-11-13/click-gettext/", import.meta.url);
+  const read = (file) => fs.readFile(new URL(file, fixture), "utf8");
+  const { root } = await repository({
+    "src/click/core.py": await read("base/src/click/core.py"),
+    "tests/test_commands.py": await read("base/tests/test_commands.py"),
+  }, { "src/click/core.py": await read("head/src/click/core.py") });
+  const output = await brief(root);
+  assert.match(output, /Python test comments mentioning "get_short_help_str" \(binding not established\):\n    tests\/test_commands\.py:587 "test_deprecated_help_text_is_not_translated"[\s\S]*?604\| assert/);
+  assert.match(output, /Python test comments mentioning "format_help_text" \(binding not established\):\n    tests\/test_commands\.py:587 "test_deprecated_help_text_is_not_translated"[\s\S]*?602\| assert/);
+});
+
 test("qa brief keeps same-named symbols from unrelated modules out of the reference list", async () => {
   const { root } = await repository({
     "src/core/price.mjs": "export function normalize(value) {\n  return Math.round(value);\n}\n",
@@ -926,4 +984,43 @@ test("a brief that cannot fit every file still names each one with its change si
   assert.ok(Buffer.byteLength(output) <= 6000);
   assert.match(output, /### src\/z-status\.ts/);
   assert.match(output, /removes a throw or error exit at base 4/);
+});
+
+test("qa brief attributes AVA async assertions to the callback of an imported runner alias", async () => {
+  const testSource = [
+    "import ava from 'ava';",
+    "import { createQueue } from './queue.js';",
+    "ava('previous test', () => {});",
+    "const runQueueCase = process.env.FILTER ? ava.skip : ava;",
+    "runQueueCase('clearing rejects queued work', async checks => {",
+    "  const queue = createQueue();",
+    "  const pending = queue.enqueue();",
+    "  queue.clear();",
+    "  await checks.throwsAsync(pending, { name: 'AbortError' });",
+    "});",
+    "function useOtherRunner(runQueueCase) {",
+    "  runQueueCase('shadowed runner', () => {",
+    "    createQueue();",
+    "  });",
+    "}",
+    "ava('one-line neighbor', checks => checks.pass()); createQueue();",
+    "ava('extra argument', checks => checks.pass(), createQueue());",
+    "ava('next test', async checks => {",
+    "  await checks.throwsAsync(Promise.reject(new Error('unrelated check')));",
+    "});",
+  ].join("\n");
+  const original = "export function createQueue() {\n  return { enqueue: () => Promise.reject({ name: 'AbortError' }), clear: () => {} };\n}\n";
+  const changed = original.replace("Promise.reject({ name: 'AbortError' })", "Promise.resolve()");
+  const { root } = await repository({
+    "package.json": JSON.stringify({ name: "ava-brief-fixture", type: "module" }),
+    "queue.js": original,
+    "test.js": testSource,
+  }, { "queue.js": changed });
+  const output = await brief(root);
+  assert.match(output, /test\.js:5 "clearing rejects queued work"/);
+  assert.match(output, /9\| await checks\.throwsAsync\(pending, \{ name: 'AbortError' \}\);/);
+  assert.match(output, /^    test\.js:16$/m);
+  assert.match(output, /^    test\.js:17$/m);
+  assert.doesNotMatch(output, /^    test\.js:\d+ "(?:previous test|shadowed runner|one-line neighbor|extra argument)"$/m);
+  assert.doesNotMatch(output, /unrelated check/);
 });
