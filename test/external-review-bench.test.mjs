@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { armOrder, causes, changeSize, executedTests, loadProtocol, mainLoopTokens, materialize, pairFile, pairPrompt, parseLog, ranQamap, sessionAnswer } from "../scripts/agent-bench/external-review.mjs";
 
 const protocol = await loadProtocol();
@@ -143,4 +144,55 @@ test("a run killed before its usage receipt counts its main-loop requests once e
   ].join("\n");
   assert.equal(mainLoopTokens(stdout), 317);
   assert.equal(mainLoopTokens(""), null);
+});
+
+
+test("neither review runner silently reuses legacy dry-run receipts for a live run", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-review-output-test-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const cases = new URL("./benchmarks/review-host/external/cases.json", import.meta.url);
+  const external = JSON.parse(await fs.readFile(cases, "utf8")).study2.cases[0];
+  const suites = [
+    { runner: "review-host", schema: "qamap.review-host-run", id: "click-gettext", args: ["--runs", "1", "--suite",
+      fileURLToPath(new URL("./benchmarks/review-host/independent-2026-11-13/cases.json", import.meta.url))] },
+    { runner: "external-review", schema: "qamap.external-review-run", id: external.id, prefix: ["run"], args: ["--cache", directory] },
+  ];
+  for (const { runner, schema, id, prefix = [], args } of suites) {
+    await t.test(runner, async () => {
+      const out = path.join(directory, runner);
+      const result = path.join(out, `${id}.standalone.run1`, "result.json");
+      await fs.mkdir(path.dirname(result), { recursive: true });
+      const receipt = JSON.stringify({ schema: { name: schema, version: 1 }, status: "dry-run" });
+      await fs.writeFile(result, receipt);
+
+      const script = fileURLToPath(new URL(`../scripts/agent-bench/${runner}.mjs`, import.meta.url));
+      const invocation = spawnSync(process.execPath, [script, ...prefix, "--engine", directory, "--out", out,
+        "--case", id, "--arms", "standalone", ...args], { encoding: "utf8" });
+
+      assert.equal(invocation.status, 1, runner);
+      assert.match(invocation.stderr, /Use a separate --out directory/);
+      assert.equal(await fs.readFile(result, "utf8"), receipt);
+      await assert.rejects(fs.stat(path.join(out, "runs.jsonl")), { code: "ENOENT" });
+    });
+  }
+});
+
+test("a new rehearsal can resume and rejects live use of its output directory", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "qamap-review-mode-test-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const script = fileURLToPath(new URL("../scripts/agent-bench/review-host.mjs", import.meta.url));
+  const suite = fileURLToPath(new URL("./benchmarks/review-host/independent-2026-11-13/cases.json", import.meta.url));
+  const args = [script, "--engine", directory, "--out", directory, "--suite", suite, "--arms", "standalone", "--runs", "1"];
+  const invoke = (...extra) => spawnSync(process.execPath, [...args, ...extra], { encoding: "utf8" });
+  const dryRun = invoke("--dry-run");
+  assert.equal(dryRun.status, 0, dryRun.stderr);
+  assert.deepEqual(dryRun.stdout.trim().split("\n").map(JSON.parse).map(record => record.status), ["dry-run", "dry-run"]);
+  const resumed = invoke("--dry-run");
+  assert.equal(resumed.status, 0, resumed.stderr);
+  assert.deepEqual(resumed.stdout.trim().split("\n").map(JSON.parse).map(record => record.status), ["kept", "kept"]);
+
+  const live = invoke();
+  assert.equal(live.status, 1);
+  assert.match(live.stderr, /Use a separate --out directory/);
+  assert.equal(live.stdout, "");
 });

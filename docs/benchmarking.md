@@ -189,10 +189,12 @@ host's `Skill` tool from both arms: the standalone host then cannot delegate to 
 built-in review skill, and the QAMap arm relies on its `AGENTS.md` instructions.
 `--arms standalone,qamap,candidate --candidate <prefix>` adds a third arm with the
 same setup and prompt as the QAMap arm and a second engine, such as an unreleased
-build, and rotates the order of all three. A rerun into the same `--out` keeps
-finished runs and repeats only those without a result. The stored answer is every
-ended host turn in order, so a short acknowledgement after a background task
-cannot replace the review.
+build, and rotates the order of all three. Resume the same experiment with the same
+`--out` to fill jobs that have no result. Keep separate output directories for
+`--dry-run` and live runs, and for the fixture runner and the external PR runner.
+To repeat an ineligible or stopped attempt, use a fresh output directory and
+retain the original receipt. The stored answer includes each ended host turn,
+including the review that preceded a later acknowledgement.
 
 The frozen [case list](../test/benchmarks/review-host/cases.json) combines
 synthetic seeded regressions from the report-evidence suites, public product
@@ -208,6 +210,14 @@ against the [frozen oracles](../test/benchmarks/review-host/oracles.json) after
 the arm is redacted from the text. `--dry-run` materializes every fixture without
 starting a host; the offline tests cover materialization, usage parsing, grading
 prompts and aggregation.
+
+For a Codex pilot, follow the [registered public snapshot protocol](../test/benchmarks/review-host/independent-2026-11-13/PROTOCOL.md)
+and the [native host setup](../scripts/agent-bench/README.md#review-host-comparison).
+The Click and p-limit cases retain selected upstream files. For measurements on
+complete tracked source trees, the [external PR protocol](../test/benchmarks/review-host/external/PROTOCOL.md)
+uses the Claude Code runner and pinned public commits. Register new cases before
+reading reviews or tuning the engine. Keep host usage and review grades together
+for each complete pair, and retain failed attempts separately.
 
 ## Run the execution contract
 
