@@ -50,14 +50,14 @@ file changes and input hashes by default; it does not write, tag or publish.
 Replace the placeholders before running:
 
 ```sh
-pnpm release:prepare --channels npm,openai --version X.Y.Z --date YYYY-MM-DD
+pnpm release:prepare --channels npm,openai,claude --version X.Y.Z --claude-version X.Y.Z --date YYYY-MM-DD
 ```
 
-The npm package and OpenAI portable manifest currently share a version contract;
-changing that version requires selecting both. A native Claude revision is a
-separate selection with a mandatory explicit `--claude-version A.B.C`. Omitting
-the Claude channel preserves its plugin version, including when CLI pins update.
-Do not remove metadata checks to force an unsupported single-channel bump.
+Use the same `X.Y.Z` for the npm package, OpenAI portable manifest, and native
+Claude Directory plugin when preparing a QAMap release. Select all three
+channels and use that version for both `--version` and `--claude-version`.
+A Claude-only revision can still use `--channels claude` with an explicit
+`--claude-version`.
 
 After reviewing the complete file list, before/after hashes and source commit,
 repeat the same selections with `--apply --plan-sha256 <preview-digest>`. A stale
